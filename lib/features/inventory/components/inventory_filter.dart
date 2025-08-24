@@ -20,6 +20,10 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
   String? selectedUnit;
   String? minCost, maxCost;
 
+  // View more state variables
+  bool showAllBrands = false;
+  bool showAllSuppliers = false;
+
   // Controller for dynamic data
   final FilterController filterController = FilterController();
 
@@ -705,7 +709,17 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                               return Center(child: CircularProgressIndicator());
                             }
                             final brands = snapshot.data ?? [];
-                            return _filterChips(brands, selectedBrands);
+                            return _filterChips(
+                              brands,
+                              selectedBrands,
+                              showViewMore: true,
+                              isExpanded: showAllBrands,
+                              onToggleViewMore: () {
+                                setState(() {
+                                  showAllBrands = !showAllBrands;
+                                });
+                              },
+                            );
                           },
                         ),
                         _sectionTitle("Supplier Name"),
@@ -717,13 +731,25 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                               return Center(child: CircularProgressIndicator());
                             }
                             final suppliers = snapshot.data ?? [];
-                            return _filterChips(suppliers, selectedSuppliers);
+                            return _filterChips(
+                              suppliers,
+                              selectedSuppliers,
+                              showViewMore: true,
+                              isExpanded: showAllSuppliers,
+                              onToggleViewMore: () {
+                                setState(() {
+                                  showAllSuppliers = !showAllSuppliers;
+                                });
+                              },
+                            );
                           },
                         ),
                         _sectionTitle("Stock Status"),
-                        _filterChips(stockStatuses, selectedStockStatus),
+                        _filterChips(stockStatuses, selectedStockStatus,
+                            showViewMore: false),
                         _sectionTitle("Expiry Date"),
-                        _filterChips(expiryOptions, selectedExpiry),
+                        _filterChips(expiryOptions, selectedExpiry,
+                            showViewMore: false),
                         _sectionTitle("Cost Range (₱)"),
                         Row(
                           children: [
@@ -821,31 +847,63 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
     );
   }
 
-  Widget _filterChips(List<String> options, Set<String> selectedSet) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((option) {
-        final selected = selectedSet.contains(option);
-        return FilterChip(
-          label: Text(option, style: TextStyle(fontWeight: FontWeight.w500)),
-          selected: selected,
-          onSelected: (val) {
-            setState(() {
-              if (selected) {
-                selectedSet.remove(option);
-              } else {
-                selectedSet.add(option);
-              }
-            });
-          },
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          selectedColor: Color(0xFFE2DCFD),
-          backgroundColor: Colors.grey.shade200,
-          labelStyle: TextStyle(color: Colors.black),
-        );
-      }).toList(),
+  Widget _filterChips(List<String> options, Set<String> selectedSet,
+      {bool showViewMore = false,
+      bool isExpanded = false,
+      VoidCallback? onToggleViewMore}) {
+    // Determine which options to show
+    List<String> displayOptions = options;
+    bool shouldShowViewMore = showViewMore && options.length > 4;
+
+    if (shouldShowViewMore && !isExpanded) {
+      displayOptions = options.take(4).toList();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: displayOptions.map((option) {
+            final selected = selectedSet.contains(option);
+            return FilterChip(
+              label:
+                  Text(option, style: TextStyle(fontWeight: FontWeight.w500)),
+              selected: selected,
+              onSelected: (val) {
+                setState(() {
+                  if (selected) {
+                    selectedSet.remove(option);
+                  } else {
+                    selectedSet.add(option);
+                  }
+                });
+              },
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              selectedColor: Color(0xFFE2DCFD),
+              backgroundColor: Colors.grey.shade200,
+              labelStyle: TextStyle(color: Colors.black),
+            );
+          }).toList(),
+        ),
+        // View More/Less button
+        if (shouldShowViewMore) ...[
+          SizedBox(height: 8),
+          TextButton(
+            onPressed: onToggleViewMore,
+            child: Text(
+              isExpanded ? 'View Less' : 'View More',
+              style: TextStyle(
+                color: Color(0xFF4E38D4),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

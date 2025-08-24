@@ -88,7 +88,10 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                 archived: data['archived'] ?? false,
               );
             })
-            .where((batch) => batch.id != item.id)
+            // Exclude the item we are viewing and exclude zero-stock batches
+            // when there exists a different batch (we will still show if it's
+            // the only batch elsewhere)
+            .where((batch) => batch.id != item.id && batch.stock > 0)
             .toList();
 
         // Sort by expiry date (earliest first, null/empty last)
@@ -205,7 +208,7 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                   Expanded(
                     flex: 2,
                     child: Text(
-                      batch.expiry ?? "",
+                      (batch.expiry ?? "").replaceAll('-', '/'),
                       style: const TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
@@ -220,7 +223,8 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(
-                          builder: (_) => InventoryViewSupplyPage(item: batch),
+                          builder: (_) => InventoryViewSupplyPage(
+                              item: batch, skipAutoRedirect: true),
                         ),
                       );
                     },

@@ -4,7 +4,16 @@ import 'package:projects/features/inventory/data/inventory_item.dart';
 class InventoryItemCard extends StatelessWidget {
   final InventoryItem item;
   final String? status;
-  const InventoryItemCard({required this.item, this.status, super.key});
+  final String? currentSort;
+  final bool? showExpiryDate;
+  final int? overrideStock; // When provided, display this instead of item.stock
+  const InventoryItemCard(
+      {required this.item,
+      this.status,
+      this.currentSort,
+      this.showExpiryDate,
+      this.overrideStock,
+      super.key});
 
   String getStatus() {
     // Check archived status first - archived items should always show "Archived"
@@ -17,6 +26,11 @@ class InventoryItemCard extends StatelessWidget {
       return status!;
     }
 
+    // Check stock status first - Out of Stock takes priority over expiry
+    if (item.stock == 0) {
+      return "Out of Stock";
+    }
+
     // Check expiry status - if expired or expiring soon, show that instead of stock status
     final expiryStatus = getExpiryStatus();
     if (expiryStatus != null) {
@@ -24,9 +38,7 @@ class InventoryItemCard extends StatelessWidget {
     }
 
     // Otherwise, calculate status based on item properties
-    if (item.stock == 0) {
-      return "Out of Stock";
-    } else if (item.stock <= 2) {
+    if (item.stock <= 2) {
       return "Low Stock";
     } else {
       return "In Stock";
@@ -55,6 +67,35 @@ class InventoryItemCard extends StatelessWidget {
 
     // If not expiring soon and not expired, no chip needed
     return null;
+  }
+
+  // Check if current sort is an expiry date sort or if expiry date should be shown
+  bool get isExpirySort {
+    // If showExpiryDate is explicitly set, use that
+    if (showExpiryDate != null) return showExpiryDate!;
+
+    // Check if current sort is an expiry date sort
+    if (currentSort != null && currentSort!.contains("Expiry Date")) {
+      return true;
+    }
+
+    // Show expiry date if item is expiring or expired (regardless of sort/filter)
+    final expiryStatus = getExpiryStatus();
+    return expiryStatus == "Expiring" || expiryStatus == "Expired";
+  }
+
+  // Format expiry date for display
+  String formatExpiryDate() {
+    if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
+      return "No Expiry";
+    }
+
+    try {
+      final expiryDate = DateTime.parse(item.expiry!);
+      return "${expiryDate.month}/${expiryDate.day}/${expiryDate.year}";
+    } catch (e) {
+      return item.expiry!; // Return as-is if parsing fails
+    }
   }
 
   @override
@@ -90,9 +131,9 @@ class InventoryItemCard extends StatelessWidget {
                     },
                   )
                 : Icon(Icons.image_not_supported, size: 96, color: Colors.grey),
-            SizedBox(height: 18),
-            SizedBox(
-              height: 45,
+            SizedBox(height: 16),
+            // Flexible text container that adjusts based on expiry display
+            Flexible(
               child: Text(
                 item.name,
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -101,15 +142,19 @@ class InventoryItemCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            SizedBox(height: 8),
+            SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  'Stock: ${item.stock}',
-                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-                ),
-                SizedBox(width: 8),
+                // Only show stock number if not "Out of Stock"
+                if (status != "Out of Stock") ...[
+                  Text(
+                    'Stock: ${overrideStock ?? item.stock}',
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                  ),
+                  SizedBox(width: 8),
+                ],
+                // Add extra top spacing only for "Out of Stock" to align with other chips
                 Container(
                   constraints: BoxConstraints(minWidth: 72),
                   alignment: Alignment.center,
@@ -158,6 +203,57 @@ class InventoryItemCard extends StatelessWidget {
                 ),
               ],
             ),
+            // Show expiry date only when sorting by expiry AND not "Out of Stock"
+            if (isExpirySort && status != "Out of Stock") ...[
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.blue[50]!,
+                      Colors.blue[100]!,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[600],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        Icons.calendar_today,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      formatExpiryDate(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue[800],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

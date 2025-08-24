@@ -13,6 +13,7 @@ import '../controller/inventory_controller.dart';
 import '../controller/filter_controller.dart';
 import '../controller/categories_controller.dart';
 import 'package:projects/features/inventory/pages/archive_supply_page.dart';
+import 'package:projects/shared/themes/font.dart';
 
 class Inventory extends StatefulWidget {
   const Inventory({super.key});
@@ -36,6 +37,12 @@ class _InventoryState extends State<Inventory> {
   final InventoryController controller = InventoryController();
   final FilterController filterController = FilterController();
   final CategoriesController categoriesController = CategoriesController();
+
+  // Add ScrollController for Choice Chips
+  final ScrollController _chipsScrollController = ScrollController();
+
+  // Map to store GlobalKeys for each chip
+  final Map<int, GlobalKey> _chipKeys = {};
 
   void _showFilterModal(BuildContext context) {
     showModalBottomSheet(
@@ -73,11 +80,49 @@ class _InventoryState extends State<Inventory> {
     );
   }
 
+  // Method to scroll to selected chip using GlobalKey for precise positioning
+  void _scrollToSelectedChip(int index, List<String> categories) {
+    if (index >= 0 &&
+        index < categories.length &&
+        _chipsScrollController.hasClients) {
+      final key = _chipKeys[index];
+      if (key?.currentContext != null) {
+        final RenderBox renderBox =
+            key!.currentContext!.findRenderObject() as RenderBox;
+        final position = renderBox.localToGlobal(Offset.zero);
+        final scrollPosition = _chipsScrollController.position.pixels +
+            position.dx -
+            16; // 16px padding from left
+
+        _chipsScrollController.animateTo(
+          scrollPosition.clamp(
+              0.0, _chipsScrollController.position.maxScrollExtent),
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        // Fallback to estimated positioning if GlobalKey is not available
+        double estimatedChipWidth = 140.0;
+        double scrollPosition = index * estimatedChipWidth;
+        double maxScroll = _chipsScrollController.position.maxScrollExtent;
+        scrollPosition = scrollPosition.clamp(0.0, maxScroll);
+
+        _chipsScrollController.animateTo(
+          scrollPosition,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     // Initialize default categories and migrate existing data
     _initializeData();
+    // Best-effort cleanup of zero-stock duplicates when there are stocked batches
+    controller.cleanupZeroStockDuplicates();
   }
 
   Future<void> _initializeData() async {
@@ -88,6 +133,7 @@ class _InventoryState extends State<Inventory> {
   @override
   void dispose() {
     searchController.dispose();
+    _chipsScrollController.dispose();
     super.dispose();
   }
 
@@ -96,9 +142,9 @@ class _InventoryState extends State<Inventory> {
     return Scaffold(
       backgroundColor: Color(0xFFF9EFF2),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Inventory",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         backgroundColor: Colors.white,
@@ -135,6 +181,10 @@ class _InventoryState extends State<Inventory> {
                       controller: searchController,
                       decoration: InputDecoration(
                         hintText: 'Search...',
+                        hintStyle: AppFonts.sfProStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                        ),
                         prefixIcon: Icon(Icons.search, color: Colors.black),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -241,15 +291,35 @@ class _InventoryState extends State<Inventory> {
                     );
                   }
 
+                  // Auto-scroll to selected chip when categories are loaded
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (selectedCategory < currentCategories.length &&
+                        _chipsScrollController.hasClients) {
+                      _scrollToSelectedChip(
+                          selectedCategory, currentCategories);
+                    }
+                  });
+
+                  // Clear old keys if categories changed
+                  if (_chipKeys.length != currentCategories.length) {
+                    _chipKeys.clear();
+                  }
+
                   return SingleChildScrollView(
+                    controller: _chipsScrollController,
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children:
                           List.generate(currentCategories.length, (index) {
                         final isSelected = selectedCategory == index;
+                        // Ensure we have a GlobalKey for this index
+                        if (!_chipKeys.containsKey(index)) {
+                          _chipKeys[index] = GlobalKey();
+                        }
                         return Padding(
                           padding: const EdgeInsets.only(right: 8.0),
                           child: ChoiceChip(
+                            key: _chipKeys[index],
                             label: Text(currentCategories[index]),
                             selected: isSelected,
                             showCheckmark: false,
@@ -270,6 +340,8 @@ class _InventoryState extends State<Inventory> {
                               setState(() {
                                 selectedCategory = index;
                               });
+                              // Scroll to the selected chip
+                              _scrollToSelectedChip(index, currentCategories);
                             },
                           ),
                         );
@@ -372,8 +444,10 @@ class _InventoryState extends State<Inventory> {
 
                         return LayoutBuilder(
                           builder: (context, constraints) {
+                            // Since cards now show expiry dates for expiring/expired items regardless of filters,
+                            // use a more conservative aspect ratio to accommodate the extra height
                             double aspectRatio =
-                                constraints.maxWidth < 400 ? 0.8 : 0.95;
+                                constraints.maxWidth < 400 ? 0.7 : 0.85;
                             return GridView.builder(
                                 gridDelegate:
                                     SliverGridDelegateWithFixedCrossAxisCount(
@@ -399,6 +473,8 @@ class _InventoryState extends State<Inventory> {
                                     child: InventoryItemCard(
                                       item: groupedItem.mainItem,
                                       status: groupedItem.getStatus(),
+                                      currentSort: selectedSort,
+                                      overrideStock: groupedItem.totalStock,
                                     ),
                                   );
                                 });

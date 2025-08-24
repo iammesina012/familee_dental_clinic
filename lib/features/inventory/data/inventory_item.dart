@@ -106,37 +106,24 @@ class GroupedInventoryItem {
   String getStatus() {
     if (mainItem.archived) return "Archived";
 
-    // Check if expired first
+    // Determine stock status using TOTAL stock across batches
+    if (totalStock == 0) return "Out of Stock";
+
+    // Expiry-based statuses still follow the earliest-expiring batch
     if (!mainItem.noExpiry &&
         mainItem.expiry != null &&
         mainItem.expiry!.isNotEmpty) {
       final expiryDate = DateTime.tryParse(mainItem.expiry!);
-      if (expiryDate != null && expiryDate.isBefore(DateTime.now())) {
+      if (expiryDate != null && expiryDate.isBefore(DateTime.now()))
         return "Expired";
-      }
-    }
-
-    // Check if expiring soon (within 30 days)
-    if (!mainItem.noExpiry &&
-        mainItem.expiry != null &&
-        mainItem.expiry!.isNotEmpty) {
-      final expiryDate = DateTime.tryParse(mainItem.expiry!);
       if (expiryDate != null) {
-        final today = DateTime.now();
-        final daysUntilExpiry = expiryDate.difference(today).inDays;
-        if (daysUntilExpiry <= 30) {
-          return "Expiring";
-        }
+        final daysUntilExpiry = expiryDate.difference(DateTime.now()).inDays;
+        if (daysUntilExpiry <= 30) return "Expiring";
       }
     }
 
-    // Otherwise, show stock status
-    if (mainItem.stock == 0) {
-      return "Out of Stock";
-    } else if (mainItem.stock <= 2) {
-      return "Low Stock";
-    } else {
-      return "In Stock";
-    }
+    // Low stock threshold based on total stock
+    if (totalStock <= 2) return "Low Stock";
+    return "In Stock";
   }
 }

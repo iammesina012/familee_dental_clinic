@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../controller/edit_supply_controller.dart';
 import '../controller/categories_controller.dart';
@@ -333,12 +334,17 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                     padding: const EdgeInsets.symmetric(vertical: 0.0),
                     child: TextField(
                       controller: controller.costController,
-                      keyboardType: TextInputType.number,
+                      keyboardType:
+                          TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}')),
+                      ],
                       decoration: InputDecoration(
                         labelText: 'Cost *',
                         border: OutlineInputBorder(),
                         errorStyle: TextStyle(color: Colors.red),
-                        hintText: 'Enter amount (e.g., 150)',
+                        hintText: 'Enter amount (e.g., 150.00)',
                       ),
                     ),
                   ),

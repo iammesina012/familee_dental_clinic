@@ -26,15 +26,25 @@ class InventorySortModal extends StatelessWidget {
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.40,
-      minChildSize: 0.30,
-      maxChildSize: 0.70,
+      initialChildSize: 0.70, // Increased to show more options
+      minChildSize: 0.50, // Increased minimum size
+      maxChildSize: 0.70, // Increased maximum size
       builder: (context, scrollController) {
         return Material(
           color: Theme.of(context).scaffoldBackgroundColor,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           child: Column(
             children: [
+              // Handle bar for dragging
+              Container(
+                margin: EdgeInsets.only(top: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.only(top: 16.0, bottom: 8),
                 child: Text("Sort By",

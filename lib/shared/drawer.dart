@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/drawer_logout.dart';
+import 'package:projects/features/auth/services/auth_service.dart';
 
 class MyDrawer extends StatelessWidget {
-  const MyDrawer({super.key});
+  const MyDrawer({super.key, this.beforeNavigate});
+
+  final Future<bool> Function()? beforeNavigate;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +30,11 @@ class MyDrawer extends StatelessWidget {
             text: 'Dashboard',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/dashboard',
-            onTap: () {
+            onTap: () async {
+              if (beforeNavigate != null) {
+                final ok = await beforeNavigate!();
+                if (!ok) return;
+              }
               Navigator.pop(context);
               if (currentRoute != '/dashboard') {
                 Navigator.pushReplacementNamed(context, '/dashboard');
@@ -39,10 +46,46 @@ class MyDrawer extends StatelessWidget {
             text: 'Inventory',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/inventory',
-            onTap: () {
+            onTap: () async {
+              if (beforeNavigate != null) {
+                final ok = await beforeNavigate!();
+                if (!ok) return;
+              }
               Navigator.pop(context);
               if (currentRoute != '/inventory') {
                 Navigator.pushReplacementNamed(context, '/inventory');
+              }
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.shopping_cart,
+            text: 'Purchase Order',
+            fontFamily: 'SF Pro',
+            selected: currentRoute == '/purchase-order',
+            onTap: () async {
+              if (beforeNavigate != null) {
+                final ok = await beforeNavigate!();
+                if (!ok) return;
+              }
+              Navigator.pop(context);
+              if (currentRoute != '/purchase-order') {
+                Navigator.pushReplacementNamed(context, '/purchase-order');
+              }
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.playlist_remove,
+            text: 'Stock Deduction',
+            fontFamily: 'SF Pro',
+            selected: currentRoute == '/stock-deduction',
+            onTap: () async {
+              if (beforeNavigate != null) {
+                final ok = await beforeNavigate!();
+                if (!ok) return;
+              }
+              Navigator.pop(context);
+              if (currentRoute != '/stock-deduction') {
+                Navigator.pushReplacementNamed(context, '/stock-deduction');
               }
             },
           ),
@@ -51,7 +94,11 @@ class MyDrawer extends StatelessWidget {
             text: 'Activity Log',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/activity-log',
-            onTap: () {
+            onTap: () async {
+              if (beforeNavigate != null) {
+                final ok = await beforeNavigate!();
+                if (!ok) return;
+              }
               Navigator.pop(context);
               if (currentRoute != '/activity-log') {
                 Navigator.pushReplacementNamed(context, '/activity-log');
@@ -64,7 +111,11 @@ class MyDrawer extends StatelessWidget {
             text: 'Settings',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/settings',
-            onTap: () {
+            onTap: () async {
+              if (beforeNavigate != null) {
+                final ok = await beforeNavigate!();
+                if (!ok) return;
+              }
               Navigator.pop(context);
               if (currentRoute != '/settings') {
                 Navigator.pushReplacementNamed(context, '/settings');
@@ -79,6 +130,8 @@ class MyDrawer extends StatelessWidget {
             onTap: () async {
               final shouldLogout = await showLogoutDialog(context);
               if (shouldLogout == true) {
+                final authService = AuthService();
+                await authService.logout();
                 // ignore: use_build_context_synchronously
                 Navigator.pushReplacementNamed(context, '/login');
               }

@@ -57,7 +57,7 @@ class FilterController {
     return false;
   }
 
-  // Check if there are supplies with "N/A" brand that might match this brand name
+  // Check if there are supplies with "N/A" brand that can be restored to this brand
   Future<int> getSuppliesWithNABrand(String brandName) async {
     if (brandName.trim().isEmpty) return 0;
 
@@ -66,16 +66,11 @@ class FilterController {
         .where('brand', isEqualTo: 'N/A')
         .get();
 
-    // Count supplies that might belong to this brand
-    // This is a simple check - you could make it more sophisticated
+    // Count supplies that have this brand as their original brand
     int count = 0;
     for (final doc in suppliesDocs.docs) {
-      final supplyName = doc.data()['name']?.toString().toLowerCase() ?? '';
-      final brandNameLower = brandName.trim().toLowerCase();
-
-      // Simple matching logic - you can enhance this
-      if (supplyName.contains(brandNameLower) ||
-          brandNameLower.contains(supplyName.split(' ').first)) {
+      final originalBrand = doc.data()['originalBrand']?.toString() ?? '';
+      if (originalBrand.toLowerCase() == brandName.trim().toLowerCase()) {
         count++;
       }
     }
@@ -94,13 +89,13 @@ class FilterController {
 
     final batch = firestore.batch();
     for (final doc in suppliesDocs.docs) {
-      final supplyName = doc.data()['name']?.toString().toLowerCase() ?? '';
-      final brandNameLower = brandName.trim().toLowerCase();
-
-      // Simple matching logic - you can enhance this
-      if (supplyName.contains(brandNameLower) ||
-          brandNameLower.contains(supplyName.split(' ').first)) {
-        batch.update(doc.reference, {'brand': brandName.trim()});
+      final originalBrand = doc.data()['originalBrand']?.toString() ?? '';
+      if (originalBrand.toLowerCase() == brandName.trim().toLowerCase()) {
+        batch.update(doc.reference, {
+          'brand': brandName.trim(),
+          'originalBrand':
+              FieldValue.delete(), // Remove the original brand field
+        });
       }
     }
     await batch.commit();
@@ -140,7 +135,7 @@ class FilterController {
     return false;
   }
 
-  // Check if there are supplies with "N/A" supplier that might match this supplier name
+  // Check if there are supplies with "N/A" supplier that can be restored to this supplier
   Future<int> getSuppliesWithNASupplier(String supplierName) async {
     if (supplierName.trim().isEmpty) return 0;
 
@@ -149,16 +144,11 @@ class FilterController {
         .where('supplier', isEqualTo: 'N/A')
         .get();
 
-    // Count supplies that might belong to this supplier
-    // This is a simple check - you could make it more sophisticated
+    // Count supplies that have this supplier as their original supplier
     int count = 0;
     for (final doc in suppliesDocs.docs) {
-      final supplyName = doc.data()['name']?.toString().toLowerCase() ?? '';
-      final supplierNameLower = supplierName.trim().toLowerCase();
-
-      // Simple matching logic - you can enhance this
-      if (supplyName.contains(supplierNameLower) ||
-          supplierNameLower.contains(supplyName.split(' ').first)) {
+      final originalSupplier = doc.data()['originalSupplier']?.toString() ?? '';
+      if (originalSupplier.toLowerCase() == supplierName.trim().toLowerCase()) {
         count++;
       }
     }
@@ -177,13 +167,13 @@ class FilterController {
 
     final batch = firestore.batch();
     for (final doc in suppliesDocs.docs) {
-      final supplyName = doc.data()['name']?.toString().toLowerCase() ?? '';
-      final supplierNameLower = supplierName.trim().toLowerCase();
-
-      // Simple matching logic - you can enhance this
-      if (supplyName.contains(supplierNameLower) ||
-          supplierNameLower.contains(supplyName.split(' ').first)) {
-        batch.update(doc.reference, {'supplier': supplierName.trim()});
+      final originalSupplier = doc.data()['originalSupplier']?.toString() ?? '';
+      if (originalSupplier.toLowerCase() == supplierName.trim().toLowerCase()) {
+        batch.update(doc.reference, {
+          'supplier': supplierName.trim(),
+          'originalSupplier':
+              FieldValue.delete(), // Remove the original supplier field
+        });
       }
     }
     await batch.commit();
@@ -368,7 +358,7 @@ class FilterController {
       await doc.reference.delete();
     }
 
-    // Update all supplies with this brand to use "N/A"
+    // Update all supplies with this brand to use "N/A" and store original brand
     final suppliesDocs = await firestore
         .collection('supplies')
         .where('brand', isEqualTo: brandName.trim())
@@ -376,7 +366,11 @@ class FilterController {
 
     final batch = firestore.batch();
     for (final doc in suppliesDocs.docs) {
-      batch.update(doc.reference, {'brand': 'N/A'});
+      batch.update(doc.reference, {
+        'brand': 'N/A',
+        'originalBrand':
+            brandName.trim(), // Store original brand for restoration
+      });
     }
     await batch.commit();
   }
@@ -395,7 +389,7 @@ class FilterController {
       await doc.reference.delete();
     }
 
-    // Update all supplies with this supplier to use "N/A"
+    // Update all supplies with this supplier to use "N/A" and store original supplier
     final suppliesDocs = await firestore
         .collection('supplies')
         .where('supplier', isEqualTo: supplierName.trim())
@@ -403,7 +397,11 @@ class FilterController {
 
     final batch = firestore.batch();
     for (final doc in suppliesDocs.docs) {
-      batch.update(doc.reference, {'supplier': 'N/A'});
+      batch.update(doc.reference, {
+        'supplier': 'N/A',
+        'originalSupplier':
+            supplierName.trim(), // Store original supplier for restoration
+      });
     }
     await batch.commit();
   }

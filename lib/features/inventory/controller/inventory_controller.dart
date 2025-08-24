@@ -111,8 +111,10 @@ class InventoryController {
         return aExpiry.compareTo(bExpiry);
       });
 
-      final mainItem = items.first; // Earliest expiring item
-      final variants = items.skip(1).toList(); // All other items
+      // Prefer the earliest-expiring item that has stock > 0 as the main item
+      final InventoryItem mainItem =
+          (items.firstWhere((it) => it.stock > 0, orElse: () => items.first));
+      final variants = List<InventoryItem>.from(items)..remove(mainItem);
       final totalStock = items.fold(0, (sum, item) => sum + item.stock);
 
       result.add(GroupedInventoryItem(
@@ -160,9 +162,13 @@ class InventoryController {
     Map<String, dynamic>? filters,
   }) {
     final filtered = items.where((item) {
-      // Category filter - only filter if a category is selected
-      if (selectedCategory.isNotEmpty &&
-          item.mainItem.category != selectedCategory) return false;
+      // Category filter - include the group if ANY variant matches the category
+      if (selectedCategory.isNotEmpty) {
+        final matchesCategory = item
+            .getAllItems()
+            .any((variant) => variant.category == selectedCategory);
+        if (!matchesCategory) return false;
+      }
 
       // Search text filter
       if (searchText.isNotEmpty &&
@@ -354,7 +360,56 @@ class InventoryController {
     // Check if expiring soon (within 30 days)
     if (daysUntilExpiry <= 30) return "Expiring";
 
-    // If not expiring soon and not expired, return "No Expiry" (items with future expiry don't need special filtering)
-    return "No Expiry";
+    // If not expiring soon and not expired, return "Future Expiry" (items with future expiry should not be in "No Expiry" filter)
+    return "Future Expiry";
+  }
+
+  // One-time cleanup: delete zero-stock duplicate batches when another batch has stock
+  Future<void> cleanupZeroStockDuplicates() async {
+    try {
+      final snapshot = await firestore.collection('supplies').get();
+      final docs = snapshot.docs;
+      if (docs.isEmpty) return;
+
+      // Group by name + brand
+      final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+          groups = {};
+      for (final doc in docs) {
+        final data = doc.data();
+        final key = '${data['name'] ?? ''}_${data['brand'] ?? ''}';
+        groups.putIfAbsent(key, () => []);
+        groups[key]!.add(doc);
+      }
+
+      final WriteBatch batch = firestore.batch();
+      int deleteCount = 0;
+
+      groups.forEach((key, groupDocs) {
+        final bool anyHasStock = groupDocs.any((d) {
+          final data = d.data();
+          final int stock = (data['stock'] ?? 0) as int;
+          final bool archived = (data['archived'] ?? false) as bool;
+          return !archived && stock > 0;
+        });
+
+        if (!anyHasStock) return; // keep zero-stock if it's the only batch
+
+        for (final d in groupDocs) {
+          final data = d.data();
+          final int stock = (data['stock'] ?? 0) as int;
+          final bool archived = (data['archived'] ?? false) as bool;
+          if (!archived && stock == 0) {
+            batch.delete(d.reference);
+            deleteCount++;
+          }
+        }
+      });
+
+      if (deleteCount > 0) {
+        await batch.commit();
+      }
+    } catch (_) {
+      // Swallow errors; cleanup is best-effort
+    }
   }
 }

@@ -45,9 +45,13 @@ class EditSupplyController {
     selectedUnit = item.unit;
     noExpiry = item.noExpiry;
     imageUrl = item.imageUrl;
-    expiryDate = (item.expiry != null && item.expiry!.isNotEmpty)
-        ? DateTime.tryParse(item.expiry!)
-        : null;
+    if (item.expiry != null && item.expiry!.isNotEmpty) {
+      // Support both YYYY-MM-DD and YYYY/MM/DD formats
+      expiryDate = DateTime.tryParse(item.expiry!) ??
+          DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+    } else {
+      expiryDate = null;
+    }
 
     // Store original values for comparison
     originalBrand = item.brand == "N/A" ? "" : item.brand;
@@ -99,8 +103,8 @@ class EditSupplyController {
     if (RegExp(r'^[0-9]+$').hasMatch(text.trim())) {
       return false;
     }
-    // Check if the text contains at least one letter and is alphanumeric
-    return RegExp(r'^[a-zA-Z0-9\s]+$').hasMatch(text.trim()) &&
+    // Check if the text contains at least one letter and allows common characters
+    return RegExp(r'^[a-zA-Z0-9\s\-_\.]+$').hasMatch(text.trim()) &&
         RegExp(r'[a-zA-Z]').hasMatch(text.trim());
   }
 
@@ -147,8 +151,7 @@ class EditSupplyController {
     }
 
     // Expiry date validation
-    if (!noExpiry &&
-        (expiryController.text.trim().isEmpty || expiryDate == null)) {
+    if (!noExpiry && expiryController.text.trim().isEmpty) {
       return 'Please enter the expiry date or check "No expiry date" if there\'s none.';
     }
 
@@ -181,11 +184,62 @@ class EditSupplyController {
     if (error != null) return error;
     final updatedData = buildUpdatedData();
     try {
-      // Update supply in Firestore
-      await FirebaseFirestore.instance
-          .collection('supplies')
-          .doc(docId)
-          .update(updatedData);
+      final suppliesRef = FirebaseFirestore.instance.collection('supplies');
+
+      // Try to merge with an existing batch if name + brand + expiry match
+      final String name = (updatedData['name'] ?? '').toString();
+      final String brand = (updatedData['brand'] ?? '').toString();
+      final String? newExpiry = updatedData['expiry'] == null ||
+              updatedData['expiry'].toString().isEmpty
+          ? null
+          : updatedData['expiry'].toString();
+
+      final existingQuery = await suppliesRef
+          .where('name', isEqualTo: name)
+          .where('brand', isEqualTo: brand)
+          .get();
+
+      // Find a matching document (excluding current) with the same expiry (null == null allowed)
+      QueryDocumentSnapshot<Map<String, dynamic>>? mergeTarget;
+      for (final doc in existingQuery.docs) {
+        if (doc.id == docId) continue;
+        final data = doc.data();
+        final dynamic otherExpiryRaw = data['expiry'];
+        final String? otherExpiry =
+            (otherExpiryRaw == null || otherExpiryRaw.toString().isEmpty)
+                ? null
+                : otherExpiryRaw.toString();
+        final bool expiryMatches = (newExpiry == null && otherExpiry == null) ||
+            (newExpiry != null && newExpiry == otherExpiry);
+        if (expiryMatches) {
+          mergeTarget = doc;
+          break;
+        }
+      }
+
+      if (mergeTarget != null) {
+        // Merge stock into the target and delete the current document
+        final targetData = mergeTarget.data();
+        final int targetStock = (targetData['stock'] ?? 0) as int;
+        final int thisStock = (updatedData['stock'] ?? 0) as int;
+        final int mergedStock = targetStock + thisStock;
+
+        final Map<String, dynamic> updates = {'stock': mergedStock};
+        // Fill missing fields on target if needed
+        if ((targetData['imageUrl'] ?? '').toString().isEmpty &&
+            (updatedData['imageUrl'] ?? '').toString().isNotEmpty) {
+          updates['imageUrl'] = updatedData['imageUrl'];
+        }
+        if (targetData['archived'] == null) {
+          updates['archived'] = false;
+        }
+
+        await suppliesRef.doc(mergeTarget.id).update(updates);
+        await suppliesRef.doc(docId).delete();
+      } else {
+        // No merge target; just update this document normally
+        await suppliesRef.doc(docId).update(updatedData);
+      }
 
       // Auto-manage brands and suppliers
       final newBrand = brandController.text.trim();

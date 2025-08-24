@@ -73,8 +73,8 @@ class AddSupplyController {
     if (RegExp(r'^[0-9]+$').hasMatch(text.trim())) {
       return false;
     }
-    // Check if the text contains at least one letter and is alphanumeric
-    return RegExp(r'^[a-zA-Z0-9\s]+$').hasMatch(text.trim()) &&
+    // Check if the text contains at least one letter and allows common characters
+    return RegExp(r'^[a-zA-Z0-9\s\-_\.]+$').hasMatch(text.trim()) &&
         RegExp(r'[a-zA-Z]').hasMatch(text.trim());
   }
 

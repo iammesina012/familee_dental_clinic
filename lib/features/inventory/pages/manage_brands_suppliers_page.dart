@@ -13,6 +13,10 @@ class ManageBrandsSuppliersPage extends StatefulWidget {
 class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
   final FilterController filterController = FilterController();
 
+  // View more state variables
+  bool showAllBrands = false;
+  bool showAllSuppliers = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,65 +178,96 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                         );
                       }
 
+                      // Determine which brands to show
+                      List<Brand> displayBrands = validBrands;
+                      bool shouldShowViewMore = validBrands.length > 4;
+
+                      if (shouldShowViewMore && !showAllBrands) {
+                        displayBrands = validBrands.take(4).toList();
+                      }
+
                       return Column(
-                        children: validBrands
-                            .map((brand) => Container(
-                                  margin: EdgeInsets.only(bottom: 12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[50],
-                                    borderRadius: BorderRadius.circular(12),
-                                    border:
-                                        Border.all(color: Colors.grey[200]!),
-                                  ),
-                                  child: ListTile(
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 20, vertical: 8),
-                                    title: Text(
-                                      brand.name,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
+                        children: [
+                          ...displayBrands
+                              .map((brand) => Container(
+                                    margin: EdgeInsets.only(bottom: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[50],
+                                      borderRadius: BorderRadius.circular(12),
+                                      border:
+                                          Border.all(color: Colors.grey[200]!),
+                                    ),
+                                    child: ListTile(
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 20, vertical: 8),
+                                      title: Text(
+                                        brand.name,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: IconButton(
+                                              icon: Icon(Icons.edit,
+                                                  size: 20,
+                                                  color: Colors.blue[600]),
+                                              onPressed: () =>
+                                                  _showEditBrandDialog(
+                                                      brand.name),
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.red[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: IconButton(
+                                              icon: Icon(Icons.delete,
+                                                  size: 20,
+                                                  color: Colors.red[600]),
+                                              onPressed: () =>
+                                                  _showDeleteBrandDialog(
+                                                      brand.name),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue[50],
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: IconButton(
-                                            icon: Icon(Icons.edit,
-                                                size: 20,
-                                                color: Colors.blue[600]),
-                                            onPressed: () =>
-                                                _showEditBrandDialog(
-                                                    brand.name),
-                                          ),
-                                        ),
-                                        SizedBox(width: 8),
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.red[50],
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: IconButton(
-                                            icon: Icon(Icons.delete,
-                                                size: 20,
-                                                color: Colors.red[600]),
-                                            onPressed: () =>
-                                                _showDeleteBrandDialog(
-                                                    brand.name),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  ))
+                              .toList(),
+                          // View More/Less button
+                          if (shouldShowViewMore) ...[
+                            SizedBox(height: 12),
+                            Center(
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    showAllBrands = !showAllBrands;
+                                  });
+                                },
+                                child: Text(
+                                  showAllBrands ? 'View Less' : 'View More',
+                                  style: TextStyle(
+                                    color: Color(0xFF4E38D4),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
                                   ),
-                                ))
-                            .toList(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       );
                     },
                   ),
@@ -297,65 +332,96 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                         );
                       }
 
+                      // Determine which suppliers to show
+                      List<Supplier> displaySuppliers = validSuppliers;
+                      bool shouldShowViewMore = validSuppliers.length > 4;
+
+                      if (shouldShowViewMore && !showAllSuppliers) {
+                        displaySuppliers = validSuppliers.take(4).toList();
+                      }
+
                       return Column(
-                        children: validSuppliers
-                            .map((supplier) => Container(
-                                  margin: EdgeInsets.only(bottom: 12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[50],
-                                    borderRadius: BorderRadius.circular(12),
-                                    border:
-                                        Border.all(color: Colors.grey[200]!),
-                                  ),
-                                  child: ListTile(
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 20, vertical: 8),
-                                    title: Text(
-                                      supplier.name,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
+                        children: [
+                          ...displaySuppliers
+                              .map((supplier) => Container(
+                                    margin: EdgeInsets.only(bottom: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[50],
+                                      borderRadius: BorderRadius.circular(12),
+                                      border:
+                                          Border.all(color: Colors.grey[200]!),
+                                    ),
+                                    child: ListTile(
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 20, vertical: 8),
+                                      title: Text(
+                                        supplier.name,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: IconButton(
+                                              icon: Icon(Icons.edit,
+                                                  size: 20,
+                                                  color: Colors.blue[600]),
+                                              onPressed: () =>
+                                                  _showEditSupplierDialog(
+                                                      supplier.name),
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.red[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: IconButton(
+                                              icon: Icon(Icons.delete,
+                                                  size: 20,
+                                                  color: Colors.red[600]),
+                                              onPressed: () =>
+                                                  _showDeleteSupplierDialog(
+                                                      supplier.name),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue[50],
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: IconButton(
-                                            icon: Icon(Icons.edit,
-                                                size: 20,
-                                                color: Colors.blue[600]),
-                                            onPressed: () =>
-                                                _showEditSupplierDialog(
-                                                    supplier.name),
-                                          ),
-                                        ),
-                                        SizedBox(width: 8),
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.red[50],
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: IconButton(
-                                            icon: Icon(Icons.delete,
-                                                size: 20,
-                                                color: Colors.red[600]),
-                                            onPressed: () =>
-                                                _showDeleteSupplierDialog(
-                                                    supplier.name),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  ))
+                              .toList(),
+                          // View More/Less button
+                          if (shouldShowViewMore) ...[
+                            SizedBox(height: 12),
+                            Center(
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    showAllSuppliers = !showAllSuppliers;
+                                  });
+                                },
+                                child: Text(
+                                  showAllSuppliers ? 'View Less' : 'View More',
+                                  style: TextStyle(
+                                    color: Color(0xFF4E38D4),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
                                   ),
-                                ))
-                            .toList(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       );
                     },
                   ),
