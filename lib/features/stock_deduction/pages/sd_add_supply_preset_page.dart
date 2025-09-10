@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/controller/inventory_controller.dart';
+import 'package:projects/features/stock_deduction/controller/sd_add_supply_preset_controller.dart';
 
 class StockDeductionAddSupplyForPresetPage extends StatefulWidget {
   const StockDeductionAddSupplyForPresetPage({super.key});
@@ -14,7 +14,7 @@ class StockDeductionAddSupplyForPresetPage extends StatefulWidget {
 class _StockDeductionAddSupplyForPresetPageState
     extends State<StockDeductionAddSupplyForPresetPage> {
   final TextEditingController _searchController = TextEditingController();
-  final InventoryController _inventoryController = InventoryController();
+  final SdAddSupplyPresetController _controller = SdAddSupplyPresetController();
   String _searchText = '';
   bool _multiSelectMode = false;
   final Set<String> _selectedIds = {};
@@ -36,16 +36,6 @@ class _StockDeductionAddSupplyForPresetPageState
     super.dispose();
   }
 
-  void _toggleMultiSelect() {
-    setState(() {
-      _multiSelectMode = !_multiSelectMode;
-      if (!_multiSelectMode) {
-        _selectedIds.clear();
-        _selectedItems.clear();
-      }
-    });
-  }
-
   void _toggleSelection(GroupedInventoryItem item) {
     setState(() {
       if (_selectedIds.contains(item.mainItem.id)) {
@@ -63,57 +53,34 @@ class _StockDeductionAddSupplyForPresetPageState
 
     // Check for duplicates in existing selections
     final args = ModalRoute.of(context)?.settings.arguments;
-    final Set<String> existingDocIds = {
-      if (args is Map && args['existingDocIds'] is List)
-        ...List.from(args['existingDocIds']).map((e) => e.toString())
-    };
+    final Set<String> existingDocIds = _controller.parseExistingDocIds(args);
 
     // Check if any selected item is already in the existing list
-    for (final item in _selectedItems.values) {
-      if (existingDocIds.contains(item.mainItem.id)) {
-        _showDuplicateDialog(item.mainItem.name);
-        return;
+    if (_controller.hasDuplicateItems(_selectedItems, existingDocIds)) {
+      final duplicateName =
+          _controller.getFirstDuplicateItemName(_selectedItems, existingDocIds);
+      if (duplicateName != null) {
+        _showDuplicateDialog(duplicateName);
       }
+      return;
     }
 
-    final List<Map<String, dynamic>> itemsToAdd = _selectedItems.values
-        .map((item) => {
-              'docId': item.mainItem.id,
-              'name': item.mainItem.name,
-              'brand': item.mainItem.brand,
-              'imageUrl': item.mainItem.imageUrl,
-              'expiry': item.mainItem.expiry,
-              'noExpiry': item.mainItem.noExpiry,
-              'stock': item.totalStock,
-            })
-        .toList();
-
+    final List<Map<String, dynamic>> itemsToAdd =
+        _controller.toReturnMapList(_selectedItems);
     Navigator.of(context).pop(itemsToAdd);
   }
 
   void _addSingleItem(GroupedInventoryItem item) {
     // Check for duplicates in existing selections
     final args = ModalRoute.of(context)?.settings.arguments;
-    final Set<String> existingDocIds = {
-      if (args is Map && args['existingDocIds'] is List)
-        ...List.from(args['existingDocIds']).map((e) => e.toString())
-    };
+    final Set<String> existingDocIds = _controller.parseExistingDocIds(args);
 
-    if (existingDocIds.contains(item.mainItem.id)) {
+    if (_controller.isDuplicate(item.mainItem.id, existingDocIds)) {
       _showDuplicateDialog(item.mainItem.name);
       return;
     }
 
-    final Map<String, dynamic> itemToAdd = {
-      'docId': item.mainItem.id,
-      'name': item.mainItem.name,
-      'brand': item.mainItem.brand,
-      'imageUrl': item.mainItem.imageUrl,
-      'expiry': item.mainItem.expiry,
-      'noExpiry': item.mainItem.noExpiry,
-      'stock': item.totalStock,
-    };
-
+    final Map<String, dynamic> itemToAdd = _controller.toReturnMap(item);
     Navigator.of(context).pop([itemToAdd]);
   }
 
@@ -146,10 +113,7 @@ class _StockDeductionAddSupplyForPresetPageState
   Widget build(BuildContext context) {
     // Read existing selections to prevent duplicates
     final args = ModalRoute.of(context)?.settings.arguments;
-    final Set<String> existingDocIds = {
-      if (args is Map && args['existingDocIds'] is List)
-        ...List.from(args['existingDocIds']).map((e) => e.toString())
-    };
+    final Set<String> existingDocIds = _controller.parseExistingDocIds(args);
     return Scaffold(
       backgroundColor: const Color(0xFFF9EFF2),
       appBar: AppBar(
@@ -169,7 +133,9 @@ class _StockDeductionAddSupplyForPresetPageState
             child: IconButton(
               icon: const Icon(Icons.notifications_outlined,
                   color: Colors.red, size: 30),
-              onPressed: () {},
+              onPressed: () {
+                Navigator.pushNamed(context, '/notifications');
+              },
             ),
           ),
         ],
@@ -209,8 +175,7 @@ class _StockDeductionAddSupplyForPresetPageState
               const SizedBox(height: 16),
               Expanded(
                 child: StreamBuilder<List<GroupedInventoryItem>>(
-                  stream: _inventoryController.getGroupedSuppliesStream(
-                      archived: false),
+                  stream: _controller.getGroupedSuppliesStream(archived: false),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -226,25 +191,8 @@ class _StockDeductionAddSupplyForPresetPageState
                     }
 
                     final items = snapshot.data ?? [];
-                    final filteredItems = items.where((item) {
-                      final itemName = item.mainItem.name.toLowerCase();
-                      final searchText = _searchText.toLowerCase();
-
-                      // Check if the name starts with the search text
-                      if (itemName.startsWith(searchText)) {
-                        return true;
-                      }
-
-                      // Check if any word in the name starts with the search text
-                      final words = itemName.split(' ');
-                      for (final word in words) {
-                        if (word.startsWith(searchText)) {
-                          return true;
-                        }
-                      }
-
-                      return false;
-                    }).toList();
+                    final filteredItems =
+                        _controller.filterSupplies(items, _searchText);
 
                     if (filteredItems.isEmpty) {
                       return Center(

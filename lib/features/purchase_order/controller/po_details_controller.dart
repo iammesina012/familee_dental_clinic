@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/purchase_order.dart';
 import 'po_firebase_controller.dart';
 import 'po_calculations.dart';
+import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
 
 class PODetailsController {
   final POFirebaseController _poController = POFirebaseController();
@@ -56,6 +57,13 @@ class PODetailsController {
     // Save the updated PO directly to Firebase for real-time updates
     await _poController.updatePOInFirebase(updatedPO);
 
+    // Log activity: Received #PO: Name with additional details of all supplies
+    await PoActivityController().logPurchaseOrderReceived(
+      poCode: updatedPO.code,
+      poName: updatedPO.name,
+      supplies: [updatedSupplies[supplyIndex]],
+    );
+
     return updatedPO;
   }
 
@@ -77,6 +85,13 @@ class PODetailsController {
 
     // Restock inventory with received supplies
     await _restockInventory(updatedPO);
+
+    // Log the purchase order approval
+    await PoActivityController().logPurchaseOrderApproved(
+      poCode: updatedPO.code,
+      poName: updatedPO.name,
+      supplies: updatedPO.supplies,
+    );
 
     return updatedPO;
   }
@@ -103,6 +118,13 @@ class PODetailsController {
 
     // Update in Firebase for real-time updates
     await _poController.updatePOInFirebase(updatedPO);
+
+    // Log the purchase order rejection
+    await PoActivityController().logPurchaseOrderRejected(
+      poCode: updatedPO.code,
+      poName: updatedPO.name,
+      supplies: updatedPO.supplies,
+    );
 
     return updatedPO;
   }

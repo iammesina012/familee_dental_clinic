@@ -82,9 +82,48 @@ class POFirebaseController {
   }
 
   Future<String> getNextCodeAndIncrement() async {
-    final existingPOs = await getAll();
-    final nextNumber = existingPOs.length + 1;
-    return '#PO$nextNumber';
+    try {
+      // Prefer Firebase as the source of truth to respect deletions
+      final snapshot = await _firestore.collection('purchase_orders').get();
+
+      final Set<int> existingNumbers = {};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final code = (data['code'] ?? '').toString();
+        if (code.startsWith('#PO')) {
+          final numberStr = code.substring(3);
+          final number = int.tryParse(numberStr);
+          if (number != null) {
+            existingNumbers.add(number);
+          }
+        }
+      }
+
+      int nextNumber = 1;
+      while (existingNumbers.contains(nextNumber)) {
+        nextNumber++;
+      }
+      return '#PO$nextNumber';
+    } catch (e) {
+      // Fallback to local storage if Firebase read fails
+      final existingPOs = await getAll();
+      final Set<int> existingNumbers = {};
+      for (final po in existingPOs) {
+        final code = po.code;
+        if (code.startsWith('#PO')) {
+          final numberStr = code.substring(3);
+          final number = int.tryParse(numberStr);
+          if (number != null) {
+            existingNumbers.add(number);
+          }
+        }
+      }
+      int nextNumber = 1;
+      while (existingNumbers.contains(nextNumber)) {
+        nextNumber++;
+      }
+      return '#PO$nextNumber';
+    }
   }
 
   Future<void> clearAllPOs() async {

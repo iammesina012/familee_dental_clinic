@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'filter_controller.dart';
+import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
+import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
 class AddSupplyController {
   final nameController = TextEditingController();
@@ -163,6 +165,45 @@ class AddSupplyController {
       await filterController.addBrandIfNotExists(brandController.text.trim());
       await filterController
           .addSupplierIfNotExists(supplierController.text.trim());
+
+      // Log the activity
+      await InventoryActivityController().logInventorySupplyAdded(
+        itemName: nameController.text.trim(),
+        category: selectedCategory!,
+        stock: int.tryParse(stockController.text.trim()) ?? 0,
+        unit: selectedUnit!,
+        cost: double.tryParse(costController.text.trim()),
+        brand: brandController.text.trim().isEmpty
+            ? null
+            : brandController.text.trim(),
+        supplier: supplierController.text.trim().isEmpty
+            ? null
+            : supplierController.text.trim(),
+        expiryDate: expiryController.text.trim().isEmpty
+            ? null
+            : expiryController.text.trim(),
+        noExpiry: noExpiry,
+      );
+
+      // Check for notifications
+      final notificationsController = NotificationsController();
+      final newStock = int.tryParse(stockController.text.trim()) ?? 0;
+
+      // Check stock level notifications (new item, so previous stock is 0)
+      await notificationsController.checkStockLevelNotification(
+        nameController.text.trim(),
+        newStock,
+        0, // previous stock is 0 for new items
+      );
+
+      // Check expiry notifications
+      await notificationsController.checkExpiryNotification(
+        nameController.text.trim(),
+        expiryController.text.trim().isEmpty
+            ? null
+            : expiryController.text.trim(),
+        noExpiry,
+      );
 
       return null; // Success
     } catch (e) {

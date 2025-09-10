@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/inventory_item.dart';
 import 'package:flutter/material.dart';
+import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
 
 class ViewSupplyController {
   Stream<InventoryItem?> supplyStream(String id) {
@@ -80,20 +81,95 @@ class ViewSupplyController {
   }
 
   Future<void> archiveSupply(String docId) async {
-    await FirebaseFirestore.instance
+    // Get supply data before archiving for activity logging
+    final supplyDoc = await FirebaseFirestore.instance
         .collection('supplies')
         .doc(docId)
-        .update({'archived': true});
+        .get();
+
+    if (supplyDoc.exists) {
+      final supplyData = supplyDoc.data() as Map<String, dynamic>;
+
+      // Archive the supply
+      await FirebaseFirestore.instance
+          .collection('supplies')
+          .doc(docId)
+          .update({'archived': true});
+
+      // Log the archive activity
+      await InventoryActivityController().logInventorySupplyArchived(
+        itemName: supplyData['name'] ?? 'Unknown Item',
+        category: supplyData['category'] ?? 'Unknown Category',
+        stock: supplyData['stock'] ?? 0,
+        unit: supplyData['unit'] ?? 'Unknown Unit',
+        cost: supplyData['cost'],
+        brand: supplyData['brand'],
+        supplier: supplyData['supplier'],
+        expiryDate: supplyData['expiryDate'],
+        noExpiry: supplyData['noExpiry'] ?? false,
+      );
+    }
   }
 
   Future<void> unarchiveSupply(String docId) async {
-    await FirebaseFirestore.instance
+    // Get supply data before unarchiving for activity logging
+    final supplyDoc = await FirebaseFirestore.instance
         .collection('supplies')
         .doc(docId)
-        .update({'archived': false});
+        .get();
+
+    if (supplyDoc.exists) {
+      final supplyData = supplyDoc.data() as Map<String, dynamic>;
+
+      // Unarchive the supply
+      await FirebaseFirestore.instance
+          .collection('supplies')
+          .doc(docId)
+          .update({'archived': false});
+
+      // Log the unarchive activity
+      await InventoryActivityController().logInventorySupplyUnarchived(
+        itemName: supplyData['name'] ?? 'Unknown Item',
+        category: supplyData['category'] ?? 'Unknown Category',
+        stock: supplyData['stock'] ?? 0,
+        unit: supplyData['unit'] ?? 'Unknown Unit',
+        cost: supplyData['cost'],
+        brand: supplyData['brand'],
+        supplier: supplyData['supplier'],
+        expiryDate: supplyData['expiryDate'],
+        noExpiry: supplyData['noExpiry'] ?? false,
+      );
+    }
   }
 
   Future<void> deleteSupply(String docId) async {
-    await FirebaseFirestore.instance.collection('supplies').doc(docId).delete();
+    // Get supply data before deleting for activity logging
+    final supplyDoc = await FirebaseFirestore.instance
+        .collection('supplies')
+        .doc(docId)
+        .get();
+
+    if (supplyDoc.exists) {
+      final supplyData = supplyDoc.data() as Map<String, dynamic>;
+
+      // Delete the supply
+      await FirebaseFirestore.instance
+          .collection('supplies')
+          .doc(docId)
+          .delete();
+
+      // Log the delete activity
+      await InventoryActivityController().logInventorySupplyDeleted(
+        itemName: supplyData['name'] ?? 'Unknown Item',
+        category: supplyData['category'] ?? 'Unknown Category',
+        stock: supplyData['stock'] ?? 0,
+        unit: supplyData['unit'] ?? 'Unknown Unit',
+        cost: supplyData['cost'],
+        brand: supplyData['brand'],
+        supplier: supplyData['supplier'],
+        expiryDate: supplyData['expiryDate'],
+        noExpiry: supplyData['noExpiry'] ?? false,
+      );
+    }
   }
 }

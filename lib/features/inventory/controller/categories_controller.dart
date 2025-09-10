@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
 
 class CategoriesController {
   final FirebaseFirestore firestore;
@@ -29,6 +30,11 @@ class CategoriesController {
         'name': categoryName.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // Log the category creation activity
+      await InventoryActivityController().logCategoryAdded(
+        categoryName: categoryName.trim(),
+      );
     }
   }
 
@@ -59,6 +65,12 @@ class CategoriesController {
       batch.update(doc.reference, {'category': newName.trim()});
     }
     await batch.commit();
+
+    // Log the category update activity
+    await InventoryActivityController().logCategoryUpdated(
+      oldCategoryName: oldName.trim(),
+      newCategoryName: newName.trim(),
+    );
   }
 
   // Delete category
@@ -84,6 +96,11 @@ class CategoriesController {
 
     if (categoryDocs.docs.isNotEmpty) {
       await categoryDocs.docs.first.reference.delete();
+
+      // Log the category deletion activity
+      await InventoryActivityController().logCategoryDeleted(
+        categoryName: categoryName.trim(),
+      );
     }
   }
 
@@ -109,6 +126,13 @@ class CategoriesController {
         });
       }
       await batch.commit();
+
+      // Log the default categories initialization
+      for (final categoryName in defaultCategories) {
+        await InventoryActivityController().logCategoryAdded(
+          categoryName: categoryName,
+        );
+      }
     }
   }
 }

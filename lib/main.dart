@@ -5,16 +5,18 @@ import 'package:projects/features/auth/pages/login_page.dart';
 import 'package:projects/features/dashboard/pages/dashboard_page.dart';
 import 'package:projects/features/inventory/pages/inventory_page.dart';
 import 'package:projects/features/purchase_order/pages/purchase_order_page.dart';
-import 'package:projects/features/purchase_order/pages/create_po_page.dart';
-import 'package:projects/features/purchase_order/pages/add_supply_page.dart';
-import 'package:projects/features/purchase_order/pages/edit_supply_po_page.dart';
+import 'package:projects/features/purchase_order/pages/po_create_page.dart';
+import 'package:projects/features/purchase_order/pages/po_add_supply_page.dart';
+import 'package:projects/features/purchase_order/pages/po_edit_supply_page.dart';
 import 'package:projects/features/purchase_order/pages/po_details_page.dart';
 import 'package:projects/features/stock_deduction/pages/stock_deduction_page.dart';
-import 'package:projects/features/stock_deduction/pages/add_supply_page.dart';
-import 'package:projects/features/stock_deduction/pages/preset_management_page.dart';
-import 'package:projects/features/stock_deduction/pages/create_preset_page.dart';
-import 'package:projects/features/stock_deduction/pages/edit_preset_page.dart';
-import 'package:projects/features/stock_deduction/pages/add_supply_for_preset_page.dart';
+import 'package:projects/features/stock_deduction/pages/sd_add_supply_page.dart';
+import 'package:projects/features/stock_deduction/pages/sd_preset_management_page.dart';
+import 'package:projects/features/stock_deduction/pages/sd_create_preset_page.dart';
+import 'package:projects/features/stock_deduction/pages/sd_edit_preset_page.dart';
+import 'package:projects/features/stock_deduction/pages/sd_add_supply_preset_page.dart';
+import 'package:projects/features/activity_log/pages/activity_log_page.dart';
+import 'package:projects/features/notifications/pages/notifications_page.dart';
 import 'package:projects/features/auth/services/auth_service.dart';
 import 'package:projects/shared/themes/font.dart';
 
@@ -68,6 +70,8 @@ class MainApp extends StatelessWidget {
               as Map<String, dynamic>;
           return EditPresetPage(preset: preset);
         },
+        '/activity-log': (context) => const ActivityLogPage(),
+        '/notifications': (context) => const NotificationsPage(),
       },
     );
   }

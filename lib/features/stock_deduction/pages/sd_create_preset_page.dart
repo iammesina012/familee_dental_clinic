@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/stock_deduction/controller/preset_controller.dart';
+import 'package:projects/features/stock_deduction/controller/sd_create_preset_controller.dart';
 
 class CreatePresetPage extends StatefulWidget {
   const CreatePresetPage({super.key});
@@ -13,7 +13,7 @@ class CreatePresetPage extends StatefulWidget {
 class _CreatePresetPageState extends State<CreatePresetPage> {
   final TextEditingController _presetNameController = TextEditingController();
   final List<Map<String, dynamic>> _presetSupplies = [];
-  final PresetController _presetController = PresetController();
+  final SdCreatePresetController _controller = SdCreatePresetController();
 
   @override
   void initState() {
@@ -32,22 +32,15 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
   }
 
   void _openAddSupply() async {
-    final existingDocIds = _presetSupplies
-        .map((e) => (e['docId'] ?? '').toString())
-        .where((id) => id.isNotEmpty)
-        .toList();
+    final existingDocIds = _controller.extractExistingDocIds(_presetSupplies);
     final result = await Navigator.of(context).pushNamed(
       '/stock-deduction/add-supply-for-preset',
       arguments: {'existingDocIds': existingDocIds},
     );
     if (result is Map<String, dynamic>) {
       // Check if supply is already in current preset
-      final docId = result['docId']?.toString();
-      final existsIndex =
-          _presetSupplies.indexWhere((e) => e['docId'] == docId);
-      if (existsIndex != -1) {
-        await _showDuplicateSupplyDialog(
-            result['name']?.toString() ?? 'This supply');
+      if (_controller.isSupplyInPreset(result, _presetSupplies)) {
+        await _showDuplicateSupplyDialog(_controller.extractSupplyName(result));
         return;
       }
 
@@ -56,26 +49,19 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
       });
     } else if (result is List) {
       // Check for duplicates within current preset
-      for (final dynamic r in result) {
-        if (r is Map<String, dynamic>) {
-          final docId = r['docId']?.toString();
-          final existsIndex =
-              _presetSupplies.indexWhere((e) => e['docId'] == docId);
-          if (existsIndex != -1) {
-            await _showDuplicateSupplyDialog(
-                r['name']?.toString() ?? 'This supply');
-            return;
-          }
+      if (_controller.hasDuplicateSupplies(result, _presetSupplies)) {
+        final duplicateName =
+            _controller.getFirstDuplicateSupplyName(result, _presetSupplies);
+        if (duplicateName != null) {
+          await _showDuplicateSupplyDialog(duplicateName);
         }
+        return;
       }
 
       // If no duplicates found, add all items
       setState(() {
-        for (final dynamic r in result) {
-          if (r is Map<String, dynamic>) {
-            _presetSupplies.add(r);
-          }
-        }
+        final validSupplies = _controller.processSuppliesResult(result);
+        _presetSupplies.addAll(validSupplies);
       });
     }
   }
@@ -87,7 +73,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
   }
 
   Future<void> _savePreset() async {
-    if (_presetNameController.text.trim().isEmpty) {
+    if (_controller.isPresetNameEmpty(_presetNameController.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -100,7 +86,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
       return;
     }
 
-    if (_presetSupplies.isEmpty) {
+    if (_controller.isPresetEmpty(_presetSupplies)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -115,8 +101,8 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
 
     // Check if preset name already exists
     try {
-      final nameExists = await _presetController
-          .isPresetNameExists(_presetNameController.text.trim());
+      final nameExists =
+          await _controller.isPresetNameExists(_presetNameController.text);
       if (nameExists) {
         await _showDuplicateNameDialog(_presetNameController.text.trim());
         return; // Stay on this page, don't navigate back
@@ -137,7 +123,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
     // Check if exact supply set already exists
     try {
       final exactSetExists =
-          await _presetController.isExactSupplySetExists(_presetSupplies);
+          await _controller.isExactSupplySetExists(_presetSupplies);
       if (exactSetExists) {
         await _showDuplicateSupplySetDialog();
         return; // Stay on this page, don't navigate back
@@ -156,18 +142,16 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
     }
 
     // Create preset data
-    final presetData = {
-      'name': _presetNameController.text.trim(),
-      'supplies': _presetSupplies,
-      'createdAt': DateTime.now().toString().split(' ')[0], // YYYY-MM-DD format
-    };
+    final presetData = _controller.createPresetData(
+        _presetNameController.text, _presetSupplies);
 
     // Return to preset management page for Firebase saving
     Navigator.of(context).pop(presetData);
   }
 
   Future<bool> _confirmLeave() async {
-    if (_presetNameController.text.trim().isEmpty && _presetSupplies.isEmpty) {
+    if (!_controller.hasUnsavedChanges(
+        _presetNameController.text, _presetSupplies)) {
       return true;
     }
 
@@ -348,7 +332,9 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
                 icon: const Icon(Icons.notifications_outlined,
                     color: Colors.red, size: 30),
                 tooltip: 'Notifications',
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.pushNamed(context, '/notifications');
+                },
               ),
             ),
           ],

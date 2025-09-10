@@ -5,6 +5,7 @@ import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/stock_deduction/controller/stock_deduction_controller.dart';
 import 'package:projects/features/inventory/controller/inventory_controller.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
+import 'package:projects/features/activity_log/controller/sd_activity_controller.dart';
 
 class StockDeductionPage extends StatefulWidget {
   const StockDeductionPage({super.key});
@@ -17,6 +18,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   final List<Map<String, dynamic>> _deductions = [];
   final StockDeductionController _controller = StockDeductionController();
   final InventoryController _inventoryController = InventoryController();
+  final SdActivityController _activityController = SdActivityController();
   OverlayEntry? _undoOverlayEntry;
   Route? _currentRoute;
 
@@ -374,6 +376,11 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
       },
     );
     overlay.insert(_undoOverlayEntry!);
+
+    // Auto-hide after 5 seconds
+    Future.delayed(const Duration(seconds: 5), () {
+      _removeUndoOverlay();
+    });
   }
 
   void _removeUndoOverlay() {
@@ -464,6 +471,12 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           }
         }
       });
+
+      // Log preset usage activity
+      await _activityController.logPresetUsed(
+        presetName: preset['name']?.toString() ?? 'Unknown',
+        supplies: supplies.cast<Map<String, dynamic>>(),
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -713,7 +726,9 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                   icon: const Icon(Icons.notifications_outlined,
                       color: Colors.red, size: 30),
                   tooltip: 'Notifications',
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/notifications');
+                  },
                 ),
               ),
             ],

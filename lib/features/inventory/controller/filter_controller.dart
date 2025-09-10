@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/inventory_item.dart';
+import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
 
 class FilterController {
   final FirebaseFirestore firestore;
@@ -52,6 +53,11 @@ class FilterController {
         'name': brandName.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // Log the brand creation activity
+      await InventoryActivityController().logBrandAdded(
+        brandName: brandName.trim(),
+      );
       return true;
     }
     return false;
@@ -130,6 +136,11 @@ class FilterController {
         'name': supplierName.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // Log the supplier creation activity
+      await InventoryActivityController().logSupplierAdded(
+        supplierName: supplierName.trim(),
+      );
       return true;
     }
     return false;
@@ -209,6 +220,12 @@ class FilterController {
       batch.update(doc.reference, {'brand': newName.trim()});
     }
     await batch.commit();
+
+    // Log the brand update activity
+    await InventoryActivityController().logBrandUpdated(
+      oldBrandName: oldName.trim(),
+      newBrandName: newName.trim(),
+    );
   }
 
   // Update supplier name across all supplies
@@ -241,6 +258,12 @@ class FilterController {
       batch.update(doc.reference, {'supplier': newName.trim()});
     }
     await batch.commit();
+
+    // Log the supplier update activity
+    await InventoryActivityController().logSupplierUpdated(
+      oldSupplierName: oldName.trim(),
+      newSupplierName: newName.trim(),
+    );
   }
 
   // Get brand names as list of strings
@@ -358,6 +381,11 @@ class FilterController {
       await doc.reference.delete();
     }
 
+    // Log the brand deletion activity
+    await InventoryActivityController().logBrandDeleted(
+      brandName: brandName.trim(),
+    );
+
     // Update all supplies with this brand to use "N/A" and store original brand
     final suppliesDocs = await firestore
         .collection('supplies')
@@ -388,6 +416,11 @@ class FilterController {
     for (final doc in supplierDocs.docs) {
       await doc.reference.delete();
     }
+
+    // Log the supplier deletion activity
+    await InventoryActivityController().logSupplierDeleted(
+      supplierName: supplierName.trim(),
+    );
 
     // Update all supplies with this supplier to use "N/A" and store original supplier
     final suppliesDocs = await firestore

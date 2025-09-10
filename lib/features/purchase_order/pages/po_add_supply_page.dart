@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/controller/inventory_controller.dart';
-import 'package:projects/features/purchase_order/pages/edit_supply_po_page.dart';
+import 'package:projects/features/purchase_order/pages/po_edit_supply_page.dart';
 
 class AddSupplyPage extends StatefulWidget {
   const AddSupplyPage({super.key});
@@ -56,7 +56,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                   color: Colors.red, size: 30),
               tooltip: 'Notifications',
               onPressed: () {
-                // Notification logic here
+                Navigator.pushNamed(context, '/notifications');
               },
             ),
           ),

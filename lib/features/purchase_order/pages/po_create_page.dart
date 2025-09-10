@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:projects/features/purchase_order/data/purchase_order.dart';
-import 'package:projects/features/purchase_order/controller/create_po_controller.dart';
+import 'package:projects/features/purchase_order/controller/po_create_controller.dart';
 import 'package:projects/shared/themes/font.dart';
 
 class CreatePOPage extends StatefulWidget {
@@ -17,12 +18,15 @@ class _CreatePOPageState extends State<CreatePOPage> {
   bool _isSaving = false; // Prevent double-save
   final CreatePOController _controller = CreatePOController();
   TextEditingController? _autocompleteController;
+  bool _nameListenerAttached = false;
 
   // Editing mode variables
   bool _isEditing = false;
   PurchaseOrder? _editingPO;
   bool _shouldSetAutocompleteText = false;
   bool _hasInitializedEditingMode = false;
+  String _originalName = '';
+  List<Map<String, dynamic>> _originalSupplies = [];
 
   @override
   void initState() {
@@ -51,6 +55,8 @@ class _CreatePOPageState extends State<CreatePOPage> {
       // Pre-populate the form with existing PO data
       purchaseNameController.text = _editingPO!.name;
       addedSupplies = List<Map<String, dynamic>>.from(_editingPO!.supplies);
+      _originalName = _editingPO!.name;
+      _originalSupplies = List<Map<String, dynamic>>.from(_editingPO!.supplies);
       _shouldSetAutocompleteText = true;
       _hasInitializedEditingMode = true;
 
@@ -60,6 +66,21 @@ class _CreatePOPageState extends State<CreatePOPage> {
     }
   }
 
+  String _getCurrentName() {
+    final controllerToCheck = _autocompleteController ?? purchaseNameController;
+    return controllerToCheck.text.trim();
+  }
+
+  bool _hasUnsavedChanges() {
+    if (!_isEditing) {
+      return addedSupplies.isNotEmpty && _getCurrentName().isNotEmpty;
+    }
+    final bool nameChanged = _getCurrentName() != _originalName;
+    final bool suppliesChanged =
+        jsonEncode(addedSupplies) != jsonEncode(_originalSupplies);
+    return nameChanged || suppliesChanged;
+  }
+
   @override
   void dispose() {
     purchaseNameController.dispose();
@@ -67,16 +88,6 @@ class _CreatePOPageState extends State<CreatePOPage> {
   }
 
   double _calculateTotalCost() {
-    // Create a temporary PO object to use the centralized method
-    final tempPO = PurchaseOrder(
-      id: '',
-      code: '',
-      name: '',
-      status: '',
-      supplies: addedSupplies,
-      receivedCount: 0,
-      createdAt: DateTime.now(),
-    );
     return _controller.calculateTotalCost(addedSupplies);
   }
 
@@ -107,7 +118,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                   color: Colors.red, size: 30),
               tooltip: 'Notifications',
               onPressed: () {
-                // Notification logic here
+                Navigator.pushNamed(context, '/notifications');
               },
             ),
           ),
@@ -149,6 +160,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                 focusNode, onFieldSubmitted) {
                               // Store reference to the autocomplete controller
                               _autocompleteController = textEditingController;
+                              if (!_nameListenerAttached) {
+                                _autocompleteController!.addListener(() {
+                                  if (mounted) setState(() {});
+                                });
+                                _nameListenerAttached = true;
+                              }
 
                               // Set the text if we're in editing mode and haven't set it yet
                               if (_shouldSetAutocompleteText &&
@@ -267,35 +284,41 @@ class _CreatePOPageState extends State<CreatePOPage> {
                           SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: (addedSupplies.isEmpty || _isSaving)
-                                  ? null
-                                  : _savePurchaseOrder,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    (addedSupplies.isEmpty || _isSaving)
-                                        ? Colors.grey[400]
-                                        : Color(0xFF00D4AA),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
+                            child: Builder(builder: (context) {
+                              final bool disabled = _isSaving ||
+                                  (_isEditing
+                                      ? !_hasUnsavedChanges()
+                                      : addedSupplies.isEmpty);
+                              return ElevatedButton(
+                                onPressed: disabled ? null : _savePurchaseOrder,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: disabled
+                                      ? Colors.grey[400]
+                                      : Color(0xFF00D4AA),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                                child: Text(
+                                  _isSaving
+                                      ? (_isEditing
+                                          ? 'Updating...'
+                                          : 'Saving...')
+                                      : (_isEditing ? 'Update' : 'Save'),
+                                  style: AppFonts.sfProStyle(
+                                    fontSize:
+                                        MediaQuery.of(context).size.width *
+                                            0.04,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                              ),
-                              child: Text(
-                                _isSaving
-                                    ? (_isEditing ? 'Updating...' : 'Saving...')
-                                    : (_isEditing ? 'Update' : 'Save'),
-                                style: AppFonts.sfProStyle(
-                                  fontSize:
-                                      MediaQuery.of(context).size.width * 0.04,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
+                              );
+                            }),
                           ),
                         ],
                       );
@@ -325,6 +348,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                     // Store reference to the autocomplete controller
                                     _autocompleteController =
                                         textEditingController;
+                                    if (!_nameListenerAttached) {
+                                      _autocompleteController!.addListener(() {
+                                        if (mounted) setState(() {});
+                                      });
+                                      _nameListenerAttached = true;
+                                    }
 
                                     // Set the text if we're in editing mode and haven't set it yet
                                     if (_shouldSetAutocompleteText &&
@@ -449,34 +478,39 @@ class _CreatePOPageState extends State<CreatePOPage> {
                             ),
                           ),
                           SizedBox(width: 16),
-                          ElevatedButton(
-                            onPressed: (addedSupplies.isEmpty || _isSaving)
-                                ? null
-                                : _savePurchaseOrder,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  (addedSupplies.isEmpty || _isSaving)
-                                      ? Colors.grey[400]
-                                      : Color(0xFF00D4AA),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
+                          Builder(builder: (context) {
+                            final bool disabled = _isSaving ||
+                                (_isEditing
+                                    ? !_hasUnsavedChanges()
+                                    : addedSupplies.isNotEmpty
+                                        ? false
+                                        : true);
+                            return ElevatedButton(
+                              onPressed: disabled ? null : _savePurchaseOrder,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: disabled
+                                    ? Colors.grey[400]
+                                    : Color(0xFF00D4AA),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                              child: Text(
+                                _isSaving
+                                    ? (_isEditing ? 'Updating...' : 'Saving...')
+                                    : (_isEditing ? 'Update' : 'Save'),
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              _isSaving
-                                  ? (_isEditing ? 'Updating...' : 'Saving...')
-                                  : (_isEditing ? 'Update' : 'Save'),
-                              style: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
+                            );
+                          }),
                         ],
                       );
                     }
@@ -1042,7 +1076,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
         supplies: List<Map<String, dynamic>>.from(addedSupplies),
         receivedCount: recalculatedReceived, // Recalculate received count
       );
-      await _controller.updatePO(updatedPO);
+      await _controller.updatePO(updatedPO, previousPO: _editingPO);
     } else {
       // Create new PO
       final now = DateTime.now();

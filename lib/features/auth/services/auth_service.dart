@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:projects/features/activity_log/controller/login_activity_controller.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -44,6 +45,8 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    // Log logout activity before signing out
+    await LoginActivityController().logLogout();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_rememberMeKey, false);
     await prefs.remove(_rememberedEmailKey);

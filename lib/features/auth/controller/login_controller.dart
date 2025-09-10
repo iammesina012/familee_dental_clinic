@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:projects/features/dashboard/pages/dashboard_page.dart';
 import 'package:projects/features/auth/services/auth_service.dart';
+import 'package:projects/features/activity_log/controller/login_activity_controller.dart';
 
 class LoginController {
   final email = TextEditingController();
@@ -70,6 +71,9 @@ class LoginController {
     try {
       await auth.login(
           email: emailText, password: passText, rememberMe: rememberMe);
+
+      // Log successful login
+      await LoginActivityController().logLogin();
 
       if (context.mounted) {
         Navigator.of(context).pushReplacement(

@@ -160,7 +160,7 @@ class _InventoryState extends State<Inventory> {
                   color: Colors.red, size: 30),
               tooltip: 'Notifications',
               onPressed: () {
-                // Notification logic here
+                Navigator.pushNamed(context, '/notifications');
               },
             ),
           ),

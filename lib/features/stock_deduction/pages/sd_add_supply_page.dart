@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/controller/inventory_controller.dart';
+import 'package:projects/features/stock_deduction/controller/sd_add_supply_controller.dart';
 
 class StockDeductionAddSupplyPage extends StatefulWidget {
   const StockDeductionAddSupplyPage({super.key});
@@ -14,20 +14,11 @@ class StockDeductionAddSupplyPage extends StatefulWidget {
 class _StockDeductionAddSupplyPageState
     extends State<StockDeductionAddSupplyPage> {
   final TextEditingController _searchController = TextEditingController();
-  final InventoryController _inventoryController = InventoryController();
+  final SdAddSupplyController _controller = SdAddSupplyController();
   String _searchText = '';
   bool _multiSelectMode = false;
   final Set<String> _selectedIds = {};
   final Map<String, InventoryItem> _selectedItems = {};
-
-  String _formatExpiry(String? expiry, bool noExpiry) {
-    if (noExpiry) return 'No Expiry';
-    if (expiry == null || expiry.isEmpty) return 'No Expiry';
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiry)) {
-      return expiry.replaceAll('-', '/');
-    }
-    return expiry;
-  }
 
   Widget _expiryChip(String text) {
     return Container(
@@ -135,36 +126,18 @@ class _StockDeductionAddSupplyPageState
   }
 
   void _toggleSelect(InventoryItem item) async {
-    if (item.stock <= 0) {
+    if (_controller.isOutOfStock(item)) {
       await _showOutOfStockDialog(item.name);
       return;
     }
-    setState(() {
-      if (_selectedIds.contains(item.id)) {
-        _selectedIds.remove(item.id);
-        _selectedItems.remove(item.id);
-      } else {
-        _selectedIds.add(item.id);
-        _selectedItems[item.id] = item;
-      }
+    _controller.toggleSelect(item, _selectedIds, _selectedItems, () {
+      setState(() {});
     });
-  }
-
-  Map<String, dynamic> _toReturnMap(InventoryItem item) {
-    return {
-      'docId': item.id,
-      'name': item.name,
-      'brand': item.brand,
-      'imageUrl': item.imageUrl,
-      'expiry': item.expiry,
-      'noExpiry': item.noExpiry,
-      'stock': item.stock,
-    };
   }
 
   void _submitSelection() {
     if (_selectedItems.isEmpty) return;
-    final list = _selectedItems.values.map(_toReturnMap).toList();
+    final list = _controller.submitSelection(_selectedItems);
     Navigator.pop(context, list);
   }
 
@@ -178,10 +151,7 @@ class _StockDeductionAddSupplyPageState
   Widget build(BuildContext context) {
     // Read existing selections to prevent duplicates
     final args = ModalRoute.of(context)?.settings.arguments;
-    final Set<String> existingDocIds = {
-      if (args is Map && args['existingDocIds'] is List)
-        ...List.from(args['existingDocIds']).map((e) => e.toString())
-    };
+    final Set<String> existingDocIds = _controller.parseExistingDocIds(args);
     return Scaffold(
       backgroundColor: const Color(0xFFF9EFF2),
       appBar: AppBar(
@@ -201,7 +171,9 @@ class _StockDeductionAddSupplyPageState
             child: IconButton(
               icon: const Icon(Icons.notifications_outlined,
                   color: Colors.red, size: 30),
-              onPressed: () {},
+              onPressed: () {
+                Navigator.pushNamed(context, '/notifications');
+              },
             ),
           ),
         ],
@@ -241,8 +213,7 @@ class _StockDeductionAddSupplyPageState
               const SizedBox(height: 16),
               Expanded(
                 child: StreamBuilder<List<GroupedInventoryItem>>(
-                  stream: _inventoryController.getGroupedSuppliesStream(
-                      archived: false),
+                  stream: _controller.getGroupedSuppliesStream(archived: false),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(
@@ -261,13 +232,8 @@ class _StockDeductionAddSupplyPageState
                     }
 
                     final groups = snapshot.data ?? [];
-                    final filtered = _searchText.isEmpty
-                        ? groups
-                        : groups
-                            .where((g) => g.mainItem.name
-                                .toLowerCase()
-                                .contains(_searchText.toLowerCase()))
-                            .toList();
+                    final filtered =
+                        _controller.filterSupplies(groups, _searchText);
 
                     if (filtered.isEmpty) {
                       return Center(
@@ -314,7 +280,8 @@ class _StockDeductionAddSupplyPageState
                             if (!_multiSelectMode) {
                               setState(() => _multiSelectMode = true);
                             }
-                            if (existingDocIds.contains(item.id)) {
+                            if (_controller.isDuplicate(
+                                item.id, existingDocIds)) {
                               await _showDuplicateDialog(item.name);
                               return;
                             }
@@ -322,21 +289,24 @@ class _StockDeductionAddSupplyPageState
                           },
                           onTap: () async {
                             if (_multiSelectMode) {
-                              if (existingDocIds.contains(item.id)) {
+                              if (_controller.isDuplicate(
+                                  item.id, existingDocIds)) {
                                 await _showDuplicateDialog(item.name);
                                 return;
                               }
                               _toggleSelect(item);
                             } else {
-                              if (item.stock <= 0) {
+                              if (_controller.isOutOfStock(item)) {
                                 await _showOutOfStockDialog(item.name);
                                 return;
                               }
-                              if (existingDocIds.contains(item.id)) {
+                              if (_controller.isDuplicate(
+                                  item.id, existingDocIds)) {
                                 await _showDuplicateDialog(item.name);
                                 return;
                               }
-                              Navigator.pop(context, _toReturnMap(item));
+                              Navigator.pop(
+                                  context, _controller.toReturnMap(item));
                             }
                           },
                           child: Container(
@@ -396,7 +366,7 @@ class _StockDeductionAddSupplyPageState
                                       ),
                                       const SizedBox(height: 6),
                                       _expiryChip('Expiry: ' +
-                                          _formatExpiry(
+                                          _controller.formatExpiry(
                                               item.expiry, item.noExpiry)),
                                       const SizedBox(height: 6),
                                       _stockChip(

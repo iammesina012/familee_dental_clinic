@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:projects/features/activity_log/controller/sd_activity_controller.dart';
+import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
 class StockDeductionController {
   final FirebaseFirestore firestore;
@@ -12,7 +14,7 @@ class StockDeductionController {
   /// Returns a summary map of docId -> actuallyDeductedQty.
   Future<Map<String, int>> applyDeductions(
       List<Map<String, dynamic>> deductionItems) async {
-    final Map<String, int> results = {};
+    final Map<String, dynamic> results = {};
 
     for (final item in deductionItems) {
       final String? docId = item['docId'] as String?;
@@ -42,10 +44,68 @@ class StockDeductionController {
         final int newStock = currentStock - deductQty;
         transaction.update(ref, {'stock': newStock});
         results[docId] = deductQty;
+
+        // Store notification data for after transaction
+        results['_notificationData_$docId'] = {
+          'itemName': data['name'] ?? 'Unknown Item',
+          'newStock': newStock,
+          'previousStock': currentStock,
+        };
+
+        // Log the stock deduction activity
+        // Note: We'll log this after the transaction completes successfully
+        results['_logData_$docId'] = {
+          'itemName': data['name'] ?? 'Unknown Item',
+          'brand': data['brand'] ?? 'Unknown Brand',
+          'quantity': deductQty,
+          'supplier': data['supplier'] ?? 'Unknown Supplier',
+        };
       });
     }
 
-    return results;
+    // Log all successful deductions and check for notifications
+    final notificationsController = NotificationsController();
+    for (final item in deductionItems) {
+      final String? docId = item['docId'] as String?;
+      if (docId != null && results.containsKey(docId)) {
+        final logData = results['_logData_$docId'] as Map<String, dynamic>?;
+        final notificationData =
+            results['_notificationData_$docId'] as Map<String, dynamic>?;
+
+        if (logData != null) {
+          await SdActivityController().logStockDeduction(
+            itemName: logData['itemName'] ?? 'Unknown Item',
+            brand: logData['brand'] ?? 'Unknown Brand',
+            quantity: logData['quantity'] ?? 0,
+            supplier: logData['supplier'] ?? 'Unknown Supplier',
+          );
+        }
+
+        // Check for stock level notifications
+        if (notificationData != null) {
+          final itemName = notificationData['itemName'] ?? 'Unknown Item';
+          final newStock = notificationData['newStock'] ?? 0;
+          final previousStock = notificationData['previousStock'] ?? 0;
+
+          await notificationsController.checkStockLevelNotification(
+            itemName,
+            newStock as int,
+            previousStock as int,
+          );
+        }
+      }
+    }
+
+    // Clean up log and notification data from results before returning
+    final cleanResults = <String, int>{};
+    results.forEach((key, value) {
+      if (!key.startsWith('_logData_') &&
+          !key.startsWith('_notificationData_')) {
+        cleanResults[key] = value as int;
+      }
+    });
+
+    return cleanResults;
   }
 
   /// Reverts stock deductions for the provided items by INCREASING stock.
@@ -54,7 +114,7 @@ class StockDeductionController {
   /// Returns a summary map of docId -> actuallyRevertedQty.
   Future<Map<String, int>> revertDeductions(
       List<Map<String, dynamic>> deductionItems) async {
-    final Map<String, int> results = {};
+    final Map<String, dynamic> results = {};
 
     for (final item in deductionItems) {
       final String? docId = item['docId'] as String?;
@@ -77,9 +137,47 @@ class StockDeductionController {
         final int newStock = currentStock + revertQty;
         transaction.update(ref, {'stock': newStock});
         results[docId] = revertQty;
+
+        // Store notification data for after transaction
+        results['_notificationData_$docId'] = {
+          'itemName': data['name'] ?? 'Unknown Item',
+          'newStock': newStock,
+          'previousStock': currentStock,
+        };
       });
     }
 
-    return results;
+    // Check for stock level notifications after reverting
+    final notificationsController = NotificationsController();
+    for (final item in deductionItems) {
+      final String? docId = item['docId'] as String?;
+      if (docId != null && results.containsKey(docId)) {
+        final notificationData =
+            results['_notificationData_$docId'] as Map<String, dynamic>?;
+
+        // Check for stock level notifications
+        if (notificationData != null) {
+          final itemName = notificationData['itemName'] ?? 'Unknown Item';
+          final newStock = notificationData['newStock'] ?? 0;
+          final previousStock = notificationData['previousStock'] ?? 0;
+
+          await notificationsController.checkStockLevelNotification(
+            itemName,
+            newStock as int,
+            previousStock as int,
+          );
+        }
+      }
+    }
+
+    // Clean up notification data from results before returning
+    final cleanResults = <String, int>{};
+    results.forEach((key, value) {
+      if (!key.startsWith('_notificationData_')) {
+        cleanResults[key] = value;
+      }
+    });
+
+    return cleanResults;
   }
 }

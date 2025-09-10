@@ -25,6 +25,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _initializeAnimation();
+    // Dashboard access logging removed for now
   }
 
   void _initializeAnimation() {
@@ -77,7 +78,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
               ),
               tooltip: 'Notifications',
               onPressed: () {
-                // Notification logic here
+                Navigator.pushNamed(context, '/notifications');
               },
             ),
           ),

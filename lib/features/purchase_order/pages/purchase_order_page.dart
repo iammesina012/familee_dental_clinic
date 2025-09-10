@@ -5,6 +5,7 @@ import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/purchase_order/controller/po_list_controller.dart';
 import 'package:projects/features/purchase_order/data/purchase_order.dart';
 import 'dart:async'; // Added for StreamSubscription
+import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
 
 class PurchaseOrderPage extends StatefulWidget {
   const PurchaseOrderPage({super.key});
@@ -207,7 +208,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                     color: Colors.red, size: 30),
                 tooltip: 'Notifications',
                 onPressed: () {
-                  // Notification logic here
+                  Navigator.pushNamed(context, '/notifications');
                 },
               ),
             ),
@@ -779,6 +780,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                 ElevatedButton(
                   onPressed: () async {
                     try {
+                      // Capture PO for logging before deletion
+                      final capturedPO = po;
                       // Delete the PO
                       await _controller.deletePO(po.id);
                       Navigator.of(context).pop(true);
@@ -802,6 +805,12 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
+                        );
+                        // Log activity for removal
+                        await PoActivityController().logPurchaseOrderRemoved(
+                          poCode: capturedPO.code,
+                          poName: capturedPO.name,
+                          supplies: capturedPO.supplies,
                         );
                       }
                     } catch (e) {

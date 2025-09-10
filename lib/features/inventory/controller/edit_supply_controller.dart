@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../data/inventory_item.dart';
 import 'filter_controller.dart';
+import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
+import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
 class EditSupplyController {
   final nameController = TextEditingController();
@@ -30,6 +32,13 @@ class EditSupplyController {
   final FilterController filterController = FilterController();
 
   // Store original values for comparison
+  String? originalName;
+  String? originalCategory;
+  int? originalStock;
+  String? originalUnit;
+  double? originalCost;
+  String? originalExpiry;
+  bool? originalNoExpiry;
   String? originalBrand;
   String? originalSupplier;
 
@@ -54,6 +63,13 @@ class EditSupplyController {
     }
 
     // Store original values for comparison
+    originalName = item.name;
+    originalCategory = item.category;
+    originalStock = item.stock;
+    originalUnit = item.unit;
+    originalCost = item.cost;
+    originalExpiry = item.expiry;
+    originalNoExpiry = item.noExpiry;
     originalBrand = item.brand == "N/A" ? "" : item.brand;
     originalSupplier = item.supplier == "N/A" ? "" : item.supplier;
   }
@@ -260,6 +276,111 @@ class EditSupplyController {
       } else {
         // Add new supplier if it doesn't exist
         await filterController.addSupplierIfNotExists(newSupplier);
+      }
+
+      // Track what fields were actually changed with before/after values
+      final Map<String, Map<String, dynamic>> fieldChanges = {};
+
+      // Compare current values with original values and track changes
+      if (nameController.text.trim() != (originalName ?? '')) {
+        fieldChanges['Name'] = {
+          'previous': originalName ?? 'N/A',
+          'new': nameController.text.trim(),
+        };
+      }
+      if (selectedCategory != (originalCategory ?? '')) {
+        fieldChanges['Category'] = {
+          'previous': originalCategory ?? 'N/A',
+          'new': selectedCategory ?? 'Unknown Category',
+        };
+      }
+      if ((int.tryParse(stockController.text.trim()) ?? 0) !=
+          (originalStock ?? 0)) {
+        fieldChanges['Stock'] = {
+          'previous': originalStock ?? 0,
+          'new': int.tryParse(stockController.text.trim()) ?? 0,
+        };
+      }
+      if (selectedUnit != (originalUnit ?? '')) {
+        fieldChanges['Unit'] = {
+          'previous': originalUnit ?? 'N/A',
+          'new': selectedUnit ?? 'Unknown Unit',
+        };
+      }
+      if (costController.text.trim().isNotEmpty &&
+          double.tryParse(costController.text.trim()) !=
+              (originalCost ?? 0.0)) {
+        fieldChanges['Cost'] = {
+          'previous': originalCost ?? 0.0,
+          'new': double.tryParse(costController.text.trim()) ?? 0.0,
+        };
+      }
+      if (brandController.text.trim() != (originalBrand ?? '')) {
+        fieldChanges['Brand'] = {
+          'previous': originalBrand ?? 'N/A',
+          'new': brandController.text.trim(),
+        };
+      }
+      if (supplierController.text.trim() != (originalSupplier ?? '')) {
+        fieldChanges['Supplier'] = {
+          'previous': originalSupplier ?? 'N/A',
+          'new': supplierController.text.trim(),
+        };
+      }
+      if (expiryController.text.trim() != (originalExpiry ?? '')) {
+        fieldChanges['Expiry Date'] = {
+          'previous': originalExpiry ?? 'N/A',
+          'new': expiryController.text.trim().isNotEmpty
+              ? expiryController.text.trim()
+              : 'N/A',
+        };
+      }
+      if (noExpiry != (originalNoExpiry ?? false)) {
+        fieldChanges['No Expiry'] = {
+          'previous': originalNoExpiry ?? false,
+          'new': noExpiry,
+        };
+      }
+
+      // Log the edit activity with detailed field changes
+      await InventoryActivityController().logInventorySupplyEdited(
+        itemName: nameController.text.trim(),
+        category: selectedCategory ?? 'Unknown Category',
+        stock: int.tryParse(stockController.text.trim()) ?? 0,
+        unit: selectedUnit ?? 'Unknown Unit',
+        cost: double.tryParse(costController.text.trim()),
+        brand: brandController.text.trim(),
+        supplier: supplierController.text.trim(),
+        expiryDate: expiryController.text.trim().isNotEmpty
+            ? expiryController.text.trim()
+            : null,
+        noExpiry: noExpiry,
+        fieldChanges: fieldChanges,
+      );
+
+      // Check for notifications
+      final notificationsController = NotificationsController();
+      final newStock = int.tryParse(stockController.text.trim()) ?? 0;
+
+      // Check stock level notifications if stock changed
+      if (newStock != (originalStock ?? 0)) {
+        await notificationsController.checkStockLevelNotification(
+          nameController.text.trim(),
+          newStock,
+          originalStock ?? 0,
+        );
+      }
+
+      // Check expiry notifications if expiry changed
+      if ((expiryController.text.trim() != (originalExpiry ?? '')) ||
+          (noExpiry != (originalNoExpiry ?? false))) {
+        await notificationsController.checkExpiryNotification(
+          nameController.text.trim(),
+          expiryController.text.trim().isEmpty
+              ? null
+              : expiryController.text.trim(),
+          noExpiry,
+        );
       }
 
       return null; // Success

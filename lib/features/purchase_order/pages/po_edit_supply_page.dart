@@ -107,7 +107,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                   color: Colors.red, size: 30),
               tooltip: 'Notifications',
               onPressed: () {
-                // Notification logic here
+                Navigator.pushNamed(context, '/notifications');
               },
             ),
           ),
@@ -375,17 +375,19 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                     context: context,
                                     initialDate: _batchExpiries[i],
                                   );
-                                  if (result != null) {
+                                  if (result is DateTime) {
                                     setState(() {
                                       _batchExpiries[i] = result;
                                       _batchNoExpirySelected[i] = false;
                                     });
-                                  } else if (result == null) {
+                                  } else if (result == 'NO_EXPIRY') {
                                     // User explicitly selected "No Expiry Date"
                                     setState(() {
                                       _batchExpiries[i] = null;
                                       _batchNoExpirySelected[i] = true;
                                     });
+                                  } else {
+                                    // Cancel or tap outside → do nothing
                                   }
                                 },
                                 child: Container(
@@ -608,18 +610,24 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
       return;
     }
 
-    // Build batches payload
-    final expiryBatches = <Map<String, dynamic>>[];
+    // Build batches payload (aggregate same expiry dates, including no-expiry)
+    final Map<String, int> aggregatedByDate = {};
     for (int i = 0; i < _batchQtyControllers.length; i++) {
-      final q = int.parse(_batchQtyControllers[i].text.trim());
-      final d = _batchExpiries[i];
-      expiryBatches.add({
-        'quantity': q,
-        'expiryDate': d != null
-            ? '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}'
-            : '', // Empty string for no expiry
-      });
+      final quantityForBatch = int.parse(_batchQtyControllers[i].text.trim());
+      final pickedDate = _batchExpiries[i];
+      final String expiryKey = pickedDate != null
+          ? '${pickedDate.year}/${pickedDate.month.toString().padLeft(2, '0')}/${pickedDate.day.toString().padLeft(2, '0')}'
+          : '';
+      aggregatedByDate[expiryKey] =
+          (aggregatedByDate[expiryKey] ?? 0) + quantityForBatch;
     }
+    final expiryBatches = <Map<String, dynamic>>[
+      for (final entry in aggregatedByDate.entries)
+        {
+          'quantity': entry.value,
+          'expiryDate': entry.key,
+        }
+    ];
 
     // Create the updated supply data
     final updatedSupplyData = {
@@ -661,11 +669,11 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     );
   }
 
-  Future<DateTime?> _showCustomDatePicker({
+  Future<Object?> _showCustomDatePicker({
     required BuildContext context,
     DateTime? initialDate,
   }) async {
-    return showDialog<DateTime?>(
+    return showDialog<Object?>(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
@@ -684,7 +692,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
             children: [
               // No Expiry option
               InkWell(
-                onTap: () => Navigator.of(dialogContext).pop(null),
+                onTap: () => Navigator.of(dialogContext).pop('NO_EXPIRY'),
                 child: Container(
                   width: double.infinity,
                   padding:

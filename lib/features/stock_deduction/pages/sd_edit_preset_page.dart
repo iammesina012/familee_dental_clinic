@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/stock_deduction/controller/preset_controller.dart';
+import 'package:projects/features/stock_deduction/controller/sd_edit_preset_controller.dart';
+import 'package:projects/features/activity_log/controller/sd_activity_controller.dart'; // Add this import
 
 class EditPresetPage extends StatefulWidget {
   final Map<String, dynamic> preset;
@@ -14,7 +15,7 @@ class EditPresetPage extends StatefulWidget {
 
 class _EditPresetPageState extends State<EditPresetPage> {
   final TextEditingController _nameController = TextEditingController();
-  final PresetController _presetController = PresetController();
+  final SdEditPresetController _controller = SdEditPresetController();
   List<Map<String, dynamic>> _presetSupplies = [];
 
   @override
@@ -32,48 +33,29 @@ class _EditPresetPageState extends State<EditPresetPage> {
   }
 
   void _openAddSupply() async {
-    final existingDocIds =
-        _presetSupplies.map((e) => e['docId']?.toString()).toList();
+    final existingDocIds = _controller.extractExistingDocIds(_presetSupplies);
 
     final result = await Navigator.of(context).pushNamed(
       '/stock-deduction/add-supply-for-preset',
       arguments: {'existingDocIds': existingDocIds},
     );
 
-    if (result is Map<String, dynamic>) {
-      final docId = result['docId']?.toString();
-      final existsIndex =
-          _presetSupplies.indexWhere((e) => e['docId'] == docId);
-      if (existsIndex != -1) {
-        // Duplicate found - show dialog
-        await _showDuplicateSupplyDialog(
-            result['name']?.toString() ?? 'This supply');
+    final processedResult =
+        _controller.processAddSupplyResult(result, _presetSupplies);
+
+    if (processedResult != null) {
+      if (processedResult['isDuplicate'] == true) {
+        await _showDuplicateSupplyDialog(processedResult['supplyName']);
         return;
       }
+
       setState(() {
-        _presetSupplies.add(result);
-      });
-    } else if (result is List) {
-      // Check for duplicates first
-      for (final dynamic r in result) {
-        if (r is Map<String, dynamic>) {
-          final docId = r['docId']?.toString();
-          final existsIndex =
-              _presetSupplies.indexWhere((e) => e['docId'] == docId);
-          if (existsIndex != -1) {
-            // Duplicate found - show dialog
-            await _showDuplicateSupplyDialog(
-                r['name']?.toString() ?? 'This supply');
-            return;
-          }
-        }
-      }
-      // If no duplicates found, add all items
-      setState(() {
-        for (final dynamic r in result) {
-          if (r is Map<String, dynamic>) {
-            _presetSupplies.add(r);
-          }
+        if (processedResult['supply'] != null) {
+          _presetSupplies = _controller.addSupplyToPreset(
+              _presetSupplies, processedResult['supply']);
+        } else if (processedResult['supplies'] != null) {
+          _presetSupplies = _controller.addSuppliesToPreset(
+              _presetSupplies, processedResult['supplies']);
         }
       });
     }
@@ -81,31 +63,21 @@ class _EditPresetPageState extends State<EditPresetPage> {
 
   void _removeSupply(int index) {
     setState(() {
-      _presetSupplies.removeAt(index);
+      _presetSupplies =
+          _controller.removeSupplyFromPreset(_presetSupplies, index);
     });
   }
 
   Future<void> _savePreset() async {
     final presetName = _nameController.text.trim();
 
-    if (presetName.isEmpty) {
+    final validation =
+        _controller.validatePresetData(presetName, _presetSupplies);
+    if (!validation['isValid']) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please enter a preset name',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (_presetSupplies.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please add at least one supply to the preset',
+            validation['error'],
             style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
           ),
           backgroundColor: Colors.red,
@@ -115,11 +87,9 @@ class _EditPresetPageState extends State<EditPresetPage> {
     }
 
     // Check if name has changed and if so, check for duplicates
-    if (presetName.toLowerCase() !=
-        (widget.preset['name'] ?? '').toLowerCase()) {
+    if (_controller.hasNameChanged(presetName, widget.preset['name'] ?? '')) {
       try {
-        final nameExists =
-            await _presetController.isPresetNameExists(presetName);
+        final nameExists = await _controller.isPresetNameExists(presetName);
         if (nameExists) {
           await _showDuplicateNameDialog();
           return; // Stay on this page, don't navigate back
@@ -140,7 +110,7 @@ class _EditPresetPageState extends State<EditPresetPage> {
 
     // Check if exact supply set already exists (excluding current preset)
     try {
-      final exactSetExists = await _presetController.isExactSupplySetExists(
+      final exactSetExists = await _controller.isExactSupplySetExists(
           _presetSupplies,
           excludePresetId: widget.preset['id']);
       if (exactSetExists) {
@@ -161,15 +131,28 @@ class _EditPresetPageState extends State<EditPresetPage> {
     }
 
     // Update preset data
-    final updatedPreset = {
-      ...widget.preset,
-      'name': presetName,
-      'supplies': _presetSupplies,
-      'updatedAt': DateTime.now().toIso8601String(),
-    };
+    final updatedPreset = _controller.createUpdatedPresetData(
+        widget.preset, presetName, _presetSupplies);
 
     try {
-      await _presetController.updatePreset(widget.preset['id'], updatedPreset);
+      await _controller.updatePreset(widget.preset['id'], updatedPreset);
+
+      // Log the preset editing activity
+      final fieldChanges = _controller.detectFieldChanges(
+        widget.preset,
+        presetName,
+        _presetSupplies,
+      );
+
+      final SdActivityController activityController = SdActivityController();
+      await activityController.logPresetEdited(
+        originalPresetName: widget.preset['name'] ?? '',
+        newPresetName: presetName,
+        originalSupplies: _controller.getOriginalSupplies(widget.preset),
+        newSupplies: _presetSupplies,
+        fieldChanges: fieldChanges,
+      );
+
       if (!mounted) return;
 
       Navigator.of(context)
@@ -277,9 +260,11 @@ class _EditPresetPageState extends State<EditPresetPage> {
     return WillPopScope(
       onWillPop: () async {
         // Check if there are unsaved changes
-        final hasChanges = _nameController.text.trim() !=
-                (widget.preset['name'] ?? '') ||
-            _presetSupplies.length != (widget.preset['supplies']?.length ?? 0);
+        final hasChanges = _controller.hasUnsavedChanges(
+            _nameController.text.trim(),
+            _presetSupplies,
+            widget.preset['name'] ?? '',
+            List<Map<String, dynamic>>.from(widget.preset['supplies'] ?? []));
 
         if (hasChanges) {
           final shouldPop = await showDialog<bool>(
@@ -345,7 +330,9 @@ class _EditPresetPageState extends State<EditPresetPage> {
                 icon: const Icon(Icons.notifications_outlined,
                     color: Colors.red, size: 30),
                 tooltip: 'Notifications',
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.pushNamed(context, '/notifications');
+                },
               ),
             ),
           ],

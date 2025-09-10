@@ -2,6 +2,7 @@ import '../data/purchase_order.dart';
 import 'po_firebase_controller.dart';
 import 'po_calculations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
 
 class CreatePOController {
   final POFirebaseController _poController = POFirebaseController();
@@ -17,11 +18,156 @@ class CreatePOController {
   // Save new PO
   Future<void> savePO(PurchaseOrder po) async {
     await _poController.save(po);
+
+    // Log the purchase order creation activity
+    await PoActivityController().logPurchaseOrderCreated(
+      poCode: po.code,
+      poName: po.name,
+      supplies: po.supplies,
+    );
   }
 
   // Update existing PO
-  Future<void> updatePO(PurchaseOrder po) async {
+  Future<void> updatePO(PurchaseOrder po, {PurchaseOrder? previousPO}) async {
+    // Build field changes by comparing with the existing PO BEFORE updating
+    Map<String, Map<String, dynamic>> fieldChanges = {};
+    // Prefer the previousPO passed in from the edit page; fall back to fetch
+    PurchaseOrder? baseline = previousPO;
+    baseline ??= await _poController.getPOByIdFromFirebase(po.id);
+
+    if (baseline != null) {
+      // Compare PO Name
+      if ((baseline.name).toString().trim() != (po.name).toString().trim()) {
+        fieldChanges['Name'] = {
+          'previous': baseline.name,
+          'new': po.name,
+        };
+      }
+
+      // Compare supplies count
+      if ((baseline.supplies.length) != (po.supplies.length)) {
+        fieldChanges['Supplies Count'] = {
+          'previous': baseline.supplies.length,
+          'new': po.supplies.length,
+        };
+      }
+
+      // Per-item quantity differences: match by name and record specific changes
+      String? nameOf(Map<String, dynamic> s) =>
+          (s['supplyName'] ?? s['name'])?.toString();
+      int qtyOf(Map<String, dynamic> s) {
+        final q = s['quantity'];
+        if (q is int) return q;
+        if (q is num) return q.toInt();
+        return 0;
+      }
+
+      final Map<String, Map<String, dynamic>> baselineByName = {
+        for (final s in baseline.supplies)
+          if (nameOf(s) != null) nameOf(s)!: s,
+      };
+      final Map<String, Map<String, dynamic>> updatedByName = {
+        for (final s in po.supplies)
+          if (nameOf(s) != null) nameOf(s)!: s,
+      };
+
+      for (final entry in baselineByName.entries) {
+        final oldName = entry.key;
+        final oldSupply = entry.value;
+        final newSupply = updatedByName[oldName];
+        if (newSupply != null) {
+          // Quantity change
+          final oldQty = qtyOf(oldSupply);
+          final newQty = qtyOf(newSupply);
+          if (oldQty != newQty) {
+            fieldChanges['Quantity::$oldName'] = {
+              'previous': oldQty,
+              'new': newQty,
+            };
+          }
+
+          // Supplier name change
+          final oldSupplier =
+              (oldSupply['supplierName'] ?? oldSupply['supplier'])
+                      ?.toString() ??
+                  'N/A';
+          final newSupplier =
+              (newSupply['supplierName'] ?? newSupply['supplier'])
+                      ?.toString() ??
+                  'N/A';
+          if (oldSupplier != newSupplier) {
+            fieldChanges['Supplier Name::$oldName'] = {
+              'previous': oldSupplier,
+              'new': newSupplier,
+            };
+          }
+
+          // Brand name change (optional, for completeness)
+          final oldBrand =
+              (oldSupply['brandName'] ?? oldSupply['brand'])?.toString() ??
+                  'N/A';
+          final newBrand =
+              (newSupply['brandName'] ?? newSupply['brand'])?.toString() ??
+                  'N/A';
+          if (oldBrand != newBrand) {
+            fieldChanges['Brand Name::$oldName'] = {
+              'previous': oldBrand,
+              'new': newBrand,
+            };
+          }
+
+          // Cost change
+          final oldCostNum = (oldSupply['cost'] ?? 0) as num;
+          final newCostNum = (newSupply['cost'] ?? 0) as num;
+          if (oldCostNum.toDouble() != newCostNum.toDouble()) {
+            fieldChanges['Subtotal::$oldName'] = {
+              'previous': oldCostNum,
+              'new': newCostNum,
+            };
+          }
+
+          // Expiry date change
+          final oldExpiry =
+              (oldSupply['expiryDate'] ?? 'No expiry date').toString();
+          final newExpiry =
+              (newSupply['expiryDate'] ?? 'No expiry date').toString();
+          if (oldExpiry != newExpiry) {
+            fieldChanges['Expiry Date::$oldName'] = {
+              'previous': oldExpiry,
+              'new': newExpiry,
+            };
+          }
+        }
+      }
+
+      // Compare first supply name if available (best-effort signal)
+      final oldFirst = baseline.supplies.isNotEmpty
+          ? (baseline.supplies.first['supplyName'] ??
+              baseline.supplies.first['name'])
+          : null;
+      final newFirst = po.supplies.isNotEmpty
+          ? (po.supplies.first['supplyName'] ?? po.supplies.first['name'])
+          : null;
+      if (oldFirst != null &&
+          newFirst != null &&
+          oldFirst.toString() != newFirst.toString()) {
+        fieldChanges['First Supply'] = {
+          'previous': oldFirst,
+          'new': newFirst,
+        };
+      }
+    }
+
+    // Persist the update
     await _poController.updatePOInFirebase(po);
+
+    // Log the purchase order edited activity
+    await PoActivityController().logPurchaseOrderEdited(
+      poCode: po.code,
+      poName: po.name,
+      supplies: po.supplies,
+      fieldChanges: fieldChanges.isEmpty ? null : fieldChanges,
+    );
   }
 
   // Validate PO data
@@ -37,9 +183,7 @@ class CreatePOController {
     for (final supply in supplies) {
       final supplyName = supply['supplyName'] ?? supply['name'] ?? '';
       final quantity = supply['quantity'] ?? 0;
-      final cost = supply['cost'] ?? 0.0;
-
-      if (supplyName.trim().isEmpty || quantity <= 0 || cost <= 0) {
+      if (supplyName.toString().trim().isEmpty || quantity is! int) {
         return false;
       }
     }

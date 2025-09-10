@@ -3,6 +3,7 @@ import '../data/purchase_order.dart';
 import '../controller/po_details_controller.dart';
 import '../controller/po_firebase_controller.dart';
 import '../../../shared/themes/font.dart';
+import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
 
 class PODetailsPage extends StatefulWidget {
   final PurchaseOrder purchaseOrder;
@@ -63,7 +64,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                   color: Colors.red, size: 30),
               tooltip: 'Notifications',
               onPressed: () {
-                // Notification logic here
+                Navigator.pushNamed(context, '/notifications');
               },
             ),
           ),
@@ -577,7 +578,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: _controller.isPOClosed(_purchaseOrder)
+        onTap: _controller.isPOClosed(_purchaseOrder) || isReceived
             ? null
             : () => _confirmMarkReceived(supply, index),
         child: Padding(
@@ -792,7 +793,8 @@ class _PODetailsPageState extends State<PODetailsPage> {
     return raw.replaceAll('-', '/');
   }
 
-  void _showReceiveDialog(Map<String, dynamic> supply, int index) {
+  // Deprecated dialog (not used). Keeping implementation removed to avoid warnings.
+  /* void _showReceiveDialog(Map<String, dynamic> supply, int index) {
     DateTime? selectedDate;
     bool noExpiry = false;
     final TextEditingController dateController = TextEditingController();
@@ -1205,110 +1207,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
         );
       },
     );
-  }
-
-  Future<void> _markAsReceived(Map<String, dynamic> supply, int index,
-      DateTime? expiryDate, bool noExpiry) async {
-    Navigator.of(context).pop(); // Close dialog
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Create a new list with updated supply status
-      final updatedSupplies =
-          List<Map<String, dynamic>>.from(_purchaseOrder.supplies);
-
-      // Check if supply was already received
-      final wasAlreadyReceived = supply['status'] == 'Received';
-
-      // Update the supply with received status and expiry date
-      updatedSupplies[index] = {
-        ...supply,
-        'status': 'Received',
-        'expiryDate': noExpiry
-            ? 'No expiry'
-            : '${expiryDate!.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}',
-      };
-
-      // Calculate new received count
-      final newReceivedCount = updatedSupplies
-          .where((supply) => supply['status'] == 'Received')
-          .length;
-
-      // Determine new status
-      String newStatus = _purchaseOrder.status;
-      if (newReceivedCount == updatedSupplies.length) {
-        newStatus = 'Approval';
-      }
-
-      // Create new PO instance with updated values
-      final updatedPO = PurchaseOrder(
-        id: _purchaseOrder.id,
-        code: _purchaseOrder.code,
-        name: _purchaseOrder.name,
-        createdAt: _purchaseOrder.createdAt,
-        status: newStatus,
-        supplies: updatedSupplies,
-        receivedCount: newReceivedCount,
-      );
-
-      // Update PO using controller
-      final updatedPOFromController = await _controller.markSupplyAsReceived(
-        _purchaseOrder,
-        index,
-        expiryDate,
-        noExpiry,
-      );
-
-      // Update local state
-      setState(() {
-        _purchaseOrder = updatedPOFromController;
-        _isLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            wasAlreadyReceived
-                ? 'Expiry date updated successfully!'
-                : 'Supply marked as received!',
-            style: AppFonts.sfProStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
-          ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error updating supply status',
-            style: AppFonts.sfProStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
+  } */
 
   Future<void> _approvePurchaseOrder() async {
     setState(() {
@@ -1317,16 +1216,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
     try {
       // Create new PO instance with Closed status
-      final updatedPO = PurchaseOrder(
-        id: _purchaseOrder.id,
-        code: _purchaseOrder.code,
-        name: _purchaseOrder.name,
-        createdAt: _purchaseOrder.createdAt,
-        status: 'Closed',
-        supplies: _purchaseOrder.supplies,
-        receivedCount: _purchaseOrder.receivedCount,
-      );
-
       // Approve PO using controller
       final updatedPOFromController =
           await _controller.approvePurchaseOrder(_purchaseOrder);
@@ -1516,6 +1405,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
       );
 
       await _poFirebase.updatePOInFirebase(updatedPO);
+
+      // Log Received activity (quick path)
+      await PoActivityController().logPurchaseOrderReceived(
+        poCode: updatedPO.code,
+        poName: updatedPO.name,
+        supplies: [updatedSupplies[index]],
+      );
 
       setState(() {
         _purchaseOrder = updatedPO;

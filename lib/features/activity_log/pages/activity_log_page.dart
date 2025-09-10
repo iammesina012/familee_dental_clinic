@@ -1,0 +1,896 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:projects/shared/drawer.dart';
+import 'package:projects/features/activity_log/controller/activity_log_controller.dart';
+// Removed backend-specific controller imports to keep this page UI-only
+
+class ActivityLogPage extends StatefulWidget {
+  const ActivityLogPage({super.key});
+
+  @override
+  State<ActivityLogPage> createState() => _ActivityLogPageState();
+}
+
+class _ActivityLogPageState extends State<ActivityLogPage> {
+  final TextEditingController _searchController = TextEditingController();
+  final ActivityLogController _controller = ActivityLogController();
+  // Removed unused per-category controllers from UI page
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      _controller.updateSearchQuery(_searchController.text);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  // Format description delegated to controller (UI-only page)
+  String _formatDescription(String description) {
+    return _controller.formatListDescription(description);
+  }
+
+  // Get icon for each category
+  Icon _getCategoryIcon(String category) {
+    switch (category) {
+      case 'Stock Deduction':
+        return const Icon(Icons.remove_circle_outline,
+            color: Colors.red, size: 20);
+      case 'Purchase Order':
+        return const Icon(Icons.shopping_cart_outlined,
+            color: Colors.blue, size: 20);
+      case 'Inventory':
+        return const Icon(Icons.inventory_2_outlined,
+            color: Colors.green, size: 20);
+      case 'Login':
+        return const Icon(Icons.login, color: Colors.orange, size: 20);
+      case 'Dashboard':
+        return const Icon(Icons.dashboard_outlined,
+            color: Colors.purple, size: 20);
+      default:
+        return const Icon(Icons.info_outline, color: Colors.grey, size: 20);
+    }
+  }
+
+  // Show delete confirmation dialog
+  void _showDeleteConfirmation(
+      BuildContext parentContext, String activityId, String description) {
+    showDialog(
+      context: parentContext,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Warning Icon
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                  child: Icon(
+                    Icons.warning_rounded,
+                    size: 40,
+                    color: Colors.red.shade600,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Title
+                const Text(
+                  'Delete Activity',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+
+                // Description
+                Text(
+                  'Are you sure you want to delete this activity?',
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    color: Colors.black54,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+
+                // Activity Preview Box
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.blue.shade600,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          '"$description"',
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Action Buttons
+                Row(
+                  children: [
+                    // Cancel Button
+                    Expanded(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: TextButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Delete Button
+                    Expanded(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade600,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.3),
+                              spreadRadius: 1,
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TextButton(
+                          onPressed: () async {
+                            // Close the dialog first
+                            Navigator.of(context).pop();
+
+                            // Delete the activity
+                            await _controller.deleteActivity(activityId);
+
+                            // Show snackbar using the parent context (main page context)
+                            if (mounted) {
+                              // Use the parent context that was passed to this method
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                SnackBar(
+                                  content: const Text(
+                                    'Activity deleted successfully',
+                                    style: TextStyle(fontFamily: 'SF Pro'),
+                                  ),
+                                  backgroundColor: Colors.green,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          style: TextButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Delete',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Show activity details dialog
+  void _showActivityDetails(
+      BuildContext context, Map<String, dynamic> activity) {
+    final metadata = activity['metadata'] as Map<String, dynamic>? ?? {};
+    final userName = activity['userName'] as String? ?? 'Unknown User';
+    final date = activity['date'] as DateTime? ?? DateTime.now();
+    final time = activity['time'] as String? ?? '';
+    final category = activity['category'] as String? ?? '';
+    final description = activity['description'] as String? ?? '';
+    final action = activity['action'] as String? ?? '';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 600, // Make it wider
+              minWidth: 500,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title Row
+                  Row(
+                    children: [
+                      _getCategoryIcon(category),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Activity Details',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'SF Pro',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  // Content
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Basic Info Section
+                          _buildDetailSection(
+                            'Basic Information',
+                            [
+                              _buildDetailRow('Category', category),
+                              // Description row: for preset_edited show Old → New only if name actually changed
+                              if (action == 'preset_edited')
+                                Builder(builder: (_) {
+                                  final String oldName =
+                                      (metadata['originalPresetName'] ?? '')
+                                          .toString();
+                                  final String newName =
+                                      (metadata['presetName'] ?? '').toString();
+                                  final String desc =
+                                      _controller.formatPresetEditedDescription(
+                                          oldName, newName);
+                                  return _buildDetailRow('Description', desc);
+                                })
+                              else
+                                _buildDetailRow('Description', description),
+                              // PO Name diff for Edited PO (exclude preset_edited)
+                              if (action == 'purchase_order_edited' &&
+                                  action != 'preset_edited' &&
+                                  metadata['fieldChanges']
+                                      is Map<String, dynamic> &&
+                                  (metadata['fieldChanges']
+                                          as Map<String, dynamic>)
+                                      .containsKey('Name'))
+                                Builder(builder: (_) {
+                                  final change = (metadata['fieldChanges']
+                                          as Map<String, dynamic>)['Name']
+                                      as Map<String, dynamic>;
+                                  final prev =
+                                      (change['previous'] ?? '').toString();
+                                  final curr = (change['new'] ?? '').toString();
+                                  return _buildDetailRow(
+                                      'PO Name', '$prev → $curr');
+                                }),
+                              // Show Fields Modified ONLY for edited Category/Brand/Supplier
+                              if (metadata.containsKey('fieldChanges') &&
+                                  metadata['fieldChanges']
+                                      is Map<String, dynamic> &&
+                                  (action == 'category_updated' ||
+                                      action == 'brand_updated' ||
+                                      action == 'supplier_updated'))
+                                _buildFieldChangesRow(metadata['fieldChanges']
+                                    as Map<String, dynamic>),
+                              _buildDetailRow('User', userName),
+                              _buildDetailRow('Date',
+                                  _controller.formatDateForDisplay(date)),
+                              _buildDetailRow('Time', time),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          // Metadata Section (if available)
+                          // Do NOT show for edited Category/Brand/Supplier (they only show Fields Modified in Basic Info)
+                          if (metadata.isNotEmpty &&
+                              !(metadata.keys.length == 1 &&
+                                  metadata.containsKey('fieldChanges')) &&
+                              action != 'category_updated' &&
+                              action != 'brand_updated' &&
+                              action != 'supplier_updated') ...[
+                            _buildDetailSection(
+                              'Additional Details',
+                              _buildControllerMetadataRows(metadata,
+                                  action: action, category: category),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Close Button
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        'Close',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF8B5A8B),
+                          fontFamily: 'SF Pro',
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Build detail section with title
+  Widget _buildDetailSection(String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF8B5A8B),
+            fontFamily: 'SF Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Build individual detail row
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width:
+                130, // Increased from 100 to 130 to fit "Supplier Name:" on one line
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+                fontFamily: 'SF Pro',
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black,
+                fontFamily: 'SF Pro',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Build field changes row with before/after values
+  Widget _buildFieldChangesRow(Map<String, dynamic> fieldChanges) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              'Fields Modified:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+                fontFamily: 'SF Pro',
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: fieldChanges.entries.map((entry) {
+                final changes = entry.value as Map<String, dynamic>;
+                final previous = changes['previous']?.toString() ?? 'N/A';
+                final newValue = changes['new']?.toString() ?? 'N/A';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '$previous → $newValue',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.black,
+                      fontFamily: 'SF Pro',
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Build rows using controller-provided data (UI-only)
+  List<Widget> _buildControllerMetadataRows(Map<String, dynamic> metadata,
+      {String? action, String? category}) {
+    final pairs = _controller.computeMetadataRows(metadata,
+        action: action, category: category);
+    final List<Widget> rows = [];
+    for (final p in pairs) {
+      if (p['label'] == '__DIVIDER__') {
+        rows.add(const Divider(height: 16));
+      } else {
+        rows.add(_buildDetailRow(p['label'] ?? '', p['value'] ?? ''));
+      }
+    }
+    return rows;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF9EFF2),
+      appBar: AppBar(
+        title: const Text(
+          "Activity Log",
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'SF Pro'),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        toolbarHeight: 70,
+        iconTheme: const IconThemeData(size: 30, color: Colors.black),
+        elevation: 5,
+        shadowColor: Colors.black54,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 5.0),
+            child: IconButton(
+              icon: const Icon(
+                Icons.notifications_outlined,
+                color: Colors.red,
+                size: 30,
+              ),
+              tooltip: 'Notifications',
+              onPressed: () {
+                Navigator.pushNamed(context, '/notifications');
+              },
+            ),
+          ),
+        ],
+      ),
+      drawer: const MyDrawer(),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // Search and Filter Bar
+            Row(
+              children: [
+                // Search Bar
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        hintText: 'Search...',
+                        border: InputBorder.none,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        suffixIcon: Icon(Icons.search, color: Colors.grey),
+                        hintStyle: TextStyle(fontFamily: 'SF Pro'),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Category Filter
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: ListenableBuilder(
+                      listenable: _controller,
+                      builder: (context, child) {
+                        return DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _controller.selectedCategory,
+                            isExpanded: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            items: [
+                              'All Categories',
+                              'Login',
+                              'Inventory',
+                              'Purchase Order',
+                              'Stock Deduction'
+                            ].map((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(
+                                  value,
+                                  style: TextStyle(
+                                      fontSize:
+                                          value == 'All Categories' ? 13 : 15,
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w500,
+                                      fontFamily: 'SF Pro'),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                _controller.updateSelectedCategory(newValue);
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Recent Activity Section
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(
+                      0xFFE8D5E8), // Light lavender/purple hex #e8d5e8
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      spreadRadius: 1,
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title and Date Picker
+                    Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Recent Activity',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              fontFamily: 'SF Pro',
+                            ),
+                          ),
+                          ListenableBuilder(
+                            listenable: _controller,
+                            builder: (context, child) {
+                              return Container(
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border:
+                                      Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: InkWell(
+                                  onTap: () async {
+                                    final DateTime? picked =
+                                        await showDatePicker(
+                                      context: context,
+                                      initialDate: _controller.selectedDate,
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime.now(),
+                                    );
+                                    if (picked != null) {
+                                      _controller.updateSelectedDate(picked);
+                                    }
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.calendar_today,
+                                          size: 16,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _controller.formatDateForDisplay(
+                                              _controller.selectedDate),
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.black,
+                                            fontWeight: FontWeight.w500,
+                                            fontFamily: 'SF Pro',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Activity List
+                    Expanded(
+                      child: ListenableBuilder(
+                        listenable: _controller,
+                        builder: (context, child) {
+                          final filteredActivities =
+                              _controller.filteredActivities;
+
+                          if (filteredActivities.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 120,
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Icon(
+                                      Icons.history_outlined,
+                                      size: 60,
+                                      color: Color(0xFF8B5A8B),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  const Text(
+                                    'No Activities Yet',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF8B5A8B),
+                                      fontFamily: 'SF Pro',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Activities will appear here once you perform actions',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: const Color(0xFF8B5A8B)
+                                          .withOpacity(0.7),
+                                      fontFamily: 'SF Pro',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          return ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            itemCount: filteredActivities.length,
+                            itemBuilder: (context, index) {
+                              final activity = filteredActivities[index];
+                              // Date formatting handled in details when needed
+
+                              return Slidable(
+                                endActionPane: ActionPane(
+                                  motion: const ScrollMotion(),
+                                  children: [
+                                    SlidableAction(
+                                      onPressed: (_) => _showDeleteConfirmation(
+                                        context,
+                                        activity['id'],
+                                        _formatDescription(
+                                            activity['description']),
+                                      ),
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      icon: Icons.delete,
+                                      label: 'Delete',
+                                      borderRadius: const BorderRadius.only(
+                                        topRight: Radius.circular(8),
+                                        bottomRight: Radius.circular(8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                child: InkWell(
+                                  onTap: () =>
+                                      _showActivityDetails(context, activity),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(16),
+                                    height: 80, // Back to original height
+                                    decoration: BoxDecoration(
+                                      color: Colors
+                                          .white, // White background for activity cards
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.grey.shade200),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Category icon
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              right: 8, top: 2),
+                                          child: _getCategoryIcon(
+                                              activity['category']),
+                                        ),
+                                        // Activity description (main text) - more concise and readable
+                                        Expanded(
+                                          child: Text(
+                                            _formatDescription(
+                                                activity['description']),
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black,
+                                              fontFamily: 'SF Pro',
+                                            ),
+                                          ),
+                                        ),
+                                        // Time aligned to the right, same level as description
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            activity['time'],
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.black,
+                                              fontFamily: 'SF Pro',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

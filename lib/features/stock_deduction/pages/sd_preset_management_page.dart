@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/stock_deduction/controller/preset_controller.dart';
-import 'package:projects/features/stock_deduction/pages/edit_preset_page.dart';
+import 'package:projects/features/stock_deduction/controller/sd_preset_management_controller.dart';
+import 'package:projects/features/stock_deduction/pages/sd_edit_preset_page.dart';
+import 'package:projects/features/activity_log/controller/sd_activity_controller.dart';
 
 class PresetManagementPage extends StatefulWidget {
   const PresetManagementPage({super.key});
@@ -15,9 +16,12 @@ class PresetManagementPage extends StatefulWidget {
 class _PresetManagementPageState extends State<PresetManagementPage> {
   final TextEditingController _searchController = TextEditingController();
   final PresetController _presetController = PresetController();
+  final SdActivityController _activityController = SdActivityController();
   List<Map<String, dynamic>> _allPresets = [];
   List<Map<String, dynamic>> _filteredPresets = [];
   Timer? _debounceTimer;
+  // Track which preset dropdown is expanded
+  String? _expandedPresetId;
   // Initialize the cached stream at declaration so hot reloads don't cause late-init errors
   final Stream<List<Map<String, dynamic>>> _presetsStream =
       PresetController().getPresetsStream();
@@ -76,6 +80,16 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
     if (result is Map<String, dynamic>) {
       try {
         await _presetController.savePreset(result);
+
+        // Log the preset creation activity
+        final presetName = result['name'] ?? 'Unknown Preset';
+        final supplies = (result['supplies'] as List<dynamic>?) ?? [];
+        final suppliesList = supplies.cast<Map<String, dynamic>>();
+        await _activityController.logPresetCreated(
+          presetName: presetName,
+          supplies: suppliesList,
+        );
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -123,7 +137,9 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
               icon: const Icon(Icons.notifications_outlined,
                   color: Colors.red, size: 30),
               tooltip: 'Notifications',
-              onPressed: () {},
+              onPressed: () {
+                Navigator.pushNamed(context, '/notifications');
+              },
             ),
           ),
         ],
@@ -271,8 +287,12 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
   }
 
   Widget _buildPresetCard(Map<String, dynamic> preset, int index) {
+    final presetId = preset['id'] ?? index.toString();
+    final isExpanded = _expandedPresetId == presetId;
+    final supplies = preset['supplies'] as List<dynamic>? ?? [];
+
     return Slidable(
-      key: ValueKey('preset-${preset['id'] ?? index}'),
+      key: ValueKey('preset-$presetId'),
       closeOnScroll: true,
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
@@ -307,45 +327,181 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
         color: Colors.white,
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: InkWell(
-          onTap: () => _usePreset(preset),
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        child: Column(
+          children: [
+            // Main preset info with dropdown button
+            InkWell(
+              onTap: () {
+                setState(() {
+                  if (isExpanded) {
+                    _expandedPresetId = null;
+                  } else {
+                    _expandedPresetId = presetId;
+                  }
+                });
+              },
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
                   children: [
-                    Icon(
-                      Icons.bookmark,
-                      color: const Color(0xFF00D4AA),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        preset['name'] ?? 'Unnamed Preset',
-                        style: AppFonts.sfProStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.bookmark,
+                            color: const Color(0xFF00D4AA),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  preset['name'] ?? 'Unnamed Preset',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${supplies.length} supplies',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      isExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: Colors.grey[600],
+                      size: 24,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Dropdown content
+            if (isExpanded) ...[
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Supplies list
+                    if (supplies.isNotEmpty) ...[
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          physics: const ClampingScrollPhysics(),
+                          itemCount: supplies.length,
+                          itemBuilder: (context, supplyIndex) {
+                            final supply =
+                                supplies[supplyIndex] as Map<String, dynamic>;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Image.network(
+                                      supply['imageUrl'] ?? '',
+                                      width: 32,
+                                      height: 32,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        width: 32,
+                                        height: 32,
+                                        color: Colors.grey[200],
+                                        child: const Icon(
+                                          Icons.inventory,
+                                          color: Colors.grey,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      supply['name'] ?? 'Unknown Supply',
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ] else ...[
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          'No supplies in this preset',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ],
+                    // Use Preset button
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      child: ElevatedButton(
+                        onPressed: () => _usePreset(preset),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          'Use Preset',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  '${preset['supplies']?.length ?? 0} supplies',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -408,6 +564,18 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
               onPressed: () async {
                 try {
                   await _presetController.deletePreset(preset['id']);
+                  // Log deleted preset activity with supplies
+                  final List<Map<String, dynamic>> supplies =
+                      ((preset['supplies'] as List?) ?? [])
+                          .map((e) => e is Map
+                              ? Map<String, dynamic>.from(e)
+                              : <String, dynamic>{})
+                          .where((m) => m.isNotEmpty)
+                          .toList();
+                  await _activityController.logPresetDeleted(
+                    presetName: (preset['name'] ?? '').toString(),
+                    supplies: supplies,
+                  );
                   if (!mounted) return;
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
