@@ -30,10 +30,16 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   StreamSubscription<List<PurchaseOrder>>? _closedSubscription;
   StreamSubscription<List<PurchaseOrder>>? _allSubscription;
 
+  // Initial navigation from notifications
+  bool _handledInitialArgs = false;
+  // removed unused _initialTabIndex
+  String? _openPOCode;
+  bool _autoOpeningDetails = false; // prevent stacked navigations
+
   Future<void> _load() async {
     try {
-      // Load from local storage as backup
-      final localPOs = await _controller.getAllPOs();
+      // Load from local storage as backup (kept for potential future use)
+      await _controller.getAllPOs();
 
       // Check current sequence
       await _controller.getCurrentSequence();
@@ -112,33 +118,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
     }
   }
 
-  List<PurchaseOrder> _filteredOrders() {
-    List<PurchaseOrder> baseList;
-
-    // Use the appropriate pre-sorted list for each tab
-    if (activeTabIndex == 0) {
-      // Open tab
-      baseList = _openOrders;
-    } else if (activeTabIndex == 1) {
-      // Approval tab
-      baseList = _approvalOrders;
-    } else {
-      // Closed tab
-      baseList = _closedOrders;
-    }
-
-    // Apply search filter if needed
-    final query = searchController.text.trim().toLowerCase();
-    if (query.isNotEmpty) {
-      return baseList
-          .where((po) =>
-              po.code.toLowerCase().contains(query) ||
-              po.name.toLowerCase().contains(query))
-          .toList();
-    }
-
-    return baseList;
-  }
+  // removed unused _filteredOrders helper
 
   // Apply search filter to a provided list (used by StreamBuilder)
   List<PurchaseOrder> _applySearchFilter(List<PurchaseOrder> baseList) {
@@ -165,6 +145,24 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
     } catch (e) {
       // Error handling
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_handledInitialArgs) return;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      final int? tab = args['initialTab'] as int?;
+      final String? code = args['openPOCode'] as String?;
+      if (tab != null) {
+        activeTabIndex = tab.clamp(0, 2);
+      }
+      if (code != null && code.isNotEmpty) {
+        _openPOCode = code;
+      }
+    }
+    _handledInitialArgs = true;
   }
 
   @override
@@ -417,6 +415,34 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                       SizedBox(height: 8),
                                   itemBuilder: (context, index) {
                                     final po = displayed[index];
+                                    // Auto-open specific PO details if requested
+                                    if (_openPOCode != null &&
+                                        !_autoOpeningDetails &&
+                                        po.code == _openPOCode) {
+                                      // Delay navigation until after first frame
+                                      _autoOpeningDetails = true;
+                                      // capture intent (not used further, just ensures we clear before rebuilds)
+                                      _openPOCode =
+                                          null; // prevent repeats during rebuilds
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) async {
+                                        final result =
+                                            await Navigator.pushNamed(
+                                          context,
+                                          '/po-details',
+                                          arguments: {'purchaseOrder': po},
+                                        );
+                                        // Keep current tab; react to closed redirect if needed
+                                        if (result is Map &&
+                                            result['switchToClosed'] == true) {
+                                          setState(() {
+                                            activeTabIndex = 2;
+                                          });
+                                        }
+                                        // Release guard after navigation completes
+                                        _autoOpeningDetails = false;
+                                      });
+                                    }
                                     return _buildPOCard(po);
                                   },
                                 );

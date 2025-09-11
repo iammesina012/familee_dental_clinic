@@ -7,6 +7,8 @@ class AppNotification {
   final DateTime createdAt;
   final String type;
   final bool isRead;
+  final String? supplyName; // optional payload for inventory
+  final String? poCode; // optional payload for purchase orders
 
   AppNotification({
     required this.id,
@@ -15,6 +17,8 @@ class AppNotification {
     required this.createdAt,
     required this.type,
     this.isRead = false,
+    this.supplyName,
+    this.poCode,
   });
 
   factory AppNotification.fromMap(String id, Map<String, dynamic> data) {
@@ -26,6 +30,8 @@ class AppNotification {
       createdAt: ts.toDate(),
       type: (data['type'] ?? 'general').toString(),
       isRead: (data['isRead'] ?? false) as bool,
+      supplyName: data['supplyName']?.toString(),
+      poCode: data['poCode']?.toString(),
     );
   }
 
@@ -36,6 +42,8 @@ class AppNotification {
       'createdAt': Timestamp.fromDate(createdAt),
       'type': type,
       'isRead': isRead,
+      if (supplyName != null) 'supplyName': supplyName,
+      if (poCode != null) 'poCode': poCode,
     };
   }
 }
@@ -73,6 +81,8 @@ class NotificationsController {
     required String title,
     required String message,
     required String type,
+    String? supplyName,
+    String? poCode,
   }) async {
     final docRef = firestore.collection('notifications').doc();
     await docRef.set({
@@ -81,6 +91,8 @@ class NotificationsController {
       'createdAt': FieldValue.serverTimestamp(),
       'type': type,
       'isRead': false,
+      if (supplyName != null) 'supplyName': supplyName,
+      if (poCode != null) 'poCode': poCode,
     });
   }
 
@@ -91,6 +103,7 @@ class NotificationsController {
       title: 'Low Stock Alert',
       message: '$supplyName is running low',
       type: 'low_stock',
+      supplyName: supplyName,
     );
   }
 
@@ -99,6 +112,7 @@ class NotificationsController {
       title: 'Out of Stock Alert',
       message: '$supplyName is now out of stock',
       type: 'out_of_stock',
+      supplyName: supplyName,
     );
   }
 
@@ -108,6 +122,7 @@ class NotificationsController {
       title: 'Expiring Soon',
       message: '$supplyName expires in $daysUntilExpiry days',
       type: 'expiring',
+      supplyName: supplyName,
     );
   }
 
@@ -116,6 +131,7 @@ class NotificationsController {
       title: 'Expired Item',
       message: '$supplyName has expired',
       type: 'expired',
+      supplyName: supplyName,
     );
   }
 
@@ -125,6 +141,7 @@ class NotificationsController {
       title: 'Restocked',
       message: '$supplyName is back in stock',
       type: 'in_stock',
+      supplyName: supplyName,
     );
   }
 
@@ -134,6 +151,7 @@ class NotificationsController {
       title: 'Purchase Order',
       message: '$poCode is waiting for approval',
       type: 'po_waiting',
+      poCode: poCode,
     );
   }
 
@@ -142,6 +160,7 @@ class NotificationsController {
       title: 'Purchase Order',
       message: 'Admin rejected $poCode',
       type: 'po_rejected',
+      poCode: poCode,
     );
   }
 
@@ -150,6 +169,7 @@ class NotificationsController {
       title: 'Purchase Order',
       message: 'Admin approved $poCode',
       type: 'po_approved',
+      poCode: poCode,
     );
   }
 
@@ -276,6 +296,7 @@ class NotificationsController {
         title: 'Expiring Soon',
         message: '$supplyName expires in 24 hours',
         type: 'expiring',
+        supplyName: supplyName,
       );
       return;
     }

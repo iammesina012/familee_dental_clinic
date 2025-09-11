@@ -188,9 +188,10 @@ class EditSupplyController {
       "brand": brandController.text.trim().isEmpty
           ? "N/A"
           : brandController.text.trim(),
+      // Persist expiry in canonical yyyy-MM-dd format
       "expiry": noExpiry || expiryController.text.isEmpty
           ? null
-          : expiryController.text,
+          : expiryController.text.replaceAll('/', '-'),
       "noExpiry": noExpiry,
     };
   }
@@ -209,6 +210,14 @@ class EditSupplyController {
               updatedData['expiry'].toString().isEmpty
           ? null
           : updatedData['expiry'].toString();
+      // Normalize and parse expiry for reliable comparisons
+      DateTime? parseExpiry(String? value) {
+        if (value == null || value.isEmpty) return null;
+        return DateTime.tryParse(value) ??
+            DateTime.tryParse(value.replaceAll('/', '-'));
+      }
+
+      final DateTime? newExpiryDate = parseExpiry(newExpiry);
 
       final existingQuery = await suppliesRef
           .where('name', isEqualTo: name)
@@ -225,8 +234,14 @@ class EditSupplyController {
             (otherExpiryRaw == null || otherExpiryRaw.toString().isEmpty)
                 ? null
                 : otherExpiryRaw.toString();
-        final bool expiryMatches = (newExpiry == null && otherExpiry == null) ||
-            (newExpiry != null && newExpiry == otherExpiry);
+        final DateTime? otherExpiryDate = parseExpiry(otherExpiry);
+        final bool expiryMatches =
+            (newExpiryDate == null && otherExpiryDate == null) ||
+                (newExpiryDate != null &&
+                    otherExpiryDate != null &&
+                    newExpiryDate.year == otherExpiryDate.year &&
+                    newExpiryDate.month == otherExpiryDate.month &&
+                    newExpiryDate.day == otherExpiryDate.day);
         if (expiryMatches) {
           mergeTarget = doc;
           break;

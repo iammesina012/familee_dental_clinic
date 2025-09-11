@@ -24,6 +24,8 @@ class Inventory extends StatefulWidget {
 
 class _InventoryState extends State<Inventory> {
   int selectedCategory = 0;
+  String? _highlightSupplyName; // for deep-link from notifications
+  bool _deepLinkHandled = false;
 
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
@@ -123,6 +125,18 @@ class _InventoryState extends State<Inventory> {
     _initializeData();
     // Best-effort cleanup of zero-stock duplicates when there are stocked batches
     controller.cleanupZeroStockDuplicates();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Capture deep-link arg once
+    if (_highlightSupplyName == null) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is Map && args['highlightSupplyName'] is String) {
+        _highlightSupplyName = (args['highlightSupplyName'] as String).trim();
+      }
+    }
   }
 
   Future<void> _initializeData() async {
@@ -257,6 +271,10 @@ class _InventoryState extends State<Inventory> {
                 stream: categoriesController.getCategoriesStream(),
                 builder: (context, snapshot) {
                   final currentCategories = snapshot.data ?? [];
+                  final List<String> categoriesWithAll = [
+                    'All Supplies',
+                    ...currentCategories
+                  ];
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return SizedBox(height: 50);
                   }
@@ -276,32 +294,17 @@ class _InventoryState extends State<Inventory> {
                     );
                   }
 
-                  if (currentCategories.isEmpty) {
-                    return SizedBox(
-                      height: 50,
-                      child: Center(
-                        child: Text(
-                          'No categories available',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
                   // Auto-scroll to selected chip when categories are loaded
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (selectedCategory < currentCategories.length &&
+                    if (selectedCategory < categoriesWithAll.length &&
                         _chipsScrollController.hasClients) {
                       _scrollToSelectedChip(
-                          selectedCategory, currentCategories);
+                          selectedCategory, categoriesWithAll);
                     }
                   });
 
                   // Clear old keys if categories changed
-                  if (_chipKeys.length != currentCategories.length) {
+                  if (_chipKeys.length != categoriesWithAll.length) {
                     _chipKeys.clear();
                   }
 
@@ -310,7 +313,7 @@ class _InventoryState extends State<Inventory> {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children:
-                          List.generate(currentCategories.length, (index) {
+                          List.generate(categoriesWithAll.length, (index) {
                         final isSelected = selectedCategory == index;
                         // Ensure we have a GlobalKey for this index
                         if (!_chipKeys.containsKey(index)) {
@@ -320,7 +323,7 @@ class _InventoryState extends State<Inventory> {
                           padding: const EdgeInsets.only(right: 8.0),
                           child: ChoiceChip(
                             key: _chipKeys[index],
-                            label: Text(currentCategories[index]),
+                            label: Text(categoriesWithAll[index]),
                             selected: isSelected,
                             showCheckmark: false,
                             selectedColor: Color(0xFF4E38D4),
@@ -341,7 +344,7 @@ class _InventoryState extends State<Inventory> {
                                 selectedCategory = index;
                               });
                               // Scroll to the selected chip
-                              _scrollToSelectedChip(index, currentCategories);
+                              _scrollToSelectedChip(index, categoriesWithAll);
                             },
                           ),
                         );
@@ -358,10 +361,15 @@ class _InventoryState extends State<Inventory> {
                   stream: categoriesController.getCategoriesStream(),
                   builder: (context, categorySnapshot) {
                     final currentCategories = categorySnapshot.data ?? [];
-                    final selectedCategoryName = currentCategories.isNotEmpty &&
-                            selectedCategory < currentCategories.length
-                        ? currentCategories[selectedCategory]
-                        : "";
+                    final categoriesWithAll = [
+                      'All Supplies',
+                      ...currentCategories
+                    ];
+                    final selectedCategoryName = (selectedCategory == 0)
+                        ? "" // empty means no category filter -> show all
+                        : (selectedCategory < categoriesWithAll.length
+                            ? categoriesWithAll[selectedCategory]
+                            : "");
 
                     return StreamBuilder<List<GroupedInventoryItem>>(
                       stream:
@@ -441,6 +449,32 @@ class _InventoryState extends State<Inventory> {
                           selectedSort: selectedSort,
                           filters: currentFilters,
                         );
+
+                        // Handle deep-link to specific supply once
+                        if (!_deepLinkHandled &&
+                            _highlightSupplyName != null &&
+                            _highlightSupplyName!.isNotEmpty) {
+                          GroupedInventoryItem? target;
+                          for (final g in sortedItems) {
+                            if (g.mainItem.name.toLowerCase() ==
+                                _highlightSupplyName!.toLowerCase()) {
+                              target = g;
+                              break;
+                            }
+                          }
+                          if (target != null) {
+                            _deepLinkHandled = true;
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => InventoryViewSupplyPage(
+                                      item: target!.mainItem),
+                                ),
+                              );
+                            });
+                          }
+                        }
 
                         return LayoutBuilder(
                           builder: (context, constraints) {

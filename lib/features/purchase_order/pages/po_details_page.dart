@@ -1215,10 +1215,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
     setState(() => _isLoading = true);
     try {
       await _controller.approvePurchaseOrder(_purchaseOrder);
-      try {
-        await NotificationsController()
-            .createPOApprovedNotification(_purchaseOrder.code);
-      } catch (_) {}
       if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(

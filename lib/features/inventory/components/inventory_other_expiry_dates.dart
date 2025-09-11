@@ -94,22 +94,20 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
             .where((batch) => batch.id != item.id && batch.stock > 0)
             .toList();
 
-        // Sort by expiry date (earliest first, null/empty last)
+        // Sort by expiry date (earliest first, null/empty last). Normalize formats.
+        DateTime? parseExpiry(String? value) {
+          if (value == null || value.isEmpty) return null;
+          return DateTime.tryParse(value) ??
+              DateTime.tryParse(value.replaceAll('/', '-'));
+        }
+
         batches.sort((a, b) {
-          // Place null/empty expiry at the end
-          if (a.expiry == null || a.expiry!.isEmpty) return 1;
-          if (b.expiry == null || b.expiry!.isEmpty) return -1;
-          // Parse and compare as DateTime (assumes yyyy-mm-dd or yyyy/mm/dd or mm/dd/yyyy)
-          try {
-            DateTime aDate = DateTime.tryParse(a.expiry!) ??
-                DateTime(9999, 12, 31); // fallback: very future
-            DateTime bDate =
-                DateTime.tryParse(b.expiry!) ?? DateTime(9999, 12, 31);
-            return aDate.compareTo(bDate);
-          } catch (e) {
-            // fallback: compare as strings
-            return a.expiry!.compareTo(b.expiry!);
-          }
+          final da = parseExpiry(a.expiry);
+          final db = parseExpiry(b.expiry);
+          if (da == null && db == null) return 0;
+          if (da == null) return 1; // nulls last
+          if (db == null) return -1;
+          return da.compareTo(db);
         });
 
         if (batches.isEmpty) {

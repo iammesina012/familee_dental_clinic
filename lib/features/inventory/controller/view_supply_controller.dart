@@ -35,7 +35,25 @@ class ViewSupplyController {
       return "Archived";
     }
 
-    // For view supply page, only show stock status (no expiry chips)
+    // If expired, prioritize Expired over stock-based statuses
+    if (!item.noExpiry && (item.expiry != null && item.expiry!.isNotEmpty)) {
+      final String raw = item.expiry!;
+      final String normalized = raw.replaceAll('/', '-');
+      final DateTime? date = DateTime.tryParse(normalized);
+      if (date != null) {
+        final DateTime today = DateTime.now();
+        final DateTime todayDateOnly =
+            DateTime(today.year, today.month, today.day);
+        final DateTime expDateOnly = DateTime(date.year, date.month, date.day);
+        // Consider same-day expiry as expired to match grid behavior
+        if (expDateOnly.isBefore(todayDateOnly) ||
+            expDateOnly.isAtSameMomentAs(todayDateOnly)) {
+          return "Expired";
+        }
+      }
+    }
+
+    // For view supply page, show stock status when not expired
     if (item.stock == 0) {
       return "Out of Stock";
     } else if (item.stock <= 2) {

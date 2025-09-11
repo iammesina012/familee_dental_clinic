@@ -229,6 +229,38 @@ class _NotificationTile extends StatelessWidget {
             if (!notification.isRead) {
               await controller.markAsRead(notification.id);
             }
+            // Navigate based on notification type
+            try {
+              if (notification.type.startsWith('po_') &&
+                  (notification.poCode ?? '').isNotEmpty) {
+                // Jump to Purchase Order page and open correct tab
+                final String code = notification.poCode!;
+                int desiredTab = 0; // Open
+                if (notification.type == 'po_waiting')
+                  desiredTab = 1; // Approval
+                if (notification.type == 'po_approved')
+                  desiredTab = 2; // Closed
+                // Push PO page, then try to open the specific PO details
+                if (context.mounted) {
+                  await Navigator.pushNamed(
+                    context,
+                    '/purchase-order',
+                    arguments: {
+                      'initialTab': desiredTab,
+                      'openPOCode': code,
+                    },
+                  );
+                }
+              } else if ((notification.supplyName ?? '').isNotEmpty) {
+                // Navigate to inventory and open the earliest batch for this supply name
+                if (context.mounted) {
+                  await Navigator.pushNamed(context, '/inventory', arguments: {
+                    'highlightSupplyName': notification.supplyName,
+                  });
+                  // The inventory list will show the item; user can tap through
+                }
+              }
+            } catch (_) {}
           },
           borderRadius: BorderRadius.circular(12),
           child: Container(

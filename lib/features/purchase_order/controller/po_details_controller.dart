@@ -176,6 +176,25 @@ class PODetailsController {
       // Restock helper to merge one batch into inventory
       Future<void> mergeOneBatch(
           {required int qty, required String? exp}) async {
+        // Normalize expiry to canonical date (yyyy-MM-dd) or null
+        String? normalize(String? v) {
+          if (v == null) return null;
+          if (v.toLowerCase() == 'no expiry') return null;
+          final s = v.replaceAll('/', '-');
+          final core = s.length >= 10 ? s.substring(0, 10) : s;
+          try {
+            final dt = DateTime.tryParse(core);
+            if (dt == null) return null;
+            final y = dt.year.toString().padLeft(4, '0');
+            final m = dt.month.toString().padLeft(2, '0');
+            final d = dt.day.toString().padLeft(2, '0');
+            return '$y-$m-$d';
+          } catch (_) {
+            return null;
+          }
+        }
+
+        final String? expNorm = normalize(exp);
         // Fetch fresh snapshot per batch to avoid stale zero-stock merging
         final freshSnapshot = await _firestore
             .collection('supplies')
@@ -199,9 +218,10 @@ class PODetailsController {
               (otherExpiryRaw == null || otherExpiryRaw.toString().isEmpty)
                   ? null
                   : otherExpiryRaw.toString();
-          final bool expiryMatches =
-              (exp == 'No expiry' && (data['noExpiry'] ?? false) == true) ||
-                  (exp != 'No expiry' && otherExpiry == exp);
+          final String? otherNorm = normalize(otherExpiry);
+          final bool expiryMatches = (expNorm == null &&
+                  (data['noExpiry'] ?? false) == true) ||
+              (expNorm != null && otherNorm != null && otherNorm == expNorm);
           if (expiryMatches) {
             sameExpiryDoc = doc;
           }
@@ -216,8 +236,8 @@ class PODetailsController {
 
           await zeroStockDoc.reference.update({
             'stock': mergedStock,
-            'expiry': exp != 'No expiry' ? exp : null,
-            'noExpiry': exp == 'No expiry',
+            'expiry': expNorm,
+            'noExpiry': expNorm == null,
             'archived': false,
           });
 
@@ -234,9 +254,10 @@ class PODetailsController {
           final existingNoExpiry = existingData['noExpiry'] ?? false;
 
           bool expiryMatches = false;
-          if (exp == 'No expiry' && existingNoExpiry) {
+          if (expNorm == null && existingNoExpiry) {
             expiryMatches = true;
-          } else if (exp != 'No expiry' && existingExpiry == exp) {
+          } else if (expNorm != null &&
+              normalize(existingExpiry?.toString()) == expNorm) {
             expiryMatches = true;
           }
 
@@ -301,8 +322,8 @@ class PODetailsController {
             "unit": unit,
             "supplier": supplierName,
             "brand": brandName,
-            "expiry": exp != 'No expiry' ? exp : null,
-            "noExpiry": exp == 'No expiry',
+            "expiry": expNorm,
+            "noExpiry": expNorm == null,
             "archived": false,
             "createdAt": FieldValue.serverTimestamp(),
           };
@@ -323,7 +344,10 @@ class PODetailsController {
         }
       } else {
         final int singleQty = totalQuantity;
-        final String? singleExp = expiryDate?.toString();
+        // Ensure we pass canonical yyyy-MM-dd when present
+        final String? singleExp = (expiryDate == null)
+            ? null
+            : '${expiryDate.year.toString().padLeft(4, '0')}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
         if (singleQty > 0) {
           await mergeOneBatch(qty: singleQty, exp: singleExp);
         }
