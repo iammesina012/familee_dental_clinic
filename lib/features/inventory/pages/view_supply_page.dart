@@ -56,8 +56,7 @@ class InventoryViewSupplyPage extends StatelessWidget {
                 final expStr = data['expiry']?.toString();
                 if (expStr == null || expStr.isEmpty) continue;
                 final dt = DateTime.tryParse(expStr.replaceAll('/', '-'));
-                if (dt != null &&
-                    (earliest == null || dt.isBefore(earliest!))) {
+                if (dt != null && (earliest == null || dt.isBefore(earliest))) {
                   earliest = dt;
                   earliestDoc = d;
                 }
@@ -70,37 +69,37 @@ class InventoryViewSupplyPage extends StatelessWidget {
                       builder: (_) => InventoryViewSupplyPage(
                         item: InventoryItem(
                           id: earliestDoc!.id,
-                          name: (earliestDoc!.data()
+                          name: (earliestDoc.data()
                                   as Map<String, dynamic>)['name'] ??
                               '',
-                          imageUrl: (earliestDoc!.data()
+                          imageUrl: (earliestDoc.data()
                                   as Map<String, dynamic>)['imageUrl'] ??
                               '',
-                          category: (earliestDoc!.data()
+                          category: (earliestDoc.data()
                                   as Map<String, dynamic>)['category'] ??
                               '',
-                          cost: ((earliestDoc!.data()
+                          cost: ((earliestDoc.data()
                                       as Map<String, dynamic>)['cost'] ??
                                   0)
                               .toDouble(),
-                          stock: ((earliestDoc!.data()
+                          stock: ((earliestDoc.data()
                                   as Map<String, dynamic>)['stock'] ??
                               0) as int,
-                          unit: (earliestDoc!.data()
+                          unit: (earliestDoc.data()
                                   as Map<String, dynamic>)['unit'] ??
                               '',
-                          supplier: (earliestDoc!.data()
+                          supplier: (earliestDoc.data()
                                   as Map<String, dynamic>)['supplier'] ??
                               '',
-                          brand: (earliestDoc!.data()
+                          brand: (earliestDoc.data()
                                   as Map<String, dynamic>)['brand'] ??
                               '',
-                          expiry: (earliestDoc!.data()
+                          expiry: (earliestDoc.data()
                               as Map<String, dynamic>)['expiry'],
-                          noExpiry: (earliestDoc!.data()
+                          noExpiry: (earliestDoc.data()
                                   as Map<String, dynamic>)['noExpiry'] ??
                               false,
-                          archived: (earliestDoc!.data()
+                          archived: (earliestDoc.data()
                                   as Map<String, dynamic>)['archived'] ??
                               false,
                         ),
