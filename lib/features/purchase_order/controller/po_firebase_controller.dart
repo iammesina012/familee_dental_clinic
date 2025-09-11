@@ -11,6 +11,18 @@ class POFirebaseController {
   POFirebaseController({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
+  int _extractPoNumber(String code) {
+    final String trimmed = code.trim();
+    final RegExp re = RegExp(r'^#?PO(\d+)');
+    final match = re.firstMatch(trimmed);
+    if (match != null) {
+      return int.tryParse(match.group(1)!) ?? 0;
+    }
+    // Fallback: try to parse trailing digits
+    final digits = RegExp(r'(\d+)').allMatches(trimmed).lastOrNull?.group(1);
+    return int.tryParse(digits ?? '') ?? 0;
+  }
+
   // ===== LOCAL STORAGE OPERATIONS =====
 
   Future<List<PurchaseOrder>> getAll() async {
@@ -168,7 +180,8 @@ class POFirebaseController {
         final data = doc.data();
         return PurchaseOrder.fromMap(data);
       }).toList();
-      list.sort((a, b) => a.code.compareTo(b.code));
+      list.sort((a, b) =>
+          _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
       return list;
     });
   }
@@ -183,7 +196,8 @@ class POFirebaseController {
         final data = doc.data();
         return PurchaseOrder.fromMap(data);
       }).toList();
-      list.sort((a, b) => a.code.compareTo(b.code));
+      list.sort((a, b) =>
+          _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
       return list;
     });
   }
@@ -198,7 +212,8 @@ class POFirebaseController {
         final data = doc.data();
         return PurchaseOrder.fromMap(data);
       }).toList();
-      list.sort((a, b) => a.code.compareTo(b.code));
+      list.sort((a, b) =>
+          _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
       return list;
     });
   }

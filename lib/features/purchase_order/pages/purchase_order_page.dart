@@ -547,12 +547,17 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
         borderRadius: BorderRadius.circular(12),
         onTap: () async {
           try {
-            await Navigator.pushNamed(
+            final result = await Navigator.pushNamed(
               context,
               '/po-details',
               arguments: {'purchaseOrder': po},
             );
             // Refresh the data when returning from PO Details
+            if (result is Map && result['switchToClosed'] == true) {
+              setState(() {
+                activeTabIndex = 2; // Closed tab
+              });
+            }
             _load();
           } catch (e) {
             ScaffoldMessenger.of(context).showSnackBar(

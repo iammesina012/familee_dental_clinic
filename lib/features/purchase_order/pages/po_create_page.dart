@@ -736,20 +736,24 @@ class _CreatePOPageState extends State<CreatePOPage> {
               // Build a flattened view for display if expiryBatches exist
               final List<Map<String, dynamic>> displaySupplies = [];
               final List<int> baseIndexes = [];
+              final List<int?> batchIndexes = [];
               for (int i = 0; i < addedSupplies.length; i++) {
                 final s = addedSupplies[i];
                 final batches = s['expiryBatches'] as List<dynamic>?;
                 if (batches != null && batches.isNotEmpty) {
-                  for (final b in batches) {
+                  for (int bi = 0; bi < batches.length; bi++) {
+                    final b = batches[bi];
                     final disp = Map<String, dynamic>.from(s);
                     disp['quantity'] = b['quantity'];
                     disp['expiryDate'] = b['expiryDate'];
                     displaySupplies.add(disp);
                     baseIndexes.add(i);
+                    batchIndexes.add(bi);
                   }
                 } else {
                   displaySupplies.add(s);
                   baseIndexes.add(i);
+                  batchIndexes.add(null);
                 }
               }
 
@@ -758,7 +762,8 @@ class _CreatePOPageState extends State<CreatePOPage> {
               }
               final displaySupply = displaySupplies[index];
               final baseIndex = baseIndexes[index];
-              return _buildSupplyCard(displaySupply, baseIndex);
+              final int? batchIndex = batchIndexes[index];
+              return _buildSupplyCard(displaySupply, baseIndex, batchIndex);
             },
             itemCount: (() {
               int count = 0;
@@ -776,16 +781,17 @@ class _CreatePOPageState extends State<CreatePOPage> {
     );
   }
 
-  Widget _buildSupplyCard(Map<String, dynamic> supply, int index) {
+  Widget _buildSupplyCard(
+      Map<String, dynamic> supply, int baseIndex, int? batchIndex) {
     return Slidable(
-      key: Key('slidable-${supply['supplyId']}'),
+      key: Key('slidable-$baseIndex-${batchIndex ?? 'base'}'),
       closeOnScroll: true,
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
         extentRatio: 0.35, // compact reveal, entire tile slides
         children: [
           SlidableAction(
-            onPressed: (_) => _editSupply(supply, index),
+            onPressed: (_) => _editSupply(supply, baseIndex),
             backgroundColor: const Color(0xFF00D4AA),
             foregroundColor: Colors.white,
             icon: Icons.edit,
@@ -800,7 +806,8 @@ class _CreatePOPageState extends State<CreatePOPage> {
         children: [
           SlidableAction(
             onPressed: (_) async {
-              final confirmed = await _showDeleteConfirmation(index);
+              final confirmed =
+                  await _showDeleteConfirmation(baseIndex, batchIndex);
               if (confirmed) {
                 // state already updated in dialog
               }
@@ -1141,7 +1148,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
     }
   }
 
-  Future<bool> _showDeleteConfirmation(int index) async {
+  Future<bool> _showDeleteConfirmation(int baseIndex, int? batchIndex) async {
     return await showDialog<bool>(
           context: context,
           builder: (BuildContext context) {
@@ -1154,7 +1161,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                 ),
               ),
               content: Text(
-                'Are you sure you want to remove this supply from the restocking list?',
+                batchIndex == null
+                    ? 'Are you sure you want to remove this supply from the restocking list?'
+                    : 'Are you sure you want to remove this batch from the supply?',
                 style: AppFonts.sfProStyle(fontSize: 16),
               ),
               actions: [
@@ -1173,7 +1182,42 @@ class _CreatePOPageState extends State<CreatePOPage> {
                 ElevatedButton(
                   onPressed: () {
                     setState(() {
-                      addedSupplies.removeAt(index);
+                      if (batchIndex == null) {
+                        // Remove entire item
+                        addedSupplies.removeAt(baseIndex);
+                      } else {
+                        // Remove only the specific batch and update quantity
+                        final supply = addedSupplies[baseIndex];
+                        final List<dynamic> batches =
+                            List<dynamic>.from(supply['expiryBatches'] ?? []);
+                        if (batchIndex >= 0 && batchIndex < batches.length) {
+                          final removed = batches.removeAt(batchIndex);
+                          final int removedQty =
+                              int.tryParse('${removed['quantity'] ?? 0}') ?? 0;
+                          final int currentQty = (supply['quantity'] ?? 0)
+                                  is int
+                              ? supply['quantity'] as int
+                              : int.tryParse('${supply['quantity'] ?? 0}') ?? 0;
+                          final int newQty = currentQty - removedQty;
+                          if (batches.isEmpty) {
+                            if (newQty <= 0) {
+                              // No batches left and no quantity – remove supply entirely
+                              addedSupplies.removeAt(baseIndex);
+                            } else {
+                              // Keep supply without batches
+                              supply['expiryBatches'] = [];
+                              supply['expiryDate'] = null;
+                              supply['quantity'] = newQty;
+                              addedSupplies[baseIndex] = supply;
+                            }
+                          } else {
+                            // Keep remaining batches and update aggregate quantity
+                            supply['expiryBatches'] = batches;
+                            supply['quantity'] = newQty < 0 ? 0 : newQty;
+                            addedSupplies[baseIndex] = supply;
+                          }
+                        }
+                      }
                     });
                     Navigator.of(context).pop(true);
                   },

@@ -46,10 +46,23 @@ class NotificationsController {
   NotificationsController({FirebaseFirestore? firestore})
       : firestore = firestore ?? FirebaseFirestore.instance;
 
+  // Default stream (unbounded)
   Stream<List<AppNotification>> getNotificationsStream() {
     return firestore
         .collection('notifications')
         .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => AppNotification.fromMap(doc.id, doc.data()))
+            .toList());
+  }
+
+  // Limited stream (keeps UI responsive and pairs with enforceMaxNotifications)
+  Stream<List<AppNotification>> getNotificationsStreamLimited({int max = 20}) {
+    return firestore
+        .collection('notifications')
+        .orderBy('createdAt', descending: true)
+        .limit(max)
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => AppNotification.fromMap(doc.id, doc.data()))
@@ -76,7 +89,7 @@ class NotificationsController {
       String supplyName, int currentStock) async {
     await createNotification(
       title: 'Low Stock Alert',
-      message: '$supplyName is running low ($currentStock remaining)',
+      message: '$supplyName is running low',
       type: 'low_stock',
     );
   }
@@ -110,8 +123,33 @@ class NotificationsController {
       String supplyName, int newStock) async {
     await createNotification(
       title: 'Restocked',
-      message: '$supplyName is back in stock ($newStock available)',
+      message: '$supplyName is back in stock',
       type: 'in_stock',
+    );
+  }
+
+  // PO notifications
+  Future<void> createPOWaitingApprovalNotification(String poCode) async {
+    await createNotification(
+      title: 'Purchase Order',
+      message: '$poCode is waiting for approval',
+      type: 'po_waiting',
+    );
+  }
+
+  Future<void> createPORejectedNotification(String poCode) async {
+    await createNotification(
+      title: 'Purchase Order',
+      message: 'Admin rejected $poCode',
+      type: 'po_rejected',
+    );
+  }
+
+  Future<void> createPOApprovedNotification(String poCode) async {
+    await createNotification(
+      title: 'Purchase Order',
+      message: 'Admin approved $poCode',
+      type: 'po_approved',
     );
   }
 
@@ -129,6 +167,22 @@ class NotificationsController {
     final snap = await firestore.collection('notifications').get();
     final batch = firestore.batch();
     for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
+  // Delete older notifications so only the most recent [max] remain
+  Future<void> enforceMaxNotifications({int max = 20}) async {
+    final snap = await firestore
+        .collection('notifications')
+        .orderBy('createdAt', descending: true)
+        .get();
+    if (snap.docs.length <= max) return;
+
+    final older = snap.docs.skip(max);
+    final batch = firestore.batch();
+    for (final doc in older) {
       batch.delete(doc.reference);
     }
     await batch.commit();
@@ -193,18 +247,36 @@ class NotificationsController {
     final expiry = DateTime.tryParse(expiryDate);
     if (expiry == null) return;
 
-    final today = DateTime.now();
-    final daysUntilExpiry = expiry.difference(today).inDays;
+    final now = DateTime.now();
+    final remaining = expiry.difference(now);
+    final daysUntilExpiry = remaining.inDays;
 
     // Check if expired
-    if (expiry.isBefore(today)) {
+    if (expiry.isBefore(now)) {
       await createExpiredNotification(supplyName);
       return;
     }
 
-    // Check if expiring soon (30 days or less)
-    if (daysUntilExpiry <= 30 && daysUntilExpiry >= 0) {
-      await createExpiringNotification(supplyName, daysUntilExpiry);
+    // Only notify at specific thresholds: 30 days, 7 days, and 24 hours
+    if (daysUntilExpiry == 30) {
+      await createExpiringNotification(supplyName, 30);
+      return;
+    }
+
+    if (daysUntilExpiry == 7) {
+      await createExpiringNotification(supplyName, 7);
+      return;
+    }
+
+    // Within the last 24 hours (but not expired yet)
+    if (daysUntilExpiry == 0 &&
+        remaining.inHours > 0 &&
+        remaining.inHours <= 24) {
+      await createNotification(
+        title: 'Expiring Soon',
+        message: '$supplyName expires in 24 hours',
+        type: 'expiring',
+      );
       return;
     }
   }

@@ -4,6 +4,7 @@ import '../controller/po_details_controller.dart';
 import '../controller/po_firebase_controller.dart';
 import '../../../shared/themes/font.dart';
 import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
+import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
 class PODetailsPage extends StatefulWidget {
   final PurchaseOrder purchaseOrder;
@@ -1210,62 +1211,43 @@ class _PODetailsPageState extends State<PODetailsPage> {
   } */
 
   Future<void> _approvePurchaseOrder() async {
-    setState(() {
-      _isLoading = true;
-    });
-
+    if (!mounted) return;
+    setState(() => _isLoading = true);
     try {
-      // Create new PO instance with Closed status
-      // Approve PO using controller
-      final updatedPOFromController =
-          await _controller.approvePurchaseOrder(_purchaseOrder);
-
-      // Update local state
-      setState(() {
-        _purchaseOrder = updatedPOFromController;
-        _isLoading = false;
-      });
-
+      await _controller.approvePurchaseOrder(_purchaseOrder);
+      try {
+        await NotificationsController()
+            .createPOApprovedNotification(_purchaseOrder.code);
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Purchase Order approved and inventory restocked successfully!',
             style: AppFonts.sfProStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
+                fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white),
           ),
           backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          duration: const Duration(seconds: 2),
         ),
       );
-
-      // Navigate back immediately after success
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
+      // Navigate back to Purchase Orders list after a short delay
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) Navigator.of(context).pop({'switchToClosed': true});
       });
-
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Error approving purchase order: $e',
+            'Error approving purchase order',
             style: AppFonts.sfProStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
+                fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white),
           ),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -1412,6 +1394,14 @@ class _PODetailsPageState extends State<PODetailsPage> {
         poName: updatedPO.name,
         supplies: [updatedSupplies[index]],
       );
+
+      // Notify if moved to Approval
+      if (_purchaseOrder.status != 'Approval' && newStatus == 'Approval') {
+        try {
+          await NotificationsController()
+              .createPOWaitingApprovalNotification(updatedPO.code);
+        } catch (_) {}
+      }
 
       setState(() {
         _purchaseOrder = updatedPO;

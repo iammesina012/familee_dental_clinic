@@ -12,6 +12,15 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage> {
   final NotificationsController _controller = NotificationsController();
+  int _visibleCount = 10; // show 10 initially, then 20 max
+
+  @override
+  void initState() {
+    super.initState();
+    // Enforce max 20 on entry (older ones are deleted)
+    // Fire and forget; UI listens to stream
+    _controller.enforceMaxNotifications(max: 20);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,14 +55,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 const SizedBox(height: 12),
                 Expanded(
                   child: StreamBuilder<List<AppNotification>>(
-                    stream: _controller.getNotificationsStream(),
+                    stream: _controller.getNotificationsStreamLimited(max: 20),
                     builder: (context, snapshot) {
-                      final items = snapshot.data ?? const <AppNotification>[];
+                      final all = snapshot.data ?? const <AppNotification>[];
+                      final items = all.take(_visibleCount).toList();
+                      final unreadCount = all.where((n) => !(n.isRead)).length;
                       if (snapshot.connectionState == ConnectionState.waiting &&
-                          items.isEmpty) {
+                          all.isEmpty) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      if (items.isEmpty) {
+                      if (all.isEmpty) {
                         return Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -94,17 +105,85 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         );
                       }
 
-                      return ListView.separated(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final n = items[index];
-                          return _NotificationTile(
-                            notification: n,
-                            controller: _controller,
-                          );
-                        },
+                      final bool showLoadMore =
+                          all.length > _visibleCount && _visibleCount == 10;
+                      final int listCount =
+                          items.length + (showLoadMore ? 1 : 0);
+
+                      return Column(
+                        children: [
+                          // Unread chip at top-right of the purple panel
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                            child: Row(
+                              children: [
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                      color: Colors.black.withOpacity(0.15),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '$unreadCount unread',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.separated(
+                              padding: const EdgeInsets.all(12),
+                              itemCount: listCount,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                if (showLoadMore && index == items.length) {
+                                  return OutlinedButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _visibleCount = 20; // reveal up to 20
+                                      });
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                          color: Colors.black.withOpacity(0.2)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      backgroundColor: Colors.white,
+                                    ),
+                                    child: Text(
+                                      'See previous notifications',
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final n = items[index];
+                                return _NotificationTile(
+                                  notification: n,
+                                  controller: _controller,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
@@ -249,6 +328,12 @@ class _NotificationTile extends StatelessWidget {
         return const Color(0xFF8B0000);
       case 'in_stock':
         return const Color(0xFF1ACB5D);
+      case 'po_rejected':
+        return const Color(0xFFE44B4D);
+      case 'po_waiting':
+        return const Color(0xFF8A8A8A);
+      case 'po_approved':
+        return const Color(0xFF1ACB5D);
       default:
         return const Color(0xFFB37BE6);
     }
@@ -266,6 +351,12 @@ class _NotificationTile extends StatelessWidget {
         return Icons.error;
       case 'in_stock':
         return Icons.check_circle;
+      case 'po_rejected':
+        return Icons.close; // X
+      case 'po_waiting':
+        return Icons.access_time; // clock
+      case 'po_approved':
+        return Icons.check; // check
       default:
         return Icons.notifications;
     }

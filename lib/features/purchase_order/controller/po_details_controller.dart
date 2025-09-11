@@ -3,6 +3,7 @@ import '../data/purchase_order.dart';
 import 'po_firebase_controller.dart';
 import 'po_calculations.dart';
 import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
+import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
 class PODetailsController {
   final POFirebaseController _poController = POFirebaseController();
@@ -64,6 +65,14 @@ class PODetailsController {
       supplies: [updatedSupplies[supplyIndex]],
     );
 
+    // Notify if moved to Approval
+    if (po.status != 'Approval' && newStatus == 'Approval') {
+      try {
+        await NotificationsController()
+            .createPOWaitingApprovalNotification(updatedPO.code);
+      } catch (_) {}
+    }
+
     return updatedPO;
   }
 
@@ -92,6 +101,12 @@ class PODetailsController {
       poName: updatedPO.name,
       supplies: updatedPO.supplies,
     );
+
+    // Notify approval
+    try {
+      await NotificationsController()
+          .createPOApprovedNotification(updatedPO.code);
+    } catch (_) {}
 
     return updatedPO;
   }
@@ -126,6 +141,12 @@ class PODetailsController {
       supplies: updatedPO.supplies,
     );
 
+    // Notify rejection
+    try {
+      await NotificationsController()
+          .createPORejectedNotification(updatedPO.code);
+    } catch (_) {}
+
     return updatedPO;
   }
 
@@ -141,13 +162,12 @@ class PODetailsController {
       final supplierName =
           supply['supplierName'] ?? supply['supplier'] ?? 'N/A';
       final int totalQuantity = supply['quantity'] ?? 0;
-      final cost = (supply['cost'] ?? 0.0).toDouble();
       final expiryDate = supply['expiryDate'];
       final List<dynamic>? expiryBatches =
           (supply['expiryBatches'] as List<dynamic>?);
 
       // Prepare existing items lookup (by name+brand)
-      final existingItems = await _firestore
+      await _firestore
           .collection('supplies')
           .where('name', isEqualTo: supplyName)
           .where('brand', isEqualTo: brandName)
