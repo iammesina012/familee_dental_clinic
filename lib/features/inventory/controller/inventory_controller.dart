@@ -72,11 +72,13 @@ class InventoryController {
   Stream<List<GroupedInventoryItem>> getGroupedSuppliesStream(
       {bool? archived}) {
     return getSuppliesStream(archived: archived).map((items) {
+      // Keep ALL items (including expired ones) for proper status display
+      // The GroupedInventoryItem.getStatus() method will handle showing "Expired" status
       return _groupItems(items);
     });
   }
 
-  // Group items by name + brand, with earliest expiring item as main
+  // Group items by name + brand, separating expired and non-expired batches
   List<GroupedInventoryItem> _groupItems(List<InventoryItem> items) {
     final Map<String, List<InventoryItem>> grouped = {};
 
@@ -95,34 +97,59 @@ class InventoryController {
     for (final entry in grouped.entries) {
       final items = entry.value;
 
-      // Sort by expiry date (earliest first)
-      items.sort((a, b) {
-        if (a.noExpiry && b.noExpiry) return 0;
-        if (a.noExpiry) return 1;
-        if (b.noExpiry) return -1;
+      // Separate expired and non-expired items
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
 
-        final aExpiry = a.expiry != null ? DateTime.tryParse(a.expiry!) : null;
-        final bExpiry = b.expiry != null ? DateTime.tryParse(b.expiry!) : null;
+      final nonExpiredItems = items.where((item) {
+        if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
+          return true;
+        }
+        final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+        if (expiryDate == null) return true;
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+        return !(dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today));
+      }).toList();
 
-        if (aExpiry == null && bExpiry == null) return 0;
-        if (aExpiry == null) return 1;
-        if (bExpiry == null) return -1;
+      // Only create groups for non-expired items
+      if (nonExpiredItems.isNotEmpty) {
+        // Sort by expiry date (earliest first)
+        nonExpiredItems.sort((a, b) {
+          if (a.noExpiry && b.noExpiry) return 0;
+          if (a.noExpiry) return 1;
+          if (b.noExpiry) return -1;
 
-        return aExpiry.compareTo(bExpiry);
-      });
+          final aExpiry = a.expiry != null
+              ? DateTime.tryParse(a.expiry!.replaceAll('/', '-'))
+              : null;
+          final bExpiry = b.expiry != null
+              ? DateTime.tryParse(b.expiry!.replaceAll('/', '-'))
+              : null;
 
-      // Prefer the earliest-expiring item that has stock > 0 as the main item
-      final InventoryItem mainItem =
-          (items.firstWhere((it) => it.stock > 0, orElse: () => items.first));
-      final variants = List<InventoryItem>.from(items)..remove(mainItem);
-      final totalStock = items.fold(0, (sum, item) => sum + item.stock);
+          if (aExpiry == null && bExpiry == null) return 0;
+          if (aExpiry == null) return 1;
+          if (bExpiry == null) return -1;
 
-      result.add(GroupedInventoryItem(
-        productKey: entry.key,
-        mainItem: mainItem,
-        variants: variants,
-        totalStock: totalStock,
-      ));
+          return aExpiry.compareTo(bExpiry);
+        });
+
+        final mainItem = nonExpiredItems.firstWhere(
+          (it) => it.stock > 0,
+          orElse: () => nonExpiredItems.first,
+        );
+        final variants =
+            nonExpiredItems.where((it) => it.id != mainItem.id).toList();
+        final totalStock =
+            nonExpiredItems.fold(0, (sum, item) => sum + item.stock);
+
+        result.add(GroupedInventoryItem(
+          productKey: entry.key,
+          mainItem: mainItem,
+          variants: variants,
+          totalStock: totalStock,
+        ));
+      }
     }
 
     return result;
@@ -162,6 +189,8 @@ class InventoryController {
     Map<String, dynamic>? filters,
   }) {
     final filtered = items.where((item) {
+      // Keep all items - let the status display handle expired items properly
+
       // Category filter - include the group if ANY variant matches the category
       if (selectedCategory.isNotEmpty) {
         final matchesCategory = item
@@ -197,18 +226,24 @@ class InventoryController {
         // Stock status filter
         if (filters['stockStatus'] != null &&
             (filters['stockStatus'] as List).isNotEmpty) {
-          final status = _getItemStatus(item.mainItem);
+          final String status = _getItemStatus(item.mainItem);
           if (!(filters['stockStatus'] as List).contains(status)) {
             return false;
           }
         }
 
-        // Expiry filter
+        // Expiry filter (Inventory only): ignore 'Expired' since expired items live on a separate page
         if (filters['expiry'] != null &&
             (filters['expiry'] as List).isNotEmpty) {
-          final expiryStatus = _getExpiryStatus(item.mainItem);
-          if (!(filters['expiry'] as List).contains(expiryStatus)) {
-            return false;
+          final List<dynamic> expirySelections =
+              List<dynamic>.from(filters['expiry'] as List);
+          // Remove any 'Expired' entries if present
+          expirySelections.removeWhere((e) => e?.toString() == 'Expired');
+          if (expirySelections.isNotEmpty) {
+            final expiryStatus = getExpiryStatus(item.mainItem);
+            if (!expirySelections.contains(expiryStatus)) {
+              return false;
+            }
           }
         }
 
@@ -328,34 +363,43 @@ class InventoryController {
   int _expiryOrder(InventoryItem item) {
     if (item.noExpiry == true) return 999999;
     if (item.expiry == null || item.expiry!.isEmpty) return 999999;
-    final date = DateTime.tryParse(item.expiry!);
+    final date = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
     return date != null ? date.millisecondsSinceEpoch : 999999;
   }
 
   // Helper method to get item status for filtering
   String _getItemStatus(InventoryItem item) {
+    // Note: Expired status is now handled by the dedicated Expired Supply page
+    // Main inventory system no longer shows expired status
+
+    // Check stock status only
     if (item.stock == 0) return "Out of Stock";
     if (item.stock <= 2) return "Low Stock";
     return "In Stock";
   }
 
   // Helper method to get expiry status for filtering
-  String _getExpiryStatus(InventoryItem item) {
+  String getExpiryStatus(InventoryItem item) {
     // If item has no expiry flag, return "No Expiry"
     if (item.noExpiry) return "No Expiry";
 
     // If item has no expiry date, return "No Expiry"
     if (item.expiry == null || item.expiry!.isEmpty) return "No Expiry";
 
-    // Try to parse the expiry date
-    final expiryDate = DateTime.tryParse(item.expiry!);
+    // Try to parse the expiry date (support both / and - formats)
+    final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
     if (expiryDate == null) return "No Expiry";
 
     final today = DateTime.now();
-    final daysUntilExpiry = expiryDate.difference(today).inDays;
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    final expiryDateOnly =
+        DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
 
-    // Check if expired
-    if (expiryDate.isBefore(today)) return "Expired Items";
+    // Check if expired (using same logic as grouping)
+    if (expiryDateOnly.isBefore(todayDateOnly) ||
+        expiryDateOnly.isAtSameMomentAs(todayDateOnly)) return "Expired";
+
+    final daysUntilExpiry = expiryDateOnly.difference(todayDateOnly).inDays;
 
     // Check if expiring soon (within 30 days)
     if (daysUntilExpiry <= 30) return "Expiring";

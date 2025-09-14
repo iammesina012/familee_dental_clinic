@@ -1,0 +1,531 @@
+import 'package:flutter/material.dart';
+import 'package:marquee/marquee.dart';
+import 'package:projects/features/inventory/data/inventory_item.dart';
+import 'package:projects/features/inventory/components/expired_other_expiry_dates.dart';
+import '../controller/expired_view_supply_controller.dart';
+import 'package:projects/shared/themes/font.dart';
+
+class ExpiredViewSupplyPage extends StatelessWidget {
+  final InventoryItem item;
+  final bool skipAutoRedirect; // when navigating from Other Expiry Dates
+  const ExpiredViewSupplyPage(
+      {super.key, required this.item, this.skipAutoRedirect = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = ExpiredViewSupplyController();
+
+    return StreamBuilder<InventoryItem?>(
+      stream: controller.supplyStream(item.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text("Expired Supply",
+                  style: AppFonts.sfProStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold)),
+              backgroundColor: Colors.white,
+              iconTheme: const IconThemeData(size: 30, color: Colors.black),
+            ),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data == null) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text("Expired Supply",
+                  style: AppFonts.sfProStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold)),
+              backgroundColor: Colors.white,
+              iconTheme: const IconThemeData(size: 30, color: Colors.black),
+            ),
+            body: Center(child: Text("Item not found.")),
+          );
+        }
+        final updatedItem = snapshot.data!;
+
+        // For expired supplies, we don't need auto-redirect logic
+        final status = "Expired"; // Force expired status
+        return _buildScaffold(context, controller, updatedItem, status);
+      },
+    );
+  }
+
+  Widget _buildScaffold(
+      BuildContext context,
+      ExpiredViewSupplyController controller,
+      InventoryItem updatedItem,
+      String status) {
+    return Scaffold(
+      backgroundColor: Color(0xFFF9EFF2),
+      appBar: AppBar(
+        title: Text(
+          "Expired Supply",
+          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        toolbarHeight: 70,
+        iconTheme: const IconThemeData(size: 30, color: Colors.black),
+        elevation: 5,
+        shadowColor: Colors.black54,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            tooltip: "Delete",
+            onPressed: () => _showDeleteDialog(context, updatedItem),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 18),
+                  Text(
+                    updatedItem.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 22,
+                      color: Colors.black,
+                    ),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    updatedItem.category,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: updatedItem.imageUrl.isNotEmpty
+                          ? Image.network(
+                              updatedItem.imageUrl,
+                              width: 130,
+                              height: 130,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              width: 130,
+                              height: 130,
+                              color: Colors.grey[200],
+                              child: const Icon(Icons.image,
+                                  size: 40, color: Colors.grey),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFFCDD2), // Red background for expired
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        "Expired",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFFFF4747), // Red text
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text("Stock",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 4),
+                            StreamBuilder<int>(
+                              stream: controller.aggregatedExpiredStockForDate(
+                                name: updatedItem.name,
+                                brand: updatedItem.brand,
+                                expiry: updatedItem.expiry,
+                              ),
+                              builder: (context, stockSnap) {
+                                final total =
+                                    stockSnap.data ?? updatedItem.stock;
+                                return Text("$total",
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15),
+                                    textAlign: TextAlign.center);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text("Unit",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 4),
+                            Text(updatedItem.unit,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500, fontSize: 15),
+                                textAlign: TextAlign.center),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text("Cost",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 4),
+                            Text("₱${updatedItem.cost.toStringAsFixed(2)}",
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500, fontSize: 15),
+                                textAlign: TextAlign.center),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text("Brand Name",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 4),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final textPainter = TextPainter(
+                                  text: TextSpan(
+                                    text: updatedItem.brand,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  textDirection: TextDirection.ltr,
+                                );
+                                textPainter.layout();
+
+                                final textWidth = textPainter.width;
+                                final containerWidth = constraints.maxWidth;
+
+                                if (textWidth > containerWidth) {
+                                  // Text is too long, use marquee
+                                  return SizedBox(
+                                    height: 20,
+                                    child: Marquee(
+                                      text: updatedItem.brand,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15,
+                                          color: Colors.black),
+                                      scrollAxis: Axis.horizontal,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      blankSpace: 20.0,
+                                      velocity: 30.0,
+                                      pauseAfterRound:
+                                          const Duration(seconds: 1),
+                                      startPadding: 10.0,
+                                      accelerationDuration:
+                                          const Duration(seconds: 1),
+                                      accelerationCurve: Curves.linear,
+                                      decelerationDuration:
+                                          const Duration(milliseconds: 500),
+                                      decelerationCurve: Curves.easeOut,
+                                    ),
+                                  );
+                                } else {
+                                  // Text fits, use normal text
+                                  return Text(
+                                    updatedItem.brand,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15),
+                                    textAlign: TextAlign.center,
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text("Expiry",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 4),
+                            Text(
+                              (updatedItem.expiry != null &&
+                                      updatedItem.expiry!.isNotEmpty)
+                                  ? updatedItem.expiry!.replaceAll('-', '/')
+                                  : "No expiry",
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w500, fontSize: 15),
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text("Supplier",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 4),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final textPainter = TextPainter(
+                                  text: TextSpan(
+                                    text: updatedItem.supplier,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  textDirection: TextDirection.ltr,
+                                );
+                                textPainter.layout();
+
+                                final textWidth = textPainter.width;
+                                final containerWidth = constraints.maxWidth;
+
+                                if (textWidth > containerWidth) {
+                                  // Text is too long, use marquee
+                                  return SizedBox(
+                                    height: 20,
+                                    child: Marquee(
+                                      text: updatedItem.supplier,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15,
+                                          color: Colors.black),
+                                      scrollAxis: Axis.horizontal,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      blankSpace: 20.0,
+                                      velocity: 30.0,
+                                      pauseAfterRound:
+                                          const Duration(seconds: 1),
+                                      startPadding: 10.0,
+                                      accelerationDuration:
+                                          const Duration(seconds: 1),
+                                      accelerationCurve: Curves.linear,
+                                      decelerationDuration:
+                                          const Duration(milliseconds: 500),
+                                      decelerationCurve: Curves.easeOut,
+                                    ),
+                                  );
+                                } else {
+                                  // Text fits, use normal text
+                                  return Text(
+                                    updatedItem.supplier,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15),
+                                    textAlign: TextAlign.center,
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Divider(thickness: 1.2, height: 36),
+                  // Other Expired Batches Section
+                  if (!updatedItem.noExpiry &&
+                      updatedItem.expiry != null &&
+                      updatedItem.expiry!.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.only(bottom: 10.0, top: 2.0),
+                      child: Text(
+                        "Other Expired Batches",
+                        style: AppFonts.sfProStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    ExpiredOtherExpiryBatches(item: updatedItem),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context, InventoryItem item) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return _buildCustomDialog(
+          context,
+          title: 'Delete Supply',
+          content:
+              'Are you sure you want to permanently delete "${item.name}"?\n\nThis action cannot be undone.',
+          confirmText: 'Delete',
+          confirmColor: Colors.red,
+          icon: Icons.delete,
+          item: item,
+        );
+      },
+    );
+  }
+
+  Widget _buildCustomDialog(
+    BuildContext context, {
+    required String title,
+    required String content,
+    required String confirmText,
+    required Color confirmColor,
+    required IconData icon,
+    required InventoryItem item,
+  }) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: confirmColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 32, color: confirmColor),
+            ),
+            SizedBox(height: 16),
+            Text(
+              title,
+              style: AppFonts.sfProStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 8),
+            Text(
+              content,
+              style: AppFonts.sfProStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Cancel',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.of(context).pop();
+                      // Delete the item
+                      final controller = ExpiredViewSupplyController();
+                      try {
+                        await controller.deleteSupply(item.id);
+                        if (context.mounted) {
+                          Navigator.of(context)
+                              .pop(); // Go back to expired supply page
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Supply deleted permanently!'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to delete supply: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: confirmColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      confirmText,
+                      style: AppFonts.sfProStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

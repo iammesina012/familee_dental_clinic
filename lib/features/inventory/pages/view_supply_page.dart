@@ -6,12 +6,18 @@ import 'package:projects/features/inventory/pages/edit_supply_page.dart';
 import '../controller/view_supply_controller.dart';
 import 'package:projects/features/inventory/pages/archive_supply_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
 
 class InventoryViewSupplyPage extends StatelessWidget {
   final InventoryItem item;
   final bool skipAutoRedirect; // when navigating from Other Expiry Dates
+  final bool
+      hideOtherExpirySection; // hide Other Expiry Dates section (e.g., from Expired page)
   const InventoryViewSupplyPage(
-      {super.key, required this.item, this.skipAutoRedirect = false});
+      {super.key,
+      required this.item,
+      this.skipAutoRedirect = false,
+      this.hideOtherExpirySection = false});
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +39,24 @@ class InventoryViewSupplyPage extends StatelessWidget {
           );
         }
         final updatedItem = snapshot.data!;
+        // If this batch is expired, redirect to Expired View page to keep
+        // inventory view free of expired supplies
+        if (_isItemExpired(updatedItem) && !skipAutoRedirect) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => ExpiredViewSupplyPage(
+                  item: updatedItem,
+                  skipAutoRedirect: true,
+                ),
+              ),
+            );
+          });
+          return Scaffold(
+            appBar: AppBar(title: Text("Inventory")),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
         // If there are other batches with earlier expiry, redirect to earliest
         // Query same name+brand and pick the earliest non-null expiry
         // UI-only re-route; no backend change
@@ -51,62 +75,74 @@ class InventoryViewSupplyPage extends StatelessWidget {
               final docs = batchSnap.data!.docs;
               DateTime? earliest;
               QueryDocumentSnapshot? earliestDoc;
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
               for (final d in docs) {
                 final data = d.data() as Map<String, dynamic>;
                 final expStr = data['expiry']?.toString();
                 if (expStr == null || expStr.isEmpty) continue;
                 final dt = DateTime.tryParse(expStr.replaceAll('/', '-'));
-                if (dt != null && (earliest == null || dt.isBefore(earliest))) {
-                  earliest = dt;
+                if (dt == null) continue;
+                final dateOnly = DateTime(dt.year, dt.month, dt.day);
+                // Skip expired batches in Inventory view
+                if (dateOnly.isBefore(today) ||
+                    dateOnly.isAtSameMomentAs(today)) {
+                  continue;
+                }
+                if (earliest == null || dateOnly.isBefore(earliest)) {
+                  earliest = dateOnly;
                   earliestDoc = d;
                 }
               }
               if (earliestDoc != null && earliestDoc.id != updatedItem.id) {
                 // Replace page with earliest batch view
+                // Schedule navigation after current frame to avoid ancestor lookup on deactivated context
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => InventoryViewSupplyPage(
-                        item: InventoryItem(
-                          id: earliestDoc!.id,
-                          name: (earliestDoc.data()
-                                  as Map<String, dynamic>)['name'] ??
-                              '',
-                          imageUrl: (earliestDoc.data()
-                                  as Map<String, dynamic>)['imageUrl'] ??
-                              '',
-                          category: (earliestDoc.data()
-                                  as Map<String, dynamic>)['category'] ??
-                              '',
-                          cost: ((earliestDoc.data()
-                                      as Map<String, dynamic>)['cost'] ??
-                                  0)
-                              .toDouble(),
-                          stock: ((earliestDoc.data()
-                                  as Map<String, dynamic>)['stock'] ??
-                              0) as int,
-                          unit: (earliestDoc.data()
-                                  as Map<String, dynamic>)['unit'] ??
-                              '',
-                          supplier: (earliestDoc.data()
-                                  as Map<String, dynamic>)['supplier'] ??
-                              '',
-                          brand: (earliestDoc.data()
-                                  as Map<String, dynamic>)['brand'] ??
-                              '',
-                          expiry: (earliestDoc.data()
-                              as Map<String, dynamic>)['expiry'],
-                          noExpiry: (earliestDoc.data()
-                                  as Map<String, dynamic>)['noExpiry'] ??
-                              false,
-                          archived: (earliestDoc.data()
-                                  as Map<String, dynamic>)['archived'] ??
-                              false,
+                  if (context.mounted && Navigator.of(context).canPop()) {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => InventoryViewSupplyPage(
+                          item: InventoryItem(
+                            id: earliestDoc!.id,
+                            name: (earliestDoc.data()
+                                    as Map<String, dynamic>)['name'] ??
+                                '',
+                            imageUrl: (earliestDoc.data()
+                                    as Map<String, dynamic>)['imageUrl'] ??
+                                '',
+                            category: (earliestDoc.data()
+                                    as Map<String, dynamic>)['category'] ??
+                                '',
+                            cost: ((earliestDoc.data()
+                                        as Map<String, dynamic>)['cost'] ??
+                                    0)
+                                .toDouble(),
+                            stock: ((earliestDoc.data()
+                                    as Map<String, dynamic>)['stock'] ??
+                                0) as int,
+                            unit: (earliestDoc.data()
+                                    as Map<String, dynamic>)['unit'] ??
+                                '',
+                            supplier: (earliestDoc.data()
+                                    as Map<String, dynamic>)['supplier'] ??
+                                '',
+                            brand: (earliestDoc.data()
+                                    as Map<String, dynamic>)['brand'] ??
+                                '',
+                            expiry: (earliestDoc.data()
+                                as Map<String, dynamic>)['expiry'],
+                            noExpiry: (earliestDoc.data()
+                                    as Map<String, dynamic>)['noExpiry'] ??
+                                false,
+                            archived: (earliestDoc.data()
+                                    as Map<String, dynamic>)['archived'] ??
+                                false,
+                          ),
+                          skipAutoRedirect: true,
                         ),
-                        skipAutoRedirect: true,
                       ),
-                    ),
-                  );
+                    );
+                  }
                 });
               }
             }
@@ -117,6 +153,18 @@ class InventoryViewSupplyPage extends StatelessWidget {
         );
       },
     );
+  }
+
+  bool _isItemExpired(InventoryItem item) {
+    if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
+      return false;
+    }
+    final parsed = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+    if (parsed == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dateOnly = DateTime(parsed.year, parsed.month, parsed.day);
+    return dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today);
   }
 
   Widget _buildScaffold(BuildContext context, ViewSupplyController controller,
@@ -154,9 +202,37 @@ class InventoryViewSupplyPage extends StatelessWidget {
                   ),
                 );
                 if (result == true) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Supply updated!')),
-                  );
+                  // Avoid showing a snackbar if the item is now expired,
+                  // because this page may immediately redirect to the Expired view
+                  try {
+                    final doc = await FirebaseFirestore.instance
+                        .collection('supplies')
+                        .doc(updatedItem.id)
+                        .get();
+                    final data = doc.data();
+                    final expiryStr = data?['expiry']?.toString();
+                    bool isExpiredNow = false;
+                    if (expiryStr != null && expiryStr.isNotEmpty) {
+                      final dt = DateTime.tryParse(expiryStr) ??
+                          DateTime.tryParse(expiryStr.replaceAll('/', '-'));
+                      if (dt != null) {
+                        final today = DateTime.now();
+                        final d = DateTime(dt.year, dt.month, dt.day);
+                        final t = DateTime(today.year, today.month, today.day);
+                        isExpiredNow = d.isBefore(t) || d.isAtSameMomentAs(t);
+                      }
+                    }
+                    if (!isExpiredNow) {
+                      final messenger = ScaffoldMessenger.maybeOf(context);
+                      if (messenger != null) {
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Supply updated!')),
+                        );
+                      }
+                    }
+                  } catch (_) {
+                    // Best-effort only; ignore errors
+                  }
                 }
               },
             ),
@@ -536,20 +612,22 @@ class InventoryViewSupplyPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 28),
                   Divider(thickness: 1.2, height: 36),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 10.0, top: 2.0),
-                      child: Text(
-                        "Other Expiry Dates",
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 18),
+                  if (!hideOtherExpirySection) ...[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 10.0, top: 2.0),
+                        child: Text(
+                          "Other Expiry Dates",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 18),
+                        ),
                       ),
                     ),
-                  ),
-                  // Show live batches from Firestore; if none, fall back to embedded expiryBatches if present
-                  FirestoreOtherExpiryBatches(item: updatedItem),
-                  _EmbeddedExpiryBatchesFallback(item: updatedItem),
+                    // Show live batches from Firestore; if none, fall back to embedded expiryBatches if present
+                    FirestoreOtherExpiryBatches(item: updatedItem),
+                    _EmbeddedExpiryBatchesFallback(item: updatedItem),
+                  ],
                 ],
               ),
             ),

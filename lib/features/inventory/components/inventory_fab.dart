@@ -4,6 +4,7 @@ import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 class InventoryFAB extends StatelessWidget {
   final Function()? onAddSupply;
   final Function()? onArchivedSupply;
+  final Function()? onExpiredSupply;
   final Function()? onAddCategory;
   final Function()? onEditCategory;
 
@@ -11,6 +12,7 @@ class InventoryFAB extends StatelessWidget {
     Key? key,
     this.onAddSupply,
     this.onArchivedSupply,
+    this.onExpiredSupply,
     this.onAddCategory,
     this.onEditCategory,
   }) : super(key: key);
@@ -26,6 +28,15 @@ class InventoryFAB extends StatelessWidget {
       spacing: 16,
       spaceBetweenChildren: 12,
       childMargin: EdgeInsets.only(bottom: 4),
+      closeManually: false,
+      animationCurve: Curves.elasticInOut,
+      animationDuration: Duration(milliseconds: 300),
+      onOpen: () {
+        // FAB opened
+      },
+      onClose: () {
+        // FAB closed
+      },
       children: [
         SpeedDialChild(
           child: Icon(Icons.add_box, color: Colors.white),
@@ -54,6 +65,20 @@ class InventoryFAB extends StatelessWidget {
           labelBackgroundColor: Colors.white,
           labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
           onTap: onArchivedSupply,
+        ),
+        SpeedDialChild(
+          child: Icon(Icons.warning, color: Colors.white),
+          backgroundColor: Colors.red,
+          label: 'Expired Supply',
+          labelStyle: TextStyle(
+            fontFamily: 'SF Pro',
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+            color: Colors.black,
+          ),
+          labelBackgroundColor: Colors.white,
+          labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
+          onTap: onExpiredSupply,
         ),
         SpeedDialChild(
           child: Icon(Icons.category, color: Colors.white),

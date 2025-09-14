@@ -17,6 +17,7 @@ import 'package:projects/features/stock_deduction/pages/sd_edit_preset_page.dart
 import 'package:projects/features/stock_deduction/pages/sd_add_supply_preset_page.dart';
 import 'package:projects/features/activity_log/pages/activity_log_page.dart';
 import 'package:projects/features/notifications/pages/notifications_page.dart';
+import 'package:projects/features/settings/pages/settings_page.dart';
 import 'package:projects/features/auth/services/auth_service.dart';
 import 'package:projects/shared/themes/font.dart';
 
@@ -72,6 +73,7 @@ class MainApp extends StatelessWidget {
         },
         '/activity-log': (context) => const ActivityLogPage(),
         '/notifications': (context) => const NotificationsPage(),
+        '/settings': (context) => const SettingsPage(),
       },
     );
   }

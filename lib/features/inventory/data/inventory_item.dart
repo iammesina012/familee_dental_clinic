@@ -106,24 +106,55 @@ class GroupedInventoryItem {
   String getStatus() {
     if (mainItem.archived) return "Archived";
 
-    // Determine stock status using TOTAL stock across batches
-    if (totalStock == 0) return "Out of Stock";
-
-    // Expiry-based statuses still follow the earliest-expiring batch
+    // Check expiry status FIRST - expired items should show as "Expired" regardless of stock
     if (!mainItem.noExpiry &&
         mainItem.expiry != null &&
         mainItem.expiry!.isNotEmpty) {
-      final expiryDate = DateTime.tryParse(mainItem.expiry!);
-      if (expiryDate != null && expiryDate.isBefore(DateTime.now()))
-        return "Expired";
+      final expiryDate =
+          DateTime.tryParse(mainItem.expiry!.replaceAll('/', '-'));
       if (expiryDate != null) {
-        final daysUntilExpiry = expiryDate.difference(DateTime.now()).inDays;
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+
+        if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today))
+          return "Expired";
+
+        final daysUntilExpiry = dateOnly.difference(today).inDays;
         if (daysUntilExpiry <= 30) return "Expiring";
       }
     }
 
+    // Determine stock status using TOTAL stock across batches (only if not expired/expiring)
+    if (totalStock == 0) return "Out of Stock";
+
     // Low stock threshold based on total stock
     if (totalStock <= 2) return "Low Stock";
     return "In Stock";
+  }
+
+  // Determine if a batch is expired (treat noExpiry as not expired)
+  bool _isExpired(InventoryItem item) {
+    if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
+      return false;
+    }
+    final dt = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+    if (dt == null) return false;
+    final today = DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    return dt.isBefore(todayDateOnly) || dt.isAtSameMomentAs(todayDateOnly);
+  }
+
+  // Total stock excluding expired batches
+  int get nonExpiredTotalStock {
+    return getAllItems()
+        .where((it) => !_isExpired(it))
+        .fold(0, (sum, it) => sum + it.stock);
+  }
+
+  // Whether all batches in this group are expired (or zero non-expired stock)
+  bool get allBatchesExpired {
+    return nonExpiredTotalStock == 0;
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/controller/inventory_controller.dart';
+import 'package:projects/features/inventory/controller/catalog_controller.dart';
 import 'package:projects/features/purchase_order/pages/po_edit_supply_page.dart';
 
 class AddSupplyPage extends StatefulWidget {
@@ -15,6 +16,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
   final InventoryController inventoryController = InventoryController();
+  final CatalogController catalogController = CatalogController();
 
   List<InventoryItem> get filteredItems {
     // This will be populated from the stream
@@ -106,8 +108,9 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
               // Items List
               Expanded(
                 child: StreamBuilder<List<GroupedInventoryItem>>(
-                  stream: inventoryController.getGroupedSuppliesStream(
-                      archived: false),
+                  // Use catalog stream to include products even if only expired batches exist
+                  stream:
+                      catalogController.getAllProductsStream(archived: false),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return Center(

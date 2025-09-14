@@ -9,6 +9,7 @@ import 'package:projects/features/inventory/pages/add_supply_page.dart';
 import 'package:projects/features/inventory/pages/view_supply_page.dart';
 import 'package:projects/features/inventory/pages/add_category_page.dart';
 import 'package:projects/features/inventory/pages/edit_categories_page.dart';
+import 'package:projects/features/inventory/pages/expired_supply_page.dart';
 import '../controller/inventory_controller.dart';
 import '../controller/filter_controller.dart';
 import '../controller/categories_controller.dart';
@@ -26,6 +27,7 @@ class _InventoryState extends State<Inventory> {
   int selectedCategory = 0;
   String? _highlightSupplyName; // for deep-link from notifications
   bool _deepLinkHandled = false;
+  // summary filter removed
 
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
@@ -131,11 +133,13 @@ class _InventoryState extends State<Inventory> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Capture deep-link arg once
-    if (_highlightSupplyName == null) {
-      final args = ModalRoute.of(context)?.settings.arguments;
-      if (args is Map && args['highlightSupplyName'] is String) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      if (_highlightSupplyName == null &&
+          args['highlightSupplyName'] is String) {
         _highlightSupplyName = (args['highlightSupplyName'] as String).trim();
       }
+      // removed: applyStatusFilter deep-link
     }
   }
 
@@ -450,6 +454,12 @@ class _InventoryState extends State<Inventory> {
                           filters: currentFilters,
                         );
 
+                        // Filter out expired items from main inventory - they should only appear in Expired Supply page
+                        // But keep non-expired batches even if other batches of the same product are expired
+                        final visibleItems = sortedItems.where((item) {
+                          return item.getStatus() != "Expired";
+                        }).toList();
+
                         // Handle deep-link to specific supply once
                         if (!_deepLinkHandled &&
                             _highlightSupplyName != null &&
@@ -464,7 +474,21 @@ class _InventoryState extends State<Inventory> {
                           }
                           if (target != null) {
                             _deepLinkHandled = true;
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                            // Check if this is a placeholder (0 stock, no expiry, and not expired)
+                            if (target.mainItem.stock == 0 &&
+                                target.mainItem.noExpiry &&
+                                target.getStatus() != "Expired") {
+                              // Show message for placeholder items
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      '${target.mainItem.name} has expired and is no longer available.'),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            } else {
+                              // Allow navigation for all other items, including expired ones
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -472,7 +496,7 @@ class _InventoryState extends State<Inventory> {
                                       item: target!.mainItem),
                                 ),
                               );
-                            });
+                            }
                           }
                         }
 
@@ -490,11 +514,30 @@ class _InventoryState extends State<Inventory> {
                                   crossAxisSpacing: 12,
                                   childAspectRatio: aspectRatio,
                                 ),
-                                itemCount: sortedItems.length,
+                                itemCount: visibleItems.length,
                                 itemBuilder: (context, index) {
-                                  final groupedItem = sortedItems[index];
+                                  final groupedItem = visibleItems[index];
                                   return GestureDetector(
                                     onTap: () {
+                                      // Check if this is a placeholder (0 stock, no expiry, and not expired)
+                                      // Only show message for true placeholders, not expired items
+                                      if (groupedItem.mainItem.stock == 0 &&
+                                          groupedItem.mainItem.noExpiry &&
+                                          groupedItem.getStatus() !=
+                                              "Expired") {
+                                        // Show a message for placeholder items
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                '${groupedItem.mainItem.name} has expired and is no longer available.'),
+                                            backgroundColor: Colors.orange,
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      // Allow navigation for all other items, including expired ones
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
@@ -540,6 +583,14 @@ class _InventoryState extends State<Inventory> {
             ),
           );
         },
+        onExpiredSupply: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ExpiredSupplyPage(),
+            ),
+          );
+        },
         onAddCategory: () {
           Navigator.push(
             context,
@@ -559,4 +610,6 @@ class _InventoryState extends State<Inventory> {
       ),
     );
   }
+
+  // Info banner intentionally removed for Inventory
 }

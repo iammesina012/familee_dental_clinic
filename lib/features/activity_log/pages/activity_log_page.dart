@@ -15,6 +15,8 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
   final TextEditingController _searchController = TextEditingController();
   final ActivityLogController _controller = ActivityLogController();
   // Removed unused per-category controllers from UI page
+  int _currentPage = 1;
+  static const int _itemsPerPage = 10;
 
   @override
   void initState() {
@@ -22,11 +24,13 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     _searchController.addListener(() {
       _controller.updateSearchQuery(_searchController.text);
     });
+    _controller.addListener(_resetPageOnDataChange);
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _controller.removeListener(_resetPageOnDataChange);
     _controller.dispose();
     super.dispose();
   }
@@ -56,6 +60,110 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
       default:
         return const Icon(Icons.info_outline, color: Colors.grey, size: 20);
     }
+  }
+
+  void _resetPageOnDataChange() {
+    if (!mounted) return;
+    setState(() {
+      _currentPage = 1;
+    });
+  }
+
+  Widget _buildPagination(int totalPages) {
+    if (totalPages <= 1) return const SizedBox.shrink();
+
+    const int window = 5; // sliding window size
+    int startPage = _currentPage - (window ~/ 2);
+    if (startPage < 1) startPage = 1;
+    int endPage = startPage + window - 1;
+    if (endPage > totalPages) {
+      endPage = totalPages;
+      startPage = (endPage - window + 1);
+      if (startPage < 1) startPage = 1;
+    }
+
+    final List<Widget> buttons = [];
+
+    // Previous
+    buttons.add(IconButton(
+      icon: const Icon(Icons.chevron_left, color: Colors.black, size: 24),
+      onPressed: _currentPage > 1
+          ? () => setState(() => _currentPage = _currentPage - 1)
+          : null,
+      tooltip: 'Previous',
+    ));
+
+    for (int i = startPage; i <= endPage; i++) {
+      final bool selected = _currentPage == i;
+      buttons.add(Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: InkWell(
+          onTap: () => setState(() => _currentPage = i),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            width: 40,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFFE8D5E8) : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: Text(
+              i.toString(),
+              style: const TextStyle(
+                fontFamily: 'SF Pro',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+              ),
+            ),
+          ),
+        ),
+      ));
+    }
+
+    // Next
+    buttons.add(IconButton(
+      icon: const Icon(Icons.chevron_right, color: Colors.black, size: 24),
+      onPressed: _currentPage < totalPages
+          ? () => setState(() => _currentPage = _currentPage + 1)
+          : null,
+      tooltip: 'Next',
+    ));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Page ' + _currentPage.toString() + ' of ' + totalPages.toString(),
+            style: const TextStyle(
+              fontFamily: 'SF Pro',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: buttons,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   // Show delete confirmation dialog
@@ -791,95 +899,122 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                             );
                           }
 
-                          return ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 10),
-                            itemCount: filteredActivities.length,
-                            itemBuilder: (context, index) {
-                              final activity = filteredActivities[index];
-                              // Date formatting handled in details when needed
+                          // Pagination calculations
+                          final int totalItems = filteredActivities.length;
+                          final int totalPages = (totalItems / _itemsPerPage)
+                              .ceil()
+                              .clamp(1, 1000000);
+                          final int startIndex =
+                              (_currentPage - 1) * _itemsPerPage;
+                          final int endIndex =
+                              (startIndex + _itemsPerPage) > totalItems
+                                  ? totalItems
+                                  : (startIndex + _itemsPerPage);
+                          final pageItems =
+                              filteredActivities.sublist(startIndex, endIndex);
 
-                              return Slidable(
-                                endActionPane: ActionPane(
-                                  motion: const ScrollMotion(),
-                                  children: [
-                                    SlidableAction(
-                                      onPressed: (_) => _showDeleteConfirmation(
-                                        context,
-                                        activity['id'],
-                                        _formatDescription(
-                                            activity['description']),
-                                      ),
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                      icon: Icons.delete,
-                                      label: 'Delete',
-                                      borderRadius: const BorderRadius.only(
-                                        topRight: Radius.circular(8),
-                                        bottomRight: Radius.circular(8),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                child: InkWell(
-                                  onTap: () =>
-                                      _showActivityDetails(context, activity),
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Container(
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    padding: const EdgeInsets.all(16),
-                                    height: 80, // Back to original height
-                                    decoration: BoxDecoration(
-                                      color: Colors
-                                          .white, // White background for activity cards
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                          color: Colors.grey.shade200),
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // Category icon
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                              right: 8, top: 2),
-                                          child: _getCategoryIcon(
-                                              activity['category']),
-                                        ),
-                                        // Activity description (main text) - more concise and readable
-                                        Expanded(
-                                          child: Text(
-                                            _formatDescription(
-                                                activity['description']),
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.black,
-                                              fontFamily: 'SF Pro',
+                          return Column(
+                            children: [
+                              Expanded(
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 10),
+                                  itemCount: pageItems.length + 1,
+                                  itemBuilder: (context, index) {
+                                    if (index == pageItems.length) {
+                                      return _buildPagination(totalPages);
+                                    }
+                                    final activity = pageItems[index];
+                                    // Date formatting handled in details when needed
+
+                                    return Slidable(
+                                      endActionPane: ActionPane(
+                                        motion: const ScrollMotion(),
+                                        children: [
+                                          SlidableAction(
+                                            onPressed: (_) =>
+                                                _showDeleteConfirmation(
+                                              context,
+                                              activity['id'],
+                                              _formatDescription(
+                                                  activity['description']),
+                                            ),
+                                            backgroundColor: Colors.red,
+                                            foregroundColor: Colors.white,
+                                            icon: Icons.delete,
+                                            label: 'Delete',
+                                            borderRadius:
+                                                const BorderRadius.only(
+                                              topRight: Radius.circular(8),
+                                              bottomRight: Radius.circular(8),
                                             ),
                                           ),
-                                        ),
-                                        // Time aligned to the right, same level as description
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 2),
-                                          child: Text(
-                                            activity['time'],
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.black,
-                                              fontFamily: 'SF Pro',
-                                            ),
+                                        ],
+                                      ),
+                                      child: InkWell(
+                                        onTap: () => _showActivityDetails(
+                                            context, activity),
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          margin:
+                                              const EdgeInsets.only(bottom: 12),
+                                          padding: const EdgeInsets.all(16),
+                                          height: 80, // Back to original height
+                                          decoration: BoxDecoration(
+                                            color: Colors
+                                                .white, // White background for activity cards
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                                color: Colors.grey.shade200),
+                                          ),
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // Category icon
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 8, top: 2),
+                                                child: _getCategoryIcon(
+                                                    activity['category']),
+                                              ),
+                                              // Activity description (main text) - more concise and readable
+                                              Expanded(
+                                                child: Text(
+                                                  _formatDescription(
+                                                      activity['description']),
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.black,
+                                                    fontFamily: 'SF Pro',
+                                                  ),
+                                                ),
+                                              ),
+                                              // Time aligned to the right, same level as description
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 2),
+                                                child: Text(
+                                                  activity['time'],
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: Colors.black,
+                                                    fontFamily: 'SF Pro',
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
+                              ),
+                            ],
                           );
                         },
                       ),

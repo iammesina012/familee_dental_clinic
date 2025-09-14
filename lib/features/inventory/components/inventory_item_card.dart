@@ -21,20 +21,17 @@ class InventoryItemCard extends StatelessWidget {
       return "Archived";
     }
 
-    // If status is provided, use it (for grouped items)
+    // If status is provided, use it (for grouped items) - this takes priority
     if (status != null) {
       return status!;
     }
 
-    // Check stock status first - Out of Stock takes priority over expiry
+    // Note: Expired status is now handled by the dedicated Expired Supply page
+    // Main inventory system no longer shows expired status
+
+    // Check stock status only
     if (item.stock == 0) {
       return "Out of Stock";
-    }
-
-    // Check expiry status - if expired or expiring soon, show that instead of stock status
-    final expiryStatus = getExpiryStatus();
-    if (expiryStatus != null) {
-      return expiryStatus;
     }
 
     // Otherwise, calculate status based on item properties
@@ -52,15 +49,19 @@ class InventoryItemCard extends StatelessWidget {
     // If item has no expiry date, return null (no expiry chip)
     if (item.expiry == null || item.expiry!.isEmpty) return null;
 
-    // Try to parse the expiry date
-    final expiryDate = DateTime.tryParse(item.expiry!);
+    // Try to parse the expiry date with consistent normalization
+    final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
     if (expiryDate == null) return null;
 
-    final today = DateTime.now();
-    final daysUntilExpiry = expiryDate.difference(today).inDays;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dateOnly =
+        DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+    final daysUntilExpiry = dateOnly.difference(today).inDays;
 
-    // Check if expired
-    if (expiryDate.isBefore(today)) return "Expired";
+    // Check if expired (using date-only comparison)
+    if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today))
+      return "Expired";
 
     // Check if expiring soon (within 30 days)
     if (daysUntilExpiry <= 30) return "Expiring";
@@ -79,19 +80,20 @@ class InventoryItemCard extends StatelessWidget {
       return true;
     }
 
-    // Show expiry date if item is expiring or expired (regardless of sort/filter)
+    // Show expiry date if item is expiring or if status is explicitly set to "Expired"
     final expiryStatus = getExpiryStatus();
-    return expiryStatus == "Expiring" || expiryStatus == "Expired";
+    return expiryStatus == "Expiring" ||
+        (status != null && status == "Expired");
   }
 
   // Format expiry date for display
   String formatExpiryDate() {
     if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
-      return "No Expiry";
+      return "N/A";
     }
 
     try {
-      final expiryDate = DateTime.parse(item.expiry!);
+      final expiryDate = DateTime.parse(item.expiry!.replaceAll('/', '-'));
       return "${expiryDate.month}/${expiryDate.day}/${expiryDate.year}";
     } catch (e) {
       return item.expiry!; // Return as-is if parsing fails

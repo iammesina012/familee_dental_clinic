@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/controller/inventory_controller.dart';
+import 'package:projects/features/inventory/controller/catalog_controller.dart';
 
 class SdAddSupplyController {
-  final InventoryController _inventoryController = InventoryController();
+  final CatalogController _catalogController = CatalogController();
 
   // Data transformation logic
   Map<String, dynamic> toReturnMap(InventoryItem item) {
@@ -67,7 +67,8 @@ class SdAddSupplyController {
   // Get inventory stream
   Stream<List<GroupedInventoryItem>> getGroupedSuppliesStream(
       {bool archived = false}) {
-    return _inventoryController.getGroupedSuppliesStream(archived: archived);
+    // Use catalog stream so products remain visible even if only expired batches exist
+    return _catalogController.getAllProductsStream(archived: archived);
   }
 
   // Search filtering logic

@@ -15,6 +15,7 @@ class StockDeductionController {
   Future<Map<String, int>> applyDeductions(
       List<Map<String, dynamic>> deductionItems) async {
     final Map<String, dynamic> results = {};
+    // summary counters removed
 
     for (final item in deductionItems) {
       final String? docId = item['docId'] as String?;
@@ -92,9 +93,13 @@ class StockDeductionController {
             newStock as int,
             previousStock as int,
           );
+
+          // summary tally removed
         }
       }
     }
+
+    // summary notifications removed
 
     // Clean up log and notification data from results before returning
     final cleanResults = <String, int>{};
@@ -144,16 +149,26 @@ class StockDeductionController {
           'newStock': newStock,
           'previousStock': currentStock,
         };
+
+        // Store log data for after transaction
+        results['_logData_$docId'] = {
+          'itemName': data['name'] ?? 'Unknown Item',
+          'brand': data['brand'] ?? 'Unknown Brand',
+          'quantity': revertQty,
+          'supplier': data['supplier'] ?? 'Unknown Supplier',
+        };
       });
     }
 
-    // Check for stock level notifications after reverting
+    // Check for stock level notifications after reverting and log activities
     final notificationsController = NotificationsController();
+    final sdActivityController = SdActivityController();
     for (final item in deductionItems) {
       final String? docId = item['docId'] as String?;
       if (docId != null && results.containsKey(docId)) {
         final notificationData =
             results['_notificationData_$docId'] as Map<String, dynamic>?;
+        final logData = results['_logData_$docId'] as Map<String, dynamic>?;
 
         // Check for stock level notifications
         if (notificationData != null) {
@@ -167,13 +182,24 @@ class StockDeductionController {
             previousStock as int,
           );
         }
+
+        // Log stocks reverted activity
+        if (logData != null) {
+          await sdActivityController.logStockReverted(
+            itemName: logData['itemName'] ?? 'Unknown Item',
+            brand: logData['brand'] ?? 'Unknown Brand',
+            quantity: logData['quantity'] ?? 0,
+            supplier: logData['supplier'] ?? 'Unknown Supplier',
+          );
+        }
       }
     }
 
-    // Clean up notification data from results before returning
+    // Clean up notification/log data from results before returning
     final cleanResults = <String, int>{};
     results.forEach((key, value) {
-      if (!key.startsWith('_notificationData_')) {
+      if (!key.startsWith('_notificationData_') &&
+          !key.startsWith('_logData_')) {
         cleanResults[key] = value;
       }
     });

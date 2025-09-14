@@ -170,6 +170,26 @@ class SdActivityController {
     );
   }
 
+  /// Log stock revert (undo) activities
+  Future<void> logStockReverted({
+    required String itemName,
+    required String brand,
+    required int quantity,
+    required String supplier,
+  }) async {
+    await _logActivity(
+      action: 'stock_reverted',
+      category: 'Stock Deduction',
+      description: 'Stocks Reverted',
+      metadata: {
+        'itemName': itemName,
+        'brand': brand,
+        'quantity': quantity,
+        'supplier': supplier,
+      },
+    );
+  }
+
   /// Log preset creation activities
   Future<void> logPresetCreated({
     required String presetName,

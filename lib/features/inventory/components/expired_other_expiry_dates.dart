@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/pages/view_supply_page.dart'; // for status helpers
-import '../controller/view_supply_controller.dart';
+import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
+import '../controller/expired_view_supply_controller.dart';
 
-class FirestoreOtherExpiryBatches extends StatelessWidget {
+class ExpiredOtherExpiryBatches extends StatelessWidget {
   final InventoryItem item;
-  const FirestoreOtherExpiryBatches({super.key, required this.item});
+  const ExpiredOtherExpiryBatches({super.key, required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -32,14 +31,11 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
       );
     }
 
-    final controller = ViewSupplyController();
+    final controller = ExpiredViewSupplyController();
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('supplies')
-          .where('name', isEqualTo: item.name)
-          .where('brand', isEqualTo: item.brand)
-          .snapshots(),
+    return StreamBuilder<List<InventoryItem>>(
+      stream: controller.getOtherExpiredBatchesStream(
+          item.name, item.brand, item.id),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
@@ -47,7 +43,7 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
             child: Center(child: CircularProgressIndicator()),
           );
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Container(
             width: double.infinity,
             margin: const EdgeInsets.symmetric(vertical: 12),
@@ -58,7 +54,7 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
             ),
             child: const Center(
               child: Text(
-                "No other expiry batches found.",
+                "No other expired batches found.",
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 15,
@@ -69,93 +65,59 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
           );
         }
 
-        // Parse and filter batches
-        final batches = snapshot.data!.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return InventoryItem(
-            id: doc.id,
-            name: data['name'] ?? '',
-            imageUrl: data['imageUrl'] ?? '',
-            category: data['category'] ?? '',
-            cost: (data['cost'] ?? 0).toDouble(),
-            stock: (data['stock'] ?? 0) as int,
-            unit: data['unit'] ?? '',
-            supplier: data['supplier'] ?? '',
-            brand: data['brand'] ?? '',
-            expiry: data['expiry'],
-            noExpiry: data['noExpiry'] ?? false,
-            archived: data['archived'] ?? false,
-          );
-        })
-            // Exclude the item we are viewing, zero-stock batches, and expired batches
-            .where((batch) {
-          if (batch.id == item.id || batch.stock == 0) return false;
+        // Exclude the same expiry date as the current item to avoid duplicating the main section
+        final batches = snapshot.data!;
+        DateTime? currentDt;
+        try {
+          currentDt = DateTime.tryParse(item.expiry ?? '') ??
+              DateTime.tryParse((item.expiry ?? '').replaceAll('/', '-'));
+        } catch (_) {
+          currentDt = null;
+        }
 
-          // Filter out expired batches
-          if (!batch.noExpiry &&
-              batch.expiry != null &&
-              batch.expiry!.isNotEmpty) {
-            final today = DateTime.now();
-            final todayDateOnly = DateTime(today.year, today.month, today.day);
-
-            final expiryDate = DateTime.tryParse(batch.expiry!) ??
-                DateTime.tryParse(batch.expiry!.replaceAll('/', '-'));
-
-            if (expiryDate != null) {
-              final expiryDateOnly =
-                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
-              // Exclude if expired (on or before today)
-              if (expiryDateOnly.isBefore(todayDateOnly) ||
-                  expiryDateOnly.isAtSameMomentAs(todayDateOnly)) {
-                return false;
-              }
-            }
-          }
-
-          return true;
-        }).toList();
-
-        // Sort by expiry date (earliest first, null/empty last). Normalize formats.
-        DateTime? parseExpiry(String? value) {
+        // Group by expiry date (normalized yyyy-MM-dd) and sum stock
+        DateTime? _parseExpiry(String? value) {
           if (value == null || value.isEmpty) return null;
           return DateTime.tryParse(value) ??
               DateTime.tryParse(value.replaceAll('/', '-'));
         }
 
-        batches.sort((a, b) {
-          final da = parseExpiry(a.expiry);
-          final db = parseExpiry(b.expiry);
-          if (da == null && db == null) return 0;
-          if (da == null) return 1; // nulls last
-          if (db == null) return -1;
-          return da.compareTo(db);
-        });
-
-        if (batches.isEmpty) {
-          return Container(
-            width: double.infinity,
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Color(0xFFFDF4FC),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Center(
-              child: Text(
-                "No other expiry batches found.",
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 15,
-                  color: Colors.black54,
-                ),
-              ),
-            ),
-          );
+        final Map<String, Map<String, dynamic>> dateKeyToGroup = {};
+        for (final batch in batches) {
+          final dt = _parseExpiry(batch.expiry);
+          if (dt == null) continue;
+          if (currentDt != null) {
+            final isSame = dt.year == currentDt.year &&
+                dt.month == currentDt.month &&
+                dt.day == currentDt.day;
+            if (isSame)
+              continue; // skip same date as the main (aggregated in header)
+          }
+          final key = '${dt.year.toString().padLeft(4, '0')}-'
+              '${dt.month.toString().padLeft(2, '0')}-'
+              '${dt.day.toString().padLeft(2, '0')}';
+          if (!dateKeyToGroup.containsKey(key)) {
+            dateKeyToGroup[key] = {
+              'item': batch, // representative for unit/cost/navigation
+              'stock': batch.stock,
+              'date': dt,
+            };
+          } else {
+            dateKeyToGroup[key]!['stock'] =
+                (dateKeyToGroup[key]!['stock'] as int) + batch.stock;
+            // keep the first representative
+          }
         }
 
+        final grouped = dateKeyToGroup.values.toList()
+          ..sort((a, b) =>
+              (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+
         return Column(
-          children: batches.map((batch) {
-            final status = controller.getStatus(batch); // from your helpers
+          children: grouped.map((g) {
+            final batch = g['item'] as InventoryItem;
+            final totalStock = g['stock'] as int;
+            final status = "Expired"; // Force expired status
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -168,7 +130,7 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                   Expanded(
                     flex: 1,
                     child: Text(
-                      "${batch.stock}",
+                      "$totalStock",
                       style: const TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
@@ -208,13 +170,13 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: controller.getStatusBgColor(status),
+                        color: Color(0xFFFFCDD2), // Red background for expired
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         status,
                         style: TextStyle(
-                          color: controller.getStatusTextColor(status),
+                          color: Color(0xFFFF4747), // Red text
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -242,7 +204,7 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(
-                          builder: (_) => InventoryViewSupplyPage(
+                          builder: (_) => ExpiredViewSupplyPage(
                               item: batch, skipAutoRedirect: true),
                         ),
                       );

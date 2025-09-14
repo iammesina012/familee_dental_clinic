@@ -35,23 +35,8 @@ class ViewSupplyController {
       return "Archived";
     }
 
-    // If expired, prioritize Expired over stock-based statuses
-    if (!item.noExpiry && (item.expiry != null && item.expiry!.isNotEmpty)) {
-      final String raw = item.expiry!;
-      final String normalized = raw.replaceAll('/', '-');
-      final DateTime? date = DateTime.tryParse(normalized);
-      if (date != null) {
-        final DateTime today = DateTime.now();
-        final DateTime todayDateOnly =
-            DateTime(today.year, today.month, today.day);
-        final DateTime expDateOnly = DateTime(date.year, date.month, date.day);
-        // Consider same-day expiry as expired to match grid behavior
-        if (expDateOnly.isBefore(todayDateOnly) ||
-            expDateOnly.isAtSameMomentAs(todayDateOnly)) {
-          return "Expired";
-        }
-      }
-    }
+    // Note: Expired status is now handled by the dedicated Expired Supply page
+    // Main inventory system no longer shows expired status
 
     // For view supply page, show stock status when not expired
     if (item.stock == 0) {

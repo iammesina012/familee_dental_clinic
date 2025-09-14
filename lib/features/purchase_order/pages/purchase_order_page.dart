@@ -35,6 +35,10 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   // removed unused _initialTabIndex
   String? _openPOCode;
   bool _autoOpeningDetails = false; // prevent stacked navigations
+  // Info banner removed
+  bool _loadedOpen = false;
+  bool _loadedApproval = false;
+  bool _loadedClosed = false;
 
   Future<void> _load() async {
     try {
@@ -60,7 +64,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           if (mounted) {
             setState(() {
               _openOrders = openPOs;
+              _loadedOpen = true;
             });
+            _resolveSmartRedirect();
           }
         },
         onError: (error) {
@@ -75,7 +81,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           if (mounted) {
             setState(() {
               _approvalOrders = approvalPOs;
+              _loadedApproval = true;
             });
+            _resolveSmartRedirect();
           }
         },
         onError: (error) {
@@ -90,7 +98,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           if (mounted) {
             setState(() {
               _closedOrders = closedPOs;
+              _loadedClosed = true;
             });
+            _resolveSmartRedirect();
           }
         },
         onError: (error) {
@@ -497,6 +507,166 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       );
     }
   }
+
+  void _resolveSmartRedirect() {
+    if (_openPOCode == null || _autoOpeningDetails) return;
+    // Wait until all streams have delivered at least one snapshot to avoid false "not found"
+    if (!(_loadedOpen && _loadedApproval && _loadedClosed)) {
+      return;
+    }
+    // Find target PO across current lists to determine actual status
+    PurchaseOrder? target;
+    for (final p in _openOrders) {
+      if (p.code == _openPOCode) {
+        target = p;
+        break;
+      }
+    }
+    if (target == null) {
+      for (final p in _approvalOrders) {
+        if (p.code == _openPOCode) {
+          target = p;
+          break;
+        }
+      }
+    }
+    if (target == null) {
+      for (final p in _closedOrders) {
+        if (p.code == _openPOCode) {
+          target = p;
+          break;
+        }
+      }
+    }
+    if (target == null) {
+      // Target PO not found across any list – likely deleted
+      final String missingCode = _openPOCode!;
+      _openPOCode = null; // clear intent to avoid repeated attempts
+      _showNotFoundOverlay(
+        title: 'Purchase Order Not Found',
+        message: 'This purchase order ($missingCode) no longer exists.',
+      );
+      return;
+    }
+
+    // Switch tab based on latest status
+    int nextTab;
+    switch (target.status) {
+      case 'Approval':
+        nextTab = 1;
+        break;
+      case 'Closed':
+        nextTab = 2;
+        break;
+      default:
+        nextTab = 0; // Open
+    }
+    if (activeTabIndex != nextTab) {
+      setState(() {
+        activeTabIndex = nextTab;
+      });
+    }
+  }
+
+  void _showNotFoundOverlay({required String title, required String message}) {
+    OverlayEntry? entry;
+    entry = OverlayEntry(
+      builder: (context) {
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE44B4D),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: const Icon(Icons.error_outline,
+                          color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 280),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppFonts.sfProStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            message,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppFonts.sfProStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () {
+                        entry?.remove();
+                      },
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(Icons.close,
+                            color: Colors.white, size: 18),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    Overlay.of(context).insert(entry);
+    Future.delayed(const Duration(milliseconds: 3500), () {
+      entry?.remove();
+    });
+  }
+
+  // Info banner removed
 
   Widget _buildSummaryItem(String label, String value) {
     return Column(

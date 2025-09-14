@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:projects/features/notifications/controller/notifications_controller.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
@@ -206,6 +207,10 @@ class _NotificationTile extends StatelessWidget {
     required this.controller,
   });
 
+  // Ensure only one banner is visible at a time across tiles
+  static OverlayEntry? _activeBanner;
+  static bool _bannerVisible = false;
+
   @override
   Widget build(BuildContext context) {
     return Slidable(
@@ -235,21 +240,55 @@ class _NotificationTile extends StatelessWidget {
                   (notification.poCode ?? '').isNotEmpty) {
                 // Jump to Purchase Order page and open correct tab
                 final String code = notification.poCode!;
-                int desiredTab = 0; // Open
-                if (notification.type == 'po_waiting')
-                  desiredTab = 1; // Approval
-                if (notification.type == 'po_approved')
-                  desiredTab = 2; // Closed
-                // Push PO page, then try to open the specific PO details
-                if (context.mounted) {
-                  await Navigator.pushNamed(
-                    context,
-                    '/purchase-order',
-                    arguments: {
-                      'initialTab': desiredTab,
-                      'openPOCode': code,
-                    },
-                  );
+                // Check live status before navigating; if missing, show banner here
+                try {
+                  final qs = await FirebaseFirestore.instance
+                      .collection('purchase_orders')
+                      .where('code', isEqualTo: code)
+                      .limit(1)
+                      .get();
+                  if (qs.docs.isEmpty) {
+                    _showNotFoundOverlay(context,
+                        title: 'Purchase Order Not Found',
+                        message:
+                            'This purchase order ($code) no longer exists.');
+                    return;
+                  }
+                  final data = qs.docs.first.data();
+                  if ((data['status'] as String?) == null ||
+                      (data['id'] as String?) == null) {
+                    // Defensive: malformed doc treated as unavailable
+                    _showNotFoundOverlay(context,
+                        title: 'Purchase Order Not Available',
+                        message: 'Please try again in a moment.');
+                    return;
+                  }
+                  final String status = (data['status'] ?? 'Open') as String;
+                  int desiredTab;
+                  switch (status) {
+                    case 'Approval':
+                      desiredTab = 1;
+                      break;
+                    case 'Closed':
+                      desiredTab = 2;
+                      break;
+                    default:
+                      desiredTab = 0;
+                  }
+                  if (context.mounted) {
+                    await Navigator.pushNamed(
+                      context,
+                      '/purchase-order',
+                      arguments: {
+                        'initialTab': desiredTab,
+                        'openPOCode': code,
+                      },
+                    );
+                  }
+                } catch (_) {
+                  _showNotFoundOverlay(context,
+                      title: 'Unable to Open Purchase Order',
+                      message: 'Please try again in a moment.');
                 }
               } else if ((notification.supplyName ?? '').isNotEmpty) {
                 // Navigate to inventory and open the earliest batch for this supply name
@@ -348,6 +387,29 @@ class _NotificationTile extends StatelessWidget {
     );
   }
 
+  void _showNotFoundOverlay(BuildContext context,
+      {required String title, required String message}) {
+    if (_bannerVisible) return; // already showing
+    // Remove any stale banner just in case
+    _activeBanner?.remove();
+    final overlay = OverlayEntry(
+      builder: (_) => _AnimatedTopBanner(
+        title: title,
+        message: message,
+        onDismiss: () {
+          _activeBanner?.remove();
+          _activeBanner = null;
+          _bannerVisible = false;
+        },
+      ),
+    );
+    _activeBanner = overlay;
+    _bannerVisible = true;
+    Overlay.of(context).insert(overlay);
+  }
+
+  // Animated banner reused from PO page style with bounce + fade
+  // Shows at top, auto-dismisses, uses SF Pro and same red gradient
   Color _getIconBackgroundColor(String type) {
     switch (type) {
       case 'low_stock':
@@ -393,6 +455,8 @@ class _NotificationTile extends StatelessWidget {
         return Icons.notifications;
     }
   }
+
+  // summary handling removed
 
   void _showDeleteConfirmation(BuildContext context) {
     showDialog(
@@ -443,6 +507,170 @@ class _NotificationTile extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _AnimatedTopBanner extends StatefulWidget {
+  final String title;
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _AnimatedTopBanner({
+    required this.title,
+    required this.message,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_AnimatedTopBanner> createState() => _AnimatedTopBannerState();
+}
+
+class _AnimatedTopBannerState extends State<_AnimatedTopBanner>
+    with TickerProviderStateMixin {
+  late AnimationController _slideController;
+  late AnimationController _fadeController;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, -2.0),
+      end: Offset.zero,
+    ).animate(
+        CurvedAnimation(parent: _slideController, curve: Curves.bounceOut));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+    );
+    _slideController.forward();
+    _fadeController.forward();
+    Future.delayed(const Duration(milliseconds: 4000), () {
+      if (mounted) _fadeOut();
+    });
+  }
+
+  Future<void> _fadeOut() async {
+    await _fadeController.reverse();
+    if (mounted) widget.onDismiss();
+  }
+
+  @override
+  void dispose() {
+    _slideController.dispose();
+    _fadeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 20,
+      left: 16,
+      right: 16,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 88),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF6B6B), Color(0xFFEE5A52)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF6B6B).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.error_outline,
+                          color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppFonts.sfProStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.message,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppFonts.sfProStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _fadeOut,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.close,
+                            color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

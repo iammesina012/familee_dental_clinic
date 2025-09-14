@@ -118,7 +118,8 @@ class MyDrawer extends StatelessWidget {
               }
               Navigator.pop(context);
               if (currentRoute != '/settings') {
-                Navigator.pushReplacementNamed(context, '/settings');
+                // Use push so user can return to the previous page
+                Navigator.pushNamed(context, '/settings');
               }
             },
           ),
