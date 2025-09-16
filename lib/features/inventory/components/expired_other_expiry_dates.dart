@@ -9,22 +9,25 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     if (item.noExpiry == true) {
       return Container(
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 12),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Color(0xFFFDF4FC),
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             "No expiry date.",
             style: TextStyle(
               fontWeight: FontWeight.w500,
               fontSize: 15,
-              color: Colors.black54,
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
             ),
           ),
         ),
@@ -49,16 +52,17 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
             margin: const EdgeInsets.symmetric(vertical: 12),
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Color(0xFFFDF4FC),
+              color: scheme.surface,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 "No other expired batches found.",
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 15,
-                  color: Colors.black54,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                 ),
               ),
             ),
@@ -122,8 +126,9 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFFDF4FC),
+                color: scheme.surface,
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
@@ -131,9 +136,10 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
                     flex: 1,
                     child: Text(
                       "$totalStock",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
@@ -143,9 +149,10 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
                     flex: 1,
                     child: Text(
                       batch.unit,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
@@ -155,9 +162,10 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       "₱${batch.cost.toStringAsFixed(2)}",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
@@ -170,13 +178,17 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Color(0xFFFFCDD2), // Red background for expired
+                        color: theme.brightness == Brightness.dark
+                            ? const Color(0xFF5B2B2B)
+                            : const Color(0xFFFFCDD2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         status,
                         style: TextStyle(
-                          color: Color(0xFFFF4747), // Red text
+                          color: theme.brightness == Brightness.dark
+                              ? const Color(0xFFFF8A80)
+                              : const Color(0xFFFF4747),
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -190,17 +202,19 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       (batch.expiry ?? "").replaceAll('-', '/'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.arrow_forward_ios,
-                        size: 16, color: Colors.black54),
+                    icon: Icon(Icons.arrow_forward_ios,
+                        size: 16,
+                        color: theme.iconTheme.color?.withOpacity(0.6)),
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(

@@ -86,19 +86,26 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           "Edit Supply",
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: theme.appBarTheme.titleTextStyle?.color ??
+                theme.textTheme.titleLarge?.color,
+          ),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation ?? 5,
+        shadowColor: theme.appBarTheme.shadowColor ?? theme.shadowColor,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -125,11 +132,11 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black12,
+                        color: theme.shadowColor.withOpacity(0.1),
                         blurRadius: 8,
                         offset: Offset(0, 2),
                       ),
@@ -160,15 +167,16 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[300]!),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
                   ),
                   child: Text(
                     widget.supply['supplyName'] ?? 'Unknown Supply',
                     style: AppFonts.sfProStyle(
                       fontSize: 16,
-                      color: Colors.grey[700],
+                      color: theme.textTheme.bodyMedium?.color,
                     ),
                   ),
                 ),
@@ -180,12 +188,14 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                 title: "Brand Name",
                 child: TextField(
                   controller: brandController,
-                  style: AppFonts.sfProStyle(fontSize: 16),
+                  style: AppFonts.sfProStyle(
+                      fontSize: 16, color: theme.textTheme.bodyMedium?.color),
                   decoration: InputDecoration(
                     hintText: 'Enter brand name',
                     hintStyle: AppFonts.sfProStyle(
                       fontSize: 16,
-                      color: Colors.grey[400],
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -205,7 +215,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                       horizontal: 16,
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: scheme.surface,
                   ),
                 ),
               ),
@@ -216,12 +226,14 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                 title: "Supplier Name",
                 child: TextField(
                   controller: supplierController,
-                  style: AppFonts.sfProStyle(fontSize: 16),
+                  style: AppFonts.sfProStyle(
+                      fontSize: 16, color: theme.textTheme.bodyMedium?.color),
                   decoration: InputDecoration(
                     hintText: 'Enter supplier name',
                     hintStyle: AppFonts.sfProStyle(
                       fontSize: 16,
-                      color: Colors.grey[400],
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -241,7 +253,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                       horizontal: 16,
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: scheme.surface,
                   ),
                 ),
               ),
@@ -257,17 +269,20 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                     FilteringTextInputFormatter.allow(
                         RegExp(r'^\d*\.?\d{0,2}')),
                   ],
-                  style: AppFonts.sfProStyle(fontSize: 16),
+                  style: AppFonts.sfProStyle(
+                      fontSize: 16, color: theme.textTheme.bodyMedium?.color),
                   decoration: InputDecoration(
                     hintText: 'Enter cost (₱)',
                     hintStyle: AppFonts.sfProStyle(
                       fontSize: 16,
-                      color: Colors.grey[400],
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
                     ),
                     prefixText: '₱ ',
                     prefixStyle: AppFonts.sfProStyle(
                       fontSize: 16,
-                      color: Colors.grey[600],
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -287,7 +302,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                       horizontal: 16,
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: scheme.surface,
                   ),
                 ),
               ),
@@ -307,9 +322,10 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                             Container(
                               width: 150,
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: scheme.surface,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey[300]!),
+                                border: Border.all(
+                                    color: theme.dividerColor.withOpacity(0.2)),
                               ),
                               child: Row(
                                 children: [
@@ -328,7 +344,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         }
                                       },
                                       icon: Icon(Icons.remove,
-                                          color: Colors.grey[600], size: 18),
+                                          color: theme.iconTheme.color
+                                              ?.withOpacity(0.7),
+                                          size: 18),
                                     ),
                                   ),
                                   Expanded(
@@ -339,7 +357,8 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                       style: AppFonts.sfProStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.black),
+                                          color: theme
+                                              .textTheme.bodyMedium?.color),
                                       decoration: const InputDecoration(
                                         border: InputBorder.none,
                                         contentPadding:
@@ -394,10 +413,11 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 12),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: scheme.surface,
                                     borderRadius: BorderRadius.circular(8),
-                                    border:
-                                        Border.all(color: Colors.grey[300]!),
+                                    border: Border.all(
+                                        color: theme.dividerColor
+                                            .withOpacity(0.2)),
                                   ),
                                   child: Row(
                                     children: [
@@ -413,10 +433,15 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         style: AppFonts.sfProStyle(
                                             fontSize: 16,
                                             color: _batchExpiries[i] != null
-                                                ? Colors.black87
+                                                ? theme
+                                                    .textTheme.bodyMedium?.color
                                                 : _batchNoExpirySelected[i]
-                                                    ? Colors.grey[700]
-                                                    : Colors.grey[600]),
+                                                    ? theme.textTheme.bodyMedium
+                                                        ?.color
+                                                        ?.withOpacity(0.8)
+                                                    : theme.textTheme.bodyMedium
+                                                        ?.color
+                                                        ?.withOpacity(0.6)),
                                       ),
                                     ],
                                   ),
@@ -564,7 +589,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
           style: AppFonts.sfProStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF8B5A8B),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Theme.of(context).textTheme.bodyMedium?.color
+                : const Color(0xFF8B5A8B),
           ),
         ),
         SizedBox(height: 8),
@@ -676,6 +703,8 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     return showDialog<Object?>(
       context: context,
       builder: (BuildContext dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final scheme = theme.colorScheme;
         return AlertDialog(
           title: Text(
             'Select Expiry Date',
@@ -698,20 +727,23 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                   padding:
                       const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[300]!),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.block, color: Colors.grey[600], size: 20),
+                      Icon(Icons.block,
+                          color: theme.iconTheme.color?.withOpacity(0.7),
+                          size: 20),
                       const SizedBox(width: 12),
                       Text(
                         'No Expiry Date',
                         style: AppFonts.sfProStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey[700],
+                          color: theme.textTheme.bodyMedium?.color,
                         ),
                       ),
                     ],
@@ -722,7 +754,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
               // Divider
               Container(
                 height: 1,
-                color: Colors.grey[300],
+                color: theme.dividerColor,
                 child: Row(
                   children: [
                     Expanded(child: Container()),
@@ -732,7 +764,8 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                         'OR',
                         style: AppFonts.sfProStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: theme.textTheme.bodySmall?.color
+                              ?.withOpacity(0.8),
                         ),
                       ),
                     ),

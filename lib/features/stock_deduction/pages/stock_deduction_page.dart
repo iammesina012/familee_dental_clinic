@@ -449,23 +449,42 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             }
 
             if (currentItem != null) {
-              // Use current inventory data
-              _deductions.add({
-                'docId': currentItem.mainItem.id,
-                'name': currentItem.mainItem.name,
-                'brand': currentItem.mainItem.brand,
-                'imageUrl': currentItem.mainItem.imageUrl,
-                'expiry': currentItem.mainItem.expiry,
-                'noExpiry': currentItem.mainItem.noExpiry,
-                'stock': currentItem.totalStock,
-                'deductQty': currentItem.totalStock > 0 ? 1 : 0,
-              });
+              // Block expired items from deduction. Treat them as missing (0 stock, no expiry).
+              if (currentItem.getStatus() == 'Expired') {
+                _deductions.add({
+                  'docId': null,
+                  'name': currentItem.mainItem.name,
+                  'brand': currentItem.mainItem.brand,
+                  'imageUrl': currentItem.mainItem.imageUrl,
+                  'expiry': null,
+                  'noExpiry': true,
+                  'stock': 0,
+                  'deductQty': 0,
+                });
+              } else {
+                _deductions.add({
+                  'docId': currentItem.mainItem.id,
+                  'name': currentItem.mainItem.name,
+                  'brand': currentItem.mainItem.brand,
+                  'imageUrl': currentItem.mainItem.imageUrl,
+                  'expiry': currentItem.mainItem.expiry,
+                  'noExpiry': currentItem.mainItem.noExpiry,
+                  'stock': currentItem.totalStock,
+                  'deductQty': currentItem.totalStock > 0 ? 1 : 0,
+                });
+              }
             } else {
-              // Fallback to preset data if item not found in current inventory
-              final stock = supply['stock'] as int? ?? 0;
+              // Not in current inventory (likely expired/removed)
+              // Use a safe placeholder so it cannot be deducted
               _deductions.add({
-                ...supply,
-                'deductQty': stock > 0 ? 1 : 0,
+                'docId': null,
+                'name': supplyName,
+                'brand': supplyBrand,
+                'imageUrl': (supply['imageUrl'] ?? '').toString(),
+                'expiry': null,
+                'noExpiry': true,
+                'stock': 0,
+                'deductQty': 0,
               });
             }
           }
@@ -561,21 +580,27 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.grey[200],
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).colorScheme.surface
+            : Colors.grey[200],
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withOpacity(0.2),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.calendar_today_outlined,
-              size: 12, color: Colors.grey[700]),
+              size: 12,
+              color: Theme.of(context).iconTheme.color?.withOpacity(0.8)),
           const SizedBox(width: 4),
           Text(
             text,
             style: AppFonts.sfProStyle(
               fontSize: 10,
               fontWeight: FontWeight.w500,
-              color: Colors.grey[800],
+              color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -589,20 +614,27 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.grey[200],
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).colorScheme.surface
+            : Colors.grey[200],
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withOpacity(0.2),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.inventory_2_outlined, size: 12, color: Colors.grey[700]),
+          Icon(Icons.inventory_2_outlined,
+              size: 12,
+              color: Theme.of(context).iconTheme.color?.withOpacity(0.8)),
           const SizedBox(width: 4),
           Text(
             text,
             style: AppFonts.sfProStyle(
               fontSize: 10,
               fontWeight: FontWeight.w500,
-              color: Colors.grey[800],
+              color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -706,19 +738,24 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           return true;
         },
         child: Scaffold(
-          backgroundColor: const Color(0xFFF9EFF2),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
             title: Text(
               'Quick Deduction',
               style: AppFonts.sfProStyle(
-                  fontSize: 20, fontWeight: FontWeight.bold),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).appBarTheme.titleTextStyle?.color ??
+                    Theme.of(context).textTheme.titleLarge?.color,
+              ),
             ),
             centerTitle: true,
-            backgroundColor: Colors.white,
+            backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
             toolbarHeight: 70,
-            iconTheme: const IconThemeData(size: 30, color: Colors.black),
-            elevation: 5,
-            shadowColor: Colors.black54,
+            iconTheme: Theme.of(context).appBarTheme.iconTheme,
+            elevation: Theme.of(context).appBarTheme.elevation ?? 5,
+            shadowColor: Theme.of(context).appBarTheme.shadowColor ??
+                Theme.of(context).shadowColor,
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 5.0),
@@ -800,8 +837,14 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE8D5E8),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.surface
+                            : const Color(0xFFE8D5E8),
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color:
+                              Theme.of(context).dividerColor.withOpacity(0.2),
+                        ),
                       ),
                       child: _deductions.isEmpty
                           ? _buildEmptyState()
@@ -832,11 +875,21 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                                     ),
                                     child: Card(
                                       margin: const EdgeInsets.only(bottom: 12),
-                                      color: Colors.white,
+                                      color:
+                                          Theme.of(context).colorScheme.surface,
                                       elevation: 2,
+                                      shadowColor: Theme.of(context)
+                                          .shadowColor
+                                          .withOpacity(0.15),
                                       shape: RoundedRectangleBorder(
                                           borderRadius:
-                                              BorderRadius.circular(12)),
+                                              BorderRadius.circular(12),
+                                          side: BorderSide(
+                                            color: Theme.of(context)
+                                                .dividerColor
+                                                .withOpacity(0.2),
+                                            width: 1,
+                                          )),
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 14, vertical: 16),
@@ -879,7 +932,12 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                                                               fontSize: 16,
                                                               fontWeight:
                                                                   FontWeight
-                                                                      .w500),
+                                                                      .w500,
+                                                              color: Theme.of(
+                                                                      context)
+                                                                  .textTheme
+                                                                  .bodyMedium
+                                                                  ?.color),
                                                       maxLines: 2,
                                                       overflow:
                                                           TextOverflow.ellipsis,
@@ -906,8 +964,13 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                                                   IconButton(
                                                     onPressed: () =>
                                                         _decrementQty(index),
-                                                    icon: const Icon(Icons
-                                                        .remove_circle_outline),
+                                                    icon: Icon(
+                                                      Icons
+                                                          .remove_circle_outline,
+                                                      color: Theme.of(context)
+                                                          .iconTheme
+                                                          .color,
+                                                    ),
                                                   ),
                                                   Text(
                                                     (_deductions[index]
@@ -917,13 +980,21 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                                                     style: AppFonts.sfProStyle(
                                                         fontSize: 16,
                                                         fontWeight:
-                                                            FontWeight.bold),
+                                                            FontWeight.bold,
+                                                        color: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.color),
                                                   ),
                                                   IconButton(
                                                     onPressed: () =>
                                                         _incrementQty(index),
-                                                    icon: const Icon(Icons
-                                                        .add_circle_outline),
+                                                    icon: Icon(
+                                                      Icons.add_circle_outline,
+                                                      color: Theme.of(context)
+                                                          .iconTheme
+                                                          .color,
+                                                    ),
                                                   ),
                                                 ],
                                               )
@@ -952,13 +1023,20 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.surface
+                  : Colors.white.withOpacity(0.3),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Theme.of(context).dividerColor.withOpacity(0.2)
+                    : Colors.transparent,
+              ),
             ),
             child: const Icon(
               Icons.shopping_basket_outlined,
               size: 60,
-              color: Color(0xFF8B5A8B),
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 24),
@@ -967,7 +1045,9 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             style: AppFonts.sfProStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF8B5A8B),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF8B5A8B),
             ),
           ),
           const SizedBox(height: 8),
@@ -975,7 +1055,9 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             'Tap the + button to add supplies',
             style: AppFonts.sfProStyle(
               fontSize: 14,
-              color: const Color(0xFF8B5A8B).withOpacity(0.7),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withOpacity(0.7)
+                  : const Color(0xFF8B5A8B).withOpacity(0.7),
             ),
           ),
         ],

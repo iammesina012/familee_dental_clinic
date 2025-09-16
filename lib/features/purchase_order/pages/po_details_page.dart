@@ -41,22 +41,26 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           '${_purchaseOrder.code} - ${_purchaseOrder.name}',
           style: AppFonts.sfProStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
+            color: theme.appBarTheme.titleTextStyle?.color ??
+                theme.textTheme.titleLarge?.color,
           ),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
+        iconTheme: theme.appBarTheme.iconTheme,
         elevation: 5,
-        shadowColor: Colors.black54,
+        shadowColor: theme.shadowColor,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -81,31 +85,18 @@ class _PODetailsPageState extends State<PODetailsPage> {
               Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white,
-                      Color(0xFFF9EFF2).withOpacity(0.3),
-                    ],
-                  ),
+                  color: scheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: theme.shadowColor.withOpacity(0.08),
                       blurRadius: 12,
                       offset: Offset(0, 4),
                       spreadRadius: 0,
                     ),
-                    BoxShadow(
-                      color: Color(0xFF8B5A8B).withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                      spreadRadius: 0,
-                    ),
                   ],
                   border: Border.all(
-                    color: Color(0xFF8B5A8B).withOpacity(0.2),
+                    color: theme.dividerColor.withOpacity(0.2),
                     width: 1,
                   ),
                 ),
@@ -120,12 +111,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
                             Container(
                               padding: EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Color(0xFF8B5A8B).withOpacity(0.1),
+                                color:
+                                    theme.colorScheme.primary.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(
                                 Icons.shopping_cart,
-                                color: Color(0xFF8B5A8B),
+                                color: theme.colorScheme.primary,
                                 size: MediaQuery.of(context).size.width * 0.05,
                               ),
                             ),
@@ -139,7 +131,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 style: AppFonts.sfProStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF8B5A8B),
+                                  color: theme.textTheme.bodyMedium?.color,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -277,23 +269,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFE8D5E8),
-                        Color(0xFFF0E0F0),
-                      ],
-                    ),
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 8,
-                        offset: Offset(0, 2),
-                        spreadRadius: 0,
-                      ),
-                    ],
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
                   ),
                   child: _purchaseOrder.supplies.isEmpty
                       ? _buildEmptyState()
@@ -304,23 +283,20 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               margin: EdgeInsets.all(16),
                               padding: EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.white.withOpacity(0.9),
-                                    Colors.white.withOpacity(0.7),
-                                  ],
-                                ),
+                                color: theme.brightness == Brightness.dark
+                                    ? const Color(0xFF1F1F23)
+                                    : scheme.surface,
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
+                                    color: theme.shadowColor.withOpacity(0.08),
                                     blurRadius: 8,
                                     offset: Offset(0, 2),
                                     spreadRadius: 0,
                                   ),
                                 ],
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: theme.dividerColor.withOpacity(0.2),
                                   width: 1,
                                 ),
                               ),
@@ -333,14 +309,14 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                       Container(
                                         padding: EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: Color(0xFF8B5A8B)
-                                              .withOpacity(0.1),
+                                          color: theme.colorScheme.primary
+                                              .withOpacity(0.12),
                                           borderRadius:
                                               BorderRadius.circular(8),
                                         ),
                                         child: Icon(
                                           Icons.inventory_2,
-                                          color: Color(0xFF8B5A8B),
+                                          color: theme.colorScheme.primary,
                                           size: 20,
                                         ),
                                       ),
@@ -350,7 +326,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                         style: AppFonts.sfProStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
-                                          color: Color(0xFF8B5A8B),
+                                          color: theme.brightness ==
+                                                  Brightness.dark
+                                              ? Colors.white
+                                              : theme
+                                                  .textTheme.bodyMedium?.color,
                                         ),
                                       ),
                                     ],
@@ -359,21 +339,17 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                     padding: EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Color(0xFF8B5A8B).withOpacity(0.1),
-                                          Color(0xFF8B5A8B).withOpacity(0.05),
-                                        ],
-                                      ),
+                                      color: theme.colorScheme.primary
+                                          .withOpacity(0.08),
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
-                                        color:
-                                            Color(0xFF8B5A8B).withOpacity(0.2),
+                                        color: theme.colorScheme.primary
+                                            .withOpacity(0.25),
                                         width: 1,
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Color(0xFF8B5A8B)
+                                          color: theme.colorScheme.primary
                                               .withOpacity(0.1),
                                           blurRadius: 4,
                                           offset: Offset(0, 2),
@@ -385,7 +361,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                       children: [
                                         Icon(
                                           Icons.check_circle_outline,
-                                          color: Color(0xFF8B5A8B),
+                                          color: theme.brightness ==
+                                                  Brightness.dark
+                                              ? Colors.white
+                                              : theme.colorScheme.primary,
                                           size: 14,
                                         ),
                                         SizedBox(width: 4),
@@ -394,7 +373,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                           style: AppFonts.sfProStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF8B5A8B),
+                                            color: theme.brightness ==
+                                                    Brightness.dark
+                                                ? Colors.white
+                                                : theme.colorScheme.primary,
                                           ),
                                         ),
                                       ],
@@ -420,20 +402,31 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               margin: EdgeInsets.all(16),
                               padding: EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFF8B5A8B).withOpacity(0.1),
-                                    Color(0xFF8B5A8B).withOpacity(0.05),
-                                  ],
-                                ),
+                                gradient: theme.brightness == Brightness.dark
+                                    ? LinearGradient(
+                                        colors: [
+                                          Color(0xFF8B5A8B).withOpacity(0.25),
+                                          Color(0xFF8B5A8B).withOpacity(0.15),
+                                        ],
+                                      )
+                                    : LinearGradient(
+                                        colors: [
+                                          Color(0xFF8B5A8B).withOpacity(0.10),
+                                          Color(0xFF8B5A8B).withOpacity(0.05),
+                                        ],
+                                      ),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: Color(0xFF8B5A8B).withOpacity(0.2),
+                                  color: theme.brightness == Brightness.dark
+                                      ? Color(0xFF8B5A8B).withOpacity(0.45)
+                                      : Color(0xFF8B5A8B).withOpacity(0.2),
                                   width: 1,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Color(0xFF8B5A8B).withOpacity(0.1),
+                                    color: theme.brightness == Brightness.dark
+                                        ? Color(0xFF8B5A8B).withOpacity(0.25)
+                                        : Color(0xFF8B5A8B).withOpacity(0.1),
                                     blurRadius: 4,
                                     offset: Offset(0, 2),
                                   ),
@@ -448,7 +441,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                     style: AppFonts.sfProStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF8B5A8B),
+                                      color: theme.brightness == Brightness.dark
+                                          ? Colors.white
+                                          : const Color(0xFF8B5A8B),
                                     ),
                                   ),
                                   Text(
@@ -456,7 +451,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                     style: AppFonts.sfProStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF8B5A8B),
+                                      color: theme.brightness == Brightness.dark
+                                          ? Colors.white
+                                          : const Color(0xFF8B5A8B),
                                     ),
                                   ),
                                 ],
@@ -479,25 +476,18 @@ class _PODetailsPageState extends State<PODetailsPage> {
         margin: EdgeInsets.all(24),
         padding: EdgeInsets.all(32),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withOpacity(0.8),
-              Colors.white.withOpacity(0.6),
-            ],
-          ),
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Theme.of(context).shadowColor.withOpacity(0.08),
               blurRadius: 12,
               offset: Offset(0, 4),
               spreadRadius: 0,
             ),
           ],
           border: Border.all(
-            color: Colors.white.withOpacity(0.3),
+            color: Theme.of(context).dividerColor.withOpacity(0.2),
             width: 1,
           ),
         ),
@@ -507,13 +497,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
             Container(
               padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Color(0xFF8B5A8B).withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
                 Icons.inventory_2_outlined,
                 size: 60,
-                color: Color(0xFF8B5A8B),
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
             const SizedBox(height: 24),
@@ -522,7 +512,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
               style: AppFonts.sfProStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF8B5A8B),
+                color: Theme.of(context).textTheme.bodyMedium?.color,
               ),
             ),
             const SizedBox(height: 12),
@@ -530,7 +520,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
               'Supplies will appear here once added',
               style: AppFonts.sfProStyle(
                 fontSize: 16,
-                color: Colors.grey[600],
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.color
+                    ?.withOpacity(0.7),
               ),
               textAlign: TextAlign.center,
             ),
@@ -546,34 +540,20 @@ class _PODetailsPageState extends State<PODetailsPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isReceived
-              ? [Colors.white, Colors.green.withOpacity(0.05)]
-              : [Colors.white, Colors.orange.withOpacity(0.05)],
-        ),
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF1F1F23)
+            : Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Theme.of(context).shadowColor.withOpacity(0.08),
             blurRadius: 12,
             offset: Offset(0, 4),
             spreadRadius: 0,
           ),
-          BoxShadow(
-            color: isReceived
-                ? Colors.green.withOpacity(0.1)
-                : Colors.orange.withOpacity(0.1),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-            spreadRadius: 0,
-          ),
         ],
         border: Border.all(
-          color: isReceived
-              ? Colors.green.withOpacity(0.2)
-              : Colors.orange.withOpacity(0.2),
+          color: Theme.of(context).dividerColor.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -617,7 +597,8 @@ class _PODetailsPageState extends State<PODetailsPage> {
                           style: AppFonts.sfProStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
                           ),
                         ),
                         SizedBox(height: 4),
@@ -675,9 +656,12 @@ class _PODetailsPageState extends State<PODetailsPage> {
               Container(
                 padding: EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF1F1F23)
+                      : Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[200]!),
+                  border: Border.all(
+                      color: Theme.of(context).dividerColor.withOpacity(0.2)),
                 ),
                 child: Column(
                   children: [
@@ -744,13 +728,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
         Container(
           padding: EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Color(0xFF00D4AA).withOpacity(0.1),
+            color: Color(0xFF00D4AA).withOpacity(0.12),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             icon,
             size: 16,
-            color: Color(0xFF00D4AA),
+            color: const Color(0xFF00D4AA),
           ),
         ),
         SizedBox(width: 12),
@@ -763,7 +747,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                 style: AppFonts.sfProStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: Colors.grey[600],
+                  color: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.color
+                      ?.withOpacity(0.8),
                 ),
               ),
               SizedBox(height: 2),
@@ -772,7 +760,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                 style: AppFonts.sfProStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
                 ),
               ),
             ],
@@ -1554,7 +1542,7 @@ class _AnimatedClosedAlertState extends State<_AnimatedClosedAlert>
                   offset: const Offset(0, 4),
                 ),
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Theme.of(context).shadowColor.withOpacity(0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 2),
                 ),

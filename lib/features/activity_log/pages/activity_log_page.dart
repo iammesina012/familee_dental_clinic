@@ -644,19 +644,24 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Activity Log",
           style: TextStyle(
-              fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'SF Pro'),
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'SF Pro',
+              color: Theme.of(context).appBarTheme.titleTextStyle?.color ??
+                  Theme.of(context).textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: Theme.of(context).appBarTheme.iconTheme,
+        elevation: Theme.of(context).appBarTheme.elevation ?? 5,
+        shadowColor: Theme.of(context).appBarTheme.shadowColor ??
+            Theme.of(context).shadowColor,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -688,19 +693,28 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                   child: Container(
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(
+                          color:
+                              Theme.of(context).dividerColor.withOpacity(0.2)),
                     ),
                     child: TextField(
                       controller: _searchController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Search...',
                         border: InputBorder.none,
                         contentPadding:
                             EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        suffixIcon: Icon(Icons.search, color: Colors.grey),
-                        hintStyle: TextStyle(fontFamily: 'SF Pro'),
+                        suffixIcon: Icon(Icons.search,
+                            color: Theme.of(context).iconTheme.color),
+                        hintStyle: TextStyle(
+                            fontFamily: 'SF Pro',
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withOpacity(0.6)),
                       ),
                     ),
                   ),
@@ -712,9 +726,11 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                   child: Container(
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(
+                          color:
+                              Theme.of(context).dividerColor.withOpacity(0.2)),
                     ),
                     child: ListenableBuilder(
                       listenable: _controller,
@@ -738,7 +754,10 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                                   style: TextStyle(
                                       fontSize:
                                           value == 'All Categories' ? 13 : 15,
-                                      color: Colors.black,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color,
                                       fontWeight: FontWeight.w500,
                                       fontFamily: 'SF Pro'),
                                 ),
@@ -762,17 +781,20 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(
-                      0xFFE8D5E8), // Light lavender/purple hex #e8d5e8
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Theme.of(context).colorScheme.surface
+                      : const Color(0xFFE8D5E8),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
+                      color: Theme.of(context).shadowColor.withOpacity(0.08),
                       spreadRadius: 1,
                       blurRadius: 5,
                       offset: const Offset(0, 2),
                     ),
                   ],
+                  border: Border.all(
+                      color: Theme.of(context).dividerColor.withOpacity(0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -783,12 +805,13 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
+                          Text(
                             'Recent Activity',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                              color:
+                                  Theme.of(context).textTheme.bodyMedium?.color,
                               fontFamily: 'SF Pro',
                             ),
                           ),
@@ -798,10 +821,12 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                               return Container(
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade50,
+                                  color: Theme.of(context).colorScheme.surface,
                                   borderRadius: BorderRadius.circular(8),
-                                  border:
-                                      Border.all(color: Colors.grey.shade300),
+                                  border: Border.all(
+                                      color: Theme.of(context)
+                                          .dividerColor
+                                          .withOpacity(0.2)),
                                 ),
                                 child: InkWell(
                                   onTap: () async {
@@ -825,15 +850,19 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                                         Icon(
                                           Icons.calendar_today,
                                           size: 16,
-                                          color: Colors.grey.shade600,
+                                          color:
+                                              Theme.of(context).iconTheme.color,
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
                                           _controller.formatDateForDisplay(
                                               _controller.selectedDate),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 14,
-                                            color: Colors.black,
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.color,
                                             fontWeight: FontWeight.w500,
                                             fontFamily: 'SF Pro',
                                           ),
@@ -865,22 +894,33 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                                     width: 120,
                                     height: 120,
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.3),
+                                      color:
+                                          Theme.of(context).colorScheme.surface,
                                       borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: Theme.of(context)
+                                              .dividerColor
+                                              .withOpacity(0.2)),
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.history_outlined,
                                       size: 60,
-                                      color: Color(0xFF8B5A8B),
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.white
+                                          : const Color(0xFF8B5A8B),
                                     ),
                                   ),
                                   const SizedBox(height: 24),
-                                  const Text(
+                                  Text(
                                     'No Activities Yet',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF8B5A8B),
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.white
+                                          : const Color(0xFF8B5A8B),
                                       fontFamily: 'SF Pro',
                                     ),
                                   ),
@@ -889,8 +929,11 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                                     'Activities will appear here once you perform actions',
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: const Color(0xFF8B5A8B)
-                                          .withOpacity(0.7),
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.white.withOpacity(0.7)
+                                          : const Color(0xFF8B5A8B)
+                                              .withOpacity(0.7),
                                       fontFamily: 'SF Pro',
                                     ),
                                   ),
@@ -961,12 +1004,15 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                                           padding: const EdgeInsets.all(16),
                                           height: 80, // Back to original height
                                           decoration: BoxDecoration(
-                                            color: Colors
-                                                .white, // White background for activity cards
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surface,
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                             border: Border.all(
-                                                color: Colors.grey.shade200),
+                                                color: Theme.of(context)
+                                                    .dividerColor
+                                                    .withOpacity(0.2)),
                                           ),
                                           child: Row(
                                             crossAxisAlignment:
@@ -984,10 +1030,13 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                                                 child: Text(
                                                   _formatDescription(
                                                       activity['description']),
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 16,
                                                     fontWeight: FontWeight.bold,
-                                                    color: Colors.black,
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color,
                                                     fontFamily: 'SF Pro',
                                                   ),
                                                 ),
@@ -998,10 +1047,13 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                                                     top: 2),
                                                 child: Text(
                                                   activity['time'],
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.w500,
-                                                    color: Colors.black,
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color,
                                                     fontFamily: 'SF Pro',
                                                   ),
                                                 ),

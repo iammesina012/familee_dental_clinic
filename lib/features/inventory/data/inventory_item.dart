@@ -85,9 +85,10 @@ class Supplier {
 }
 
 class GroupedInventoryItem {
-  final String productKey; // name + brand combination
+  final String productKey; // name + category combination
   final InventoryItem mainItem; // The item with earliest expiry
-  final List<InventoryItem> variants; // All other items with same name + brand
+  final List<InventoryItem>
+      variants; // All other items with same name + category
   final int totalStock; // Total stock across all variants
 
   GroupedInventoryItem({
@@ -106,7 +107,7 @@ class GroupedInventoryItem {
   String getStatus() {
     if (mainItem.archived) return "Archived";
 
-    // Check expiry status FIRST - expired items should show as "Expired" regardless of stock
+    // 1) Expired overrides everything
     if (!mainItem.noExpiry &&
         mainItem.expiry != null &&
         mainItem.expiry!.isNotEmpty) {
@@ -120,14 +121,28 @@ class GroupedInventoryItem {
 
         if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today))
           return "Expired";
+      }
+    }
+
+    // 2) Out of Stock should beat Expiring when total stock is zero
+    if (totalStock == 0) return "Out of Stock";
+
+    // 3) Expiring applies only when there is stock
+    if (!mainItem.noExpiry &&
+        mainItem.expiry != null &&
+        mainItem.expiry!.isNotEmpty) {
+      final expiryDate =
+          DateTime.tryParse(mainItem.expiry!.replaceAll('/', '-'));
+      if (expiryDate != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
 
         final daysUntilExpiry = dateOnly.difference(today).inDays;
         if (daysUntilExpiry <= 30) return "Expiring";
       }
     }
-
-    // Determine stock status using TOTAL stock across batches (only if not expired/expiring)
-    if (totalStock == 0) return "Out of Stock";
 
     // Low stock threshold based on total stock
     if (totalStock <= 2) return "Low Stock";

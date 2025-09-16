@@ -3,6 +3,8 @@ import 'package:projects/shared/themes/font.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:projects/features/notifications/controller/notifications_controller.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:projects/features/inventory/data/inventory_item.dart';
+import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -25,20 +27,25 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        leading: const BackButton(color: Colors.black),
+        leading: BackButton(color: theme.iconTheme.color),
         title: Text(
           "Notifications",
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: theme.textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
         actions: const [],
       ),
       // No drawer on this page; show back button instead
@@ -47,8 +54,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
           padding: const EdgeInsets.all(16.0),
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFE8D5E8),
+              color: scheme.surface,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
               boxShadow: [],
             ),
             child: Column(
@@ -74,13 +82,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                 width: 120,
                                 height: 120,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: theme.colorScheme.surface
+                                      .withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.notifications_none,
                                   size: 60,
-                                  color: Color(0xFF8B5A8B),
+                                  color:
+                                      theme.iconTheme.color?.withOpacity(0.7),
                                 ),
                               ),
                               const SizedBox(height: 24),
@@ -89,7 +99,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                 style: AppFonts.sfProStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF8B5A8B),
+                                  color: theme.textTheme.bodyMedium?.color,
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -98,7 +108,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                 style: AppFonts.sfProStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
-                                  color: Color(0xFF8B5A8B),
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.7),
                                 ),
                               ),
                             ],
@@ -123,10 +134,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 14, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: scheme.surface,
                                     borderRadius: BorderRadius.circular(24),
                                     border: Border.all(
-                                      color: Colors.black.withOpacity(0.15),
+                                      color:
+                                          theme.dividerColor.withOpacity(0.2),
                                       width: 1,
                                     ),
                                   ),
@@ -135,7 +147,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                     style: AppFonts.sfProStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.black,
+                                      color: theme.textTheme.bodyMedium?.color,
                                     ),
                                   ),
                                 ),
@@ -158,19 +170,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                     },
                                     style: OutlinedButton.styleFrom(
                                       side: BorderSide(
-                                          color: Colors.black.withOpacity(0.2)),
+                                          color: theme.dividerColor
+                                              .withOpacity(0.2)),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 12),
-                                      backgroundColor: Colors.white,
+                                      backgroundColor: scheme.surface,
                                     ),
                                     child: Text(
                                       'See previous notifications',
                                       style: AppFonts.sfProStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
                                       ),
                                     ),
                                   );
@@ -291,12 +306,75 @@ class _NotificationTile extends StatelessWidget {
                       message: 'Please try again in a moment.');
                 }
               } else if ((notification.supplyName ?? '').isNotEmpty) {
-                // Navigate to inventory and open the earliest batch for this supply name
-                if (context.mounted) {
-                  await Navigator.pushNamed(context, '/inventory', arguments: {
-                    'highlightSupplyName': notification.supplyName,
-                  });
-                  // The inventory list will show the item; user can tap through
+                // Inventory notifications
+                final String name = notification.supplyName!;
+                if (notification.type == 'expired') {
+                  // Open specific expired batch directly
+                  try {
+                    final qs = await FirebaseFirestore.instance
+                        .collection('supplies')
+                        .where('name', isEqualTo: name)
+                        .get();
+                    if (qs.docs.isNotEmpty) {
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      InventoryItem? chosen;
+                      DateTime? earliest;
+                      for (final d in qs.docs) {
+                        final data = d.data();
+                        if ((data['expiry'] ?? '').toString().isEmpty) continue;
+                        final parsed = DateTime.tryParse(
+                            (data['expiry'] as String).replaceAll('/', '-'));
+                        if (parsed == null) continue;
+                        final dateOnly =
+                            DateTime(parsed.year, parsed.month, parsed.day);
+                        final isExpired = dateOnly.isBefore(today) ||
+                            dateOnly.isAtSameMomentAs(today);
+                        if (!isExpired) continue;
+                        // Build InventoryItem lazily for the first qualified doc
+                        if (earliest == null || dateOnly.isBefore(earliest)) {
+                          earliest = dateOnly;
+                          chosen = InventoryItem(
+                            id: d.id,
+                            name: (data['name'] ?? '').toString(),
+                            imageUrl: (data['imageUrl'] ?? '').toString(),
+                            category: (data['category'] ?? '').toString(),
+                            cost: ((data['cost'] ?? 0) as num).toDouble(),
+                            stock: (data['stock'] ?? 0) as int,
+                            unit: (data['unit'] ?? '').toString(),
+                            supplier: (data['supplier'] ?? '').toString(),
+                            brand: (data['brand'] ?? '').toString(),
+                            expiry: (data['expiry'] ?? '').toString(),
+                            noExpiry: (data['noExpiry'] ?? false) as bool,
+                            archived: (data['archived'] ?? false) as bool,
+                          );
+                        }
+                      }
+                      if (chosen != null && context.mounted) {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ExpiredViewSupplyPage(
+                                item: chosen as InventoryItem),
+                          ),
+                        );
+                        return;
+                      }
+                    }
+                  } catch (_) {}
+                  // Fallback: open Expired list page so user can locate it
+                  if (context.mounted) {
+                    await Navigator.pushNamed(context, '/inventory',
+                        arguments: {'highlightSupplyName': name});
+                  }
+                } else {
+                  // Default: open Inventory and deep-link
+                  if (context.mounted) {
+                    await Navigator.pushNamed(context, '/inventory',
+                        arguments: {
+                          'highlightSupplyName': name,
+                        });
+                  }
                 }
               }
             } catch (_) {}
@@ -304,10 +382,10 @@ class _NotificationTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.black.withOpacity(0.08),
+                color: Theme.of(context).dividerColor.withOpacity(0.12),
                 width: 1,
               ),
             ),
@@ -344,6 +422,8 @@ class _NotificationTile extends StatelessWidget {
                             fontWeight: notification.isRead
                                 ? FontWeight.w500
                                 : FontWeight.bold,
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -370,7 +450,11 @@ class _NotificationTile extends StatelessWidget {
                                   .getRelativeTime(notification.createdAt),
                               style: AppFonts.sfProStyle(
                                 fontSize: 12,
-                                color: Colors.black54,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.6),
                               ),
                             ),
                           ],

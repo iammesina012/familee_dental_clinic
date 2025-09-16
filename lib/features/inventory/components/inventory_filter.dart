@@ -665,8 +665,10 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
       minChildSize: 0.5,
       maxChildSize: 0.97,
       builder: (_, scrollController) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
         return Material(
-          color: Theme.of(context).scaffoldBackgroundColor,
+          color: theme.scaffoldBackgroundColor,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -675,9 +677,11 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("Search Filter",
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text(
+                      "Search Filter",
+                      style: theme.textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
                     IconButton(
                       icon: Icon(Icons.edit, size: 24, color: Colors.green),
                       onPressed: () {
@@ -693,7 +697,7 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                     ),
                   ],
                 ),
-                Divider(height: 28),
+                Divider(height: 28, color: theme.dividerColor),
                 Expanded(
                   child: SingleChildScrollView(
                     controller: scrollController,
@@ -758,6 +762,8 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                                 decoration: InputDecoration(
                                   hintText: "MIN",
                                   border: OutlineInputBorder(),
+                                  filled: true,
+                                  fillColor: scheme.surface,
                                   contentPadding: EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 8),
                                 ),
@@ -771,6 +777,8 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                                 decoration: InputDecoration(
                                   hintText: "MAX",
                                   border: OutlineInputBorder(),
+                                  filled: true,
+                                  fillColor: scheme.surface,
                                   contentPadding: EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 8),
                                 ),
@@ -840,10 +848,14 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 6),
-      child: Text(
-        text,
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-      ),
+      child: Builder(builder: (context) {
+        final theme = Theme.of(context);
+        return Text(
+          text,
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(fontWeight: FontWeight.bold, fontSize: 15),
+        );
+      }),
     );
   }
 
@@ -859,6 +871,8 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
       displayOptions = options.take(4).toList();
     }
 
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -882,9 +896,13 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
               },
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
-              selectedColor: Color(0xFFE2DCFD),
-              backgroundColor: Colors.grey.shade200,
-              labelStyle: TextStyle(color: Colors.black),
+              selectedColor: theme.brightness == Brightness.dark
+                  ? Color(0xFF3D356E)
+                  : Color(0xFFE2DCFD),
+              backgroundColor: theme.brightness == Brightness.dark
+                  ? scheme.surface
+                  : Colors.grey.shade200,
+              labelStyle: TextStyle(color: theme.textTheme.bodyMedium?.color),
             );
           }).toList(),
         ),

@@ -19,12 +19,18 @@ class InventoryFAB extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final labelBg = scheme.surface;
+    final labelTextColor = theme.textTheme.bodyMedium?.color;
+    // final borderColor = theme.dividerColor.withOpacity(0.25);
+
     return SpeedDial(
       animatedIcon: AnimatedIcons.menu_close,
       backgroundColor: Color(0xFF4E38D4),
       foregroundColor: Colors.white,
       overlayColor: Colors.black,
-      overlayOpacity: 0.15,
+      overlayOpacity: 0.2,
       spacing: 16,
       spaceBetweenChildren: 12,
       childMargin: EdgeInsets.only(bottom: 4),
@@ -46,9 +52,9 @@ class InventoryFAB extends StatelessWidget {
             fontFamily: 'SF Pro',
             fontWeight: FontWeight.w500,
             fontSize: 15,
-            color: Colors.black,
+            color: labelTextColor,
           ),
-          labelBackgroundColor: Colors.white,
+          labelBackgroundColor: labelBg,
           labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
           onTap: onAddSupply,
         ),
@@ -60,9 +66,9 @@ class InventoryFAB extends StatelessWidget {
             fontFamily: 'SF Pro',
             fontWeight: FontWeight.w500,
             fontSize: 15,
-            color: Colors.black,
+            color: labelTextColor,
           ),
-          labelBackgroundColor: Colors.white,
+          labelBackgroundColor: labelBg,
           labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
           onTap: onArchivedSupply,
         ),
@@ -74,9 +80,9 @@ class InventoryFAB extends StatelessWidget {
             fontFamily: 'SF Pro',
             fontWeight: FontWeight.w500,
             fontSize: 15,
-            color: Colors.black,
+            color: labelTextColor,
           ),
-          labelBackgroundColor: Colors.white,
+          labelBackgroundColor: labelBg,
           labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
           onTap: onExpiredSupply,
         ),
@@ -88,9 +94,9 @@ class InventoryFAB extends StatelessWidget {
             fontFamily: 'SF Pro',
             fontWeight: FontWeight.w500,
             fontSize: 15,
-            color: Colors.black,
+            color: labelTextColor,
           ),
-          labelBackgroundColor: Colors.white,
+          labelBackgroundColor: labelBg,
           labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
           onTap: onAddCategory,
         ),
@@ -102,9 +108,9 @@ class InventoryFAB extends StatelessWidget {
             fontFamily: 'SF Pro',
             fontWeight: FontWeight.w500,
             fontSize: 15,
-            color: Colors.black,
+            color: labelTextColor,
           ),
-          labelBackgroundColor: Colors.white,
+          labelBackgroundColor: labelBg,
           labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
           onTap: onEditCategory,
         ),

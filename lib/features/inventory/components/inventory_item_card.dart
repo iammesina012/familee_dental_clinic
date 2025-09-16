@@ -103,13 +103,18 @@ class InventoryItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = getStatus();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
+            color: (theme.brightness == Brightness.dark
+                    ? Colors.black
+                    : Colors.black)
+                .withOpacity(0.12),
             blurRadius: 8,
             offset: Offset(0, 2),
           ),
@@ -138,7 +143,10 @@ class InventoryItemCard extends StatelessWidget {
             Flexible(
               child: Text(
                 item.name,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: theme.textTheme.bodyMedium?.color),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -152,7 +160,10 @@ class InventoryItemCard extends StatelessWidget {
                 if (status != "Out of Stock") ...[
                   Text(
                     'Stock: ${overrideStock ?? item.stock}',
-                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                        color: theme.textTheme.bodyMedium?.color),
                   ),
                   SizedBox(width: 8),
                 ],
@@ -163,20 +174,32 @@ class InventoryItemCard extends StatelessWidget {
                   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: status == "Archived"
-                        ? const Color(0xFFFFF59D) // Light yellow background
+                        ? const Color(0xFFFFF59D)
                         : status == "In Stock"
-                            ? Colors.green[100]
+                            ? (theme.brightness == Brightness.dark
+                                ? Colors.green[900]
+                                : Colors.green[100])
                             : status == "Low Stock"
-                                ? Colors.orange[100]
+                                ? (theme.brightness == Brightness.dark
+                                    ? Colors.orange[900]
+                                    : Colors.orange[100])
                                 : status == "Out of Stock"
-                                    ? Color(0xFFFFCDD2) // More red background
+                                    ? (theme.brightness == Brightness.dark
+                                        ? const Color(0xFF5B2B2B)
+                                        : const Color(0xFFFFCDD2))
                                     : status == "Expired"
-                                        ? Color(
-                                            0xFFFFCDD2) // Same as Out of Stock
+                                        ? (theme.brightness == Brightness.dark
+                                            ? const Color(0xFF5B2B2B)
+                                            : const Color(0xFFFFCDD2))
                                         : status == "Expiring"
-                                            ? Colors.orange[
-                                                100] // Same as Low Stock
-                                            : Colors.red[100],
+                                            ? (theme.brightness ==
+                                                    Brightness.dark
+                                                ? Colors.orange[900]
+                                                : Colors.orange[100])
+                                            : (theme.brightness ==
+                                                    Brightness.dark
+                                                ? const Color(0xFF5B2B2B)
+                                                : Colors.red[100]),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -184,20 +207,32 @@ class InventoryItemCard extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: status == "Archived"
-                          ? const Color(0xFFF57C00) // Pure yellow text
+                          ? const Color(0xFFF57C00)
                           : status == "In Stock"
-                              ? Colors.green
+                              ? (theme.brightness == Brightness.dark
+                                  ? Colors.green[300]
+                                  : Colors.green)
                               : status == "Low Stock"
-                                  ? Colors.orange
+                                  ? (theme.brightness == Brightness.dark
+                                      ? Colors.orange[300]
+                                      : Colors.orange)
                                   : status == "Out of Stock"
-                                      ? Color(0xFFFF4747)
+                                      ? (theme.brightness == Brightness.dark
+                                          ? const Color(0xFFFF8A80)
+                                          : const Color(0xFFFF4747))
                                       : status == "Expired"
-                                          ? Color(
-                                              0xFFFF4747) // Same as Out of Stock
+                                          ? (theme.brightness == Brightness.dark
+                                              ? const Color(0xFFFF8A80)
+                                              : const Color(0xFFFF4747))
                                           : status == "Expiring"
-                                              ? Colors
-                                                  .orange // Same as Low Stock
-                                              : Colors.red,
+                                              ? (theme.brightness ==
+                                                      Brightness.dark
+                                                  ? Colors.orange[300]
+                                                  : Colors.orange)
+                                              : (theme.brightness ==
+                                                      Brightness.dark
+                                                  ? const Color(0xFFFF8A80)
+                                                  : Colors.red),
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),

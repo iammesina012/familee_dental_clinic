@@ -19,23 +19,25 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           "Manage Brands & Suppliers",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style:
+              theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(20),
@@ -46,11 +48,11 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
             Container(
               padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.black.withOpacity(0.08),
                     spreadRadius: 1,
                     blurRadius: 4,
                     offset: Offset(0, 2),
@@ -62,10 +64,9 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                 children: [
                   Text(
                     'Add New',
-                    style: TextStyle(
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
                     ),
                   ),
                   SizedBox(height: 16),
@@ -126,11 +127,11 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
             Container(
               padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.black.withOpacity(0.08),
                     spreadRadius: 1,
                     blurRadius: 4,
                     offset: Offset(0, 2),
@@ -146,10 +147,9 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                       SizedBox(width: 12),
                       Text(
                         'Brands',
-                        style: TextStyle(
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
                         ),
                       ),
                     ],
@@ -192,10 +192,11 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                               .map((brand) => Container(
                                     margin: EdgeInsets.only(bottom: 12),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey[50],
+                                      color: theme.colorScheme.surface,
                                       borderRadius: BorderRadius.circular(12),
-                                      border:
-                                          Border.all(color: Colors.grey[200]!),
+                                      border: Border.all(
+                                          color: theme.dividerColor
+                                              .withOpacity(0.2)),
                                     ),
                                     child: ListTile(
                                       contentPadding: EdgeInsets.symmetric(
@@ -279,11 +280,11 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
             Container(
               padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.black.withOpacity(0.08),
                     spreadRadius: 1,
                     blurRadius: 4,
                     offset: Offset(0, 2),
@@ -300,10 +301,9 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                       SizedBox(width: 12),
                       Text(
                         'Suppliers',
-                        style: TextStyle(
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
                         ),
                       ),
                     ],
@@ -346,10 +346,11 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                               .map((supplier) => Container(
                                     margin: EdgeInsets.only(bottom: 12),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey[50],
+                                      color: theme.colorScheme.surface,
                                       borderRadius: BorderRadius.circular(12),
-                                      border:
-                                          Border.all(color: Colors.grey[200]!),
+                                      border: Border.all(
+                                          color: theme.dividerColor
+                                              .withOpacity(0.2)),
                                     ),
                                     child: ListTile(
                                       contentPadding: EdgeInsets.symmetric(

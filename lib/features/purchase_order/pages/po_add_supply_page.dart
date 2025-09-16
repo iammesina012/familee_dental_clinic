@@ -31,6 +31,8 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     // Receive existingIds from CreatePOPage to prevent duplicates
     final routeArgs = ModalRoute.of(context)?.settings.arguments;
     final Set<String> existingIds = {
@@ -38,16 +40,20 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
         ...List.from(routeArgs['existingIds']).map((e) => e.toString()),
     };
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           "Add Supply",
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: theme.appBarTheme.titleTextStyle?.color ??
+                  theme.textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
+        iconTheme: theme.appBarTheme.iconTheme,
         elevation: 5,
         shadowColor: Colors.black54,
         actions: [
@@ -82,9 +88,9 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                   hintText: 'Search supplies...',
                   hintStyle: AppFonts.sfProStyle(
                     fontSize: 16,
-                    color: Colors.grey[600],
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
                   ),
-                  prefixIcon: Icon(Icons.search, color: Colors.black),
+                  prefixIcon: Icon(Icons.search, color: theme.iconTheme.color),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -100,7 +106,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                   contentPadding:
                       EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: scheme.surface,
                 ),
               ),
               SizedBox(height: 16),
@@ -149,7 +155,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                             Icon(
                               Icons.search_off,
                               size: 60,
-                              color: Colors.grey[400],
+                              color: theme.iconTheme.color?.withOpacity(0.4),
                             ),
                             SizedBox(height: 16),
                             Text(
@@ -157,7 +163,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                               style: AppFonts.sfProStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.grey[600],
+                                color: theme.textTheme.bodyMedium?.color,
                               ),
                             ),
                             SizedBox(height: 8),
@@ -165,7 +171,8 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                               "Try adjusting your search terms",
                               style: AppFonts.sfProStyle(
                                 fontSize: 14,
-                                color: Colors.grey[500],
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.7),
                               ),
                             ),
                           ],
@@ -188,15 +195,17 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                           onTap: () => _handleTapItem(item, existingIds),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: scheme.surface,
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black12,
+                                  color: theme.shadowColor.withOpacity(0.12),
                                   blurRadius: 8,
                                   offset: Offset(0, 2),
                                 ),
                               ],
+                              border: Border.all(
+                                  color: theme.dividerColor.withOpacity(0.2)),
                             ),
                             child: Padding(
                               padding: EdgeInsets.fromLTRB(12, 12, 12, 12),
@@ -228,6 +237,8 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                       style: AppFonts.sfProStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
                                       ),
                                       textAlign: TextAlign.center,
                                       maxLines: 2,

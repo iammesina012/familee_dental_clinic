@@ -54,19 +54,20 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text(
           "Dashboard",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -95,7 +96,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
-              color: Colors.white,
+              color: theme.colorScheme.surface,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                 child: Column(
@@ -110,7 +111,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: theme.textTheme.bodyMedium?.color,
                           ),
                         ),
                         Row(
@@ -120,14 +121,14 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
-                                color: Colors.black,
+                                color: theme.textTheme.bodyMedium?.color,
                               ),
                             ),
                             const SizedBox(width: 4),
                             Icon(
                               Icons.arrow_forward_ios,
                               size: 12,
-                              color: Colors.black,
+                              color: theme.iconTheme.color,
                             ),
                           ],
                         ),
@@ -216,8 +217,8 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                                               scaleFactor /
                                               100) *
                                           currentMultiplier;
-                                      final isNarrow = barWidth < 50;
-                                      final isVeryNarrow = barWidth < 30;
+                                      // final isNarrow = barWidth < 50;
+                                      // final isVeryNarrow = barWidth < 30;
 
                                       return AnimatedContainer(
                                         duration: Duration(milliseconds: 200),
@@ -279,8 +280,8 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                                               scaleFactor /
                                               100) *
                                           currentMultiplier;
-                                      final isNarrow = barWidth < 50;
-                                      final isVeryNarrow = barWidth < 30;
+                                      // final isNarrow = barWidth < 50;
+                                      // final isVeryNarrow = barWidth < 30;
 
                                       return AnimatedContainer(
                                         duration: Duration(milliseconds: 200),
@@ -342,8 +343,8 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                                               scaleFactor /
                                               100) *
                                           currentMultiplier;
-                                      final isNarrow = barWidth < 50;
-                                      final isVeryNarrow = barWidth < 30;
+                                      // final isNarrow = barWidth < 50;
+                                      // final isVeryNarrow = barWidth < 30;
 
                                       return AnimatedContainer(
                                         duration: Duration(milliseconds: 200),
@@ -427,7 +428,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                               "In stock",
                               style: TextStyle(
                                 fontSize: 15,
-                                color: Colors.black,
+                                color: theme.textTheme.bodyMedium?.color,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -457,7 +458,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                               "Low stock",
                               style: TextStyle(
                                 fontSize: 15,
-                                color: Colors.black,
+                                color: theme.textTheme.bodyMedium?.color,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -487,7 +488,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                               "Out of stock",
                               style: TextStyle(
                                 fontSize: 15,
-                                color: Colors.black,
+                                color: theme.textTheme.bodyMedium?.color,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),

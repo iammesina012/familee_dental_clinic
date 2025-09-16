@@ -169,23 +169,23 @@ class InventoryViewSupplyPage extends StatelessWidget {
 
   Widget _buildScaffold(BuildContext context, ViewSupplyController controller,
       InventoryItem updatedItem, String status) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Inventory",
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
         actions: [
           // Show different buttons based on archived status
           if (!updatedItem.archived) ...[
@@ -338,20 +338,23 @@ class InventoryViewSupplyPage extends StatelessWidget {
                   const SizedBox(height: 18),
                   Text(
                     updatedItem.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 22,
-                      color: Colors.black,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                        color: Theme.of(context).textTheme.bodyMedium?.color),
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
                     updatedItem.category,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
-                      color: Colors.black54,
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.color
+                          ?.withOpacity(0.7),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -369,7 +372,9 @@ class InventoryViewSupplyPage extends StatelessWidget {
                           : Container(
                               width: 130,
                               height: 130,
-                              color: Colors.grey[200],
+                              color: Theme.of(context)
+                                  .dividerColor
+                                  .withOpacity(0.15),
                               child: const Icon(Icons.image,
                                   size: 40, color: Colors.grey),
                             ),
@@ -403,13 +408,21 @@ class InventoryViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Stock",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text("Stock",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
                             const SizedBox(height: 4),
                             Text("${updatedItem.stock}",
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w500, fontSize: 15),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15),
                                 textAlign: TextAlign.center),
                           ],
                         ),
@@ -419,13 +432,21 @@ class InventoryViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Unit",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text("Unit",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
                             const SizedBox(height: 4),
                             Text(updatedItem.unit,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w500, fontSize: 15),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15),
                                 textAlign: TextAlign.center),
                           ],
                         ),
@@ -435,13 +456,21 @@ class InventoryViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Cost",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text("Cost",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
                             const SizedBox(height: 4),
                             Text("₱${updatedItem.cost.toStringAsFixed(2)}",
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w500, fontSize: 15),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15),
                                 textAlign: TextAlign.center),
                           ],
                         ),
@@ -456,9 +485,13 @@ class InventoryViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Brand Name",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text("Brand Name",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
                             const SizedBox(height: 4),
                             LayoutBuilder(
                               builder: (context, constraints) {
@@ -483,10 +516,16 @@ class InventoryViewSupplyPage extends StatelessWidget {
                                     height: 20,
                                     child: Marquee(
                                       text: updatedItem.brand,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15,
-                                          color: Colors.black),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 15,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color),
                                       scrollAxis: Axis.horizontal,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.center,
@@ -507,9 +546,12 @@ class InventoryViewSupplyPage extends StatelessWidget {
                                   // Text fits, use normal text
                                   return Text(
                                     updatedItem.brand,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 15),
                                     textAlign: TextAlign.center,
                                   );
                                 }
@@ -523,17 +565,25 @@ class InventoryViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Expiry",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text("Expiry",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
                             const SizedBox(height: 4),
                             Text(
                               (updatedItem.expiry != null &&
                                       updatedItem.expiry!.isNotEmpty)
                                   ? updatedItem.expiry!.replaceAll('-', '/')
                                   : "No expiry",
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w500, fontSize: 15),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 15),
                               textAlign: TextAlign.center,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 2,
@@ -546,9 +596,13 @@ class InventoryViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Supplier",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text("Supplier",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
                             const SizedBox(height: 4),
                             LayoutBuilder(
                               builder: (context, constraints) {
@@ -573,10 +627,16 @@ class InventoryViewSupplyPage extends StatelessWidget {
                                     height: 20,
                                     child: Marquee(
                                       text: updatedItem.supplier,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15,
-                                          color: Colors.black),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 15,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color),
                                       scrollAxis: Axis.horizontal,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.center,
@@ -597,9 +657,12 @@ class InventoryViewSupplyPage extends StatelessWidget {
                                   // short text = no animation
                                   return Text(
                                     updatedItem.supplier,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 15),
                                     textAlign: TextAlign.center,
                                   );
                                 }
@@ -611,7 +674,10 @@ class InventoryViewSupplyPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 28),
-                  Divider(thickness: 1.2, height: 36),
+                  Divider(
+                      thickness: 1.2,
+                      height: 36,
+                      color: Theme.of(context).dividerColor),
                   if (!hideOtherExpirySection) ...[
                     Align(
                       alignment: Alignment.centerLeft,
@@ -619,8 +685,11 @@ class InventoryViewSupplyPage extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 10.0, top: 2.0),
                         child: Text(
                           "Other Expiry Dates",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 18),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                  fontWeight: FontWeight.bold, fontSize: 18),
                         ),
                       ),
                     ),
@@ -645,20 +714,21 @@ class InventoryViewSupplyPage extends StatelessWidget {
     required Color confirmColor,
     required IconData icon,
   }) {
+    final theme = Theme.of(context);
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
       elevation: 8,
-      backgroundColor: Colors.white,
+      backgroundColor: theme.colorScheme.surface,
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: Colors.white,
+          color: theme.colorScheme.surface,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withOpacity(0.3),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -686,7 +756,7 @@ class InventoryViewSupplyPage extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.black87,
+                    color: theme.textTheme.titleLarge?.color,
                   ),
               textAlign: TextAlign.center,
             ),
@@ -696,7 +766,7 @@ class InventoryViewSupplyPage extends StatelessWidget {
             Text(
               content,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.black54,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                     height: 1.4,
                   ),
               textAlign: TextAlign.center,
@@ -713,14 +783,17 @@ class InventoryViewSupplyPage extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.grey.shade300),
+                        side: BorderSide(
+                            color: theme.dividerColor.withOpacity(0.4)),
                       ),
+                      foregroundColor: theme.textTheme.bodyMedium?.color,
                     ),
                     child: Text(
                       'Cancel',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             fontWeight: FontWeight.w500,
-                            color: Colors.black54,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.7),
                           ),
                     ),
                   ),

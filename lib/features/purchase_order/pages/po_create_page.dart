@@ -93,21 +93,27 @@ class _CreatePOPageState extends State<CreatePOPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           _isEditing ? "Edit PO" : "Create PO",
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: theme.appBarTheme.titleTextStyle?.color ??
+                  theme.textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation ?? 5,
+        shadowColor: theme.appBarTheme.shadowColor ?? theme.shadowColor,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black, size: 30),
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color, size: 30),
           onPressed: () => _handleBackPress(),
         ),
         actions: [
@@ -135,8 +141,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
                 padding:
                     EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
                 decoration: BoxDecoration(
-                  color: Color(0xFFE8D5E8),
+                  color: theme.brightness == Brightness.dark
+                      ? theme.colorScheme.surface
+                      : const Color(0xFFE8D5E8),
                   borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: theme.dividerColor.withOpacity(0.2)),
                 ),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -151,7 +161,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                               fontSize:
                                   MediaQuery.of(context).size.width * 0.04,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF8B5A8B),
+                              color: theme.brightness == Brightness.dark
+                                  ? theme.textTheme.bodyMedium?.color
+                                  : const Color(0xFF8B5A8B),
                             ),
                           ),
                           SizedBox(height: 8),
@@ -188,7 +200,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                 style: AppFonts.sfProStyle(
                                   fontSize:
                                       MediaQuery.of(context).size.width * 0.04,
-                                  color: Colors.black,
+                                  color: theme.textTheme.bodyMedium?.color,
                                 ),
                                 decoration: InputDecoration(
                                   hintText: 'Type here...',
@@ -196,7 +208,8 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                     fontSize:
                                         MediaQuery.of(context).size.width *
                                             0.04,
-                                    color: Colors.grey[400],
+                                    color: theme.textTheme.bodyMedium?.color
+                                        ?.withOpacity(0.4),
                                   ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
@@ -215,7 +228,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                     horizontal: 16,
                                   ),
                                   filled: true,
-                                  fillColor: Colors.white,
+                                  fillColor: scheme.surface,
                                 ),
                               );
                             },
@@ -240,11 +253,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                         56.0, // Increased height for better spacing
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: scheme.surface,
                                     borderRadius: BorderRadius.circular(8),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black12,
+                                        color:
+                                            theme.shadowColor.withOpacity(0.12),
                                         blurRadius: 8,
                                         offset: Offset(0, 2),
                                       ),
@@ -268,7 +282,8 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                           option,
                                           style: AppFonts.sfProStyle(
                                             fontSize: 16,
-                                            color: Colors.black87,
+                                            color: theme
+                                                .textTheme.bodyMedium?.color,
                                           ),
                                         ),
                                         onTap: () {
@@ -336,7 +351,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                   style: AppFonts.sfProStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF8B5A8B),
+                                    color: theme.brightness == Brightness.dark
+                                        ? Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color
+                                        : const Color(0xFF8B5A8B),
                                   ),
                                 ),
                                 SizedBox(height: 8),
@@ -375,7 +395,10 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                       focusNode: focusNode,
                                       style: AppFonts.sfProStyle(
                                         fontSize: 16,
-                                        color: Colors.black,
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color,
                                       ),
                                       decoration: InputDecoration(
                                         hintText: 'Type here...',
@@ -386,24 +409,35 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                         border: OutlineInputBorder(
                                           borderRadius:
                                               BorderRadius.circular(8),
-                                          borderSide: BorderSide.none,
+                                          borderSide: BorderSide(
+                                              color:
+                                                  Colors.white.withOpacity(0.2),
+                                              width: 1),
                                         ),
                                         enabledBorder: OutlineInputBorder(
                                           borderRadius:
                                               BorderRadius.circular(8),
-                                          borderSide: BorderSide.none,
+                                          borderSide: BorderSide(
+                                              color:
+                                                  Colors.white.withOpacity(0.2),
+                                              width: 1),
                                         ),
                                         focusedBorder: OutlineInputBorder(
                                           borderRadius:
                                               BorderRadius.circular(8),
-                                          borderSide: BorderSide.none,
+                                          borderSide: BorderSide(
+                                              color:
+                                                  Colors.white.withOpacity(0.3),
+                                              width: 1.2),
                                         ),
                                         contentPadding: EdgeInsets.symmetric(
                                           vertical: 12,
                                           horizontal: 16,
                                         ),
                                         filled: true,
-                                        fillColor: Colors.white,
+                                        fillColor: Theme.of(context)
+                                            .colorScheme
+                                            .surface,
                                       ),
                                     );
                                   },
@@ -429,12 +463,13 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                               56.0, // Increased height for better spacing
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.white,
+                                          color: scheme.surface,
                                           borderRadius:
                                               BorderRadius.circular(8),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black12,
+                                              color: theme.shadowColor
+                                                  .withOpacity(0.12),
                                               blurRadius: 8,
                                               offset: Offset(0, 2),
                                             ),
@@ -461,7 +496,10 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                                 option,
                                                 style: AppFonts.sfProStyle(
                                                   fontSize: 16,
-                                                  color: Colors.black87,
+                                                  color: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color,
                                                 ),
                                               ),
                                               onTap: () {
@@ -523,8 +561,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Color(0xFFE8D5E8),
+                    color: theme.brightness == Brightness.dark
+                        ? theme.colorScheme.surface
+                        : const Color(0xFFE8D5E8),
                     borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
                   ),
                   child: addedSupplies.isEmpty
                       ? _buildEmptyState()
@@ -619,13 +661,22 @@ class _CreatePOPageState extends State<CreatePOPage> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.surface
+                  : Colors.white.withOpacity(0.3),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Theme.of(context).dividerColor.withOpacity(0.2)
+                    : Colors.transparent,
+              ),
             ),
             child: Icon(
               Icons.shopping_basket_outlined,
               size: 60,
-              color: Color(0xFF8B5A8B),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF8B5A8B),
             ),
           ),
           SizedBox(height: 24),
@@ -634,7 +685,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
             style: AppFonts.sfProStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF8B5A8B),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF8B5A8B),
             ),
           ),
           SizedBox(height: 8),
@@ -642,7 +695,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
             "Tap the + button to add supplies",
             style: AppFonts.sfProStyle(
               fontSize: 14,
-              color: Color(0xFF8B5A8B).withOpacity(0.7),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withOpacity(0.7)
+                  : const Color(0xFF8B5A8B).withOpacity(0.7),
             ),
           ),
         ],
@@ -664,7 +719,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                 style: AppFonts.sfProStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF8B5A8B),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Theme.of(context).textTheme.bodyMedium?.color
+                      : const Color(0xFF8B5A8B),
                 ),
               ),
               // Clear All Button
@@ -693,15 +750,22 @@ class _CreatePOPageState extends State<CreatePOPage> {
             margin: EdgeInsets.symmetric(horizontal: 16),
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF8B5A8B).withOpacity(0.1),
-                  Color(0xFF8B5A8B).withOpacity(0.05),
-                ],
-              ),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.surface
+                  : null,
+              gradient: Theme.of(context).brightness == Brightness.dark
+                  ? null
+                  : LinearGradient(
+                      colors: [
+                        const Color(0xFF8B5A8B).withOpacity(0.1),
+                        const Color(0xFF8B5A8B).withOpacity(0.05),
+                      ],
+                    ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Color(0xFF8B5A8B).withOpacity(0.2),
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Theme.of(context).dividerColor.withOpacity(0.2)
+                    : const Color(0xFF8B5A8B).withOpacity(0.2),
                 width: 1,
               ),
             ),
@@ -713,7 +777,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                   style: AppFonts.sfProStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF8B5A8B),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Theme.of(context).textTheme.bodyMedium?.color
+                        : const Color(0xFF8B5A8B),
                   ),
                 ),
                 Text(
@@ -721,7 +787,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                   style: AppFonts.sfProStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF8B5A8B),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Theme.of(context).textTheme.bodyMedium?.color
+                        : const Color(0xFF8B5A8B),
                   ),
                 ),
               ],
@@ -822,11 +890,15 @@ class _CreatePOPageState extends State<CreatePOPage> {
       ),
       child: Card(
         margin: EdgeInsets.only(bottom: 10),
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.15),
+        shadowColor: Theme.of(context).shadowColor.withOpacity(0.15),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.2),
+            width: 1,
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: Padding(
@@ -844,9 +916,10 @@ class _CreatePOPageState extends State<CreatePOPage> {
                   maxHeight: 72,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.black12),
+                  border: Border.all(
+                      color: Theme.of(context).dividerColor.withOpacity(0.2)),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
@@ -878,7 +951,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                       style: AppFonts.sfProStyle(
                         fontSize: MediaQuery.of(context).size.width * 0.04,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -892,7 +965,11 @@ class _CreatePOPageState extends State<CreatePOPage> {
                           style: AppFonts.sfProStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
-                            color: Colors.grey[600],
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.color
+                                ?.withOpacity(0.8),
                           ),
                         ),
                         SizedBox(width: 6),
@@ -902,7 +979,8 @@ class _CreatePOPageState extends State<CreatePOPage> {
                             style: AppFonts.sfProStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
-                              color: Colors.black87,
+                              color:
+                                  Theme.of(context).textTheme.bodyMedium?.color,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -919,7 +997,11 @@ class _CreatePOPageState extends State<CreatePOPage> {
                           style: AppFonts.sfProStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
-                            color: Colors.grey[600],
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.color
+                                ?.withOpacity(0.8),
                           ),
                         ),
                         SizedBox(width: 6),
@@ -929,7 +1011,8 @@ class _CreatePOPageState extends State<CreatePOPage> {
                             style: AppFonts.sfProStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
-                              color: Colors.black87,
+                              color:
+                                  Theme.of(context).textTheme.bodyMedium?.color,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

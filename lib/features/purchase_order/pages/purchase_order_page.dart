@@ -188,20 +188,24 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   @override
   Widget build(BuildContext context) {
     try {
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
       return Scaffold(
-        backgroundColor: Color(0xFFF9EFF2),
+        backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
-          title: Text(
-            "Purchase Order",
-            style:
-                AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
+          title: Text("Purchase Order",
+              style: AppFonts.sfProStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: theme.appBarTheme.titleTextStyle?.color ??
+                    theme.textTheme.titleLarge?.color,
+              )),
           centerTitle: true,
-          backgroundColor: Colors.white,
+          backgroundColor: theme.appBarTheme.backgroundColor,
           toolbarHeight: 70,
-          iconTheme: const IconThemeData(size: 30, color: Colors.black),
-          elevation: 5,
-          shadowColor: Colors.black54,
+          iconTheme: theme.appBarTheme.iconTheme,
+          elevation: theme.appBarTheme.elevation ?? 5,
+          shadowColor: theme.appBarTheme.shadowColor ?? theme.shadowColor,
           actions: [
             // Clear all POs button (for testing)
             IconButton(
@@ -233,15 +237,17 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                 Container(
                   padding: EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: theme.shadowColor.withOpacity(0.1),
                         blurRadius: 4,
                         offset: Offset(0, 2),
                       ),
                     ],
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -272,9 +278,11 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                           hintText: 'Search PO...',
                           hintStyle: AppFonts.sfProStyle(
                             fontSize: 16,
-                            color: Colors.grey[600],
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.6),
                           ),
-                          prefixIcon: Icon(Icons.search, color: Colors.black),
+                          prefixIcon:
+                              Icon(Icons.search, color: theme.iconTheme.color),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -290,7 +298,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                           contentPadding:
                               EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: scheme.surface,
                         ),
                       ),
                     ),
@@ -332,8 +340,12 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Color(0xFFE8D5E8), // Light purple background
+                      color: theme.brightness == Brightness.dark
+                          ? theme.colorScheme.surface
+                          : const Color(0xFFE8D5E8),
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.2)),
                     ),
                     child: Column(
                       children: [
@@ -393,15 +405,29 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                           width: 120,
                                           height: 120,
                                           decoration: BoxDecoration(
-                                            color:
-                                                Colors.white.withOpacity(0.3),
+                                            color: theme.brightness ==
+                                                    Brightness.dark
+                                                ? theme.colorScheme.surface
+                                                : scheme.surface
+                                                    .withOpacity(0.6),
                                             borderRadius:
                                                 BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: theme.brightness ==
+                                                      Brightness.dark
+                                                  ? theme.dividerColor
+                                                      .withOpacity(0.2)
+                                                  : theme.dividerColor
+                                                      .withOpacity(0.3),
+                                            ),
                                           ),
                                           child: Icon(
                                             Icons.shopping_cart_outlined,
                                             size: 60,
-                                            color: Color(0xFF8B5A8B),
+                                            color: theme.brightness ==
+                                                    Brightness.dark
+                                                ? Colors.white
+                                                : const Color(0xFF8B5A8B),
                                           ),
                                         ),
                                         SizedBox(height: 24),
@@ -410,7 +436,10 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                           style: AppFonts.sfProStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
-                                            color: Color(0xFF8B5A8B),
+                                            color: theme.brightness ==
+                                                    Brightness.dark
+                                                ? Colors.white
+                                                : const Color(0xFF8B5A8B),
                                           ),
                                         ),
                                       ],
@@ -676,14 +705,15 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           style: AppFonts.sfProStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Colors.black,
+            color: Theme.of(context).textTheme.bodyMedium?.color,
           ),
         ),
         Text(
           label,
           style: AppFonts.sfProStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color:
+                Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
           ),
         ),
       ],
@@ -705,7 +735,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? Colors.white.withOpacity(0.5) : Colors.transparent,
+          color: isActive
+              ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -713,7 +745,13 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           style: AppFonts.sfProStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: isActive ? Colors.black : Colors.grey[600],
+            color: isActive
+                ? Theme.of(context).textTheme.bodyMedium?.color
+                : Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.color
+                    ?.withOpacity(0.7),
           ),
         ),
       ),
@@ -736,8 +774,11 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
     // Create the card content
     Widget cardContent = Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.white.withOpacity(0.2), width: 1),
+      ),
+      color: Theme.of(context).colorScheme.surface,
       elevation: 3,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -787,7 +828,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                       style: AppFonts.sfProStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -833,7 +874,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                 height: 6,
                 width: 180,
                 decoration: BoxDecoration(
-                  color: Colors.black12.withOpacity(0.08),
+                  color: Theme.of(context).dividerColor.withOpacity(0.25),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Align(
@@ -858,7 +899,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                     '${po.receivedCount} of ${po.totalCount}',
                     style: AppFonts.sfProStyle(
                       fontSize: 14,
-                      color: Colors.black87,
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
                   ),
                   const Spacer(),
@@ -869,13 +910,21 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                         _controller.formatDate(po.createdAt),
                         style: AppFonts.sfProStyle(
                           fontSize: 13,
-                          color: Colors.grey[700],
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.color
+                              ?.withOpacity(0.8),
                         ),
                       ),
                       const SizedBox(width: 8),
                       const SizedBox(width: 8),
-                      const Icon(Icons.chevron_right,
-                          size: 20, color: Colors.black54),
+                      Icon(Icons.chevron_right,
+                          size: 20,
+                          color: Theme.of(context)
+                              .iconTheme
+                              .color
+                              ?.withOpacity(0.6)),
                     ],
                   ),
                 ],

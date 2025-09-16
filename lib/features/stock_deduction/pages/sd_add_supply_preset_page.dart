@@ -115,18 +115,23 @@ class _StockDeductionAddSupplyForPresetPageState
     final args = ModalRoute.of(context)?.settings.arguments;
     final Set<String> existingDocIds = _controller.parseExistingDocIds(args);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Add Supply',
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).appBarTheme.titleTextStyle?.color ??
+                  Theme.of(context).textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: Theme.of(context).appBarTheme.iconTheme,
+        elevation: Theme.of(context).appBarTheme.elevation ?? 5,
+        shadowColor: Theme.of(context).appBarTheme.shadowColor ??
+            Theme.of(context).shadowColor,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -152,8 +157,14 @@ class _StockDeductionAddSupplyForPresetPageState
                 decoration: InputDecoration(
                   hintText: 'Search supplies...',
                   hintStyle: AppFonts.sfProStyle(
-                      fontSize: 16, color: Colors.grey[600]),
-                  prefixIcon: const Icon(Icons.search, color: Colors.black),
+                      fontSize: 16,
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.color
+                          ?.withOpacity(0.6)),
+                  prefixIcon: Icon(Icons.search,
+                      color: Theme.of(context).iconTheme.color),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -169,7 +180,7 @@ class _StockDeductionAddSupplyForPresetPageState
                   contentPadding:
                       const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Theme.of(context).colorScheme.surface,
                 ),
               ),
               const SizedBox(height: 16),
@@ -249,18 +260,20 @@ class _StockDeductionAddSupplyForPresetPageState
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.surface,
                               borderRadius: BorderRadius.circular(16),
                               // Highlight when selected (visual only)
                               border: isSelected
                                   ? Border.all(
                                       color: const Color(0xFF00D4AA), width: 2)
                                   : null,
-                              boxShadow: const [
+                              boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black12,
+                                  color: Theme.of(context)
+                                      .shadowColor
+                                      .withOpacity(0.15),
                                   blurRadius: 8,
-                                  offset: Offset(0, 2),
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
@@ -296,7 +309,11 @@ class _StockDeductionAddSupplyForPresetPageState
                                           item.mainItem.name,
                                           style: AppFonts.sfProStyle(
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 16),
+                                              fontSize: 16,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color),
                                           textAlign: TextAlign.center,
                                           maxLines: 3,
                                           overflow: TextOverflow.ellipsis,
@@ -315,12 +332,16 @@ class _StockDeductionAddSupplyForPresetPageState
                                       decoration: BoxDecoration(
                                         color: isSelected
                                             ? const Color(0xFF00D4AA)
-                                            : Colors.white,
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .surface,
                                         shape: BoxShape.circle,
                                         border: Border.all(
                                           color: isSelected
                                               ? const Color(0xFF00D4AA)
-                                              : Colors.grey[400]!,
+                                              : Theme.of(context)
+                                                  .dividerColor
+                                                  .withOpacity(0.4),
                                           width: 2,
                                         ),
                                       ),

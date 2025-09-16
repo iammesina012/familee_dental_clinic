@@ -118,18 +118,23 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Preset Management',
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).appBarTheme.titleTextStyle?.color ??
+                  Theme.of(context).textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: Theme.of(context).appBarTheme.iconTheme,
+        elevation: Theme.of(context).appBarTheme.elevation ?? 5,
+        shadowColor: Theme.of(context).appBarTheme.shadowColor ??
+            Theme.of(context).shadowColor,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -180,16 +185,21 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                   // Search bar
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
+                          color:
+                              Theme.of(context).shadowColor.withOpacity(0.08),
                           spreadRadius: 1,
                           blurRadius: 3,
                           offset: const Offset(0, 1),
                         ),
                       ],
+                      border: Border.all(
+                        color: Theme.of(context).dividerColor.withOpacity(0.2),
+                        width: 1,
+                      ),
                     ),
                     child: TextField(
                       controller: _searchController,
@@ -197,15 +207,20 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                         hintText: 'Search presets...',
                         hintStyle: AppFonts.sfProStyle(
                           fontSize: 16,
-                          color: Colors.grey[500],
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.6),
                         ),
-                        prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
+                        prefixIcon: Icon(Icons.search,
+                            color: Theme.of(context).iconTheme.color),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: Theme.of(context).colorScheme.surface,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
@@ -218,8 +233,14 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE8D5E8),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.surface
+                            : const Color(0xFFE8D5E8),
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withOpacity(0.2)),
                       ),
                       child: _filteredPresets.isEmpty
                           ? _buildEmptyState()
@@ -324,9 +345,14 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
       ),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shadowColor: Theme.of(context).shadowColor.withOpacity(0.15),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+              color: Theme.of(context).dividerColor.withOpacity(0.2)),
+        ),
         child: Column(
           children: [
             // Main preset info with dropdown button
@@ -367,6 +393,10 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                                   style: AppFonts.sfProStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -375,7 +405,11 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                                   style: AppFonts.sfProStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
-                                    color: Colors.grey[600],
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color
+                                        ?.withOpacity(0.8),
                                   ),
                                 ),
                               ],
@@ -388,7 +422,8 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                       isExpanded
                           ? Icons.keyboard_arrow_up
                           : Icons.keyboard_arrow_down,
-                      color: Colors.grey[600],
+                      color:
+                          Theme.of(context).iconTheme.color?.withOpacity(0.8),
                       size: 24,
                     ),
                   ],
@@ -399,7 +434,9 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
             if (isExpanded) ...[
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Theme.of(context).colorScheme.surface
+                      : Colors.grey[50],
                   borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(12),
                     bottomRight: Radius.circular(12),
@@ -451,6 +488,10 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                                       style: AppFonts.sfProStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -469,7 +510,11 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                           'No supplies in this preset',
                           style: AppFonts.sfProStyle(
                             fontSize: 14,
-                            color: Colors.grey[600],
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.color
+                                ?.withOpacity(0.8),
                           ),
                         ),
                       ),

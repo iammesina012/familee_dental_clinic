@@ -11,11 +11,12 @@ class MyDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     String? currentRoute = ModalRoute.of(context)?.settings.name;
 
+    final theme = Theme.of(context);
     return Drawer(
       child: Column(
         children: [
           DrawerHeader(
-            decoration: const BoxDecoration(color: Colors.white),
+            decoration: BoxDecoration(color: theme.appBarTheme.backgroundColor),
             child: Center(
               child: Image.asset(
                 'assets/images/logo/tita_doc.png',
@@ -30,6 +31,7 @@ class MyDrawer extends StatelessWidget {
             text: 'Dashboard',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/dashboard',
+            context: context,
             onTap: () async {
               if (beforeNavigate != null) {
                 final ok = await beforeNavigate!();
@@ -46,6 +48,7 @@ class MyDrawer extends StatelessWidget {
             text: 'Inventory',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/inventory',
+            context: context,
             onTap: () async {
               if (beforeNavigate != null) {
                 final ok = await beforeNavigate!();
@@ -62,6 +65,7 @@ class MyDrawer extends StatelessWidget {
             text: 'Purchase Order',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/purchase-order',
+            context: context,
             onTap: () async {
               if (beforeNavigate != null) {
                 final ok = await beforeNavigate!();
@@ -78,6 +82,7 @@ class MyDrawer extends StatelessWidget {
             text: 'Stock Deduction',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/stock-deduction',
+            context: context,
             onTap: () async {
               if (beforeNavigate != null) {
                 final ok = await beforeNavigate!();
@@ -94,6 +99,7 @@ class MyDrawer extends StatelessWidget {
             text: 'Activity Log',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/activity-log',
+            context: context,
             onTap: () async {
               if (beforeNavigate != null) {
                 final ok = await beforeNavigate!();
@@ -111,6 +117,7 @@ class MyDrawer extends StatelessWidget {
             text: 'Settings',
             fontFamily: 'SF Pro',
             selected: currentRoute == '/settings',
+            context: context,
             onTap: () async {
               if (beforeNavigate != null) {
                 final ok = await beforeNavigate!();
@@ -128,6 +135,7 @@ class MyDrawer extends StatelessWidget {
             text: 'Logout',
             fontFamily: 'SF Pro',
             selected: false,
+            context: context,
             onTap: () async {
               final shouldLogout = await showLogoutDialog(context);
               if (shouldLogout == true) {
@@ -150,21 +158,25 @@ class MyDrawer extends StatelessWidget {
     required String fontFamily,
     required bool selected,
     required VoidCallback onTap,
+    required BuildContext context,
   }) {
+    final theme = Theme.of(context);
     return ListTile(
       dense: true,
-      leading: Icon(icon, color: Colors.black, size: 20),
+      leading: Icon(icon, color: theme.iconTheme.color, size: 20),
       title: Text(
         text,
         style: TextStyle(
           fontFamily: fontFamily,
           fontSize: 16,
           fontWeight: FontWeight.bold,
-          color: Colors.black,
+          color: theme.textTheme.bodyMedium?.color,
         ),
       ),
       selected: selected,
-      selectedTileColor: Colors.grey[200],
+      selectedTileColor: theme.brightness == Brightness.dark
+          ? Colors.white10
+          : Colors.grey[200],
       onTap: onTap,
     );
   }

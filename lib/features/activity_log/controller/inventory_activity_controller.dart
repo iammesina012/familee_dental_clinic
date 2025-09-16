@@ -301,6 +301,36 @@ class InventoryActivityController {
     );
   }
 
+  /// Log expired supply disposed
+  Future<void> logExpiredSupplyDisposed({
+    required String itemName,
+    required String category,
+    required int stock,
+    required String unit,
+    double? cost,
+    String? brand,
+    String? supplier,
+    String? expiryDate,
+    bool noExpiry = false,
+  }) async {
+    await _logActivity(
+      action: 'expired_supply_disposed',
+      category: 'Inventory',
+      description: 'Disposed $itemName',
+      metadata: {
+        'itemName': itemName,
+        'category': category,
+        'stock': stock,
+        'unit': unit,
+        'cost': cost,
+        'brand': brand,
+        'supplier': supplier,
+        'expiryDate':
+            noExpiry ? 'No expiry date' : (expiryDate ?? 'No expiry date'),
+      },
+    );
+  }
+
   /// Log new category added
   Future<void> logCategoryAdded({
     required String categoryName,

@@ -31,23 +31,25 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          "Edit Item",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        title: Text(
+          "Edit Supply",
+          style:
+              theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -66,21 +68,24 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                   Container(
                     padding: EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.blue[50],
+                      color: theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue[200]!),
+                      border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.2)),
                     ),
                     child: Row(
                       children: [
                         Icon(Icons.info_outline,
-                            color: Colors.blue[600], size: 20),
+                            color: theme.iconTheme.color?.withOpacity(0.8),
+                            size: 20),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Fields marked with * are required. Supplier and Brand names are optional.',
-                            style: TextStyle(
-                              color: Colors.blue[700],
+                            style: theme.textTheme.bodySmall?.copyWith(
                               fontSize: 12,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.8),
                             ),
                           ),
                         ),
@@ -154,21 +159,26 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                 height: 130,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12),
-                                  color: Colors.grey[100],
-                                  border:
-                                      Border.all(color: Colors.grey.shade300),
+                                  color: theme.colorScheme.surface,
+                                  border: Border.all(
+                                      color:
+                                          theme.dividerColor.withOpacity(0.2)),
                                 ),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(Icons.image_not_supported,
-                                        size: 40, color: Colors.grey),
+                                        size: 40,
+                                        color: theme.iconTheme.color
+                                            ?.withOpacity(0.6)),
                                     SizedBox(height: 8),
                                     Text(
                                       'No image',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
                                         fontSize: 12,
+                                        color: theme.textTheme.bodyMedium?.color
+                                            ?.withOpacity(0.7),
                                       ),
                                     ),
                                   ],
@@ -241,7 +251,8 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Stock',
-                          style: TextStyle(fontWeight: FontWeight.w500)),
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w500)),
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -249,8 +260,10 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                             child: Container(
                               height: 48,
                               decoration: BoxDecoration(
-                                color: Colors.purple[50],
+                                color: theme.colorScheme.surface,
                                 borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: theme.dividerColor.withOpacity(0.2)),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -258,7 +271,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                 children: [
                                   IconButton(
                                     icon: Icon(Icons.remove,
-                                        color: Colors.purple),
+                                        color: theme.iconTheme.color),
                                     splashRadius: 18,
                                     onPressed: () {
                                       if (controller.stock > 0) {
@@ -281,7 +294,9 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                             border: InputBorder.none),
                                         style: TextStyle(
                                             fontSize: 18,
-                                            fontWeight: FontWeight.w500),
+                                            fontWeight: FontWeight.w500,
+                                            color: theme
+                                                .textTheme.bodyMedium?.color),
                                         onChanged: (val) {
                                           setState(() {
                                             controller.stock =
@@ -292,7 +307,8 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                     ),
                                   ),
                                   IconButton(
-                                    icon: Icon(Icons.add, color: Colors.purple),
+                                    icon: Icon(Icons.add,
+                                        color: theme.iconTheme.color),
                                     splashRadius: 18,
                                     onPressed: () {
                                       setState(() {

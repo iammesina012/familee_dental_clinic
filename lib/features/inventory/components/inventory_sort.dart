@@ -7,6 +7,7 @@ class InventorySortModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final sortOptions = [
       "Name (A → Z)",
       "Name (Z → A)",
@@ -31,7 +32,7 @@ class InventorySortModal extends StatelessWidget {
       maxChildSize: 0.70, // Increased maximum size
       builder: (context, scrollController) {
         return Material(
-          color: Theme.of(context).scaffoldBackgroundColor,
+          color: theme.scaffoldBackgroundColor,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           child: Column(
             children: [
@@ -41,33 +42,41 @@ class InventorySortModal extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: theme.dividerColor.withOpacity(0.6),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 16.0, bottom: 8),
-                child: Text("Sort By",
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
+                child: Text(
+                  "Sort By",
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold, fontSize: 19),
+                ),
               ),
               Expanded(
                 child: ListView.separated(
                   controller: scrollController,
                   itemCount: sortOptions.length,
-                  separatorBuilder: (_, __) => Divider(height: 0),
+                  separatorBuilder: (_, __) =>
+                      Divider(height: 0, color: theme.dividerColor),
                   itemBuilder: (context, i) {
                     final isActive = selected == sortOptions[i];
                     return ListTile(
                       title: Text(
                         sortOptions[i],
-                        style: TextStyle(
+                        style: theme.textTheme.bodyLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: isActive ? Color(0xFF4E38D4) : Colors.black87,
+                          color: isActive
+                              ? const Color(0xFF4E38D4)
+                              : theme.textTheme.bodyLarge?.color,
                         ),
                       ),
-                      subtitle: Text(sortDescriptions[i],
-                          style: TextStyle(fontSize: 13)),
+                      subtitle: Text(
+                        sortDescriptions[i],
+                        style:
+                            theme.textTheme.bodySmall?.copyWith(fontSize: 13),
+                      ),
                       trailing: isActive
                           ? Icon(Icons.check_circle, color: Color(0xFF4E38D4))
                           : null,

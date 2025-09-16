@@ -54,23 +54,25 @@ class _AddCategoryPageState extends State<AddCategoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           "Add Category",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style:
+              theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -78,19 +80,13 @@ class _AddCategoryPageState extends State<AddCategoryPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Add New Category',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
               'Enter the name of the new category',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             SizedBox(height: 32),
             TextField(

@@ -120,27 +120,27 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           "Edit Categories",
-          style: TextStyle(
-            fontSize: 20,
+          style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
             fontFamily: 'SF Pro',
           ),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
       ),
       body: StreamBuilder<List<String>>(
         stream: categoriesController.getCategoriesStream(),
@@ -227,7 +227,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
               return Container(
                 margin: EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -269,8 +269,9 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                                   ),
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    borderSide:
-                                        BorderSide(color: Colors.grey.shade300),
+                                    borderSide: BorderSide(
+                                        color: theme.dividerColor
+                                            .withOpacity(0.2)),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -282,7 +283,8 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                                   hintText: 'Enter category name',
                                   hintStyle: TextStyle(
                                     fontFamily: 'SF Pro',
-                                    color: Colors.grey[400],
+                                    color: theme.textTheme.bodyMedium?.color
+                                        ?.withOpacity(0.5),
                                     fontWeight: FontWeight.w500,
                                     fontStyle: FontStyle.normal,
                                   ),
@@ -301,7 +303,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                                   fontFamily: 'SF Pro',
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.grey[800],
+                                  color: theme.textTheme.bodyMedium?.color,
                                 ),
                               ),
                       ),

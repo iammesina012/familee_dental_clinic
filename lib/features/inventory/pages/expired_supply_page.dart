@@ -18,21 +18,25 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           "Expired Supply",
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: theme.textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -50,9 +54,11 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                     hintText: 'Search expired supplies...',
                     hintStyle: AppFonts.sfProStyle(
                       fontSize: 16,
-                      color: Colors.grey[600],
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
                     ),
-                    prefixIcon: Icon(Icons.search, color: Colors.black),
+                    prefixIcon:
+                        Icon(Icons.search, color: theme.iconTheme.color),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -68,7 +74,7 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                     contentPadding:
                         EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: theme.colorScheme.surface,
                   ),
                   onChanged: (value) {
                     setState(() {

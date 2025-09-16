@@ -39,23 +39,25 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           "Archived Supplies",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style:
+              theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
       ),
       body: SafeArea(
         child: Padding(
@@ -71,9 +73,9 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                       decoration: InputDecoration(
                         hintText: 'Search archived...',
                         prefixIcon:
-                            const Icon(Icons.search, color: Colors.black),
+                            Icon(Icons.search, color: theme.iconTheme.color),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: theme.colorScheme.surface,
                         contentPadding: const EdgeInsets.symmetric(
                             vertical: 0, horizontal: 16),
                         border: OutlineInputBorder(
@@ -104,30 +106,31 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                     }
 
                     if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return const Center(
+                      return Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.archive_outlined,
                               size: 64,
-                              color: Colors.grey,
+                              color: theme.iconTheme.color?.withOpacity(0.6),
                             ),
                             SizedBox(height: 16),
                             Text(
                               'No archived supplies found',
-                              style: TextStyle(
+                              style: theme.textTheme.bodyMedium?.copyWith(
                                 fontSize: 18,
-                                color: Colors.grey,
+                                color: theme.textTheme.bodyMedium?.color,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                             SizedBox(height: 8),
                             Text(
                               'Archived supplies will appear here',
-                              style: TextStyle(
+                              style: theme.textTheme.bodyMedium?.copyWith(
                                 fontSize: 14,
-                                color: Colors.grey,
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.7),
                               ),
                             ),
                           ],
@@ -138,21 +141,21 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                     final supplies = filterSupplies(snapshot.data!);
 
                     if (supplies.isEmpty) {
-                      return const Center(
+                      return Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.search_off,
                               size: 64,
-                              color: Colors.grey,
+                              color: theme.iconTheme.color?.withOpacity(0.6),
                             ),
                             SizedBox(height: 16),
                             Text(
                               'No supplies match your search',
-                              style: TextStyle(
+                              style: theme.textTheme.bodyMedium?.copyWith(
                                 fontSize: 18,
-                                color: Colors.grey,
+                                color: theme.textTheme.bodyMedium?.color,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),

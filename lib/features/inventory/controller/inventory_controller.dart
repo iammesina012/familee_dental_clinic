@@ -82,9 +82,11 @@ class InventoryController {
   List<GroupedInventoryItem> _groupItems(List<InventoryItem> items) {
     final Map<String, List<InventoryItem>> grouped = {};
 
-    // Group items by name + brand
+    // Group items by name + category (normalize to avoid case/whitespace mismatches)
     for (final item in items) {
-      final key = '${item.name}_${item.brand}';
+      final nameKey = (item.name).trim().toLowerCase();
+      final categoryKey = (item.category).trim().toLowerCase();
+      final key = '${nameKey}_${categoryKey}';
       if (!grouped.containsKey(key)) {
         grouped[key] = [];
       }
@@ -158,9 +160,11 @@ class InventoryController {
   // Get all variants for a specific product (for view supply page)
   Stream<List<InventoryItem>> getProductVariants(String productKey) {
     return getSuppliesStream().map((items) {
-      return items
-          .where((item) => '${item.name}_${item.brand}' == productKey)
-          .toList();
+      return items.where((item) {
+        final key =
+            '${item.name.trim().toLowerCase()}_${item.category.trim().toLowerCase()}';
+        return key == productKey;
+      }).toList();
     });
   }
 

@@ -93,9 +93,8 @@ class ExpiredSupplyController {
         replace = true;
       } else if (nextDate == null) {
         replace = false;
-      } else if (nextDate.isAfter(currDate) ||
-          nextDate.isAtSameMomentAs(currDate)) {
-        // Prefer the most recent expired date
+      } else if (nextDate.isBefore(currDate)) {
+        // Prefer the earliest expired date
         replace = true;
       } else {
         replace = false;

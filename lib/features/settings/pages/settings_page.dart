@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
+import 'package:projects/features/settings/controller/settings_controller.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -13,14 +14,32 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _darkMode = false;
   bool _inventoryAlerts = true;
   bool _approvalAlerts = true;
+  final SettingsController _settingsController = SettingsController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final isDark = await _settingsController.getDarkMode();
+    if (mounted) {
+      setState(() {
+        _darkMode = isDark;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black, size: 28),
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color, size: 28),
           onPressed: () {
             Navigator.maybePop(context);
           },
@@ -31,15 +50,15 @@ class _SettingsPageState extends State<SettingsPage> {
             fontSize: 20,
             fontWeight: FontWeight.bold,
             fontFamily: 'SF Pro',
-            color: Colors.black,
+            color: null,
           ),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -58,8 +77,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   setState(() {
                     _darkMode = value;
                   });
+                  _settingsController.setDarkMode(value);
+                  AppTheme.themeMode.value =
+                      value ? ThemeMode.dark : ThemeMode.light;
                 },
-                activeColor: const Color(0xFF00D4AA),
+                activeColor: scheme.primary,
               ),
             ),
             _buildNotificationCard(),
@@ -75,7 +97,7 @@ class _SettingsPageState extends State<SettingsPage> {
               trailing: const Icon(
                 Icons.arrow_forward_ios,
                 size: 16,
-                color: Colors.grey,
+                color: null,
               ),
               onTap: () {
                 // TODO: Navigate to employee list
@@ -93,7 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
               trailing: const Icon(
                 Icons.arrow_forward_ios,
                 size: 16,
-                color: Colors.grey,
+                color: null,
               ),
               onTap: () {
                 // TODO: Navigate to backup & restore
@@ -103,6 +125,8 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 32),
 
             // Standalone Settings
+            Divider(height: 1, thickness: 1, color: theme.dividerColor),
+            const SizedBox(height: 20),
             _buildSettingItem(
               icon: Icons.help_outline,
               title: "App Tutorial",
@@ -110,36 +134,10 @@ class _SettingsPageState extends State<SettingsPage> {
               trailing: const Icon(
                 Icons.arrow_forward_ios,
                 size: 16,
-                color: Colors.grey,
+                color: null,
               ),
               onTap: () {
                 // TODO: Navigate to app tutorial
-              },
-            ),
-            _buildSettingItem(
-              icon: Icons.support_agent,
-              title: "Contact Support",
-              subtitle: "Get help and support",
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey,
-              ),
-              onTap: () {
-                // TODO: Navigate to contact support
-              },
-            ),
-            _buildSettingItem(
-              icon: Icons.info_outline,
-              title: "About",
-              subtitle: "App version and information",
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey,
-              ),
-              onTap: () {
-                // TODO: Navigate to about page
               },
             ),
           ],
@@ -149,6 +147,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildSectionHeader(String title) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
       child: Text(
@@ -156,21 +155,27 @@ class _SettingsPageState extends State<SettingsPage> {
         style: AppFonts.sfProStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
-          color: Colors.black,
+          color: theme.textTheme.bodyMedium?.color,
         ),
       ),
     );
   }
 
   Widget _buildNotificationCard() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: (theme.brightness == Brightness.dark
+                    ? Colors.black
+                    : Colors.black)
+                .withOpacity(0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -181,9 +186,9 @@ class _SettingsPageState extends State<SettingsPage> {
           // Notification header only
           ListTile(
             contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            leading: const Icon(
+            leading: Icon(
               Icons.notifications_outlined,
-              color: Colors.black,
+              color: theme.iconTheme.color,
               size: 24,
             ),
             title: Text(
@@ -191,7 +196,7 @@ class _SettingsPageState extends State<SettingsPage> {
               style: AppFonts.sfProStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                color: Colors.black,
+                color: theme.textTheme.bodyMedium?.color,
               ),
             ),
           ),
@@ -205,8 +210,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   "Inventory Alerts",
                   style: AppFonts.sfProStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.black,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
                   ),
                 ),
                 Switch(
@@ -216,7 +221,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       _inventoryAlerts = value;
                     });
                   },
-                  activeColor: const Color(0xFF00D4AA),
+                  activeColor: scheme.primary,
                 ),
               ],
             ),
@@ -231,8 +236,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   "Approval Alerts",
                   style: AppFonts.sfProStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.black,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
                   ),
                 ),
                 Switch(
@@ -242,7 +247,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       _approvalAlerts = value;
                     });
                   },
-                  activeColor: const Color(0xFF00D4AA),
+                  activeColor: scheme.primary,
                 ),
               ],
             ),
@@ -260,14 +265,20 @@ class _SettingsPageState extends State<SettingsPage> {
     VoidCallback? onTap,
     bool isSubItem = false,
   }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: (theme.brightness == Brightness.dark
+                    ? Colors.black
+                    : Colors.black)
+                .withOpacity(0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -280,7 +291,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         leading: Icon(
           icon,
-          color: Colors.black,
+          color: theme.iconTheme.color,
           size: 24,
         ),
         title: title.isNotEmpty
@@ -289,7 +300,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: AppFonts.sfProStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: Colors.black,
+                  color: theme.textTheme.bodyMedium?.color,
                 ),
               )
             : null,
@@ -298,7 +309,7 @@ class _SettingsPageState extends State<SettingsPage> {
           style: AppFonts.sfProStyle(
             fontSize: 14,
             fontWeight: FontWeight.w400,
-            color: Colors.grey[600],
+            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
           ),
         ),
         trailing: trailing,

@@ -310,19 +310,23 @@ class _EditPresetPageState extends State<EditPresetPage> {
         return true;
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF9EFF2),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: Text(
             'Edit Preset',
-            style:
-                AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: AppFonts.sfProStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).appBarTheme.titleTextStyle?.color ??
+                    Theme.of(context).textTheme.titleLarge?.color),
           ),
           centerTitle: true,
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
           toolbarHeight: 70,
-          iconTheme: const IconThemeData(size: 30, color: Colors.black),
-          elevation: 5,
-          shadowColor: Colors.black54,
+          iconTheme: Theme.of(context).appBarTheme.iconTheme,
+          elevation: Theme.of(context).appBarTheme.elevation ?? 5,
+          shadowColor: Theme.of(context).appBarTheme.shadowColor ??
+              Theme.of(context).shadowColor,
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 5.0),
@@ -354,31 +358,42 @@ class _EditPresetPageState extends State<EditPresetPage> {
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
+                              color: Theme.of(context)
+                                  .shadowColor
+                                  .withOpacity(0.08),
                               spreadRadius: 1,
                               blurRadius: 3,
                               offset: const Offset(0, 1),
                             ),
                           ],
+                          border: Border.all(
+                            color:
+                                Theme.of(context).dividerColor.withOpacity(0.2),
+                          ),
                         ),
                         child: TextField(
                           controller: _nameController,
                           decoration: InputDecoration(
                             hintText: 'Enter preset name...',
                             hintStyle: AppFonts.sfProStyle(
-                                fontSize: 16, color: Colors.grey[500]),
+                                fontSize: 16,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.6)),
                             prefixIcon: Icon(Icons.bookmark_outline,
-                                color: Colors.grey[500]),
+                                color: Theme.of(context).iconTheme.color),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
                             ),
                             filled: true,
-                            fillColor: Colors.white,
+                            fillColor: Theme.of(context).colorScheme.surface,
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 12),
                           ),
@@ -418,8 +433,13 @@ class _EditPresetPageState extends State<EditPresetPage> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE8D5E8),
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Theme.of(context).colorScheme.surface
+                          : const Color(0xFFE8D5E8),
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context).dividerColor.withOpacity(0.2),
+                      ),
                     ),
                     child: _presetSupplies.isEmpty
                         ? _buildEmptyState()
@@ -450,16 +470,25 @@ class _EditPresetPageState extends State<EditPresetPage> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.surface
+                  : Colors.white.withOpacity(0.3),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Theme.of(context).dividerColor.withOpacity(0.2)
+                    : Colors.transparent,
+              ),
             ),
             child: Stack(
               alignment: Alignment.center,
               children: [
-                const Icon(
+                Icon(
                   Icons.bookmark,
                   size: 60,
-                  color: Color(0xFF8B5A8B),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : const Color(0xFF8B5A8B),
                 ),
                 Positioned(
                   top: 10,
@@ -468,13 +497,17 @@ class _EditPresetPageState extends State<EditPresetPage> {
                     width: 20,
                     height: 20,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Theme.of(context).colorScheme.surface
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.add,
                       size: 16,
-                      color: Color(0xFF8B5A8B),
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : const Color(0xFF8B5A8B),
                     ),
                   ),
                 ),
@@ -487,7 +520,9 @@ class _EditPresetPageState extends State<EditPresetPage> {
             style: AppFonts.sfProStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF8B5A8B),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF8B5A8B),
             ),
           ),
           const SizedBox(height: 8),
@@ -495,7 +530,9 @@ class _EditPresetPageState extends State<EditPresetPage> {
             'Tap the + button to add supplies to this preset',
             style: AppFonts.sfProStyle(
               fontSize: 14,
-              color: const Color(0xFF8B5A8B).withOpacity(0.7),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withOpacity(0.7)
+                  : const Color(0xFF8B5A8B).withOpacity(0.7),
             ),
           ),
         ],
@@ -523,9 +560,13 @@ class _EditPresetPageState extends State<EditPresetPage> {
       ),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shadowColor: Theme.of(context).shadowColor.withOpacity(0.15),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+                color: Theme.of(context).dividerColor.withOpacity(0.2))),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
@@ -551,7 +592,9 @@ class _EditPresetPageState extends State<EditPresetPage> {
                 child: Text(
                   item['name'] ?? '',
                   style: AppFonts.sfProStyle(
-                      fontSize: 15, fontWeight: FontWeight.w500),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).textTheme.bodyMedium?.color),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),

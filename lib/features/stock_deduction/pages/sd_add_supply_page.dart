@@ -24,21 +24,27 @@ class _StockDeductionAddSupplyPageState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.grey[200],
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).colorScheme.surface
+            : Colors.grey[200],
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withOpacity(0.2),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.calendar_today_outlined,
-              size: 12, color: Colors.grey[700]),
+              size: 12,
+              color: Theme.of(context).iconTheme.color?.withOpacity(0.8)),
           const SizedBox(width: 4),
           Text(
             text,
             style: AppFonts.sfProStyle(
               fontSize: 10,
               fontWeight: FontWeight.w500,
-              color: Colors.grey[800],
+              color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -52,20 +58,27 @@ class _StockDeductionAddSupplyPageState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.grey[200],
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).colorScheme.surface
+            : Colors.grey[200],
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withOpacity(0.2),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.inventory_2_outlined, size: 12, color: Colors.grey[700]),
+          Icon(Icons.inventory_2_outlined,
+              size: 12,
+              color: Theme.of(context).iconTheme.color?.withOpacity(0.8)),
           const SizedBox(width: 4),
           Text(
             text,
             style: AppFonts.sfProStyle(
               fontSize: 10,
               fontWeight: FontWeight.w500,
-              color: Colors.grey[800],
+              color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -153,18 +166,23 @@ class _StockDeductionAddSupplyPageState
     final args = ModalRoute.of(context)?.settings.arguments;
     final Set<String> existingDocIds = _controller.parseExistingDocIds(args);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9EFF2),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Add Supply',
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).appBarTheme.titleTextStyle?.color ??
+                  Theme.of(context).textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: Theme.of(context).appBarTheme.iconTheme,
+        elevation: Theme.of(context).appBarTheme.elevation ?? 5,
+        shadowColor: Theme.of(context).appBarTheme.shadowColor ??
+            Theme.of(context).shadowColor,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -190,8 +208,14 @@ class _StockDeductionAddSupplyPageState
                 decoration: InputDecoration(
                   hintText: 'Search supplies...',
                   hintStyle: AppFonts.sfProStyle(
-                      fontSize: 16, color: Colors.grey[600]),
-                  prefixIcon: const Icon(Icons.search, color: Colors.black),
+                      fontSize: 16,
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.color
+                          ?.withOpacity(0.6)),
+                  prefixIcon: Icon(Icons.search,
+                      color: Theme.of(context).iconTheme.color),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -207,7 +231,7 @@ class _StockDeductionAddSupplyPageState
                   contentPadding:
                       const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Theme.of(context).colorScheme.surface,
                 ),
               ),
               const SizedBox(height: 16),
@@ -311,18 +335,20 @@ class _StockDeductionAddSupplyPageState
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.surface,
                               borderRadius: BorderRadius.circular(16),
                               // Highlight when selected (visual only)
                               border: selected
                                   ? Border.all(
                                       color: const Color(0xFF00D4AA), width: 2)
                                   : null,
-                              boxShadow: const [
+                              boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black12,
+                                  color: Theme.of(context)
+                                      .shadowColor
+                                      .withOpacity(0.15),
                                   blurRadius: 8,
-                                  offset: Offset(0, 2),
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
@@ -358,7 +384,11 @@ class _StockDeductionAddSupplyPageState
                                           item.name,
                                           style: AppFonts.sfProStyle(
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 16),
+                                              fontSize: 16,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color),
                                           textAlign: TextAlign.center,
                                           maxLines: 3,
                                           overflow: TextOverflow.ellipsis,
@@ -384,13 +414,17 @@ class _StockDeductionAddSupplyPageState
                                       decoration: BoxDecoration(
                                         color: selected
                                             ? const Color(0xFF00D4AA)
-                                            : Colors.white,
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .surface,
                                         borderRadius:
                                             BorderRadius.circular(100),
                                         border: Border.all(
                                             color: selected
                                                 ? const Color(0xFF00D4AA)
-                                                : Colors.grey[400]!,
+                                                : Theme.of(context)
+                                                    .dividerColor
+                                                    .withOpacity(0.4),
                                             width: 2),
                                       ),
                                       child: selected

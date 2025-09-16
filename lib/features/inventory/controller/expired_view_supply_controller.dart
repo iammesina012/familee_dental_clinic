@@ -168,15 +168,37 @@ class ExpiredViewSupplyController {
           archived: data['archived'] ?? false,
         );
 
-        // Delete from Firebase
-        await FirebaseFirestore.instance
+        // Determine whether this is the last batch for the product (same name + brand)
+        final siblings = await FirebaseFirestore.instance
             .collection('supplies')
-            .doc(id)
-            .delete();
+            .where('name', isEqualTo: item.name)
+            .where('brand', isEqualTo: item.brand)
+            .get();
 
-        // Log the deletion activity
+        final bool hasOtherBatches = siblings.docs.any((d) => d.id != id);
+
+        if (hasOtherBatches) {
+          // Safe to delete this expired batch only
+          await FirebaseFirestore.instance
+              .collection('supplies')
+              .doc(id)
+              .delete();
+        } else {
+          // This is the last batch of the product. Convert to a placeholder
+          // so the product remains visible in catalog/pickers with 0 stock.
+          await FirebaseFirestore.instance
+              .collection('supplies')
+              .doc(id)
+              .update({
+            'stock': 0,
+            'noExpiry': true,
+            'expiry': null,
+          });
+        }
+
+        // Log the disposal of an expired supply
         final activityController = InventoryActivityController();
-        await activityController.logInventorySupplyDeleted(
+        await activityController.logExpiredSupplyDisposed(
           itemName: item.name,
           category: item.category,
           stock: item.stock,

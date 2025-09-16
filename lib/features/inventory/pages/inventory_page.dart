@@ -9,8 +9,8 @@ import 'package:projects/features/inventory/pages/add_supply_page.dart';
 import 'package:projects/features/inventory/pages/view_supply_page.dart';
 import 'package:projects/features/inventory/pages/add_category_page.dart';
 import 'package:projects/features/inventory/pages/edit_categories_page.dart';
-import 'package:projects/features/inventory/pages/expired_supply_page.dart';
 import '../controller/inventory_controller.dart';
+import 'package:projects/features/inventory/pages/expired_supply_page.dart';
 import '../controller/filter_controller.dart';
 import '../controller/categories_controller.dart';
 import 'package:projects/features/inventory/pages/archive_supply_page.dart';
@@ -157,19 +157,21 @@ class _InventoryState extends State<Inventory> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           "Inventory",
           style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -201,9 +203,11 @@ class _InventoryState extends State<Inventory> {
                         hintText: 'Search...',
                         hintStyle: AppFonts.sfProStyle(
                           fontSize: 16,
-                          color: Colors.grey[600],
+                          color: theme.textTheme.bodyMedium?.color
+                              ?.withOpacity(0.6),
                         ),
-                        prefixIcon: Icon(Icons.search, color: Colors.black),
+                        prefixIcon:
+                            Icon(Icons.search, color: theme.iconTheme.color),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -219,7 +223,7 @@ class _InventoryState extends State<Inventory> {
                         contentPadding:
                             EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: scheme.surface,
                       ),
                       onChanged: (value) {
                         setState(() {
@@ -236,11 +240,11 @@ class _InventoryState extends State<Inventory> {
                       style: ElevatedButton.styleFrom(
                         padding: EdgeInsets.zero,
                         backgroundColor: currentFilters.isNotEmpty
-                            ? Color(0xFF4E38D4)
-                            : Colors.white,
+                            ? const Color(0xFF4E38D4)
+                            : scheme.surface,
                         foregroundColor: currentFilters.isNotEmpty
                             ? Colors.white
-                            : Colors.black,
+                            : theme.textTheme.bodyMedium?.color,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -257,8 +261,8 @@ class _InventoryState extends State<Inventory> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         padding: EdgeInsets.zero,
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
+                        backgroundColor: scheme.surface,
+                        foregroundColor: theme.textTheme.bodyMedium?.color,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -330,17 +334,19 @@ class _InventoryState extends State<Inventory> {
                             label: Text(categoriesWithAll[index]),
                             selected: isSelected,
                             showCheckmark: false,
-                            selectedColor: Color(0xFF4E38D4),
-                            backgroundColor: Colors.white,
+                            selectedColor: const Color(0xFF4E38D4),
+                            backgroundColor: scheme.surface,
                             labelStyle: TextStyle(
-                              color: isSelected ? Colors.white : Colors.black,
+                              color: isSelected
+                                  ? Colors.white
+                                  : theme.textTheme.bodyMedium?.color,
                               fontWeight: FontWeight.bold,
                             ),
                             shape: StadiumBorder(
                               side: BorderSide(
                                 color: isSelected
-                                    ? Color(0xFF4E38D4)
-                                    : Colors.grey.shade400,
+                                    ? const Color(0xFF4E38D4)
+                                    : theme.dividerColor,
                               ),
                             ),
                             onSelected: (selected) {
@@ -460,7 +466,7 @@ class _InventoryState extends State<Inventory> {
                           return item.getStatus() != "Expired";
                         }).toList();
 
-                        // Handle deep-link to specific supply once
+                        // Handle deep-link to specific supply once, after frame
                         if (!_deepLinkHandled &&
                             _highlightSupplyName != null &&
                             _highlightSupplyName!.isNotEmpty) {
@@ -474,29 +480,31 @@ class _InventoryState extends State<Inventory> {
                           }
                           if (target != null) {
                             _deepLinkHandled = true;
-                            // Check if this is a placeholder (0 stock, no expiry, and not expired)
-                            if (target.mainItem.stock == 0 &&
-                                target.mainItem.noExpiry &&
-                                target.getStatus() != "Expired") {
-                              // Show message for placeholder items
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      '${target.mainItem.name} has expired and is no longer available.'),
-                                  backgroundColor: Colors.orange,
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            } else {
-                              // Allow navigation for all other items, including expired ones
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => InventoryViewSupplyPage(
-                                      item: target!.mainItem),
-                                ),
-                              );
-                            }
+                            final t = target;
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              // Check if this is a placeholder (0 stock, no expiry, and not expired)
+                              if (t.mainItem.stock == 0 &&
+                                  t.mainItem.noExpiry &&
+                                  t.getStatus() != "Expired") {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        '${t.mainItem.name} has expired and is no longer available.'),
+                                    backgroundColor: Colors.orange,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        InventoryViewSupplyPage(
+                                            item: t.mainItem),
+                                  ),
+                                );
+                              }
+                            });
                           }
                         }
 

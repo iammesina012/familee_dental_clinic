@@ -10,22 +10,25 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     if (item.noExpiry == true) {
       return Container(
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 12),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Color(0xFFFDF4FC),
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             "No expiry date.",
             style: TextStyle(
               fontWeight: FontWeight.w500,
               fontSize: 15,
-              color: Colors.black54,
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
             ),
           ),
         ),
@@ -38,7 +41,6 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
       stream: FirebaseFirestore.instance
           .collection('supplies')
           .where('name', isEqualTo: item.name)
-          .where('brand', isEqualTo: item.brand)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -53,16 +55,17 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
             margin: const EdgeInsets.symmetric(vertical: 12),
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Color(0xFFFDF4FC),
+              color: scheme.surface,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 "No other expiry batches found.",
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 15,
-                  color: Colors.black54,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                 ),
               ),
             ),
@@ -86,9 +89,13 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
             noExpiry: data['noExpiry'] ?? false,
             archived: data['archived'] ?? false,
           );
-        })
-            // Exclude the item we are viewing, zero-stock batches, and expired batches
-            .where((batch) {
+        }).where((batch) {
+          // Keep only same category using normalized comparison
+          final batchCat = batch.category.trim().toLowerCase();
+          final currentCat = item.category.trim().toLowerCase();
+          if (batchCat != currentCat) return false;
+
+          // Exclude the item we are viewing, zero-stock batches, and expired batches
           if (batch.id == item.id || batch.stock == 0) return false;
 
           // Filter out expired batches
@@ -137,16 +144,17 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
             margin: const EdgeInsets.symmetric(vertical: 12),
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Color(0xFFFDF4FC),
+              color: scheme.surface,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 "No other expiry batches found.",
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 15,
-                  color: Colors.black54,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                 ),
               ),
             ),
@@ -160,8 +168,9 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFFDF4FC),
+                color: scheme.surface,
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
@@ -169,9 +178,10 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                     flex: 1,
                     child: Text(
                       "${batch.stock}",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
@@ -181,9 +191,10 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                     flex: 1,
                     child: Text(
                       batch.unit,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
@@ -193,9 +204,10 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       "₱${batch.cost.toStringAsFixed(2)}",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
@@ -228,17 +240,17 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       (batch.expiry ?? "").replaceAll('-', '/'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.arrow_forward_ios,
-                        size: 16, color: Colors.black54),
+                    icon: const Icon(Icons.arrow_forward_ios, size: 16),
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(

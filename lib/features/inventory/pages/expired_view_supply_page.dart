@@ -56,19 +56,23 @@ class ExpiredViewSupplyPage extends StatelessWidget {
       ExpiredViewSupplyController controller,
       InventoryItem updatedItem,
       String status) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Color(0xFFF9EFF2),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           "Expired Supply",
-          style: AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: theme.textTheme.titleLarge?.color),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
-        iconTheme: const IconThemeData(size: 30, color: Colors.black),
-        elevation: 5,
-        shadowColor: Colors.black54,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete, color: Colors.red),
@@ -88,20 +92,20 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                   const SizedBox(height: 18),
                   Text(
                     updatedItem.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 22,
-                      color: Colors.black,
-                    ),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                        color: theme.textTheme.bodyMedium?.color),
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
                     updatedItem.category,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
-                      color: Colors.black54,
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -119,9 +123,11 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                           : Container(
                               width: 130,
                               height: 130,
-                              color: Colors.grey[200],
-                              child: const Icon(Icons.image,
-                                  size: 40, color: Colors.grey),
+                              color: theme.dividerColor.withOpacity(0.15),
+                              child: Icon(Icons.image,
+                                  size: 40,
+                                  color:
+                                      theme.iconTheme.color?.withOpacity(0.6)),
                             ),
                     ),
                   ),
@@ -131,14 +137,18 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 18, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Color(0xFFFFCDD2), // Red background for expired
+                        color: theme.brightness == Brightness.dark
+                            ? const Color(0xFF5B2B2B)
+                            : const Color(0xFFFFCDD2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         "Expired",
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Color(0xFFFF4747), // Red text
+                          color: theme.brightness == Brightness.dark
+                              ? const Color(0xFFFF8A80)
+                              : const Color(0xFFFF4747),
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                         ),
@@ -153,8 +163,8 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Stock",
-                                style: TextStyle(
+                            Text("Stock",
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold, fontSize: 15)),
                             const SizedBox(height: 4),
                             StreamBuilder<int>(
@@ -167,7 +177,7 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                                 final total =
                                     stockSnap.data ?? updatedItem.stock;
                                 return Text("$total",
-                                    style: const TextStyle(
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.w500,
                                         fontSize: 15),
                                     textAlign: TextAlign.center);
@@ -181,12 +191,12 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Unit",
-                                style: TextStyle(
+                            Text("Unit",
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold, fontSize: 15)),
                             const SizedBox(height: 4),
                             Text(updatedItem.unit,
-                                style: const TextStyle(
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.w500, fontSize: 15),
                                 textAlign: TextAlign.center),
                           ],
@@ -197,12 +207,12 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Cost",
-                                style: TextStyle(
+                            Text("Cost",
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold, fontSize: 15)),
                             const SizedBox(height: 4),
                             Text("₱${updatedItem.cost.toStringAsFixed(2)}",
-                                style: const TextStyle(
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.w500, fontSize: 15),
                                 textAlign: TextAlign.center),
                           ],
@@ -218,8 +228,8 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Brand Name",
-                                style: TextStyle(
+                            Text("Brand Name",
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold, fontSize: 15)),
                             const SizedBox(height: 4),
                             LayoutBuilder(
@@ -245,10 +255,12 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                                     height: 20,
                                     child: Marquee(
                                       text: updatedItem.brand,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15,
-                                          color: Colors.black),
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 15,
+                                              color: theme
+                                                  .textTheme.bodyMedium?.color),
                                       scrollAxis: Axis.horizontal,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.center,
@@ -269,7 +281,7 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                                   // Text fits, use normal text
                                   return Text(
                                     updatedItem.brand,
-                                    style: const TextStyle(
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.w500,
                                         fontSize: 15),
                                     textAlign: TextAlign.center,
@@ -285,8 +297,8 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Expiry",
-                                style: TextStyle(
+                            Text("Expiry",
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold, fontSize: 15)),
                             const SizedBox(height: 4),
                             Text(
@@ -294,7 +306,7 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                                       updatedItem.expiry!.isNotEmpty)
                                   ? updatedItem.expiry!.replaceAll('-', '/')
                                   : "No expiry",
-                              style: const TextStyle(
+                              style: theme.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.w500, fontSize: 15),
                               textAlign: TextAlign.center,
                               overflow: TextOverflow.ellipsis,
@@ -308,8 +320,8 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text("Supplier",
-                                style: TextStyle(
+                            Text("Supplier",
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold, fontSize: 15)),
                             const SizedBox(height: 4),
                             LayoutBuilder(
@@ -335,10 +347,12 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                                     height: 20,
                                     child: Marquee(
                                       text: updatedItem.supplier,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15,
-                                          color: Colors.black),
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 15,
+                                              color: theme
+                                                  .textTheme.bodyMedium?.color),
                                       scrollAxis: Axis.horizontal,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.center,
@@ -359,7 +373,7 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                                   // Text fits, use normal text
                                   return Text(
                                     updatedItem.supplier,
-                                    style: const TextStyle(
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.w500,
                                         fontSize: 15),
                                     textAlign: TextAlign.center,
@@ -373,7 +387,8 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  Divider(thickness: 1.2, height: 36),
+                  Divider(
+                      thickness: 1.2, height: 36, color: theme.dividerColor),
                   // Other Expired Batches Section
                   if (!updatedItem.noExpiry &&
                       updatedItem.expiry != null &&
@@ -386,6 +401,7 @@ class ExpiredViewSupplyPage extends StatelessWidget {
                         style: AppFonts.sfProStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
+                          color: theme.textTheme.bodyMedium?.color,
                         ),
                       ),
                     ),
