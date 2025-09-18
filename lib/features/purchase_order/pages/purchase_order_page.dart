@@ -881,8 +881,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                   alignment: Alignment.centerLeft,
                   child: Container(
                     height: 6,
-                    width: po.totalCount > 0
-                        ? (180 * (po.receivedCount / po.totalCount))
+                    width: _supplierTotal(po) > 0
+                        ? (180 * (_supplierReceived(po) / _supplierTotal(po)))
                         : 0,
                     decoration: BoxDecoration(
                       color: const Color(0xFFB37BE6),
@@ -896,7 +896,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
               Row(
                 children: [
                   Text(
-                    '${po.receivedCount} of ${po.totalCount}',
+                    '${_supplierReceived(po)} of ${_supplierTotal(po)}',
                     style: AppFonts.sfProStyle(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodyMedium?.color,
@@ -979,6 +979,30 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
     // Return regular card for non-Open POs
     return cardContent;
+  }
+
+  // Supplier-based counts for PO list
+  int _supplierTotal(PurchaseOrder po) {
+    final Set<String> names = {};
+    for (final s in po.supplies) {
+      final name = (s['supplierName'] ?? s['supplier'] ?? '').toString();
+      names.add(name.trim().toLowerCase());
+    }
+    return names.length;
+  }
+
+  int _supplierReceived(PurchaseOrder po) {
+    final Map<String, bool> supplierAllReceived = {};
+    for (final s in po.supplies) {
+      final name = (s['supplierName'] ?? s['supplier'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final received = (s['status'] == 'Received');
+      supplierAllReceived[name] =
+          (supplierAllReceived[name] ?? true) && received;
+    }
+    return supplierAllReceived.values.where((v) => v).length;
   }
 
   void _editPO(PurchaseOrder po) async {

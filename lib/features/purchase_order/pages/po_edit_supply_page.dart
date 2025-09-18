@@ -161,35 +161,40 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
               ),
               SizedBox(height: 24),
 
-              // Supply Name (Read-only)
+              // Supply Name (disabled style, read-only)
               _buildFieldSection(
                 title: "Supply Name",
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: scheme.surface,
+                    color: theme.disabledColor.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                    border: Border.all(color: theme.disabledColor, width: 1),
                   ),
                   child: Text(
                     widget.supply['supplyName'] ?? 'Unknown Supply',
                     style: AppFonts.sfProStyle(
                       fontSize: 16,
-                      color: theme.textTheme.bodyMedium?.color,
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                     ),
                   ),
                 ),
               ),
               SizedBox(height: 16),
 
-              // Brand Name
+              // Brand Name (disabled)
               _buildFieldSection(
                 title: "Brand Name",
                 child: TextField(
                   controller: brandController,
+                  enabled: false,
+                  readOnly: true,
+                  enableInteractiveSelection: false,
                   style: AppFonts.sfProStyle(
-                      fontSize: 16, color: theme.textTheme.bodyMedium?.color),
+                    fontSize: 16,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Enter brand name',
                     hintStyle: AppFonts.sfProStyle(
@@ -203,7 +208,13 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
+                      borderSide: BorderSide(
+                          color: theme.dividerColor.withOpacity(0.3)),
+                    ),
+                    disabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide:
+                          BorderSide(color: theme.disabledColor, width: 1),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -215,7 +226,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                       horizontal: 16,
                     ),
                     filled: true,
-                    fillColor: scheme.surface,
+                    fillColor: theme.disabledColor.withOpacity(0.08),
                   ),
                 ),
               ),

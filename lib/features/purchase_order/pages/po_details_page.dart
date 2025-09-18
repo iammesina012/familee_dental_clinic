@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../data/purchase_order.dart';
 import '../controller/po_details_controller.dart';
 import '../controller/po_firebase_controller.dart';
@@ -16,11 +18,21 @@ class PODetailsPage extends StatefulWidget {
   State<PODetailsPage> createState() => _PODetailsPageState();
 }
 
+class _ReceiptDetails {
+  final String drNumber;
+  final String recipient;
+  final XFile? image;
+  _ReceiptDetails(
+      {required this.drNumber, required this.recipient, required this.image});
+}
+
 class _PODetailsPageState extends State<PODetailsPage> {
   late PurchaseOrder _purchaseOrder;
   final PODetailsController _controller = PODetailsController();
   final POFirebaseController _poFirebase = POFirebaseController();
   bool _isLoading = false;
+  final Map<String, int> _supplierPageIndex = {};
+  final Set<String> _expandedSuppliers = {};
 
   @override
   void initState() {
@@ -43,6 +55,17 @@ class _PODetailsPageState extends State<PODetailsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    // Compute per-supplier counts for header
+    final Map<String, bool> _supplierAllReceivedHeader = {};
+    for (final s in _purchaseOrder.supplies) {
+      final supplierName = _controller.getSupplierName(s);
+      final isReceived = _controller.isSupplyReceived(s);
+      _supplierAllReceivedHeader[supplierName] =
+          (_supplierAllReceivedHeader[supplierName] ?? true) && isReceived;
+    }
+    final int _uniqueSuppliersHeader = _supplierAllReceivedHeader.length;
+    final int _receivedSuppliersHeader =
+        _supplierAllReceivedHeader.values.where((v) => v).length;
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
@@ -59,8 +82,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
         backgroundColor: theme.appBarTheme.backgroundColor,
         toolbarHeight: 70,
         iconTheme: theme.appBarTheme.iconTheme,
-        elevation: 5,
-        shadowColor: theme.shadowColor,
+        elevation: theme.appBarTheme.elevation ?? 1,
+        shadowColor: theme.appBarTheme.shadowColor ??
+            theme.shadowColor.withOpacity(0.12),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
@@ -81,189 +105,67 @@ class _PODetailsPageState extends State<PODetailsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Purchase Name Section (Read-only)
+              // Moved Total Cost Section to top
               Container(
+                margin: EdgeInsets.only(bottom: 12),
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: scheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.shadowColor.withOpacity(0.08),
-                      blurRadius: 12,
-                      offset: Offset(0, 4),
-                      spreadRadius: 0,
-                    ),
-                  ],
+                  gradient: theme.brightness == Brightness.dark
+                      ? LinearGradient(
+                          colors: [
+                            Color(0xFF8B5A8B).withOpacity(0.25),
+                            Color(0xFF8B5A8B).withOpacity(0.15),
+                          ],
+                        )
+                      : LinearGradient(
+                          colors: [
+                            Color(0xFF8B5A8B).withOpacity(0.10),
+                            Color(0xFF8B5A8B).withOpacity(0.05),
+                          ],
+                        ),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: theme.dividerColor.withOpacity(0.2),
+                    color: theme.brightness == Brightness.dark
+                        ? Color(0xFF8B5A8B).withOpacity(0.45)
+                        : Color(0xFF8B5A8B).withOpacity(0.2),
                     width: 1,
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color:
-                                    theme.colorScheme.primary.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.shopping_cart,
-                                color: theme.colorScheme.primary,
-                                size: MediaQuery.of(context).size.width * 0.05,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                  maxWidth:
-                                      MediaQuery.of(context).size.width * 0.5),
-                              child: Text(
-                                _purchaseOrder.name,
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.textTheme.bodyMedium?.color,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        // Approve button positioned beside the purchase name
-                        Wrap(
-                          spacing: 8,
-                          alignment: WrapAlignment.end,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (_controller.canRejectPO(_purchaseOrder))
-                              Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.orange,
-                                      Colors.deepOrange,
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.orange.withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _confirmReject,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                  child: _isLoading
-                                      ? SizedBox(
-                                          height: 14,
-                                          width: 14,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    Colors.white),
-                                          ),
-                                        )
-                                      : Text(
-                                          'Reject',
-                                          style: AppFonts.sfProStyle(
-                                            fontSize: MediaQuery.of(context)
-                                                    .size
-                                                    .width *
-                                                0.035,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            if (_controller.canApprovePO(_purchaseOrder))
-                              Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Color(0xFF00D4AA),
-                                      Color(0xFF00B894),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Color(0xFF00D4AA).withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: ElevatedButton(
-                                  onPressed: (_isLoading ||
-                                          !_controller
-                                              .canApprovePO(_purchaseOrder))
-                                      ? null
-                                      : _approvePurchaseOrder,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                  child: _isLoading
-                                      ? SizedBox(
-                                          height: 14,
-                                          width: 14,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    Colors.white),
-                                          ),
-                                        )
-                                      : Text(
-                                          'Approve',
-                                          style: AppFonts.sfProStyle(
-                                            fontSize: MediaQuery.of(context)
-                                                    .size
-                                                    .width *
-                                                0.035,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.brightness == Brightness.dark
+                          ? Color(0xFF8B5A8B).withOpacity(0.25)
+                          : Color(0xFF8B5A8B).withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
                     ),
-                    const SizedBox(height: 8),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total Cost:',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: theme.brightness == Brightness.dark
+                            ? Colors.white
+                            : const Color(0xFF8B5A8B),
+                      ),
+                    ),
+                    Text(
+                      '₱${_controller.calculateTotalCost(_purchaseOrder).toStringAsFixed(2)}',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: theme.brightness == Brightness.dark
+                            ? Colors.white
+                            : const Color(0xFF8B5A8B),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
 
               // Supplies List Section
               Expanded(
@@ -278,20 +180,21 @@ class _PODetailsPageState extends State<PODetailsPage> {
                       ? _buildEmptyState()
                       : Column(
                           children: [
-                            // Header
+                            // Header (renamed to Supplier)
                             Container(
-                              margin: EdgeInsets.all(16),
-                              padding: EdgeInsets.all(20),
+                              margin: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                              padding: EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: theme.brightness == Brightness.dark
                                     ? const Color(0xFF1F1F23)
                                     : scheme.surface,
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(12),
                                 boxShadow: [
                                   BoxShadow(
                                     color: theme.shadowColor.withOpacity(0.08),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 2),
+                                    blurRadius: 6,
+                                    offset: Offset(0, 1),
                                     spreadRadius: 0,
                                   ),
                                 ],
@@ -307,24 +210,24 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   Row(
                                     children: [
                                       Container(
-                                        padding: EdgeInsets.all(8),
+                                        padding: EdgeInsets.all(6),
                                         decoration: BoxDecoration(
                                           color: theme.colorScheme.primary
                                               .withOpacity(0.12),
                                           borderRadius:
-                                              BorderRadius.circular(8),
+                                              BorderRadius.circular(6),
                                         ),
                                         child: Icon(
                                           Icons.inventory_2,
                                           color: theme.colorScheme.primary,
-                                          size: 20,
+                                          size: 18,
                                         ),
                                       ),
-                                      SizedBox(width: 12),
+                                      SizedBox(width: 8),
                                       Text(
-                                        "Supplies (${_purchaseOrder.supplies.length})",
+                                        "Suppliers (${_uniqueSuppliersHeader})",
                                         style: AppFonts.sfProStyle(
-                                          fontSize: 18,
+                                          fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                           color: theme.brightness ==
                                                   Brightness.dark
@@ -337,11 +240,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   ),
                                   Container(
                                     padding: EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
+                                        horizontal: 10, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: theme.colorScheme.primary
                                           .withOpacity(0.08),
-                                      borderRadius: BorderRadius.circular(16),
+                                      borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: theme.colorScheme.primary
                                             .withOpacity(0.25),
@@ -351,8 +254,8 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                         BoxShadow(
                                           color: theme.colorScheme.primary
                                               .withOpacity(0.1),
-                                          blurRadius: 4,
-                                          offset: Offset(0, 2),
+                                          blurRadius: 3,
+                                          offset: Offset(0, 1),
                                         ),
                                       ],
                                     ),
@@ -365,13 +268,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                   Brightness.dark
                                               ? Colors.white
                                               : theme.colorScheme.primary,
-                                          size: 14,
+                                          size: 12,
                                         ),
-                                        SizedBox(width: 4),
+                                        SizedBox(width: 3),
                                         Text(
-                                          '${_purchaseOrder.receivedCount}/${_purchaseOrder.supplies.length}',
+                                          '${_receivedSuppliersHeader}/${_uniqueSuppliersHeader}',
                                           style: AppFonts.sfProStyle(
-                                            fontSize: 12,
+                                            fontSize: 11,
                                             fontWeight: FontWeight.w600,
                                             color: theme.brightness ==
                                                     Brightness.dark
@@ -385,79 +288,513 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 ],
                               ),
                             ),
-                            // List
+                            // List grouped by Supplier with footer buttons rendered as the last item
                             Expanded(
-                              child: ListView.builder(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
-                                itemCount: _purchaseOrder.supplies.length,
-                                itemBuilder: (context, index) {
-                                  final supply = _purchaseOrder.supplies[index];
-                                  return _buildSupplyCard(supply, index);
-                                },
-                              ),
-                            ),
-                            // Total Cost Section
-                            Container(
-                              margin: EdgeInsets.all(16),
-                              padding: EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                gradient: theme.brightness == Brightness.dark
-                                    ? LinearGradient(
-                                        colors: [
-                                          Color(0xFF8B5A8B).withOpacity(0.25),
-                                          Color(0xFF8B5A8B).withOpacity(0.15),
-                                        ],
-                                      )
-                                    : LinearGradient(
-                                        colors: [
-                                          Color(0xFF8B5A8B).withOpacity(0.10),
-                                          Color(0xFF8B5A8B).withOpacity(0.05),
-                                        ],
+                              child: Builder(builder: (context) {
+                                // Group supplies by supplier name
+                                final Map<String, List<Map<String, dynamic>>>
+                                    bySupplier = {};
+                                for (final s in _purchaseOrder.supplies) {
+                                  final name = _controller.getSupplierName(s);
+                                  bySupplier.putIfAbsent(name, () => []).add(s);
+                                }
+                                final entries = bySupplier.entries.toList();
+
+                                // counts handled in app bar header; no per-list counts needed here
+
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  itemCount: entries.length + 1,
+                                  itemBuilder: (context, index) {
+                                    if (index == entries.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            0, 8, 0, 16),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            if (_controller
+                                                .canRejectPO(_purchaseOrder))
+                                              Container(
+                                                decoration: BoxDecoration(
+                                                  gradient:
+                                                      LinearGradient(colors: [
+                                                    Colors.orange,
+                                                    Colors.deepOrange,
+                                                  ]),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.orange
+                                                          .withOpacity(0.3),
+                                                      blurRadius: 6,
+                                                      offset: Offset(0, 3),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ElevatedButton(
+                                                  onPressed: _isLoading
+                                                      ? null
+                                                      : _confirmReject,
+                                                  style:
+                                                      ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    shadowColor:
+                                                        Colors.transparent,
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 8),
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                    ),
+                                                  ),
+                                                  child: _isLoading
+                                                      ? SizedBox(
+                                                          height: 14,
+                                                          width: 14,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            valueColor:
+                                                                AlwaysStoppedAnimation<
+                                                                        Color>(
+                                                                    Colors
+                                                                        .white),
+                                                          ),
+                                                        )
+                                                      : Text(
+                                                          'Reject',
+                                                          style: AppFonts
+                                                              .sfProStyle(
+                                                            fontSize: MediaQuery.of(
+                                                                        context)
+                                                                    .size
+                                                                    .width *
+                                                                0.032,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors.white,
+                                                          ),
+                                                        ),
+                                                ),
+                                              ),
+                                            if (_controller
+                                                .canApprovePO(_purchaseOrder))
+                                              const SizedBox(width: 8),
+                                            if (_controller
+                                                .canApprovePO(_purchaseOrder))
+                                              Container(
+                                                decoration: BoxDecoration(
+                                                  gradient:
+                                                      LinearGradient(colors: [
+                                                    Color(0xFF00D4AA),
+                                                    Color(0xFF00B894),
+                                                  ]),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Color(0xFF00D4AA)
+                                                          .withOpacity(0.3),
+                                                      blurRadius: 6,
+                                                      offset: Offset(0, 3),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ElevatedButton(
+                                                  onPressed: (_isLoading ||
+                                                          !_controller
+                                                              .canApprovePO(
+                                                                  _purchaseOrder))
+                                                      ? null
+                                                      : _approvePurchaseOrder,
+                                                  style:
+                                                      ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    shadowColor:
+                                                        Colors.transparent,
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 8),
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                    ),
+                                                  ),
+                                                  child: _isLoading
+                                                      ? SizedBox(
+                                                          height: 14,
+                                                          width: 14,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            valueColor:
+                                                                AlwaysStoppedAnimation<
+                                                                        Color>(
+                                                                    Colors
+                                                                        .white),
+                                                          ),
+                                                        )
+                                                      : Text(
+                                                          'Approve',
+                                                          style: AppFonts
+                                                              .sfProStyle(
+                                                            fontSize: MediaQuery.of(
+                                                                        context)
+                                                                    .size
+                                                                    .width *
+                                                                0.032,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors.white,
+                                                          ),
+                                                        ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+
+                                    final entry = entries[index];
+                                    final supplierName = entry.key;
+                                    final items = entry.value;
+
+                                    // Page index per supplier for indicators
+                                    _supplierPageIndex[supplierName] =
+                                        _supplierPageIndex[supplierName] ?? 0;
+                                    final currentIdx =
+                                        _supplierPageIndex[supplierName]!;
+                                    final bool allReceived = items.every(
+                                        (item) =>
+                                            _controller.isSupplyReceived(item));
+                                    final bool hasPending = items.any((item) =>
+                                        !_controller.isSupplyReceived(item));
+                                    final bool tappable = !_controller
+                                            .isPOClosed(_purchaseOrder) &&
+                                        hasPending;
+                                    final bool isExpanded = _expandedSuppliers
+                                        .contains(supplierName);
+                                    final pageController =
+                                        PageController(initialPage: currentIdx);
+
+                                    return GestureDetector(
+                                      onTap: tappable
+                                          ? () => _confirmMarkAllReceived(
+                                              supplierName, items)
+                                          : null,
+                                      child: Container(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 16),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).brightness ==
+                                                  Brightness.dark
+                                              ? const Color(0xFF1F1F23)
+                                              : Theme.of(context)
+                                                  .colorScheme
+                                                  .surface,
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: theme.dividerColor
+                                                .withOpacity(0.2),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  // Icon
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                            12),
+                                                    decoration: BoxDecoration(
+                                                      color: allReceived
+                                                          ? Colors.green
+                                                              .withOpacity(0.1)
+                                                          : Colors.orange
+                                                              .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.inventory_2,
+                                                      color: allReceived
+                                                          ? Colors.green
+                                                          : Colors.orange,
+                                                      size: 24,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          supplierName,
+                                                          style: AppFonts
+                                                              .sfProStyle(
+                                                            fontSize: 18,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.color,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                            height: 6),
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                  horizontal:
+                                                                      12,
+                                                                  vertical: 6),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            gradient:
+                                                                LinearGradient(
+                                                              colors:
+                                                                  allReceived
+                                                                      ? [
+                                                                          Colors
+                                                                              .green,
+                                                                          Colors
+                                                                              .green
+                                                                              .shade600
+                                                                        ]
+                                                                      : [
+                                                                          Colors
+                                                                              .orange,
+                                                                          Colors
+                                                                              .orange
+                                                                              .shade600
+                                                                        ],
+                                                            ),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        20),
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Icon(
+                                                                allReceived
+                                                                    ? Icons
+                                                                        .check_circle
+                                                                    : Icons
+                                                                        .schedule,
+                                                                size: 14,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                              const SizedBox(
+                                                                  width: 6),
+                                                              Text(
+                                                                allReceived
+                                                                    ? 'Received'
+                                                                    : 'Pending',
+                                                                style: AppFonts
+                                                                    .sfProStyle(
+                                                                  fontSize: 12,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  color: Colors
+                                                                      .white,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              // Expand/collapse toggle and content
+                                              // Move chevron up and align with text baseline
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 4.0),
+                                                child: Align(
+                                                  alignment: Alignment.topRight,
+                                                  child: IconButton(
+                                                    icon: Icon(
+                                                      _expandedSuppliers
+                                                              .contains(
+                                                                  supplierName)
+                                                          ? Icons.expand_less
+                                                          : Icons.expand_more,
+                                                      color: theme
+                                                          .iconTheme.color
+                                                          ?.withOpacity(0.8),
+                                                    ),
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        if (_expandedSuppliers
+                                                            .contains(
+                                                                supplierName)) {
+                                                          _expandedSuppliers
+                                                              .remove(
+                                                                  supplierName);
+                                                        } else {
+                                                          _expandedSuppliers
+                                                              .add(
+                                                                  supplierName);
+                                                        }
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                              if (_expandedSuppliers
+                                                  .contains(supplierName)) ...[
+                                                SizedBox(
+                                                  height: 240,
+                                                  child: PageView.builder(
+                                                    controller: pageController,
+                                                    onPageChanged: (i) {
+                                                      setState(() {
+                                                        _supplierPageIndex[
+                                                            supplierName] = i;
+                                                      });
+                                                    },
+                                                    itemCount: items.length,
+                                                    itemBuilder: (context, i) {
+                                                      return _buildSupplyDetailsOnly(
+                                                          items[i]);
+                                                    },
+                                                  ),
+                                                ),
+                                                // Removed top total cost (now only shown below the indicators)
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: List.generate(
+                                                      items.length, (i) {
+                                                    final active =
+                                                        _supplierPageIndex[
+                                                                supplierName] ==
+                                                            i;
+                                                    return Container(
+                                                      width: active ? 10 : 8,
+                                                      height: active ? 10 : 8,
+                                                      margin: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 3),
+                                                      decoration: BoxDecoration(
+                                                        shape: BoxShape.circle,
+                                                        color: active
+                                                            ? theme.colorScheme
+                                                                .primary
+                                                            : theme.dividerColor
+                                                                .withOpacity(
+                                                                    0.6),
+                                                      ),
+                                                    );
+                                                  }),
+                                                ),
+                                                const SizedBox(height: 14),
+                                                Container(
+                                                  margin: const EdgeInsets.only(
+                                                      top: 0),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    color: theme
+                                                        .colorScheme.primary
+                                                        .withOpacity(0.06),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10),
+                                                    border: Border.all(
+                                                      color: theme.dividerColor
+                                                          .withOpacity(0.2),
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      Text(
+                                                        'Total Cost',
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: theme.textTheme
+                                                              .bodySmall?.color
+                                                              ?.withOpacity(
+                                                                  0.8),
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '₱' +
+                                                            items
+                                                                .fold<double>(
+                                                                    0.0,
+                                                                    (sum, it) =>
+                                                                        sum +
+                                                                        _controller.calculateSupplySubtotal(
+                                                                            it))
+                                                                .toStringAsFixed(
+                                                                    2),
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: theme
+                                                              .textTheme
+                                                              .bodyMedium
+                                                              ?.color,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: theme.brightness == Brightness.dark
-                                      ? Color(0xFF8B5A8B).withOpacity(0.45)
-                                      : Color(0xFF8B5A8B).withOpacity(0.2),
-                                  width: 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: theme.brightness == Brightness.dark
-                                        ? Color(0xFF8B5A8B).withOpacity(0.25)
-                                        : Color(0xFF8B5A8B).withOpacity(0.1),
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Total Cost:',
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.brightness == Brightness.dark
-                                          ? Colors.white
-                                          : const Color(0xFF8B5A8B),
-                                    ),
-                                  ),
-                                  Text(
-                                    '₱${_controller.calculateTotalCost(_purchaseOrder).toStringAsFixed(2)}',
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.brightness == Brightness.dark
-                                          ? Colors.white
-                                          : const Color(0xFF8B5A8B),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                    );
+                                  },
+                                );
+                              }),
                             ),
                           ],
                         ),
@@ -534,210 +871,22 @@ class _PODetailsPageState extends State<PODetailsPage> {
     );
   }
 
-  Widget _buildSupplyCard(Map<String, dynamic> supply, int index) {
-    final isReceived = _controller.isSupplyReceived(supply);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF1F1F23)
-            : Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).shadowColor.withOpacity(0.08),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-            spreadRadius: 0,
-          ),
-        ],
-        border: Border.all(
-          color: Theme.of(context).dividerColor.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: _controller.isPOClosed(_purchaseOrder) || isReceived
-            ? null
-            : () => _confirmMarkReceived(supply, index),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with supply name and status
-              Row(
-                children: [
-                  // Supply icon
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isReceived
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      isReceived ? Icons.inventory_2 : Icons.pending_actions,
-                      color: isReceived ? Colors.green : Colors.orange,
-                      size: 24,
-                    ),
-                  ),
-                  SizedBox(width: 16),
-
-                  // Supply name
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _controller.getSupplyName(supply),
-                          style: AppFonts.sfProStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color:
-                                Theme.of(context).textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Container(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: isReceived
-                                  ? [Colors.green, Colors.green.shade600]
-                                  : [Colors.orange, Colors.orange.shade600],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    (isReceived ? Colors.green : Colors.orange)
-                                        .withOpacity(0.3),
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                isReceived
-                                    ? Icons.check_circle
-                                    : Icons.schedule,
-                                size: 14,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                isReceived ? 'Received' : 'Pending',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              SizedBox(height: 20),
-
-              // Supply details in a styled container
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF1F1F23)
-                      : Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: Theme.of(context).dividerColor.withOpacity(0.2)),
-                ),
-                child: Column(
-                  children: [
-                    _buildEnhancedDetailRow(
-                        'Brand',
-                        _controller.getBrandName(supply),
-                        Icons.branding_watermark),
-                    SizedBox(height: 12),
-                    _buildEnhancedDetailRow('Supplier',
-                        _controller.getSupplierName(supply), Icons.business),
-                    SizedBox(height: 12),
-                    _buildEnhancedDetailRow('Quantity',
-                        '${supply['quantity'] ?? 0}', Icons.inventory),
-                    SizedBox(height: 12),
-                    _buildEnhancedDetailRow(
-                        'Subtotal',
-                        '₱${_controller.calculateSupplySubtotal(supply).toStringAsFixed(2)}',
-                        Icons.attach_money),
-
-                    // Show expiry date(s)
-                    ...(() {
-                      final batches = supply['expiryBatches'] as List<dynamic>?;
-                      if (batches != null && batches.isNotEmpty) {
-                        return <Widget>[
-                          const SizedBox(height: 12),
-                          ...batches.map((b) {
-                            final String? date = _formatExpiry(b['expiryDate']);
-                            final int qty =
-                                int.tryParse('${b['quantity'] ?? 0}') ?? 0;
-                            if (date == null) return const SizedBox.shrink();
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: _buildEnhancedDetailRow('Expiry Date',
-                                  '$date  •  Qty: $qty', Icons.event),
-                            );
-                          }).toList(),
-                        ];
-                      }
-                      final single = _formatExpiry(supply['expiryDate']);
-                      if (single != null) {
-                        return <Widget>[
-                          const SizedBox(height: 12),
-                          _buildEnhancedDetailRow(
-                              'Expiry Date', single, Icons.event),
-                        ];
-                      }
-                      return <Widget>[];
-                    })(),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // _buildDetailRow was unused and removed
-
   Widget _buildEnhancedDetailRow(String label, String value, IconData icon) {
     return Row(
       children: [
         Container(
-          padding: EdgeInsets.all(8),
+          padding: EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: Color(0xFF00D4AA).withOpacity(0.12),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             icon,
-            size: 16,
+            size: 14,
             color: const Color(0xFF00D4AA),
           ),
         ),
-        SizedBox(width: 12),
+        SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -745,7 +894,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
               Text(
                 label,
                 style: AppFonts.sfProStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w500,
                   color: Theme.of(context)
                       .textTheme
@@ -754,11 +903,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                       ?.withOpacity(0.8),
                 ),
               ),
-              SizedBox(height: 2),
+              SizedBox(height: 1),
               Text(
                 value,
                 style: AppFonts.sfProStyle(
-                  fontSize: 14,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                   color: Theme.of(context).textTheme.bodyMedium?.color,
                 ),
@@ -767,6 +916,61 @@ class _PODetailsPageState extends State<PODetailsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  // Build details-only content so the PageView slides only details
+  Widget _buildSupplyDetailsOnly(Map<String, dynamic> supply) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Details content mirrors the inner block of _buildSupplyCard
+            _buildEnhancedDetailRow('Supply', _controller.getSupplyName(supply),
+                Icons.shopping_bag),
+            SizedBox(height: 8),
+            _buildEnhancedDetailRow('Brand', _controller.getBrandName(supply),
+                Icons.branding_watermark),
+            SizedBox(height: 8),
+            _buildEnhancedDetailRow(
+                'Quantity', '${supply['quantity'] ?? 0}', Icons.inventory),
+            SizedBox(height: 8),
+            _buildEnhancedDetailRow(
+                'Subtotal',
+                '₱${_controller.calculateSupplySubtotal(supply).toStringAsFixed(2)}',
+                Icons.attach_money),
+            ...(() {
+              final batches = supply['expiryBatches'] as List<dynamic>?;
+              if (batches != null && batches.isNotEmpty) {
+                return <Widget>[
+                  const SizedBox(height: 8),
+                  ...batches.map((b) {
+                    final String? date = _formatExpiry(b['expiryDate']);
+                    final int qty = int.tryParse('${b['quantity'] ?? 0}') ?? 0;
+                    if (date == null) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: _buildEnhancedDetailRow(
+                          'Expiry Date', '$date  •  Qty: $qty', Icons.event),
+                    );
+                  }).toList(),
+                ];
+              }
+              final single = _formatExpiry(supply['expiryDate']);
+              if (single != null) {
+                return <Widget>[
+                  const SizedBox(height: 8),
+                  _buildEnhancedDetailRow('Expiry Date', single, Icons.event),
+                ];
+              }
+              return <Widget>[];
+            })(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -781,422 +985,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
     // Accept YYYY-MM-DD or other separators and normalize to '/'
     return raw.replaceAll('-', '/');
   }
-
-  // Deprecated dialog (not used). Keeping implementation removed to avoid warnings.
-  /* void _showReceiveDialog(Map<String, dynamic> supply, int index) {
-    DateTime? selectedDate;
-    bool noExpiry = false;
-    final TextEditingController dateController = TextEditingController();
-
-    // Check if supply is already received and has expiry date
-    final isAlreadyReceived = supply['status'] == 'Received';
-    final existingExpiryDate = supply['expiryDate'];
-
-    // Initialize values based on existing data
-    if (isAlreadyReceived && existingExpiryDate != null) {
-      if (existingExpiryDate == 'No expiry') {
-        noExpiry = true;
-      } else {
-        // Parse existing date if it's in YYYY-MM-DD format
-        try {
-          final parts = existingExpiryDate.split('-');
-          if (parts.length == 3) {
-            selectedDate = DateTime(
-              int.parse(parts[0]), // year
-              int.parse(parts[1]), // month
-              int.parse(parts[2]), // day
-            );
-            dateController.text = existingExpiryDate;
-          }
-        } catch (e) {
-          // If parsing fails, just use the string as is
-          dateController.text = existingExpiryDate;
-        }
-      }
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              child: Container(
-                padding: EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white,
-                      Colors.grey[50]!,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: Offset(0, 10),
-                      spreadRadius: 0,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header with icon and title
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: isAlreadyReceived
-                              ? [Color(0xFF8B5A8B), Color(0xFF7B4A7B)]
-                              : [Color(0xFF00D4AA), Color(0xFF00B894)],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              isAlreadyReceived
-                                  ? Icons.edit
-                                  : Icons.check_circle_outline,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              isAlreadyReceived
-                                  ? 'Edit Expiry Date'
-                                  : 'Mark as Received',
-                              style: AppFonts.sfProStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(height: 24),
-
-                    // Supply name and status
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[300]!),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.inventory_2,
-                                color: isAlreadyReceived
-                                    ? Color(0xFF8B5A8B)
-                                    : Color(0xFF00D4AA),
-                                size: 20,
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  _controller.getSupplyName(supply),
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (isAlreadyReceived) ...[
-                            SizedBox(height: 8),
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: Colors.green.withOpacity(0.3)),
-                              ),
-                              child: Text(
-                                'Currently Received',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(height: 20),
-
-                    // Checkbox for no expiry
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[300]!),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 4,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              color: noExpiry
-                                  ? Color(0xFF00D4AA)
-                                  : Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Checkbox(
-                              value: noExpiry,
-                              onChanged: (value) {
-                                setDialogState(() {
-                                  noExpiry = value ?? false;
-                                  if (noExpiry) {
-                                    selectedDate = null;
-                                    dateController.clear();
-                                  }
-                                });
-                              },
-                              activeColor: Color(0xFF00D4AA),
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'No expiry date',
-                              style: AppFonts.sfProStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    if (!noExpiry) ...[
-                      SizedBox(height: 16),
-                      Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey[300]!),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.event,
-                                  color: Color(0xFF00D4AA),
-                                  size: 20,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Expiry Date:',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 12),
-                            TextField(
-                              controller: dateController,
-                              readOnly: true,
-                              decoration: InputDecoration(
-                                hintText: 'Select expiry date',
-                                hintStyle: AppFonts.sfProStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[400],
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey[50],
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide:
-                                      BorderSide(color: Colors.grey[300]!),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide:
-                                      BorderSide(color: Colors.grey[300]!),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                      color: Color(0xFF00D4AA), width: 2),
-                                ),
-                                suffixIcon: Container(
-                                  margin: EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF00D4AA),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: IconButton(
-                                    icon: Icon(Icons.calendar_today,
-                                        color: Colors.white, size: 20),
-                                    onPressed: () async {
-                                      final date = await showDatePicker(
-                                        context: context,
-                                        initialDate: DateTime.now(),
-                                        firstDate: DateTime.now(),
-                                        lastDate: DateTime.now()
-                                            .add(Duration(days: 365 * 10)),
-                                      );
-                                      if (date != null) {
-                                        setDialogState(() {
-                                          selectedDate = date;
-                                          dateController.text =
-                                              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    SizedBox(height: 24),
-
-                    // Action buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey[300]!),
-                            ),
-                            child: TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: Text(
-                                'Cancel',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: (noExpiry || selectedDate != null)
-                                    ? [Color(0xFF00D4AA), Color(0xFF00B894)]
-                                    : [Colors.grey[300]!, Colors.grey[400]!],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: (noExpiry || selectedDate != null)
-                                  ? [
-                                      BoxShadow(
-                                        color:
-                                            Color(0xFF00D4AA).withOpacity(0.3),
-                                        blurRadius: 8,
-                                        offset: Offset(0, 4),
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: ElevatedButton(
-                              onPressed: (noExpiry || selectedDate != null)
-                                  ? () => _markAsReceived(
-                                      supply, index, selectedDate, noExpiry)
-                                  : null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                padding: EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: Text(
-                                isAlreadyReceived ? 'Update' : 'Received',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  } */
 
   Future<void> _approvePurchaseOrder() async {
     if (!mounted) return;
@@ -1419,6 +1207,244 @@ class _PODetailsPageState extends State<PODetailsPage> {
         ),
       );
     }
+  }
+
+  Future<void> _confirmMarkAllReceived(
+      String supplierName, List<Map<String, dynamic>> items) async {
+    final pendingItems =
+        items.where((item) => !_controller.isSupplyReceived(item)).toList();
+    if (pendingItems.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Mark All as Received?',
+                style: AppFonts.sfProStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold)),
+            content: Text(
+                'This will mark all supplies from $supplierName as received.',
+                style: AppFonts.sfProStyle(fontSize: 14)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text('Cancel',
+                    style: AppFonts.sfProStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text('Mark All Received',
+                    style: AppFonts.sfProStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF00D4AA))),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirm) return;
+
+    // Secondary details dialog
+    final receiptDetails = await _showReceiptDetailsDialog(supplierName);
+    if (receiptDetails == null) return; // user tapped Back
+
+    setState(() => _isLoading = true);
+    try {
+      final updatedSupplies =
+          List<Map<String, dynamic>>.from(_purchaseOrder.supplies);
+      for (final item in pendingItems) {
+        final idx = updatedSupplies.indexOf(item);
+        updatedSupplies[idx] = {
+          ...item,
+          'status': 'Received',
+        };
+      }
+
+      final newReceivedCount =
+          updatedSupplies.where((s) => s['status'] == 'Received').length;
+      String newStatus = _purchaseOrder.status;
+      if (newReceivedCount == updatedSupplies.length) {
+        newStatus = 'Approval';
+      }
+
+      final updatedPO = PurchaseOrder(
+        id: _purchaseOrder.id,
+        code: _purchaseOrder.code,
+        name: _purchaseOrder.name,
+        createdAt: _purchaseOrder.createdAt,
+        status: newStatus,
+        supplies: updatedSupplies,
+        receivedCount: newReceivedCount,
+      );
+
+      await _poFirebase.updatePOInFirebase(updatedPO);
+
+      await PoActivityController().logPurchaseOrderReceived(
+        poCode: updatedPO.code,
+        poName: updatedPO.name,
+        supplies: pendingItems,
+      );
+
+      if (_purchaseOrder.status != 'Approval' && newStatus == 'Approval') {
+        try {
+          await NotificationsController()
+              .createPOWaitingApprovalNotification(updatedPO.code);
+        } catch (_) {}
+      }
+
+      setState(() {
+        _purchaseOrder = updatedPO;
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('All supplies from $supplierName marked as received!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating supplies'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Secondary dialog to capture receipt details with Back -> returns to previous dialog
+  Future<_ReceiptDetails?> _showReceiptDetailsDialog(
+      String supplierName) async {
+    final TextEditingController drController = TextEditingController();
+    final TextEditingController recipientController = TextEditingController();
+    XFile? pickedImage;
+    final ImagePicker picker = ImagePicker();
+
+    final result = await showDialog<_ReceiptDetails>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setLocal) {
+          return AlertDialog(
+            title: Text('Receive from $supplierName',
+                style: AppFonts.sfProStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold)),
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 2, vertical: 12),
+            content: SingleChildScrollView(
+                child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.98),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Delivery Receipt No.',
+                      style: AppFonts.sfProStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: drController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter DR number',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Recipient Name',
+                      style: AppFonts.sfProStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: recipientController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter recipient name',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Attach Receipt',
+                      style: AppFonts.sfProStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  if (pickedImage == null)
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final img = await picker.pickImage(
+                            source: ImageSource.gallery, imageQuality: 85);
+                        if (img != null) setLocal(() => pickedImage = img);
+                      },
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('Pick Image'),
+                    )
+                  else
+                    Stack(
+                      children: [
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.9,
+                          height: 180,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.file(
+                              File(pickedImage!.path),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: InkWell(
+                            onTap: () => setLocal(() => pickedImage = null),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.all(4),
+                              child: const Icon(Icons.close,
+                                  color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            )),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                child: Text('Back',
+                    style: AppFonts.sfProStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(_ReceiptDetails(
+                    drNumber: drController.text.trim(),
+                    recipient: recipientController.text.trim(),
+                    image: pickedImage,
+                  ));
+                },
+                child: Text('Save',
+                    style: AppFonts.sfProStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF00D4AA))),
+              ),
+            ],
+          );
+        });
+      },
+    );
+    return result;
   }
 
   void _showClosedAlert() {
