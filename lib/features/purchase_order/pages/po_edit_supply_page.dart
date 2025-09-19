@@ -183,17 +183,17 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
               ),
               SizedBox(height: 16),
 
-              // Brand Name (disabled)
+              // Brand Name (enabled again)
               _buildFieldSection(
                 title: "Brand Name",
                 child: TextField(
                   controller: brandController,
-                  enabled: false,
-                  readOnly: true,
-                  enableInteractiveSelection: false,
+                  enabled: true,
+                  readOnly: false,
+                  enableInteractiveSelection: true,
                   style: AppFonts.sfProStyle(
                     fontSize: 16,
-                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                    color: theme.textTheme.bodyMedium?.color,
                   ),
                   decoration: InputDecoration(
                     hintText: 'Enter brand name',
@@ -208,13 +208,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                          color: theme.dividerColor.withOpacity(0.3)),
-                    ),
-                    disabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide:
-                          BorderSide(color: theme.disabledColor, width: 1),
+                      borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -226,7 +220,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                       horizontal: 16,
                     ),
                     filled: true,
-                    fillColor: theme.disabledColor.withOpacity(0.08),
+                    fillColor: scheme.surface,
                   ),
                 ),
               ),

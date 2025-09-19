@@ -170,7 +170,7 @@ class PODetailsController {
       await _firestore
           .collection('supplies')
           .where('name', isEqualTo: supplyName)
-          .where('brand', isEqualTo: brandName)
+          // .where('brand', isEqualTo: brandName)
           .get();
 
       // Restock helper to merge one batch into inventory
@@ -199,7 +199,7 @@ class PODetailsController {
         final freshSnapshot = await _firestore
             .collection('supplies')
             .where('name', isEqualTo: supplyName)
-            .where('brand', isEqualTo: brandName)
+            // .where('brand', isEqualTo: brandName)
             .get();
         final freshDocs = freshSnapshot.docs;
 

@@ -134,11 +134,25 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   List<PurchaseOrder> _applySearchFilter(List<PurchaseOrder> baseList) {
     final query = searchController.text.trim().toLowerCase();
     if (query.isEmpty) return baseList;
-    return baseList
-        .where((po) =>
-            po.code.toLowerCase().contains(query) ||
-            po.name.toLowerCase().contains(query))
-        .toList();
+    return baseList.where((po) {
+      final bool matchesBasic = po.code.toLowerCase().contains(query) ||
+          po.name.toLowerCase().contains(query);
+      if (matchesBasic) return true;
+      try {
+        // Also search delivery receipt numbers saved on supplies
+        final supplies = po.supplies as List<dynamic>?;
+        if (supplies == null) return false;
+        for (final s in supplies) {
+          if (s is Map) {
+            final dr = (s['receiptDrNo'] ?? s['drNo'] ?? s['dr_number'])
+                ?.toString()
+                .toLowerCase();
+            if (dr != null && dr.contains(query)) return true;
+          }
+        }
+      } catch (_) {}
+      return false;
+    }).toList();
   }
 
   // Add listener for search functionality

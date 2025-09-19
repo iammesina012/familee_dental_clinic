@@ -85,7 +85,7 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
             unit: data['unit'] ?? '',
             supplier: data['supplier'] ?? '',
             brand: data['brand'] ?? '',
-            expiry: data['expiry'],
+            expiry: data['expiry'] ?? 'No expiry',
             noExpiry: data['noExpiry'] ?? false,
             archived: data['archived'] ?? false,
           );

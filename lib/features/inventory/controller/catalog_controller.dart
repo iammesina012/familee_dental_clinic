@@ -33,10 +33,10 @@ class CatalogController {
           .where((it) => it.archived == archived)
           .toList();
 
-      // Group by product key (name + brand, case-insensitive)
+      // Group by product key: NAME ONLY (normalized)
       final Map<String, List<InventoryItem>> byProduct = {};
       for (final it in items) {
-        final key = '${it.name.toLowerCase()}_${it.brand.toLowerCase()}';
+        final key = (it.name).trim().toLowerCase();
         byProduct.putIfAbsent(key, () => []).add(it);
       }
 
@@ -47,21 +47,29 @@ class CatalogController {
       for (final entry in byProduct.entries) {
         final variants = entry.value;
 
-        // Prefer a non-expired, in-stock item as the main representative when available
-        InventoryItem? preferred;
-        for (final v in variants) {
-          final isExpired = _isExpired(v, today);
-          if (!isExpired && v.stock > 0) {
-            preferred = v;
-            break;
-          }
+        // Choose a stable representative to avoid the card "switching" on restocks.
+        // 1) Prefer non-expired and in-stock variants
+        // 2) Else prefer any non-expired
+        // 3) Else any
+        // Within the chosen set, pick the one with the smallest doc id for stability.
+        List<InventoryItem> candidates = variants
+            .where((v) => !_isExpired(v, today) && v.stock > 0)
+            .toList();
+        if (candidates.isEmpty) {
+          candidates = variants.where((v) => !_isExpired(v, today)).toList();
         }
-
-        // If none found, fall back to any non-expired, or else the first
-        preferred ??= variants.firstWhere(
-          (v) => !_isExpired(v, today),
-          orElse: () => variants.first,
-        );
+        if (candidates.isEmpty) {
+          candidates = List<InventoryItem>.from(variants);
+        }
+        // Prefer items that have an image to avoid blank thumbnails,
+        // then use a stable tiebreaker by doc id.
+        bool hasImage(InventoryItem x) => x.imageUrl.trim().isNotEmpty;
+        candidates.sort((a, b) {
+          final imgDiff = (hasImage(b) ? 1 : 0) - (hasImage(a) ? 1 : 0);
+          if (imgDiff != 0) return imgDiff;
+          return a.id.compareTo(b.id);
+        });
+        final InventoryItem preferred = candidates.first;
 
         final totalStock = variants.fold(0, (sum, it) => sum + it.stock);
         final preferredId = preferred.id;

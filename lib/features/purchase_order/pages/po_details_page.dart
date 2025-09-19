@@ -51,6 +51,42 @@ class _PODetailsPageState extends State<PODetailsPage> {
     }
   }
 
+  DateTime? _tryParseDate(dynamic raw) {
+    try {
+      if (raw == null) return null;
+      if (raw is DateTime) return raw;
+      if (raw is int) {
+        // epoch millis
+        return DateTime.fromMillisecondsSinceEpoch(raw);
+      }
+      if (raw is String) {
+        return DateTime.tryParse(raw);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatYmd(DateTime d) {
+    const months = [
+      'Jan.',
+      'Feb.',
+      'Mar.',
+      'Apr.',
+      'May.',
+      'Jun.',
+      'Jul.',
+      'Aug.',
+      'Sep.',
+      'Oct.',
+      'Nov.',
+      'Dec.'
+    ];
+    final month = months[d.month - 1];
+    return '$month ${d.day}, ${d.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -209,21 +245,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 children: [
                                   Row(
                                     children: [
-                                      Container(
-                                        padding: EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.primary
-                                              .withOpacity(0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                        ),
-                                        child: Icon(
-                                          Icons.inventory_2,
-                                          color: theme.colorScheme.primary,
-                                          size: 18,
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
                                       Text(
                                         "Suppliers (${_uniqueSuppliersHeader})",
                                         style: AppFonts.sfProStyle(
@@ -259,30 +280,16 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                         ),
                                       ],
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.check_circle_outline,
-                                          color: theme.brightness ==
-                                                  Brightness.dark
-                                              ? Colors.white
-                                              : theme.colorScheme.primary,
-                                          size: 12,
-                                        ),
-                                        SizedBox(width: 3),
-                                        Text(
-                                          '${_receivedSuppliersHeader}/${_uniqueSuppliersHeader}',
-                                          style: AppFonts.sfProStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: theme.brightness ==
-                                                    Brightness.dark
+                                    child: Text(
+                                      '${_receivedSuppliersHeader}/${_uniqueSuppliersHeader}',
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color:
+                                            theme.brightness == Brightness.dark
                                                 ? Colors.white
                                                 : theme.colorScheme.primary,
-                                          ),
-                                        ),
-                                      ],
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -492,6 +499,17 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                         .firstWhere(
                                             (v) => v != null && v.isNotEmpty,
                                             orElse: () => null);
+                                    final String? supplierReceivedDate = (() {
+                                      dynamic raw = items
+                                          .map((m) =>
+                                              m['receiptDate'] ??
+                                              m['receivedAt'] ??
+                                              m['received_date'])
+                                          .firstWhere((v) => v != null,
+                                              orElse: () => null);
+                                      final d = _tryParseDate(raw);
+                                      return d == null ? null : _formatYmd(d);
+                                    })();
 
                                     // Page index per supplier for indicators
                                     _supplierPageIndex[supplierName] =
@@ -542,30 +560,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                             children: [
                                               Row(
                                                 children: [
-                                                  // Icon
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                            12),
-                                                    decoration: BoxDecoration(
-                                                      color: allReceived
-                                                          ? Colors.green
-                                                              .withOpacity(0.1)
-                                                          : Colors.orange
-                                                              .withOpacity(0.1),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12),
-                                                    ),
-                                                    child: Icon(
-                                                      Icons.inventory_2,
-                                                      color: allReceived
-                                                          ? Colors.green
-                                                          : Colors.orange,
-                                                      size: 24,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 12),
                                                   Expanded(
                                                     child: Column(
                                                       crossAxisAlignment:
@@ -573,9 +567,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                               .start,
                                                       children: [
                                                         Text(
-                                                          supplierDrNo == null
-                                                              ? supplierName
-                                                              : '$supplierName (${supplierDrNo})',
+                                                          (allReceived &&
+                                                                  supplierDrNo !=
+                                                                      null)
+                                                              ? '$supplierName (${supplierDrNo})'
+                                                              : supplierName,
                                                           style: AppFonts
                                                               .sfProStyle(
                                                             fontSize: 18,
@@ -657,47 +653,29 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                                 ],
                                                               ),
                                                             ),
-                                                            if (supplierRecipient !=
-                                                                null)
-                                                              Text(
-                                                                'Recipient: ${supplierRecipient}',
-                                                                style: AppFonts.sfProStyle(
-                                                                    fontSize:
-                                                                        12,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w500),
-                                                              ),
-                                                            if (supplierImagePath !=
-                                                                null)
-                                                              TextButton.icon(
-                                                                style: TextButton.styleFrom(
-                                                                    padding:
-                                                                        EdgeInsets
-                                                                            .zero,
-                                                                    minimumSize:
-                                                                        const Size(
-                                                                            0,
-                                                                            0),
-                                                                    tapTargetSize:
-                                                                        MaterialTapTargetSize
-                                                                            .shrinkWrap),
-                                                                onPressed: () =>
-                                                                    _showAttachmentImage(
-                                                                        supplierImagePath!),
-                                                                icon: const Icon(
-                                                                    Icons.image,
-                                                                    size: 16),
-                                                                label: Text(
-                                                                    'See attachment',
-                                                                    style: AppFonts.sfProStyle(
-                                                                        fontSize:
-                                                                            12,
-                                                                        fontWeight:
-                                                                            FontWeight.w600)),
-                                                              ),
                                                           ],
                                                         ),
+                                                        SizedBox(height: 4),
+                                                        if (allReceived &&
+                                                            supplierReceivedDate !=
+                                                                null)
+                                                          Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                                    top: 6),
+                                                            child: Text(
+                                                              'Date Received: ' +
+                                                                  supplierReceivedDate,
+                                                              style: AppFonts
+                                                                  .sfProStyle(
+                                                                fontSize: 13,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                              ),
+                                                            ),
+                                                          ),
                                                       ],
                                                     ),
                                                   ),
@@ -784,6 +762,67 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                     );
                                                   }),
                                                 ),
+                                                if (allReceived &&
+                                                    (supplierRecipient !=
+                                                            null ||
+                                                        supplierImagePath !=
+                                                            null))
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 8),
+                                                    child: Row(
+                                                      children: [
+                                                        if (allReceived &&
+                                                            supplierRecipient !=
+                                                                null)
+                                                          Text(
+                                                            'Recipient: ${supplierRecipient}',
+                                                            style: AppFonts
+                                                                .sfProStyle(
+                                                              fontSize: 12,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500,
+                                                            ),
+                                                          ),
+                                                        const Spacer(),
+                                                        if (allReceived &&
+                                                            supplierImagePath !=
+                                                                null)
+                                                          TextButton.icon(
+                                                            style: TextButton
+                                                                .styleFrom(
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                              minimumSize:
+                                                                  const Size(
+                                                                      0, 0),
+                                                              tapTargetSize:
+                                                                  MaterialTapTargetSize
+                                                                      .shrinkWrap,
+                                                            ),
+                                                            onPressed: () =>
+                                                                _showAttachmentImage(
+                                                                    supplierImagePath!),
+                                                            icon: const Icon(
+                                                                Icons.image,
+                                                                size: 16),
+                                                            label: Text(
+                                                              'See attachment',
+                                                              style: AppFonts
+                                                                  .sfProStyle(
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 const SizedBox(height: 14),
                                                 Container(
                                                   margin: const EdgeInsets.only(
@@ -1316,6 +1355,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
     try {
       final updatedSupplies =
           List<Map<String, dynamic>>.from(_purchaseOrder.supplies);
+      final String nowIso = DateTime.now().toIso8601String();
       for (final item in pendingItems) {
         final idx = updatedSupplies.indexOf(item);
         updatedSupplies[idx] = {
@@ -1324,6 +1364,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
           'receiptDrNo': receiptDetails.drNumber,
           'receiptRecipient': receiptDetails.recipient,
           'receiptImagePath': receiptDetails.image?.path,
+          'receiptDate': nowIso,
         };
       }
 
@@ -1386,8 +1427,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
       String supplierName) async {
     final TextEditingController drController = TextEditingController();
     final TextEditingController recipientController = TextEditingController();
+    String? drError;
+    String? recipientError;
+    String? imageError;
     XFile? pickedImage;
     final ImagePicker picker = ImagePicker();
+    final RegExp drPattern = RegExp(r'^[A-Za-z0-9]+$');
+    final RegExp recipientPattern = RegExp(r'^[A-Za-z\s]+$');
 
     final result = await showDialog<_ReceiptDetails>(
       context: context,
@@ -1409,9 +1455,59 @@ class _PODetailsPageState extends State<PODetailsPage> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Received from $supplierName',
-                          style: AppFonts.sfProStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('Received from $supplierName',
+                                style: AppFonts.sfProStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold)),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            splashRadius: 20,
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                    context: context,
+                                    barrierDismissible: false,
+                                    builder: (context) => AlertDialog(
+                                      title: Text('Discard changes',
+                                          style: AppFonts.sfProStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold)),
+                                      content: Text(
+                                          'Go back without saving these receipt details?',
+                                          style: AppFonts.sfProStyle(
+                                              fontSize: 14)),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(false),
+                                          child: Text('Cancel',
+                                              style: AppFonts.sfProStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(true),
+                                          child: Text('Discard',
+                                              style: AppFonts.sfProStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color:
+                                                      const Color(0xFFEE5A52))),
+                                        ),
+                                      ],
+                                    ),
+                                  ) ??
+                                  false;
+                              if (confirm) {
+                                Navigator.of(context).pop(null);
+                              }
+                            },
+                          )
+                        ],
+                      ),
                       const SizedBox(height: 12),
                       SingleChildScrollView(
                         child: Column(
@@ -1425,10 +1521,12 @@ class _PODetailsPageState extends State<PODetailsPage> {
                             TextField(
                               controller: drController,
                               decoration: InputDecoration(
-                                hintText: 'Enter DR number (ex. A-12345)',
+                                hintText: 'Enter DR number',
                                 border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10)),
+                                errorText: drError,
                               ),
+                              onChanged: (_) => setLocal(() => drError = null),
                             ),
                             const SizedBox(height: 12),
                             Text('Recipient Name',
@@ -1441,7 +1539,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 hintText: 'Enter recipient name',
                                 border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10)),
+                                errorText: recipientError,
                               ),
+                              onChanged: (_) =>
+                                  setLocal(() => recipientError = null),
                             ),
                             const SizedBox(height: 12),
                             Text('Attach Receipt',
@@ -1455,7 +1556,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                       source: ImageSource.gallery,
                                       imageQuality: 85);
                                   if (img != null)
-                                    setLocal(() => pickedImage = img);
+                                    setLocal(() {
+                                      pickedImage = img;
+                                      imageError = null;
+                                    });
                                 },
                                 icon: const Icon(Icons.photo_library_outlined),
                                 label: const Text('Pick Image'),
@@ -1475,11 +1579,12 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                     ),
                                   ),
                                   Positioned(
-                                    top: 8,
-                                    right: 8,
+                                    top: 12,
+                                    right: 12,
                                     child: InkWell(
-                                      onTap: () =>
-                                          setLocal(() => pickedImage = null),
+                                      onTap: () => setLocal(() {
+                                        pickedImage = null;
+                                      }),
                                       child: Container(
                                         decoration: BoxDecoration(
                                           color: Colors.black54,
@@ -1494,6 +1599,16 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   ),
                                 ],
                               ),
+                            const SizedBox(height: 6),
+                            if (imageError != null)
+                              Text(
+                                imageError!,
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -1502,17 +1617,112 @@ class _PODetailsPageState extends State<PODetailsPage> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           TextButton(
-                            onPressed: () => Navigator.of(context).pop(null),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                    context: context,
+                                    barrierDismissible: false,
+                                    builder: (context) => AlertDialog(
+                                      title: Text('Discard changes',
+                                          style: AppFonts.sfProStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold)),
+                                      content: Text(
+                                          'Go back without saving these receipt details?',
+                                          style: AppFonts.sfProStyle(
+                                              fontSize: 14)),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(false),
+                                          child: Text('Cancel',
+                                              style: AppFonts.sfProStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(true),
+                                          child: Text('Discard',
+                                              style: AppFonts.sfProStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color:
+                                                      const Color(0xFFEE5A52))),
+                                        ),
+                                      ],
+                                    ),
+                                  ) ??
+                                  false;
+                              if (confirm) {
+                                Navigator.of(context).pop(null);
+                              }
+                            },
                             child: Text('Back',
                                 style: AppFonts.sfProStyle(
                                     fontSize: 14, fontWeight: FontWeight.w600)),
                           ),
                           const SizedBox(width: 8),
                           TextButton(
-                            onPressed: () {
+                            onPressed: () async {
+                              final dr = drController.text.trim();
+                              final rec = recipientController.text.trim();
+                              bool ok = true;
+                              if (dr.isEmpty || !drPattern.hasMatch(dr)) {
+                                drError = 'Please enter alphanumeric only';
+                                ok = false;
+                              }
+                              if (rec.isEmpty ||
+                                  !recipientPattern.hasMatch(rec)) {
+                                recipientError = 'Please enter letters only';
+                                ok = false;
+                              }
+                              if (pickedImage == null) {
+                                imageError = 'Please attach a receipt image';
+                                ok = false;
+                              }
+                              if (!ok) {
+                                setLocal(() {});
+                                return;
+                              }
+                              final confirm = await showDialog<bool>(
+                                    context: context,
+                                    barrierDismissible: false,
+                                    builder: (context) => AlertDialog(
+                                      title: Text('Save receipt details',
+                                          style: AppFonts.sfProStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold)),
+                                      content: Text(
+                                          'Do you want to save these receipt details?',
+                                          style: AppFonts.sfProStyle(
+                                              fontSize: 14)),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(false),
+                                          child: Text('Cancel',
+                                              style: AppFonts.sfProStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(true),
+                                          child: Text('Save',
+                                              style: AppFonts.sfProStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color:
+                                                      const Color(0xFF00D4AA))),
+                                        ),
+                                      ],
+                                    ),
+                                  ) ??
+                                  false;
+                              if (!confirm) return;
                               Navigator.of(context).pop(_ReceiptDetails(
-                                drNumber: drController.text.trim(),
-                                recipient: recipientController.text.trim(),
+                                drNumber: dr,
+                                recipient: rec,
                                 image: pickedImage,
                               ));
                             },
@@ -1541,10 +1751,38 @@ class _PODetailsPageState extends State<PODetailsPage> {
       context: context,
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.all(16),
-        child: InteractiveViewer(
-          child: AspectRatio(
-            aspectRatio: 3 / 4,
-            child: Image.file(File(path), fit: BoxFit.contain),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.9,
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: InteractiveViewer(
+                  child: AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: Image.file(File(path), fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 14,
+                right: 14,
+                child: Material(
+                  color: Colors.black54,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.of(context).pop(),
+                    child: const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Icon(Icons.close, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

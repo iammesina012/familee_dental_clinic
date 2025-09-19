@@ -51,7 +51,7 @@ class EditSupplyController {
     expiryController.text = item.expiry ?? '';
     stock = item.stock;
     selectedCategory = item.category;
-    selectedUnit = item.unit;
+    selectedUnit = _normalizeUnit(item.unit);
     noExpiry = item.noExpiry;
     imageUrl = item.imageUrl;
     if (item.expiry != null && item.expiry!.isNotEmpty) {
@@ -72,6 +72,30 @@ class EditSupplyController {
     originalNoExpiry = item.noExpiry;
     originalBrand = item.brand == "N/A" ? "" : item.brand;
     originalSupplier = item.supplier == "N/A" ? "" : item.supplier;
+  }
+
+  String? _normalizeUnit(String? raw) {
+    if (raw == null) return null;
+    final s = raw.trim().toLowerCase();
+    if (s.isEmpty) return null;
+    // Map common variants to our canonical set used in dropdown: Box, Piece, Pack
+    if (s == 'box' || s == 'boxes' || s == 'bx') return 'Box';
+    if (s == 'pack' || s == 'packs' || s == 'pk') return 'Pack';
+    if (s == 'piece' ||
+        s == 'pieces' ||
+        s == 'pc' ||
+        s == 'pcs' ||
+        s == 'unit' ||
+        s == 'units') {
+      return 'Piece';
+    }
+    // If it already matches one of the allowed labels ignoring case
+    final allowed = ['Box', 'Piece', 'Pack'];
+    for (final a in allowed) {
+      if (a.toLowerCase() == s) return a;
+    }
+    // Fallback to Piece to avoid dropdown mismatch
+    return 'Piece';
   }
 
   void dispose() {
