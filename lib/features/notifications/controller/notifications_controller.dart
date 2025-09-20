@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppNotification {
   final String id;
@@ -50,6 +51,9 @@ class AppNotification {
 
 class NotificationsController {
   final FirebaseFirestore firestore;
+  // Local preferences keys
+  static const String _kInventoryPref = 'settings.notify_inventory';
+  static const String _kApprovalPref = 'settings.notify_approval';
 
   NotificationsController({FirebaseFirestore? firestore})
       : firestore = firestore ?? FirebaseFirestore.instance;
@@ -84,6 +88,23 @@ class NotificationsController {
     String? supplyName,
     String? poCode,
   }) async {
+    // Before creating, enforce user preferences
+    final typeLower = type.toLowerCase();
+    final prefs = await SharedPreferences.getInstance();
+    final invEnabled = prefs.getBool(_kInventoryPref) ?? true;
+    final apprEnabled = prefs.getBool(_kApprovalPref) ?? true;
+
+    final isInventoryType = typeLower == 'low_stock' ||
+        typeLower == 'out_of_stock' ||
+        typeLower == 'in_stock' ||
+        typeLower == 'expired' ||
+        typeLower == 'expiring';
+    final isApprovalType = typeLower.startsWith('po_');
+
+    if ((isInventoryType && !invEnabled) || (isApprovalType && !apprEnabled)) {
+      return; // Respect preferences: do not create notification
+    }
+
     final docRef = firestore.collection('notifications').doc();
     await docRef.set({
       'title': title,

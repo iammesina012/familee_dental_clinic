@@ -31,21 +31,25 @@ class SettingsController {
 
   // ----- Notifications -----
   Future<bool> getInventoryAlertsEnabled() async {
-    // Placeholder implementation – integrate with backend later
-    return true;
+    final prefs = await SharedPreferences.getInstance();
+    // Enabled by default
+    return prefs.getBool('settings.notify_inventory') ?? true;
   }
 
   Future<void> setInventoryAlertsEnabled(bool enabled) async {
-    // Placeholder implementation – integrate with backend later
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('settings.notify_inventory', enabled);
   }
 
   Future<bool> getApprovalAlertsEnabled() async {
-    // Placeholder implementation – integrate with backend later
-    return true;
+    final prefs = await SharedPreferences.getInstance();
+    // Enabled by default
+    return prefs.getBool('settings.notify_approval') ?? true;
   }
 
   Future<void> setApprovalAlertsEnabled(bool enabled) async {
-    // Placeholder implementation – integrate with backend later
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('settings.notify_approval', enabled);
   }
 
   // ----- System: Backup & Restore -----

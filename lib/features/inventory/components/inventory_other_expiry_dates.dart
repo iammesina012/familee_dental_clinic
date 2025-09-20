@@ -98,23 +98,28 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
           // Exclude the item we are viewing, zero-stock batches, and expired batches
           if (batch.id == item.id || batch.stock == 0) return false;
 
-          // Filter out expired batches
-          if (!batch.noExpiry &&
-              batch.expiry != null &&
-              batch.expiry!.isNotEmpty) {
-            final today = DateTime.now();
-            final todayDateOnly = DateTime(today.year, today.month, today.day);
+          // Filter out expired batches ONLY for non-archived view.
+          // When viewing an archived item, include expired batches so they are visible.
+          final bool viewingArchived = item.archived;
+          if (!viewingArchived) {
+            if (!batch.noExpiry &&
+                batch.expiry != null &&
+                batch.expiry!.isNotEmpty) {
+              final today = DateTime.now();
+              final todayDateOnly =
+                  DateTime(today.year, today.month, today.day);
 
-            final expiryDate = DateTime.tryParse(batch.expiry!) ??
-                DateTime.tryParse(batch.expiry!.replaceAll('/', '-'));
+              final expiryDate = DateTime.tryParse(batch.expiry!) ??
+                  DateTime.tryParse(batch.expiry!.replaceAll('/', '-'));
 
-            if (expiryDate != null) {
-              final expiryDateOnly =
-                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
-              // Exclude if expired (on or before today)
-              if (expiryDateOnly.isBefore(todayDateOnly) ||
-                  expiryDateOnly.isAtSameMomentAs(todayDateOnly)) {
-                return false;
+              if (expiryDate != null) {
+                final expiryDateOnly =
+                    DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+                // Exclude if expired (on or before today)
+                if (expiryDateOnly.isBefore(todayDateOnly) ||
+                    expiryDateOnly.isAtSameMomentAs(todayDateOnly)) {
+                  return false;
+                }
               }
             }
           }
@@ -161,8 +166,47 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
           );
         }
 
+        // Merge batches by normalized (brand, supplier, expiry, unit, cost) and sum stock
+        String norm(String v) => v.trim().toLowerCase();
+        DateTime? parseExpiry2(String? v) {
+          if (v == null || v.isEmpty) return null;
+          return DateTime.tryParse(v) ??
+              DateTime.tryParse(v.replaceAll('/', '-'));
+        }
+
+        final Map<String, InventoryItem> merged = {};
+        for (final b in batches) {
+          final exp = parseExpiry2(b.expiry);
+          final expKey = exp == null
+              ? 'noexpiry'
+              : '${exp.year}-${exp.month.toString().padLeft(2, '0')}-${exp.day.toString().padLeft(2, '0')}';
+          final key =
+              '${norm(b.brand)}|${norm(b.supplier)}|$expKey|${norm(b.unit)}|${b.cost.toStringAsFixed(2)}';
+          if (merged.containsKey(key)) {
+            final existing = merged[key]!;
+            merged[key] = InventoryItem(
+              id: existing.id,
+              name: existing.name,
+              imageUrl: existing.imageUrl,
+              category: existing.category,
+              cost: existing.cost,
+              stock: existing.stock + b.stock,
+              unit: existing.unit,
+              supplier: existing.supplier,
+              brand: existing.brand,
+              expiry: existing.expiry,
+              noExpiry: existing.noExpiry,
+              archived: existing.archived,
+            );
+          } else {
+            merged[key] = b;
+          }
+        }
+
+        final mergedList = merged.values.toList();
+
         return Column(
-          children: batches.map((batch) {
+          children: mergedList.map((batch) {
             final status = controller.getStatus(batch); // from your helpers
             return Container(
               margin: const EdgeInsets.only(bottom: 8),

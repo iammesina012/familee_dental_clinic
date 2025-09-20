@@ -7,12 +7,16 @@ class InventoryItemCard extends StatelessWidget {
   final String? currentSort;
   final bool? showExpiryDate;
   final int? overrideStock; // When provided, display this instead of item.stock
+  final bool hideStock;
+  final bool hideExpiry;
   const InventoryItemCard(
       {required this.item,
       this.status,
       this.currentSort,
       this.showExpiryDate,
       this.overrideStock,
+      this.hideStock = false,
+      this.hideExpiry = false,
       super.key});
 
   String getStatus() {
@@ -157,7 +161,7 @@ class InventoryItemCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Only show stock number if not "Out of Stock"
-                if (status != "Out of Stock") ...[
+                if (!hideStock && status != "Out of Stock") ...[
                   Text(
                     'Stock: ${overrideStock ?? item.stock}',
                     style: TextStyle(
@@ -241,7 +245,7 @@ class InventoryItemCard extends StatelessWidget {
               ],
             ),
             // Show expiry date only when sorting by expiry AND not "Out of Stock"
-            if (isExpirySort && status != "Out of Stock") ...[
+            if (!hideExpiry && isExpirySort && status != "Out of Stock") ...[
               SizedBox(height: 16),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),

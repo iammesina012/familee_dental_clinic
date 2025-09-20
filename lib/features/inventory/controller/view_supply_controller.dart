@@ -84,95 +84,104 @@ class ViewSupplyController {
   }
 
   Future<void> archiveSupply(String docId) async {
-    // Get supply data before archiving for activity logging
-    final supplyDoc = await FirebaseFirestore.instance
-        .collection('supplies')
-        .doc(docId)
-        .get();
+    // Get supply data before archiving for activity logging and name-based bulk archive
+    final suppliesRef = FirebaseFirestore.instance.collection('supplies');
+    final supplyDoc = await suppliesRef.doc(docId).get();
 
-    if (supplyDoc.exists) {
-      final supplyData = supplyDoc.data() as Map<String, dynamic>;
+    if (!supplyDoc.exists) return;
 
-      // Archive the supply
-      await FirebaseFirestore.instance
-          .collection('supplies')
-          .doc(docId)
-          .update({'archived': true});
+    final supplyData = supplyDoc.data() as Map<String, dynamic>;
+    final String name = (supplyData['name'] ?? '').toString();
 
-      // Log the archive activity
-      await InventoryActivityController().logInventorySupplyArchived(
-        itemName: supplyData['name'] ?? 'Unknown Item',
-        category: supplyData['category'] ?? 'Unknown Category',
-        stock: supplyData['stock'] ?? 0,
-        unit: supplyData['unit'] ?? 'Unknown Unit',
-        cost: supplyData['cost'],
-        brand: supplyData['brand'],
-        supplier: supplyData['supplier'],
-        expiryDate: supplyData['expiryDate'],
-        noExpiry: supplyData['noExpiry'] ?? false,
-      );
+    // Archive all stocks that share the same name
+    final query = await suppliesRef.where('name', isEqualTo: name).get();
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in query.docs) {
+      batch.update(doc.reference, {'archived': true});
     }
+    await batch.commit();
+
+    // Log the archive activity for the initiating item (single log to avoid spam)
+    await InventoryActivityController().logInventorySupplyArchived(
+      itemName: supplyData['name'] ?? 'Unknown Item',
+      category: supplyData['category'] ?? 'Unknown Category',
+      stock: supplyData['stock'] ?? 0,
+      unit: supplyData['unit'] ?? 'Unknown Unit',
+      cost: supplyData['cost'],
+      brand: supplyData['brand'],
+      supplier: supplyData['supplier'],
+      expiryDate: supplyData['expiryDate'],
+      noExpiry: supplyData['noExpiry'] ?? false,
+    );
   }
 
   Future<void> unarchiveSupply(String docId) async {
-    // Get supply data before unarchiving for activity logging
-    final supplyDoc = await FirebaseFirestore.instance
-        .collection('supplies')
-        .doc(docId)
+    // Get initiating doc to determine supply name
+    final suppliesRef = FirebaseFirestore.instance.collection('supplies');
+    final supplyDoc = await suppliesRef.doc(docId).get();
+
+    if (!supplyDoc.exists) return;
+
+    final supplyData = supplyDoc.data() as Map<String, dynamic>;
+    final String name = (supplyData['name'] ?? '').toString();
+
+    // Unarchive all stocks sharing the same name
+    final query = await suppliesRef
+        .where('name', isEqualTo: name)
+        .where('archived', isEqualTo: true)
         .get();
-
-    if (supplyDoc.exists) {
-      final supplyData = supplyDoc.data() as Map<String, dynamic>;
-
-      // Unarchive the supply
-      await FirebaseFirestore.instance
-          .collection('supplies')
-          .doc(docId)
-          .update({'archived': false});
-
-      // Log the unarchive activity
-      await InventoryActivityController().logInventorySupplyUnarchived(
-        itemName: supplyData['name'] ?? 'Unknown Item',
-        category: supplyData['category'] ?? 'Unknown Category',
-        stock: supplyData['stock'] ?? 0,
-        unit: supplyData['unit'] ?? 'Unknown Unit',
-        cost: supplyData['cost'],
-        brand: supplyData['brand'],
-        supplier: supplyData['supplier'],
-        expiryDate: supplyData['expiryDate'],
-        noExpiry: supplyData['noExpiry'] ?? false,
-      );
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in query.docs) {
+      batch.update(doc.reference, {'archived': false});
     }
+    await batch.commit();
+
+    // Single activity log for the action
+    await InventoryActivityController().logInventorySupplyUnarchived(
+      itemName: supplyData['name'] ?? 'Unknown Item',
+      category: supplyData['category'] ?? 'Unknown Category',
+      stock: supplyData['stock'] ?? 0,
+      unit: supplyData['unit'] ?? 'Unknown Unit',
+      cost: supplyData['cost'],
+      brand: supplyData['brand'],
+      supplier: supplyData['supplier'],
+      expiryDate: supplyData['expiryDate'],
+      noExpiry: supplyData['noExpiry'] ?? false,
+    );
   }
 
   Future<void> deleteSupply(String docId) async {
-    // Get supply data before deleting for activity logging
-    final supplyDoc = await FirebaseFirestore.instance
-        .collection('supplies')
-        .doc(docId)
+    // Get initiating doc to determine supply name
+    final suppliesRef = FirebaseFirestore.instance.collection('supplies');
+    final supplyDoc = await suppliesRef.doc(docId).get();
+
+    if (!supplyDoc.exists) return;
+
+    final supplyData = supplyDoc.data() as Map<String, dynamic>;
+    final String name = (supplyData['name'] ?? '').toString();
+
+    // Delete all archived stocks sharing the same name
+    final query = await suppliesRef
+        .where('name', isEqualTo: name)
+        .where('archived', isEqualTo: true)
         .get();
-
-    if (supplyDoc.exists) {
-      final supplyData = supplyDoc.data() as Map<String, dynamic>;
-
-      // Delete the supply
-      await FirebaseFirestore.instance
-          .collection('supplies')
-          .doc(docId)
-          .delete();
-
-      // Log the delete activity
-      await InventoryActivityController().logInventorySupplyDeleted(
-        itemName: supplyData['name'] ?? 'Unknown Item',
-        category: supplyData['category'] ?? 'Unknown Category',
-        stock: supplyData['stock'] ?? 0,
-        unit: supplyData['unit'] ?? 'Unknown Unit',
-        cost: supplyData['cost'],
-        brand: supplyData['brand'],
-        supplier: supplyData['supplier'],
-        expiryDate: supplyData['expiryDate'],
-        noExpiry: supplyData['noExpiry'] ?? false,
-      );
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in query.docs) {
+      batch.delete(doc.reference);
     }
+    await batch.commit();
+
+    // Single activity log
+    await InventoryActivityController().logInventorySupplyDeleted(
+      itemName: supplyData['name'] ?? 'Unknown Item',
+      category: supplyData['category'] ?? 'Unknown Category',
+      stock: supplyData['stock'] ?? 0,
+      unit: supplyData['unit'] ?? 'Unknown Unit',
+      cost: supplyData['cost'],
+      brand: supplyData['brand'],
+      supplier: supplyData['supplier'],
+      expiryDate: supplyData['expiryDate'],
+      noExpiry: supplyData['noExpiry'] ?? false,
+    );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
+import 'package:projects/features/settings/pages/user_list_page.dart';
 import 'package:projects/features/settings/controller/settings_controller.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -24,9 +25,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadSettings() async {
     final isDark = await _settingsController.getDarkMode();
+    final inv = await _settingsController.getInventoryAlertsEnabled();
+    final appr = await _settingsController.getApprovalAlertsEnabled();
     if (mounted) {
       setState(() {
         _darkMode = isDark;
+        _inventoryAlerts = inv;
+        _approvalAlerts = appr;
       });
     }
   }
@@ -88,19 +93,22 @@ class _SettingsPageState extends State<SettingsPage> {
 
             const SizedBox(height: 24),
 
-            // Employee Management Section
-            _buildSectionHeader("Employee Management"),
+            // User Management Section
+            _buildSectionHeader("User Management"),
             _buildSettingItem(
               icon: Icons.people_outline,
-              title: "Employee List",
-              subtitle: "Manage employees and roles",
+              title: "User List",
+              subtitle: "Manage users and roles",
               trailing: const Icon(
                 Icons.arrow_forward_ios,
                 size: 16,
                 color: null,
               ),
               onTap: () {
-                // TODO: Navigate to employee list
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UserListPage()),
+                );
               },
             ),
 
@@ -220,6 +228,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     setState(() {
                       _inventoryAlerts = value;
                     });
+                    _settingsController.setInventoryAlertsEnabled(value);
                   },
                   activeColor: scheme.primary,
                 ),
@@ -246,6 +255,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     setState(() {
                       _approvalAlerts = value;
                     });
+                    _settingsController.setApprovalAlertsEnabled(value);
                   },
                   activeColor: scheme.primary,
                 ),

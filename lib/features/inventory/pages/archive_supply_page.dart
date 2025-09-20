@@ -37,6 +37,51 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
         .toList();
   }
 
+  // ─── Grouping Helpers (archived page) ─────────────────────────────────────
+  String _normalizeName(String name) => name.trim().toLowerCase();
+
+  DateTime? _parseExpiry(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw) ??
+        DateTime.tryParse(raw.replaceAll('/', '-'));
+  }
+
+  List<_ArchivedGroup> _groupByName(List<InventoryItem> items) {
+    final Map<String, List<InventoryItem>> byName = {};
+    for (final item in items) {
+      final key = _normalizeName(item.name);
+      byName.putIfAbsent(key, () => <InventoryItem>[]).add(item);
+    }
+    final List<_ArchivedGroup> groups = [];
+    byName.forEach((key, list) {
+      final withImage = list.where((i) => i.imageUrl.isNotEmpty).toList();
+      final candidates = withImage.isNotEmpty ? withImage : list;
+      candidates.sort((a, b) {
+        final ae = _parseExpiry(a.expiry);
+        final be = _parseExpiry(b.expiry);
+        if (ae == null && be == null) return 0;
+        if (ae == null) return 1;
+        if (be == null) return -1;
+        return ae.compareTo(be);
+      });
+      final representative = candidates.first;
+      groups.add(_ArchivedGroup(
+        key: key,
+        displayName: representative.name,
+        representative: representative,
+        otherCount: list.length - 1,
+        items: List<InventoryItem>.from(list),
+      ));
+    });
+    groups.sort((a, b) =>
+        a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+    return groups;
+  }
+
+  // (no formatting helpers needed here)
+
+  // Bottom sheet removed; tap navigates to InventoryViewSupplyPage
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -164,6 +209,7 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                       );
                     }
 
+                    final groups = _groupByName(supplies);
                     return GridView.builder(
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
@@ -172,23 +218,47 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
                       ),
-                      itemCount: supplies.length,
+                      itemCount: groups.length,
                       itemBuilder: (context, index) {
-                        final supply = supplies[index];
-                        return GestureDetector(
-                          onTap: () {
-                            // Navigate to view supply page
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    InventoryViewSupplyPage(item: supply),
+                        final group = groups[index];
+                        return LayoutBuilder(
+                          builder: (context, box) {
+                            final bool bounded = box.hasBoundedHeight;
+                            final double maxH = bounded ? box.maxHeight : 260;
+                            return ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxHeight: maxH,
+                                minHeight: 0,
+                              ),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => InventoryViewSupplyPage(
+                                        item: group.representative,
+                                        skipAutoRedirect: true,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.max,
+                                  children: [
+                                    Expanded(
+                                      child: InventoryItemCard(
+                                        item: group.representative,
+                                        showExpiryDate: true,
+                                        hideStock: true,
+                                        hideExpiry: true,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
-                          child: InventoryItemCard(
-                            item: supply,
-                          ),
                         );
                       },
                     );
@@ -201,4 +271,19 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
       ),
     );
   }
+}
+
+class _ArchivedGroup {
+  final String key;
+  final String displayName;
+  final InventoryItem representative;
+  final int otherCount;
+  final List<InventoryItem> items;
+  const _ArchivedGroup({
+    required this.key,
+    required this.displayName,
+    required this.representative,
+    required this.otherCount,
+    required this.items,
+  });
 }
