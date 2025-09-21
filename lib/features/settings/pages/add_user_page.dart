@@ -1,0 +1,474 @@
+import 'package:flutter/material.dart';
+import 'package:projects/features/settings/controller/add_user_controller.dart';
+
+class AddUserPage extends StatefulWidget {
+  const AddUserPage({super.key});
+
+  @override
+  State<AddUserPage> createState() => _AddUserPageState();
+}
+
+class _AddUserPageState extends State<AddUserPage> {
+  final _controller = AddUserController();
+  final _formKey = GlobalKey<FormState>();
+
+  // Form controllers
+  final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  // Form state
+  String _selectedRole = 'Staff';
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
+  bool _isCreating = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color, size: 28),
+          onPressed: () => Navigator.maybePop(context),
+        ),
+        title: const Text(
+          'Add User',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'SF Pro',
+            color: null,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        toolbarHeight: 70,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name Field
+                _buildTextField(
+                  controller: _nameController,
+                  label: 'Name',
+                  hint: 'Enter display name',
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Name is required';
+                    }
+                    return null;
+                  },
+                  theme: theme,
+                ),
+                const SizedBox(height: 16),
+
+                // Username Field
+                _buildTextField(
+                  controller: _usernameController,
+                  label: 'Username',
+                  hint: 'Enter username',
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Username is required';
+                    }
+                    return null;
+                  },
+                  theme: theme,
+                ),
+                const SizedBox(height: 16),
+
+                // Email Field
+                _buildTextField(
+                  controller: _emailController,
+                  label: 'Email',
+                  hint: 'Enter email address',
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Email is required';
+                    }
+                    if (!_controller.isEmailValid(value)) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                  theme: theme,
+                ),
+                const SizedBox(height: 16),
+
+                // Password Field
+                _buildPasswordField(
+                  controller: _passwordController,
+                  label: 'Password',
+                  hint: 'Enter password',
+                  isVisible: _isPasswordVisible,
+                  onToggleVisibility: () {
+                    setState(() {
+                      _isPasswordVisible = !_isPasswordVisible;
+                    });
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Password is required';
+                    }
+                    if (!_controller.isPasswordValid(value)) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                  theme: theme,
+                ),
+                const SizedBox(height: 16),
+
+                // Confirm Password Field
+                _buildPasswordField(
+                  controller: _confirmPasswordController,
+                  label: 'Confirm Password',
+                  hint: 'Confirm password',
+                  isVisible: _isConfirmPasswordVisible,
+                  onToggleVisibility: () {
+                    setState(() {
+                      _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                    });
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please confirm password';
+                    }
+                    if (value != _passwordController.text) {
+                      return 'Passwords do not match';
+                    }
+                    return null;
+                  },
+                  theme: theme,
+                ),
+                const SizedBox(height: 16),
+
+                // Role Field
+                _buildRoleDropdown(theme),
+                const SizedBox(height: 32),
+
+                // Create User Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isCreating ? null : _createUser,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D4AA),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 1,
+                    ),
+                    child: _isCreating
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Create User',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+    required ThemeData theme,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'SF Pro',
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          validator: validator,
+          style: const TextStyle(
+            fontFamily: 'SF Pro',
+            fontSize: 16,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              fontFamily: 'SF Pro',
+              color: theme.textTheme.bodyLarge?.color?.withOpacity(0.5),
+            ),
+            filled: true,
+            fillColor: theme.brightness == Brightness.dark
+                ? theme.colorScheme.surface
+                : Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF00D4AA), width: 2),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.red),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPasswordField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required bool isVisible,
+    required VoidCallback onToggleVisibility,
+    String? Function(String?)? validator,
+    required ThemeData theme,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'SF Pro',
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          obscureText: !isVisible,
+          validator: validator,
+          style: const TextStyle(
+            fontFamily: 'SF Pro',
+            fontSize: 16,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              fontFamily: 'SF Pro',
+              color: theme.textTheme.bodyLarge?.color?.withOpacity(0.5),
+            ),
+            filled: true,
+            fillColor: theme.brightness == Brightness.dark
+                ? theme.colorScheme.surface
+                : Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF00D4AA), width: 2),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.red),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            suffixIcon: IconButton(
+              icon: Icon(
+                isVisible ? Icons.visibility_off : Icons.visibility,
+                color: theme.iconTheme.color,
+              ),
+              onPressed: onToggleVisibility,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRoleDropdown(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Role',
+          style: TextStyle(
+            fontFamily: 'SF Pro',
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.brightness == Brightness.dark
+                ? theme.colorScheme.surface
+                : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedRole,
+              isExpanded: true,
+              style: const TextStyle(
+                fontFamily: 'SF Pro',
+                fontSize: 16,
+              ),
+              items: _controller.getAvailableRoles().map((String role) {
+                return DropdownMenuItem<String>(
+                  value: role,
+                  child: Text(
+                    role,
+                    style: TextStyle(
+                      fontFamily: 'SF Pro',
+                      fontSize: 16,
+                      color: theme.textTheme.bodyLarge?.color ?? Colors.black,
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    _selectedRole = newValue;
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _createUser() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isCreating = true);
+
+    // Check for duplicates before creating
+    final isUsernameTaken =
+        await _controller.isUsernameTaken(_usernameController.text.trim());
+    final isEmailTaken =
+        await _controller.isEmailTaken(_emailController.text.trim());
+
+    if (isUsernameTaken) {
+      setState(() => _isCreating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Username is already taken'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (isEmailTaken) {
+      setState(() => _isCreating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email is already taken'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final result = await _controller.createUser(
+      name: _nameController.text.trim(),
+      username: _usernameController.text.trim(),
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      role: _selectedRole,
+      isActive: true, // Always create new users as active
+    );
+
+    setState(() => _isCreating = false);
+
+    if (result['success']) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User created successfully'),
+            backgroundColor: Color(0xFF00D4AA),
+          ),
+        );
+        Navigator.pop(context, true); // Return true to indicate success
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating user: ${result['error']}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+}

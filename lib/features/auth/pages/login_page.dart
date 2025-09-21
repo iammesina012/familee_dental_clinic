@@ -164,7 +164,7 @@ class _LoginState extends State<Login> {
                           color: Color(0xFF2D2D2D),
                         ),
                         decoration: InputDecoration(
-                          hintText: "Email",
+                          hintText: "Email/Username",
                           hintStyle: AppFonts.interStyle(
                             fontWeight: FontWeight.w500,
                             color: const Color(0xFF2D2D2D).withOpacity(0.6),
@@ -378,22 +378,6 @@ class _LoginState extends State<Login> {
                     ],
                   ),
                 ],
-              ),
-            ),
-            // Bottom version
-            Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Text(
-                  "Version: 0.1.0",
-                  style: AppFonts.interStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    color: Color.fromARGB(255, 0, 0, 0),
-                  ),
-                ),
               ),
             ),
           ],

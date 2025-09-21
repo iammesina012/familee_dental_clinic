@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/settings/pages/user_list_page.dart';
+import 'package:projects/features/settings/pages/choose_account_page.dart';
 import 'package:projects/features/settings/controller/settings_controller.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -108,6 +109,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const UserListPage()),
+                );
+              },
+            ),
+
+            // Change Password (sub-item)
+            _buildSettingItem(
+              icon: Icons.lock_outline,
+              title: "Change Password",
+              subtitle: "Update users' account password",
+              trailing: const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: null,
+              ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ChooseAccountPage()),
                 );
               },
             ),

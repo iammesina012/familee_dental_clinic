@@ -14,12 +14,19 @@ class LoginController {
   bool obscure = true;
   bool hasEmailError = false;
   bool hasPasswordError = false;
+  bool isUsernameLogin = false; // Toggle between email and username login
 
   Future<void> loadRememberedCredentials() async {
     final rememberedEmail = await auth.getRememberedEmail();
     if (rememberedEmail != null) {
       email.text = rememberedEmail;
     }
+  }
+
+  void toggleLoginMode() {
+    isUsernameLogin = !isUsernameLogin;
+    // Clear the email field when switching modes
+    email.clear();
   }
 
   void _showErrorDialog(BuildContext context, String title, String message) {
@@ -57,7 +64,7 @@ class LoginController {
       hasEmailError = true;
       onStateUpdate();
       _showErrorDialog(
-          context, "Email Required", "Please enter an email address.");
+          context, "Input Required", "Please enter an email or username.");
       return;
     }
     if (passText.isEmpty) {
@@ -69,8 +76,18 @@ class LoginController {
     }
 
     try {
-      await auth.login(
-          email: emailText, password: passText, rememberMe: rememberMe);
+      // Auto-detect if input is email or username
+      final isEmail = emailText.contains('@');
+
+      if (isEmail) {
+        // Login with email
+        await auth.login(
+            email: emailText, password: passText, rememberMe: rememberMe);
+      } else {
+        // Login with username
+        await auth.loginWithUsername(
+            username: emailText, password: passText, rememberMe: rememberMe);
+      }
 
       // Log successful login
       await LoginActivityController().logLogin();
@@ -81,22 +98,27 @@ class LoginController {
         );
       }
     } on FirebaseAuthException catch (e) {
-      String title = "Login Error";
+      String title = "Login Failed";
       String message = "";
 
       if (e.code == 'invalid-email') {
         hasEmailError = true;
-        message = "Please enter a valid email format.";
+        message = "Enter a valid email or username.";
+      } else if (e.code == 'user-disabled') {
+        hasEmailError = true;
+        hasPasswordError = true;
+        title = "Login Denied";
+        message = "This account is currently deactivated.";
       } else if (e.code == 'user-not-found' ||
           e.code == 'wrong-password' ||
           e.code == 'invalid-credential') {
         hasEmailError = true;
         hasPasswordError = true;
-        message = "Incorrect email or password. Please try again.";
+        message = "Incorrect email/username or password.";
       } else {
         hasEmailError = true;
         hasPasswordError = true;
-        message = "Login failed. Please check your connection and try again.";
+        message = "Login failed. Check your connection.";
       }
 
       onStateUpdate();
