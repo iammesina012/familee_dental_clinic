@@ -38,6 +38,7 @@ class BackupRestoreService {
 
   static const String collectionName = 'supplies';
   static const String _bucket = 'backups';
+  static const int _maxBackups = 10;
   static const List<String> _allCollections = <String>[
     'supplies',
     'brands',
@@ -86,7 +87,7 @@ class BackupRestoreService {
   /// Create a backup JSON for all collections and upload to Storage.
   /// onProgress returns processed document count.
   Future<BackupResult> createBackup(
-      {void Function(int processed)? onProgress}) async {
+      {void Function(int processed)? onProgress, bool force = false}) async {
     _requireUser();
 
     const int pageSize = 500;
@@ -124,9 +125,34 @@ class BackupRestoreService {
       collections[coll] = items;
     }
 
+    // Compute a simple checksum of the collections content to detect no-op backups
+    final String collectionsJsonForHash = jsonEncode(collections);
+    final String checksum = _simpleChecksum(collectionsJsonForHash);
+
+    // Compare with latest backup checksum (if available)
+    try {
+      final existing = await listBackups();
+      if (!force && existing.isNotEmpty) {
+        final latest = existing.first; // newest first
+        final bytes =
+            await _supabase.storage.from(_bucket).download(latest.fullPath);
+        final lastPayload =
+            jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+        final String? lastChecksum = lastPayload['checksum'] as String?;
+        if (lastChecksum != null && lastChecksum == checksum) {
+          throw StateError('no_changes');
+        }
+      }
+    } on StateError catch (e) {
+      if (e.message == 'no_changes') rethrow;
+    } catch (_) {
+      // ignore other errors; proceed with backup
+    }
+
     final Map<String, dynamic> payload = <String, dynamic>{
       'version': 1,
       'generatedAt': DateTime.now().toUtc().toIso8601String(),
+      'checksum': checksum,
       'collections': collections,
     };
 
@@ -142,6 +168,20 @@ class BackupRestoreService {
             upsert: true,
           ),
         );
+
+    // Retain only the latest _maxBackups files
+    try {
+      final existing = await listBackups();
+      if (existing.length > _maxBackups) {
+        final toDelete = existing.sublist(_maxBackups);
+        final paths = toDelete.map((f) => f.fullPath).toList();
+        if (paths.isNotEmpty) {
+          await _supabase.storage.from(_bucket).remove(paths);
+        }
+      }
+    } catch (_) {
+      // ignore retention failures
+    }
 
     int totalItems = 0;
     for (final entry in collections.entries) {
@@ -372,6 +412,18 @@ class BackupRestoreService {
   bool _likelyTimestampField(String key) {
     final lower = key.toLowerCase();
     return lower.endsWith('at') || lower.contains('date');
+  }
+
+  // Lightweight deterministic checksum (FNV-1a 32-bit) to avoid extra deps
+  String _simpleChecksum(String input) {
+    const int fnvPrime = 0x01000193;
+    int hash = 0x811c9dc5;
+    for (int i = 0; i < input.length; i++) {
+      hash ^= input.codeUnitAt(i);
+      hash = (hash * fnvPrime) & 0xFFFFFFFF;
+    }
+    // convert to 8-char hex
+    return hash.toUnsigned(32).toRadixString(16).padLeft(8, '0');
   }
 }
 
