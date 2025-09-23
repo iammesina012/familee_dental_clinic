@@ -3,6 +3,7 @@ import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/settings/pages/user_list_page.dart';
 import 'package:projects/features/settings/pages/choose_account_page.dart';
 import 'package:projects/features/settings/controller/settings_controller.dart';
+import 'package:projects/features/backup_restore/pages/backup_restore_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -145,7 +146,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: null,
               ),
               onTap: () {
-                // TODO: Navigate to backup & restore
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BackupRestorePage()),
+                );
               },
             ),
 

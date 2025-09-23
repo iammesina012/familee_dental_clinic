@@ -22,6 +22,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   bool _showConfirm = false;
   bool _isSaving = false;
 
+  String? _currentPasswordServerError;
+
   @override
   void dispose() {
     _currentPassword.dispose();
@@ -40,10 +42,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           icon: Icon(Icons.arrow_back, color: theme.iconTheme.color, size: 28),
           onPressed: () => Navigator.maybePop(context),
         ),
-        title: Text(
-          widget.user == null
-              ? 'Change Password'
-              : 'Change Password — ${widget.user!['name'] ?? ''}',
+        title: const Text(
+          'Change Password',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -70,28 +70,51 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 controller: _currentPassword,
                 isVisible: _showCurrent,
                 onToggle: () => setState(() => _showCurrent = !_showCurrent),
-                validator: (v) => (v == null || v.isEmpty)
-                    ? 'Enter your current password'
-                    : null,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Enter your current password';
+                  }
+                  if (_currentPasswordServerError != null) {
+                    return _currentPasswordServerError;
+                  }
+                  return null;
+                },
+                onChanged: (_) {
+                  if (_currentPasswordServerError != null) {
+                    setState(() => _currentPasswordServerError = null);
+                    _formKey.currentState?.validate();
+                  }
+                },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               _buildPasswordField(
                 label: 'New Password',
                 controller: _newPassword,
                 isVisible: _showNew,
                 onToggle: () => setState(() => _showNew = !_showNew),
-                validator: (v) => _controller.isPasswordValid(v ?? '')
-                    ? null
-                    : 'Use 8+ chars with letters and numbers',
+                validator: (value) {
+                  final text = value ?? '';
+                  if (text.isEmpty) return 'Enter a new password';
+                  return _controller.isPasswordValid(text)
+                      ? null
+                      : 'Use 8+ chars with letters and numbers';
+                },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               _buildPasswordField(
                 label: 'Confirm Password',
                 controller: _confirmPassword,
                 isVisible: _showConfirm,
                 onToggle: () => setState(() => _showConfirm = !_showConfirm),
-                validator: (v) =>
-                    (v == _newPassword.text) ? null : 'Passwords do not match',
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please confirm your new password';
+                  }
+                  if (value != _newPassword.text) {
+                    return 'Passwords do not match';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 20),
               SizedBox(
@@ -139,6 +162,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     required bool isVisible,
     required VoidCallback onToggle,
     String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
   }) {
     final theme = Theme.of(context);
     return Column(
@@ -157,28 +181,58 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           controller: controller,
           obscureText: !isVisible,
           validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           style: const TextStyle(
             fontFamily: 'SF Pro',
             fontSize: 16,
           ),
           decoration: InputDecoration(
+            // Show visible inline error text
+            errorStyle: TextStyle(
+              height: 1.2,
+              fontSize: 12,
+              color: theme.colorScheme.error,
+              fontFamily: 'SF Pro',
+            ),
             filled: true,
             fillColor: theme.brightness == Brightness.dark
                 ? theme.colorScheme.surface
                 : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
+              borderSide: BorderSide(
+                color: theme.dividerColor.withOpacity(0.2),
+                width: 1,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
+              borderSide: BorderSide(
+                color: theme.dividerColor.withOpacity(0.2),
+                width: 1,
+              ),
             ),
-            focusedBorder: OutlineInputBorder(
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+              borderSide: BorderSide(
+                color: Color(0xFF00D4AA),
+                width: 1,
+              ),
+            ),
+            // Ensure red border on error
+            errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF00D4AA), width: 2),
+              borderSide: BorderSide(
+                color: theme.colorScheme.error,
+                width: 1,
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: theme.colorScheme.error,
+                width: 1,
+              ),
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -190,32 +244,62 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               ),
             ),
           ),
+          onChanged: onChanged,
         ),
       ],
     );
   }
 
   Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isSaving = true);
+    final valid = _formKey.currentState?.validate() ?? false;
+    if (!valid) return;
+
+    setState(() {
+      _isSaving = true;
+      _currentPasswordServerError = null;
+    });
+
     final result = await _controller.changePassword(
       currentPassword: _currentPassword.text,
       newPassword: _newPassword.text,
     );
-    setState(() => _isSaving = false);
-
-    final ok = result['success'] == true;
-    final msg = (result['message'] as String?) ??
-        (ok ? 'Password updated' : 'Unable to update password');
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: ok ? const Color(0xFF00D4AA) : Colors.red,
-      ),
-    );
 
-    if (ok) Navigator.maybePop(context);
+    setState(() {
+      _isSaving = false;
+    });
+
+    final ok = result['success'] == true;
+    final message = (result['message'] as String?) ??
+        (ok ? 'Password updated' : 'Unable to update password');
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFF00D4AA),
+        ),
+      );
+      Navigator.maybePop(context);
+      return;
+    }
+
+    final errText = message.toLowerCase();
+    final isWrongPassword = errText.contains('incorrect') ||
+        errText.contains('wrong-password') ||
+        errText.contains('invalid-credential') ||
+        errText.contains('wrong password') ||
+        errText.contains('invalid credential');
+
+    if (isWrongPassword) {
+      setState(
+          () => _currentPasswordServerError = 'Current password is incorrect.');
+      _formKey.currentState?.validate();
+    } else {
+      // No error snackbar; show inline error on current field
+      setState(() => _currentPasswordServerError = message);
+      _formKey.currentState?.validate();
+    }
   }
 }

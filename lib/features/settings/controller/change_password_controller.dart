@@ -8,22 +8,37 @@ class ChangePasswordController {
     required String newPassword,
   }) async {
     try {
+      await _auth.currentUser?.reload();
       final user = _auth.currentUser;
-      if (user == null || user.email == null) {
+      if (user == null) {
         return {
           'success': false,
           'message': 'Not signed in.',
         };
       }
 
-      // Reauthenticate with current password
-      final cred = EmailAuthProvider.credential(
+      final providerIds = user.providerData.map((p) => p.providerId).toList();
+      final usesEmailPassword = providerIds.contains('password');
+      if (!usesEmailPassword) {
+        return {
+          'success': false,
+          'message': 'Password change requires email/password sign-in.',
+        };
+      }
+
+      if (user.email == null || user.email!.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Account has no email address set.',
+        };
+      }
+
+      final credential = EmailAuthProvider.credential(
         email: user.email!,
         password: currentPassword,
       );
-      await user.reauthenticateWithCredential(cred);
+      await user.reauthenticateWithCredential(credential);
 
-      // Update password
       await user.updatePassword(newPassword);
 
       return {
@@ -31,17 +46,17 @@ class ChangePasswordController {
         'message': 'Password updated successfully.',
       };
     } on FirebaseAuthException catch (e) {
-      String msg = 'Unable to update password.';
+      String message = 'Unable to update password.';
       if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        msg = 'Current password is incorrect.';
+        message = 'Current password is incorrect.';
       } else if (e.code == 'weak-password') {
-        msg = 'New password is too weak.';
+        message = 'New password is too weak.';
       } else if (e.code == 'requires-recent-login') {
-        msg = 'Please sign in again and retry.';
+        message = 'Please sign in again and retry.';
       }
       return {
         'success': false,
-        'message': msg,
+        'message': message,
       };
     } catch (_) {
       return {
@@ -53,8 +68,8 @@ class ChangePasswordController {
 
   bool isPasswordValid(String password) {
     if (password.length < 8) return false;
-    if (!password.contains(RegExp(r'[A-Za-z]'))) return false;
-    if (!password.contains(RegExp(r'[0-9]'))) return false;
+    if (!RegExp(r'[A-Za-z]').hasMatch(password)) return false;
+    if (!RegExp(r'[0-9]').hasMatch(password)) return false;
     return true;
   }
 }

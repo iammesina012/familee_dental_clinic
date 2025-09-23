@@ -45,7 +45,7 @@ class AuthService {
     }
 
     // First, attempt authentication so wrong creds show the correct error
-    final userCred = await _auth.signInWithEmailAndPassword(
+    await _auth.signInWithEmailAndPassword(
         email: loginEmail, password: password);
 
     // After successful auth, enforce our Firestore isActive flag
@@ -125,6 +125,12 @@ class AuthService {
     // Use the Firebase Auth email for actual login (lowercased)
     final loginEmail = (firebaseAuthEmail ?? email).toLowerCase();
 
+    // Authenticate with Firebase using the resolved email
+    await _auth.signInWithEmailAndPassword(
+      email: loginEmail,
+      password: password,
+    );
+
     // Block inactive users
     QuerySnapshot<Map<String, dynamic>> statusSnap = await _firestore
         .collection('user_roles')
@@ -145,14 +151,15 @@ class AuthService {
       final isActive =
           statusSnap.docs.first.data()['isActive'] as bool? ?? true;
       if (!isActive) {
+        try {
+          await _auth.signOut();
+        } catch (_) {}
         throw FirebaseAuthException(
           code: 'user-disabled',
           message: 'This account is inactive. Please contact an admin.',
         );
       }
     }
-
-    // Already signed in above; continue
 
     // Save remember me preference
     final prefs = await SharedPreferences.getInstance();

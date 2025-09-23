@@ -156,4 +156,59 @@ class InventoryAnalyticsService {
       };
     });
   }
+
+  // Stream for expired and expiring counts
+  Stream<Map<String, int>> getExpiryCountsStream() {
+    return firestore.collection('supplies').snapshots().map((snapshot) {
+      final allSupplies = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return InventoryItem(
+          id: doc.id,
+          name: data['name'] ?? '',
+          imageUrl: data['imageUrl'] ?? '',
+          category: data['category'] ?? '',
+          cost: (data['cost'] ?? 0).toDouble(),
+          stock: (data['stock'] ?? 0) as int,
+          unit: data['unit'] ?? '',
+          supplier: data['supplier'] ?? '',
+          brand: data['brand'] ?? '',
+          expiry: data['expiry'],
+          noExpiry: data['noExpiry'] ?? false,
+          archived: data['archived'] ?? false,
+        );
+      }).toList();
+
+      final supplies = allSupplies
+          .where((supply) => !supply.archived && supply.stock > 0)
+          .toList();
+
+      int expired = 0;
+      int expiring = 0;
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      for (final s in supplies) {
+        if (s.noExpiry || s.expiry == null || s.expiry!.isEmpty) {
+          continue;
+        }
+        final parsed = DateTime.tryParse(s.expiry!.replaceAll('/', '-'));
+        if (parsed == null) continue;
+        final dateOnly = DateTime(parsed.year, parsed.month, parsed.day);
+        if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
+          expired++;
+        } else {
+          final daysUntil = dateOnly.difference(today).inDays;
+          if (daysUntil <= 30) {
+            expiring++;
+          }
+        }
+      }
+
+      return {
+        'expired': expired,
+        'expiring': expiring,
+      };
+    });
+  }
 }

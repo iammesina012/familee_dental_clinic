@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/drawer.dart';
 import 'package:projects/features/dashboard/services/inventory_analytics_service.dart';
+import 'package:projects/features/dashboard/services/fast_moving_service.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -17,6 +18,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
 
   final InventoryAnalyticsService _analyticsService =
       InventoryAnalyticsService();
+  final FastMovingService _fastMovingService = FastMovingService();
 
   AnimationController? _inventoryCardController;
   Animation<double>? _animation;
@@ -89,6 +91,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ListView(
+          physics: const NeverScrollableScrollPhysics(),
           children: [
             // Inventory Check Card
             Card(
@@ -96,6 +99,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
+              margin: EdgeInsets.zero,
               color: theme.colorScheme.surface,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -117,7 +121,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                         Row(
                           children: [
                             Text(
-                              "Analysis",
+                              "View",
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -501,22 +505,274 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
               ),
             ),
 
-            const SizedBox(height: 20),
-
-            // COMMENTED OUT EXISTING DESIGN
-            /*
-            ...dashboardCards.map((card) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: DashboardCard(
-                    title: card['title'],
-                    color: card['color'],
-                  ),
-                )),
             const SizedBox(height: 10),
-            const FastMovingItemsCard(),
-            */
+
+            // Expired / Expiring mini-cards
+            StreamBuilder<Map<String, int>>(
+              stream: _analyticsService.getExpiryCountsStream(),
+              builder: (context, snapshot) {
+                final expired = snapshot.data != null
+                    ? (snapshot.data!['expired'] ?? 0)
+                    : 0;
+                final expiring = snapshot.data != null
+                    ? (snapshot.data!['expiring'] ?? 0)
+                    : 0;
+
+                return Row(
+                  children: [
+                    Expanded(
+                      child: _buildExpiryCard(
+                        context: context,
+                        count: expired,
+                        label: 'Expired',
+                        icon: Icons.warning_amber_rounded,
+                        accentColor: Colors.red,
+                        height: 96,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildExpiryCard(
+                        context: context,
+                        count: expiring,
+                        label: 'Expiring',
+                        icon: Icons.timer_outlined,
+                        accentColor: Colors.orange,
+                        height: 96,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            const SizedBox(height: 12),
+
+            // Fast Moving Supply
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              margin: EdgeInsets.zero,
+              color: theme.colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Fast Moving Supply',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                        Text(
+                          'Last 3 months',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Divider(height: 1),
+                    const SizedBox(height: 4),
+                    StreamBuilder<List<FastMovingItem>>(
+                      stream: _fastMovingService.streamTopFastMovingItems(
+                        limit: 5,
+                        window: const Duration(days: 90),
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          );
+                        }
+
+                        final items = snapshot.data ?? [];
+                        if (items.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              'No deductions recorded yet.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return Column(
+                          children: [
+                            for (int i = 0; i < items.length; i++)
+                              _FastMovingRow(index: i + 1, item: items[i]),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildExpiryCard({
+    required BuildContext context,
+    required int count,
+    required String label,
+    required IconData icon,
+    required Color accentColor,
+    double height = 88,
+  }) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      margin: EdgeInsets.zero,
+      child: Container(
+        constraints: BoxConstraints(minHeight: height),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: accentColor,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              width: 55,
+              height: 55,
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: accentColor,
+                size: 35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FastMovingRow extends StatelessWidget {
+  final int index;
+  final FastMovingItem item;
+  const _FastMovingRow({required this.index, required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          // Index
+          SizedBox(
+            width: 24,
+            child: Text(
+              '$index.',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.bodyMedium?.color,
+              ),
+            ),
+          ),
+          // Name and brand
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
+                ),
+                if (item.brand.isNotEmpty)
+                  Text(
+                    item.brand,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.textTheme.bodySmall?.color,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Times deducted pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF3E0),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'x${item.timesDeducted}',
+              style: const TextStyle(
+                color: Color(0xFFFB8C00),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
