@@ -1,33 +1,35 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import '../data/inventory_item.dart';
 import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
 
 class ExpiredViewSupplyController {
-  /// Get stream of individual supply item from Firebase
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  /// Get stream of individual supply item from Supabase
   Stream<InventoryItem?> supplyStream(String id) {
-    return FirebaseFirestore.instance
-        .collection('supplies')
-        .doc(id)
-        .snapshots()
-        .map((doc) {
-      if (!doc.exists) return null;
-      final data = doc.data() as Map<String, dynamic>;
-      return InventoryItem(
-        id: doc.id,
-        name: data['name'] ?? '',
-        imageUrl: data['imageUrl'] ?? '',
-        category: data['category'] ?? '',
-        cost: (data['cost'] ?? 0).toDouble(),
-        stock: (data['stock'] ?? 0) as int,
-        unit: data['unit'] ?? '',
-        supplier: data['supplier'] ?? '',
-        brand: data['brand'] ?? '',
-        expiry: data['expiry'],
-        noExpiry: data['noExpiry'] ?? false,
-        archived: data['archived'] ?? false,
-      );
-    });
+    return _supabase
+        .from('supplies')
+        .stream(primaryKey: ['id'])
+        .eq('id', id)
+        .map((data) {
+          if (data.isEmpty) return null;
+          final row = data.first;
+          return InventoryItem(
+            id: row['id'] as String,
+            name: row['name'] ?? '',
+            imageUrl: row['image_url'] ?? '',
+            category: row['category'] ?? '',
+            cost: (row['cost'] ?? 0).toDouble(),
+            stock: (row['stock'] ?? 0).toInt(),
+            unit: row['unit'] ?? '',
+            supplier: row['supplier'] ?? '',
+            brand: row['brand'] ?? '',
+            expiry: row['expiry'],
+            noExpiry: row['no_expiry'] ?? false,
+            archived: row['archived'] ?? false,
+          );
+        });
   }
 
   /// Stream the total stock for a specific expired date of a product (name + brand)
@@ -41,28 +43,26 @@ class ExpiredViewSupplyController {
 
     final targetDate = normalize(expiry);
 
-    return FirebaseFirestore.instance
-        .collection('supplies')
-        .where('name', isEqualTo: name)
-        .where('brand', isEqualTo: brand)
-        .snapshots()
-        .map((snapshot) {
-      final items = snapshot.docs
-          .map((doc) {
-            final data = doc.data();
+    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
+      // Filter by name and brand on the client side
+      final filteredData = data
+          .where((row) => row['name'] == name && row['brand'] == brand)
+          .toList();
+      final items = filteredData
+          .map((row) {
             return InventoryItem(
-              id: doc.id,
-              name: data['name'] ?? '',
-              imageUrl: data['imageUrl'] ?? '',
-              category: data['category'] ?? '',
-              cost: (data['cost'] ?? 0).toDouble(),
-              stock: (data['stock'] ?? 0) as int,
-              unit: data['unit'] ?? '',
-              supplier: data['supplier'] ?? '',
-              brand: data['brand'] ?? '',
-              expiry: data['expiry'],
-              noExpiry: data['noExpiry'] ?? false,
-              archived: data['archived'] ?? false,
+              id: row['id'] as String,
+              name: row['name'] ?? '',
+              imageUrl: row['image_url'] ?? '',
+              category: row['category'] ?? '',
+              cost: (row['cost'] ?? 0).toDouble(),
+              stock: (row['stock'] ?? 0).toInt(),
+              unit: row['unit'] ?? '',
+              supplier: row['supplier'] ?? '',
+              brand: row['brand'] ?? '',
+              expiry: row['expiry'],
+              noExpiry: row['no_expiry'] ?? false,
+              archived: row['archived'] ?? false,
             );
           })
           .where((it) => it.archived == false)
@@ -95,28 +95,26 @@ class ExpiredViewSupplyController {
   /// Get stream of other expired batches of the same product (same name + brand)
   Stream<List<InventoryItem>> getOtherExpiredBatchesStream(
       String productName, String brand, String currentItemId) {
-    return FirebaseFirestore.instance
-        .collection('supplies')
-        .where('name', isEqualTo: productName)
-        .where('brand', isEqualTo: brand)
-        .snapshots()
-        .map((snapshot) {
-      final items = snapshot.docs
-          .map((doc) {
-            final data = doc.data();
+    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
+      // Filter by name and brand on the client side
+      final filteredData = data
+          .where((row) => row['name'] == productName && row['brand'] == brand)
+          .toList();
+      final items = filteredData
+          .map((row) {
             return InventoryItem(
-              id: doc.id,
-              name: data['name'] ?? '',
-              imageUrl: data['imageUrl'] ?? '',
-              category: data['category'] ?? '',
-              cost: (data['cost'] ?? 0).toDouble(),
-              stock: (data['stock'] ?? 0) as int,
-              unit: data['unit'] ?? '',
-              supplier: data['supplier'] ?? '',
-              brand: data['brand'] ?? '',
-              expiry: data['expiry'],
-              noExpiry: data['noExpiry'] ?? false,
-              archived: data['archived'] ?? false,
+              id: row['id'] as String,
+              name: row['name'] ?? '',
+              imageUrl: row['image_url'] ?? '',
+              category: row['category'] ?? '',
+              cost: (row['cost'] ?? 0).toDouble(),
+              stock: (row['stock'] ?? 0).toInt(),
+              unit: row['unit'] ?? '',
+              supplier: row['supplier'] ?? '',
+              brand: row['brand'] ?? '',
+              expiry: row['expiry'],
+              noExpiry: row['no_expiry'] ?? false,
+              archived: row['archived'] ?? false,
             );
           })
           .where((it) => it.archived == false)
@@ -145,55 +143,49 @@ class ExpiredViewSupplyController {
     });
   }
 
-  /// Delete supply permanently from Firebase
+  /// Delete supply permanently from Supabase
   Future<void> deleteSupply(String id) async {
     try {
       // Get the item data before deletion for activity log
-      final doc =
-          await FirebaseFirestore.instance.collection('supplies').doc(id).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
+      final itemResponse =
+          await _supabase.from('supplies').select('*').eq('id', id).single();
+
+      if (itemResponse.isNotEmpty) {
         final item = InventoryItem(
-          id: doc.id,
-          name: data['name'] ?? '',
-          imageUrl: data['imageUrl'] ?? '',
-          category: data['category'] ?? '',
-          cost: (data['cost'] ?? 0).toDouble(),
-          stock: (data['stock'] ?? 0) as int,
-          unit: data['unit'] ?? '',
-          supplier: data['supplier'] ?? '',
-          brand: data['brand'] ?? '',
-          expiry: data['expiry'],
-          noExpiry: data['noExpiry'] ?? false,
-          archived: data['archived'] ?? false,
+          id: itemResponse['id'] as String,
+          name: itemResponse['name'] ?? '',
+          imageUrl: itemResponse['image_url'] ?? '',
+          category: itemResponse['category'] ?? '',
+          cost: (itemResponse['cost'] ?? 0).toDouble(),
+          stock: (itemResponse['stock'] ?? 0).toInt(),
+          unit: itemResponse['unit'] ?? '',
+          supplier: itemResponse['supplier'] ?? '',
+          brand: itemResponse['brand'] ?? '',
+          expiry: itemResponse['expiry'],
+          noExpiry: itemResponse['no_expiry'] ?? false,
+          archived: itemResponse['archived'] ?? false,
         );
 
         // Determine whether this is the last batch for the product (same name + brand)
-        final siblings = await FirebaseFirestore.instance
-            .collection('supplies')
-            .where('name', isEqualTo: item.name)
-            .where('brand', isEqualTo: item.brand)
-            .get();
+        final siblings = await _supabase
+            .from('supplies')
+            .select('id')
+            .eq('name', item.name)
+            .eq('brand', item.brand);
 
-        final bool hasOtherBatches = siblings.docs.any((d) => d.id != id);
+        final bool hasOtherBatches = siblings.any((row) => row['id'] != id);
 
         if (hasOtherBatches) {
           // Safe to delete this expired batch only
-          await FirebaseFirestore.instance
-              .collection('supplies')
-              .doc(id)
-              .delete();
+          await _supabase.from('supplies').delete().eq('id', id);
         } else {
           // This is the last batch of the product. Convert to a placeholder
           // so the product remains visible in catalog/pickers with 0 stock.
-          await FirebaseFirestore.instance
-              .collection('supplies')
-              .doc(id)
-              .update({
+          await _supabase.from('supplies').update({
             'stock': 0,
-            'noExpiry': true,
+            'no_expiry': true,
             'expiry': null,
-          });
+          }).eq('id', id);
         }
 
         // Log the disposal of an expired supply

@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class InventoryItem {
   final String id;
   final String name;
@@ -52,7 +50,7 @@ class Brand {
     return Brand(
       id: id,
       name: map['name'] ?? '',
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
+      createdAt: DateTime.parse(map['created_at'] as String),
     );
   }
 }
@@ -79,7 +77,7 @@ class Supplier {
     return Supplier(
       id: id,
       name: map['name'] ?? '',
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
+      createdAt: DateTime.parse(map['created_at'] as String),
     );
   }
 }

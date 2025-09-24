@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/dashboard/pages/dashboard_page.dart';
 import 'package:projects/features/auth/services/auth_service.dart';
 import 'package:projects/features/activity_log/controller/login_activity_controller.dart';
@@ -97,21 +97,21 @@ class LoginController {
           MaterialPageRoute(builder: (_) => const Dashboard()),
         );
       }
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       String title = "Login Failed";
-      String message = "";
+      String message = e.message;
 
-      if (e.code == 'invalid-email') {
+      if (e.message.contains('invalid') || e.message.contains('Invalid')) {
         hasEmailError = true;
         message = "Enter a valid email or username.";
-      } else if (e.code == 'user-disabled') {
+      } else if (e.message.contains('inactive') ||
+          e.message.contains('disabled')) {
         hasEmailError = true;
         hasPasswordError = true;
         title = "Login Denied";
         message = "This account is currently deactivated.";
-      } else if (e.code == 'user-not-found' ||
-          e.code == 'wrong-password' ||
-          e.code == 'invalid-credential') {
+      } else if (e.message.contains('not found') ||
+          e.message.contains('password')) {
         hasEmailError = true;
         hasPasswordError = true;
         message = "Incorrect email/username or password.";

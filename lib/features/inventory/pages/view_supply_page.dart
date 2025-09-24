@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/components/inventory_other_expiry_dates.dart';
 import 'package:projects/features/inventory/pages/edit_supply_page.dart';
 import '../controller/view_supply_controller.dart';
 import 'package:projects/features/inventory/pages/archive_supply_page.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
 
-class InventoryViewSupplyPage extends StatelessWidget {
+class InventoryViewSupplyPage extends StatefulWidget {
   final InventoryItem item;
   final bool skipAutoRedirect; // when navigating from Other Expiry Dates
   final bool
@@ -20,11 +20,28 @@ class InventoryViewSupplyPage extends StatelessWidget {
       this.hideOtherExpirySection = false});
 
   @override
+  State<InventoryViewSupplyPage> createState() =>
+      _InventoryViewSupplyPageState();
+}
+
+class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
+  // Add a key to force rebuild when needed
+  Key _streamKey = UniqueKey();
+
+  // Method to refresh the stream
+  void _refreshStream() {
+    setState(() {
+      _streamKey = UniqueKey();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final controller = ViewSupplyController();
 
     return StreamBuilder<InventoryItem?>(
-      stream: controller.supplyStream(item.id),
+      key: _streamKey,
+      stream: controller.supplyStream(widget.item.id),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
@@ -41,7 +58,7 @@ class InventoryViewSupplyPage extends StatelessWidget {
         final updatedItem = snapshot.data!;
         // If this batch is expired, redirect to Expired View page to keep
         // inventory view free of expired supplies
-        if (_isItemExpired(updatedItem) && !skipAutoRedirect) {
+        if (_isItemExpired(updatedItem) && !widget.skipAutoRedirect) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
@@ -60,26 +77,25 @@ class InventoryViewSupplyPage extends StatelessWidget {
         // If there are other batches with earlier expiry, redirect to earliest
         // Query same name+brand and pick the earliest non-null expiry
         // UI-only re-route; no backend change
-        if (skipAutoRedirect) {
+        if (widget.skipAutoRedirect) {
           final status = controller.getStatus(updatedItem);
           return _buildScaffold(context, controller, updatedItem, status);
         }
-        return FutureBuilder<QuerySnapshot>(
-          future: FirebaseFirestore.instance
-              .collection('supplies')
-              .where('name', isEqualTo: updatedItem.name)
-              .where('brand', isEqualTo: updatedItem.brand)
-              .get(),
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: Supabase.instance.client
+              .from('supplies')
+              .select('*')
+              .eq('name', updatedItem.name)
+              .eq('brand', updatedItem.brand),
           builder: (context, batchSnap) {
             if (batchSnap.hasData) {
-              final docs = batchSnap.data!.docs;
+              final rows = batchSnap.data!;
               DateTime? earliest;
-              QueryDocumentSnapshot? earliestDoc;
+              Map<String, dynamic>? earliestRow;
               final now = DateTime.now();
               final today = DateTime(now.year, now.month, now.day);
-              for (final d in docs) {
-                final data = d.data() as Map<String, dynamic>;
-                final expStr = data['expiry']?.toString();
+              for (final row in rows) {
+                final expStr = row['expiry']?.toString();
                 if (expStr == null || expStr.isEmpty) continue;
                 final dt = DateTime.tryParse(expStr.replaceAll('/', '-'));
                 if (dt == null) continue;
@@ -91,10 +107,10 @@ class InventoryViewSupplyPage extends StatelessWidget {
                 }
                 if (earliest == null || dateOnly.isBefore(earliest)) {
                   earliest = dateOnly;
-                  earliestDoc = d;
+                  earliestRow = row;
                 }
               }
-              if (earliestDoc != null && earliestDoc.id != updatedItem.id) {
+              if (earliestRow != null && earliestRow['id'] != updatedItem.id) {
                 // Replace page with earliest batch view
                 // Schedule navigation after current frame to avoid ancestor lookup on deactivated context
                 WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -103,40 +119,18 @@ class InventoryViewSupplyPage extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) => InventoryViewSupplyPage(
                           item: InventoryItem(
-                            id: earliestDoc!.id,
-                            name: (earliestDoc.data()
-                                    as Map<String, dynamic>)['name'] ??
-                                '',
-                            imageUrl: (earliestDoc.data()
-                                    as Map<String, dynamic>)['imageUrl'] ??
-                                '',
-                            category: (earliestDoc.data()
-                                    as Map<String, dynamic>)['category'] ??
-                                '',
-                            cost: ((earliestDoc.data()
-                                        as Map<String, dynamic>)['cost'] ??
-                                    0)
-                                .toDouble(),
-                            stock: ((earliestDoc.data()
-                                    as Map<String, dynamic>)['stock'] ??
-                                0) as int,
-                            unit: (earliestDoc.data()
-                                    as Map<String, dynamic>)['unit'] ??
-                                '',
-                            supplier: (earliestDoc.data()
-                                    as Map<String, dynamic>)['supplier'] ??
-                                '',
-                            brand: (earliestDoc.data()
-                                    as Map<String, dynamic>)['brand'] ??
-                                '',
-                            expiry: (earliestDoc.data()
-                                as Map<String, dynamic>)['expiry'],
-                            noExpiry: (earliestDoc.data()
-                                    as Map<String, dynamic>)['noExpiry'] ??
-                                false,
-                            archived: (earliestDoc.data()
-                                    as Map<String, dynamic>)['archived'] ??
-                                false,
+                            id: earliestRow!['id'] as String,
+                            name: earliestRow['name'] ?? '',
+                            imageUrl: earliestRow['image_url'] ?? '',
+                            category: earliestRow['category'] ?? '',
+                            cost: (earliestRow['cost'] ?? 0).toDouble(),
+                            stock: (earliestRow['stock'] ?? 0).toInt(),
+                            unit: earliestRow['unit'] ?? '',
+                            supplier: earliestRow['supplier'] ?? '',
+                            brand: earliestRow['brand'] ?? '',
+                            expiry: earliestRow['expiry'],
+                            noExpiry: earliestRow['no_expiry'] ?? false,
+                            archived: earliestRow['archived'] ?? false,
                           ),
                           skipAutoRedirect: true,
                         ),
@@ -202,15 +196,17 @@ class InventoryViewSupplyPage extends StatelessWidget {
                   ),
                 );
                 if (result == true) {
+                  // Refresh the stream to get updated data
+                  _refreshStream();
                   // Avoid showing a snackbar if the item is now expired,
                   // because this page may immediately redirect to the Expired view
                   try {
-                    final doc = await FirebaseFirestore.instance
-                        .collection('supplies')
-                        .doc(updatedItem.id)
-                        .get();
-                    final data = doc.data();
-                    final expiryStr = data?['expiry']?.toString();
+                    final response = await Supabase.instance.client
+                        .from('supplies')
+                        .select('expiry')
+                        .eq('id', updatedItem.id)
+                        .single();
+                    final expiryStr = response['expiry']?.toString();
                     bool isExpiredNow = false;
                     if (expiryStr != null && expiryStr.isNotEmpty) {
                       final dt = DateTime.tryParse(expiryStr) ??
@@ -253,6 +249,8 @@ class InventoryViewSupplyPage extends StatelessWidget {
                 );
                 if (confirmed == true) {
                   await controller.archiveSupply(updatedItem.id);
+                  // Refresh the stream to show updated status
+                  _refreshStream();
                   if (!context.mounted) return;
                   Navigator.of(context).pushReplacement(
                     MaterialPageRoute(
@@ -280,8 +278,11 @@ class InventoryViewSupplyPage extends StatelessWidget {
                 );
                 if (confirmed == true) {
                   await controller.unarchiveSupply(updatedItem.id);
+                  // Refresh the stream to show updated status
+                  _refreshStream();
                   if (!context.mounted) return;
-                  Navigator.of(context).pop(); // Go back to archive page
+                  Navigator.of(context)
+                      .pop('unarchived'); // Go back to archive page with result
                 }
               },
             ),
@@ -330,374 +331,384 @@ class InventoryViewSupplyPage extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 18),
-                  Text(
-                    updatedItem.name,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 22,
-                        color: Theme.of(context).textTheme.bodyMedium?.color),
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    updatedItem.category,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.color
-                          ?.withOpacity(0.7),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: updatedItem.imageUrl.isNotEmpty
-                          ? Image.network(
-                              updatedItem.imageUrl,
-                              width: 130,
-                              height: 130,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              width: 130,
-                              height: 130,
-                              color: Theme.of(context)
-                                  .dividerColor
-                                  .withOpacity(0.15),
-                              child: const Icon(Icons.image,
-                                  size: 40, color: Colors.grey),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: controller.getStatusBgColor(status),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        status,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: controller.getStatusTextColor(status),
+            RefreshIndicator(
+              onRefresh: () async {
+                _refreshStream();
+                // Wait a bit for the stream to update
+                await Future.delayed(Duration(milliseconds: 500));
+              },
+              child: SingleChildScrollView(
+                physics: AlwaysScrollableScrollPhysics(),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 18),
+                    Text(
+                      updatedItem.name,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                          fontSize: 22,
+                          color: Theme.of(context).textTheme.bodyMedium?.color),
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      updatedItem.category,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.color
+                            ?.withOpacity(0.7),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text("Stock",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
-                            const SizedBox(height: 4),
-                            Text("${updatedItem.stock}",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15),
-                                textAlign: TextAlign.center),
-                          ],
-                        ),
+                    const SizedBox(height: 14),
+                    Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: updatedItem.imageUrl.isNotEmpty
+                            ? Image.network(
+                                updatedItem.imageUrl,
+                                width: 130,
+                                height: 130,
+                                fit: BoxFit.cover,
+                              )
+                            : Container(
+                                width: 130,
+                                height: 130,
+                                color: Theme.of(context)
+                                    .dividerColor
+                                    .withOpacity(0.15),
+                                child: const Icon(Icons.image,
+                                    size: 40, color: Colors.grey),
+                              ),
                       ),
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text("Unit",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
-                            const SizedBox(height: 4),
-                            Text(updatedItem.unit,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15),
-                                textAlign: TextAlign.center),
-                          ],
+                    ),
+                    const SizedBox(height: 24),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: controller.getStatusBgColor(status),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ),
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text("Cost",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
-                            const SizedBox(height: 4),
-                            Text("₱${updatedItem.cost.toStringAsFixed(2)}",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15),
-                                textAlign: TextAlign.center),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text("Brand Name",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
-                            const SizedBox(height: 4),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final textPainter = TextPainter(
-                                  text: TextSpan(
-                                    text: updatedItem.brand,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  textDirection: TextDirection.ltr,
-                                );
-                                textPainter.layout();
-
-                                final textWidth = textPainter.width;
-                                final containerWidth = constraints.maxWidth;
-
-                                if (textWidth > containerWidth) {
-                                  // Text is too long, use marquee
-                                  return SizedBox(
-                                    height: 20,
-                                    child: Marquee(
-                                      text: updatedItem.brand,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.w500,
-                                              fontSize: 15,
-                                              color: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium
-                                                  ?.color),
-                                      scrollAxis: Axis.horizontal,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      blankSpace: 20.0,
-                                      velocity: 30.0,
-                                      pauseAfterRound:
-                                          const Duration(seconds: 1),
-                                      startPadding: 10.0,
-                                      accelerationDuration:
-                                          const Duration(seconds: 1),
-                                      accelerationCurve: Curves.linear,
-                                      decelerationDuration:
-                                          const Duration(milliseconds: 500),
-                                      decelerationCurve: Curves.easeOut,
-                                    ),
-                                  );
-                                } else {
-                                  // Text fits, use normal text
-                                  return Text(
-                                    updatedItem.brand,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 15),
-                                    textAlign: TextAlign.center,
-                                  );
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text("Expiry",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
-                            const SizedBox(height: 4),
-                            Text(
-                              (updatedItem.expiry != null &&
-                                      updatedItem.expiry!.isNotEmpty)
-                                  ? updatedItem.expiry!.replaceAll('-', '/')
-                                  : "No expiry",
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 15),
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text("Supplier",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
-                            const SizedBox(height: 4),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final textPainter = TextPainter(
-                                  text: TextSpan(
-                                    text: updatedItem.supplier,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  textDirection: TextDirection.ltr,
-                                );
-                                textPainter.layout();
-
-                                final textWidth = textPainter.width;
-                                final containerWidth = constraints.maxWidth;
-
-                                if (textWidth > containerWidth) {
-                                  // long text = marquee animation
-                                  return SizedBox(
-                                    height: 20,
-                                    child: Marquee(
-                                      text: updatedItem.supplier,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.w500,
-                                              fontSize: 15,
-                                              color: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium
-                                                  ?.color),
-                                      scrollAxis: Axis.horizontal,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      blankSpace: 20.0,
-                                      velocity: 30.0,
-                                      pauseAfterRound:
-                                          const Duration(seconds: 1),
-                                      startPadding: 10.0,
-                                      accelerationDuration:
-                                          const Duration(seconds: 1),
-                                      accelerationCurve: Curves.linear,
-                                      decelerationDuration:
-                                          const Duration(milliseconds: 500),
-                                      decelerationCurve: Curves.easeOut,
-                                    ),
-                                  );
-                                } else {
-                                  // short text = no animation
-                                  return Text(
-                                    updatedItem.supplier,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 15),
-                                    textAlign: TextAlign.center,
-                                  );
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-                  Divider(
-                      thickness: 1.2,
-                      height: 36,
-                      color: Theme.of(context).dividerColor),
-                  if (!hideOtherExpirySection) ...[
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 10.0, top: 2.0),
                         child: Text(
-                          "Other Expiry Dates",
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                  fontWeight: FontWeight.bold, fontSize: 18),
+                          status,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: controller.getStatusTextColor(status),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                     ),
-                    // Show live batches from Firestore; if none, fall back to embedded expiryBatches if present
-                    FirestoreOtherExpiryBatches(item: updatedItem),
-                    _EmbeddedExpiryBatchesFallback(item: updatedItem),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text("Stock",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15)),
+                              const SizedBox(height: 4),
+                              Text("${updatedItem.stock}",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15),
+                                  textAlign: TextAlign.center),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text("Unit",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15)),
+                              const SizedBox(height: 4),
+                              Text(updatedItem.unit,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15),
+                                  textAlign: TextAlign.center),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text("Cost",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15)),
+                              const SizedBox(height: 4),
+                              Text("₱${updatedItem.cost.toStringAsFixed(2)}",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15),
+                                  textAlign: TextAlign.center),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text("Brand Name",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15)),
+                              const SizedBox(height: 4),
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final textPainter = TextPainter(
+                                    text: TextSpan(
+                                      text: updatedItem.brand,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    textDirection: TextDirection.ltr,
+                                  );
+                                  textPainter.layout();
+
+                                  final textWidth = textPainter.width;
+                                  final containerWidth = constraints.maxWidth;
+
+                                  if (textWidth > containerWidth) {
+                                    // Text is too long, use marquee
+                                    return SizedBox(
+                                      height: 20,
+                                      child: Marquee(
+                                        text: updatedItem.brand,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 15,
+                                                color: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.color),
+                                        scrollAxis: Axis.horizontal,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        blankSpace: 20.0,
+                                        velocity: 30.0,
+                                        pauseAfterRound:
+                                            const Duration(seconds: 1),
+                                        startPadding: 10.0,
+                                        accelerationDuration:
+                                            const Duration(seconds: 1),
+                                        accelerationCurve: Curves.linear,
+                                        decelerationDuration:
+                                            const Duration(milliseconds: 500),
+                                        decelerationCurve: Curves.easeOut,
+                                      ),
+                                    );
+                                  } else {
+                                    // Text fits, use normal text
+                                    return Text(
+                                      updatedItem.brand,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 15),
+                                      textAlign: TextAlign.center,
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text("Expiry",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15)),
+                              const SizedBox(height: 4),
+                              Text(
+                                (updatedItem.expiry != null &&
+                                        updatedItem.expiry!.isNotEmpty)
+                                    ? updatedItem.expiry!.replaceAll('-', '/')
+                                    : "No expiry",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15),
+                                textAlign: TextAlign.center,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 2,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text("Supplier",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15)),
+                              const SizedBox(height: 4),
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final textPainter = TextPainter(
+                                    text: TextSpan(
+                                      text: updatedItem.supplier,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    textDirection: TextDirection.ltr,
+                                  );
+                                  textPainter.layout();
+
+                                  final textWidth = textPainter.width;
+                                  final containerWidth = constraints.maxWidth;
+
+                                  if (textWidth > containerWidth) {
+                                    // long text = marquee animation
+                                    return SizedBox(
+                                      height: 20,
+                                      child: Marquee(
+                                        text: updatedItem.supplier,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 15,
+                                                color: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.color),
+                                        scrollAxis: Axis.horizontal,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        blankSpace: 20.0,
+                                        velocity: 30.0,
+                                        pauseAfterRound:
+                                            const Duration(seconds: 1),
+                                        startPadding: 10.0,
+                                        accelerationDuration:
+                                            const Duration(seconds: 1),
+                                        accelerationCurve: Curves.linear,
+                                        decelerationDuration:
+                                            const Duration(milliseconds: 500),
+                                        decelerationCurve: Curves.easeOut,
+                                      ),
+                                    );
+                                  } else {
+                                    // short text = no animation
+                                    return Text(
+                                      updatedItem.supplier,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 15),
+                                      textAlign: TextAlign.center,
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    Divider(
+                        thickness: 1.2,
+                        height: 36,
+                        color: Theme.of(context).dividerColor),
+                    if (!widget.hideOtherExpirySection) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: 10.0, top: 2.0),
+                          child: Text(
+                            "Other Expiry Dates",
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    fontWeight: FontWeight.bold, fontSize: 18),
+                          ),
+                        ),
+                      ),
+                      // Show live batches from Firestore; if none, fall back to embedded expiryBatches if present
+                      SupabaseOtherExpiryBatches(item: updatedItem),
+                      _EmbeddedExpiryBatchesFallback(item: updatedItem),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ],

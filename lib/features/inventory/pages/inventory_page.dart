@@ -42,11 +42,37 @@ class _InventoryState extends State<Inventory> {
   final FilterController filterController = FilterController();
   final CategoriesController categoriesController = CategoriesController();
 
+  // ─── Real-time State ─────────────────────────────────────────────────────
+  Key _categoriesStreamKey = UniqueKey();
+  Key _inventoryStreamKey = UniqueKey();
+
   // Add ScrollController for Choice Chips
   final ScrollController _chipsScrollController = ScrollController();
 
   // Map to store GlobalKeys for each chip
   final Map<int, GlobalKey> _chipKeys = {};
+
+  // Method to refresh the categories stream
+  void _refreshCategoriesStream() {
+    setState(() {
+      _categoriesStreamKey = UniqueKey();
+    });
+  }
+
+  // Method to refresh the inventory stream
+  void _refreshInventoryStream() {
+    setState(() {
+      _inventoryStreamKey = UniqueKey();
+    });
+  }
+
+  // Method to refresh both streams
+  void _refreshAllStreams() {
+    setState(() {
+      _categoriesStreamKey = UniqueKey();
+      _inventoryStreamKey = UniqueKey();
+    });
+  }
 
   void _showFilterModal(BuildContext context) {
     showModalBottomSheet(
@@ -188,432 +214,463 @@ class _InventoryState extends State<Inventory> {
       ),
       drawer: const MyDrawer(),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Search Bar + filter/sort
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search...',
-                        hintStyle: AppFonts.sfProStyle(
-                          fontSize: 16,
-                          color: theme.textTheme.bodyMedium?.color
-                              ?.withOpacity(0.6),
-                        ),
-                        prefixIcon:
-                            Icon(Icons.search, color: theme.iconTheme.color),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding:
-                            EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                        filled: true,
-                        fillColor: scheme.surface,
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          searchText = value;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    height: 48,
-                    width: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        backgroundColor: currentFilters.isNotEmpty
-                            ? const Color(0xFF4E38D4)
-                            : scheme.surface,
-                        foregroundColor: currentFilters.isNotEmpty
-                            ? Colors.white
-                            : theme.textTheme.bodyMedium?.color,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 1,
-                      ),
-                      onPressed: () => _showFilterModal(context),
-                      child: Icon(Icons.filter_alt_outlined),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    height: 48,
-                    width: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        backgroundColor: scheme.surface,
-                        foregroundColor: theme.textTheme.bodyMedium?.color,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 1,
-                      ),
-                      onPressed: () => _showSortModal(context),
-                      child: Icon(Icons.sort_by_alpha),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              StreamBuilder<List<String>>(
-                stream: categoriesController.getCategoriesStream(),
-                builder: (context, snapshot) {
-                  final currentCategories = snapshot.data ?? [];
-                  final List<String> categoriesWithAll = [
-                    'All Supplies',
-                    ...currentCategories
-                  ];
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return SizedBox(height: 50);
-                  }
-
-                  if (snapshot.hasError) {
-                    return SizedBox(
-                      height: 50,
-                      child: Center(
-                        child: Text(
-                          'Error loading categories',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontSize: 14,
+        child: RefreshIndicator(
+          onRefresh: () async {
+            _refreshAllStreams();
+            // Wait a bit for the streams to update
+            await Future.delayed(Duration(milliseconds: 500));
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Search Bar + filter/sort
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search...',
+                          hintStyle: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.6),
                           ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  // Auto-scroll to selected chip when categories are loaded
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (selectedCategory < categoriesWithAll.length &&
-                        _chipsScrollController.hasClients) {
-                      _scrollToSelectedChip(
-                          selectedCategory, categoriesWithAll);
-                    }
-                  });
-
-                  // Clear old keys if categories changed
-                  if (_chipKeys.length != categoriesWithAll.length) {
-                    _chipKeys.clear();
-                  }
-
-                  return SingleChildScrollView(
-                    controller: _chipsScrollController,
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children:
-                          List.generate(categoriesWithAll.length, (index) {
-                        final isSelected = selectedCategory == index;
-                        // Ensure we have a GlobalKey for this index
-                        if (!_chipKeys.containsKey(index)) {
-                          _chipKeys[index] = GlobalKey();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: ChoiceChip(
-                            key: _chipKeys[index],
-                            label: Text(categoriesWithAll[index]),
-                            selected: isSelected,
-                            showCheckmark: false,
-                            selectedColor: const Color(0xFF4E38D4),
-                            backgroundColor: scheme.surface,
-                            labelStyle: TextStyle(
-                              color: isSelected
-                                  ? Colors.white
-                                  : theme.textTheme.bodyMedium?.color,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            shape: StadiumBorder(
-                              side: BorderSide(
-                                color: isSelected
-                                    ? const Color(0xFF4E38D4)
-                                    : theme.dividerColor,
-                              ),
-                            ),
-                            onSelected: (selected) {
-                              setState(() {
-                                selectedCategory = index;
-                              });
-                              // Scroll to the selected chip
-                              _scrollToSelectedChip(index, categoriesWithAll);
-                            },
+                          prefixIcon:
+                              Icon(Icons.search, color: theme.iconTheme.color),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
-                        );
-                      }),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding:
+                              EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                          filled: true,
+                          fillColor: scheme.surface,
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            searchText = value;
+                          });
+                        },
+                      ),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Firestore-powered, category-filtered, search-filtered, responsive grid
-              Expanded(
-                child: StreamBuilder<List<String>>(
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      width: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          backgroundColor: currentFilters.isNotEmpty
+                              ? const Color(0xFF4E38D4)
+                              : scheme.surface,
+                          foregroundColor: currentFilters.isNotEmpty
+                              ? Colors.white
+                              : theme.textTheme.bodyMedium?.color,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 1,
+                        ),
+                        onPressed: () => _showFilterModal(context),
+                        child: Icon(Icons.filter_alt_outlined),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 48,
+                      width: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          backgroundColor: scheme.surface,
+                          foregroundColor: theme.textTheme.bodyMedium?.color,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 1,
+                        ),
+                        onPressed: () => _showSortModal(context),
+                        child: Icon(Icons.sort_by_alpha),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                StreamBuilder<List<String>>(
+                  key: _categoriesStreamKey,
                   stream: categoriesController.getCategoriesStream(),
-                  builder: (context, categorySnapshot) {
-                    final currentCategories = categorySnapshot.data ?? [];
-                    final categoriesWithAll = [
+                  builder: (context, snapshot) {
+                    final currentCategories = snapshot.data ?? [];
+                    final List<String> categoriesWithAll = [
                       'All Supplies',
                       ...currentCategories
                     ];
-                    final selectedCategoryName = (selectedCategory == 0)
-                        ? "" // empty means no category filter -> show all
-                        : (selectedCategory < categoriesWithAll.length
-                            ? categoriesWithAll[selectedCategory]
-                            : "");
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return SizedBox(height: 50);
+                    }
 
-                    return StreamBuilder<List<GroupedInventoryItem>>(
-                      stream:
-                          controller.getGroupedSuppliesStream(archived: false),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return Center(
-                            child: SizedBox(),
-                          );
-                        }
-
-                        if (snapshot.hasError) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.error_outline,
-                                    size: 64, color: Colors.red),
-                                SizedBox(height: 16),
-                                Text(
-                                  'Error loading inventory',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Please try again later',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
+                    if (snapshot.hasError) {
+                      return SizedBox(
+                        height: 50,
+                        child: Center(
+                          child: Text(
+                            'Error loading categories',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
                             ),
-                          );
-                        }
+                          ),
+                        ),
+                      );
+                    }
 
-                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.inventory_2_outlined,
-                                    size: 64, color: Colors.grey),
-                                SizedBox(height: 16),
-                                Text(
-                                  'No supplies found',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Add your first supply using the + button',
-                                  style: TextStyle(
-                                    color: Colors.grey[500],
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
+                    // Auto-scroll to selected chip when categories are loaded
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (selectedCategory < categoriesWithAll.length &&
+                          _chipsScrollController.hasClients) {
+                        _scrollToSelectedChip(
+                            selectedCategory, categoriesWithAll);
+                      }
+                    });
 
-                        // Use controller to filter and sort grouped items
-                        final sortedItems =
-                            controller.filterAndSortGroupedItems(
-                          items: snapshot.data!,
-                          selectedCategory: selectedCategoryName,
-                          searchText: searchText,
-                          selectedSort: selectedSort,
-                          filters: currentFilters,
-                        );
+                    // Clear old keys if categories changed
+                    if (_chipKeys.length != categoriesWithAll.length) {
+                      _chipKeys.clear();
+                    }
 
-                        // Filter out expired items from main inventory - they should only appear in Expired Supply page
-                        // But keep non-expired batches even if other batches of the same product are expired
-                        final visibleItems = sortedItems.where((item) {
-                          return item.getStatus() != "Expired";
-                        }).toList();
-
-                        // Handle deep-link to specific supply once, after frame
-                        if (!_deepLinkHandled &&
-                            _highlightSupplyName != null &&
-                            _highlightSupplyName!.isNotEmpty) {
-                          GroupedInventoryItem? target;
-                          for (final g in sortedItems) {
-                            if (g.mainItem.name.toLowerCase() ==
-                                _highlightSupplyName!.toLowerCase()) {
-                              target = g;
-                              break;
-                            }
+                    return SingleChildScrollView(
+                      controller: _chipsScrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children:
+                            List.generate(categoriesWithAll.length, (index) {
+                          final isSelected = selectedCategory == index;
+                          // Ensure we have a GlobalKey for this index
+                          if (!_chipKeys.containsKey(index)) {
+                            _chipKeys[index] = GlobalKey();
                           }
-                          if (target != null) {
-                            _deepLinkHandled = true;
-                            final t = target;
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              // Check if this is a placeholder (0 stock, no expiry, and not expired)
-                              if (t.mainItem.stock == 0 &&
-                                  t.mainItem.noExpiry &&
-                                  t.getStatus() != "Expired") {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        '${t.mainItem.name} has expired and is no longer available.'),
-                                    backgroundColor: Colors.orange,
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              } else {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        InventoryViewSupplyPage(
-                                            item: t.mainItem),
-                                  ),
-                                );
-                              }
-                            });
-                          }
-                        }
-
-                        return LayoutBuilder(
-                          builder: (context, constraints) {
-                            // Since cards now show expiry dates for expiring/expired items regardless of filters,
-                            // use a more conservative aspect ratio to accommodate the extra height
-                            double aspectRatio =
-                                constraints.maxWidth < 400 ? 0.7 : 0.85;
-                            return GridView.builder(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  mainAxisSpacing: 12,
-                                  crossAxisSpacing: 12,
-                                  childAspectRatio: aspectRatio,
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: ChoiceChip(
+                              key: _chipKeys[index],
+                              label: Text(categoriesWithAll[index]),
+                              selected: isSelected,
+                              showCheckmark: false,
+                              selectedColor: const Color(0xFF4E38D4),
+                              backgroundColor: scheme.surface,
+                              labelStyle: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : theme.textTheme.bodyMedium?.color,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              shape: StadiumBorder(
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? const Color(0xFF4E38D4)
+                                      : theme.dividerColor,
                                 ),
-                                itemCount: visibleItems.length,
-                                itemBuilder: (context, index) {
-                                  final groupedItem = visibleItems[index];
-                                  return GestureDetector(
-                                    onTap: () {
-                                      // Check if this is a placeholder (0 stock, no expiry, and not expired)
-                                      // Only show message for true placeholders, not expired items
-                                      if (groupedItem.mainItem.stock == 0 &&
-                                          groupedItem.mainItem.noExpiry &&
-                                          groupedItem.getStatus() !=
-                                              "Expired") {
-                                        // Show a message for placeholder items
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                                '${groupedItem.mainItem.name} has expired and is no longer available.'),
-                                            backgroundColor: Colors.orange,
-                                            duration: Duration(seconds: 2),
-                                          ),
-                                        );
-                                        return;
-                                      }
-                                      // Allow navigation for all other items, including expired ones
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              InventoryViewSupplyPage(
-                                                  item: groupedItem.mainItem),
-                                        ),
-                                      );
-                                    },
-                                    child: InventoryItemCard(
-                                      item: groupedItem.mainItem,
-                                      status: groupedItem.getStatus(),
-                                      currentSort: selectedSort,
-                                      overrideStock: groupedItem.totalStock,
-                                    ),
-                                  );
+                              ),
+                              onSelected: (selected) {
+                                setState(() {
+                                  selectedCategory = index;
                                 });
-                          },
-                        );
-                      },
+                                // Scroll to the selected chip
+                                _scrollToSelectedChip(index, categoriesWithAll);
+                              },
+                            ),
+                          );
+                        }),
+                      ),
                     );
                   },
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+
+                // Firestore-powered, category-filtered, search-filtered, responsive grid
+                Expanded(
+                  child: StreamBuilder<List<String>>(
+                    key: _categoriesStreamKey,
+                    stream: categoriesController.getCategoriesStream(),
+                    builder: (context, categorySnapshot) {
+                      final currentCategories = categorySnapshot.data ?? [];
+                      final categoriesWithAll = [
+                        'All Supplies',
+                        ...currentCategories
+                      ];
+                      final selectedCategoryName = (selectedCategory == 0)
+                          ? "" // empty means no category filter -> show all
+                          : (selectedCategory < categoriesWithAll.length
+                              ? categoriesWithAll[selectedCategory]
+                              : "");
+
+                      return StreamBuilder<List<GroupedInventoryItem>>(
+                        key: _inventoryStreamKey,
+                        stream: controller.getGroupedSuppliesStream(
+                            archived: false),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return Center(
+                              child: SizedBox(),
+                            );
+                          }
+
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline,
+                                      size: 64, color: Colors.red),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'Error loading inventory',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Please try again later',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.inventory_2_outlined,
+                                      size: 64, color: Colors.grey),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'No supplies found',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Add your first supply using the + button',
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          // Use controller to filter and sort grouped items
+                          final sortedItems =
+                              controller.filterAndSortGroupedItems(
+                            items: snapshot.data!,
+                            selectedCategory: selectedCategoryName,
+                            searchText: searchText,
+                            selectedSort: selectedSort,
+                            filters: currentFilters,
+                          );
+
+                          // Filter out expired items from main inventory - they should only appear in Expired Supply page
+                          // But keep non-expired batches even if other batches of the same product are expired
+                          final visibleItems = sortedItems.where((item) {
+                            return item.getStatus() != "Expired";
+                          }).toList();
+
+                          // Handle deep-link to specific supply once, after frame
+                          if (!_deepLinkHandled &&
+                              _highlightSupplyName != null &&
+                              _highlightSupplyName!.isNotEmpty) {
+                            GroupedInventoryItem? target;
+                            for (final g in sortedItems) {
+                              if (g.mainItem.name.toLowerCase() ==
+                                  _highlightSupplyName!.toLowerCase()) {
+                                target = g;
+                                break;
+                              }
+                            }
+                            if (target != null) {
+                              _deepLinkHandled = true;
+                              final t = target;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                // Check if this is a placeholder (0 stock, no expiry, and not expired)
+                                if (t.mainItem.stock == 0 &&
+                                    t.mainItem.noExpiry &&
+                                    t.getStatus() != "Expired") {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          '${t.mainItem.name} has expired and is no longer available.'),
+                                      backgroundColor: Colors.orange,
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                } else {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          InventoryViewSupplyPage(
+                                              item: t.mainItem),
+                                    ),
+                                  );
+                                }
+                              });
+                            }
+                          }
+
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              // Since cards now show expiry dates for expiring/expired items regardless of filters,
+                              // use a more conservative aspect ratio to accommodate the extra height
+                              double aspectRatio =
+                                  constraints.maxWidth < 400 ? 0.7 : 0.85;
+                              return GridView.builder(
+                                  physics: AlwaysScrollableScrollPhysics(),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    mainAxisSpacing: 12,
+                                    crossAxisSpacing: 12,
+                                    childAspectRatio: aspectRatio,
+                                  ),
+                                  itemCount: visibleItems.length,
+                                  itemBuilder: (context, index) {
+                                    final groupedItem = visibleItems[index];
+                                    return GestureDetector(
+                                      onTap: () {
+                                        // Check if this is a placeholder (0 stock, no expiry, and not expired)
+                                        // Only show message for true placeholders, not expired items
+                                        if (groupedItem.mainItem.stock == 0 &&
+                                            groupedItem.mainItem.noExpiry &&
+                                            groupedItem.getStatus() !=
+                                                "Expired") {
+                                          // Show a message for placeholder items
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  '${groupedItem.mainItem.name} has expired and is no longer available.'),
+                                              backgroundColor: Colors.orange,
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                          return;
+                                        }
+                                        // Allow navigation for all other items, including expired ones
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                InventoryViewSupplyPage(
+                                                    item: groupedItem.mainItem),
+                                          ),
+                                        );
+                                      },
+                                      child: InventoryItemCard(
+                                        item: groupedItem.mainItem,
+                                        status: groupedItem.getStatus(),
+                                        currentSort: selectedSort,
+                                        overrideStock: groupedItem.totalStock,
+                                      ),
+                                    );
+                                  });
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
       floatingActionButton: InventoryFAB(
-        onAddSupply: () {
-          Navigator.push(
+        onAddSupply: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => const AddSupplyPage(),
             ),
           );
+          // Refresh inventory stream when returning from add page
+          if (result == true || result == 'added') {
+            _refreshInventoryStream();
+          }
         },
-        onArchivedSupply: () {
-          Navigator.push(
+        onArchivedSupply: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => const ArchiveSupplyPage(),
             ),
           );
+          // Refresh inventory stream when returning from archive page
+          if (result == true || result == 'unarchived') {
+            _refreshInventoryStream();
+          }
         },
-        onExpiredSupply: () {
-          Navigator.push(
+        onExpiredSupply: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => const ExpiredSupplyPage(),
             ),
           );
+          // Refresh inventory stream when returning from expired page
+          if (result == true || result == 'disposed') {
+            _refreshInventoryStream();
+          }
         },
-        onAddCategory: () {
-          Navigator.push(
+        onAddCategory: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => const AddCategoryPage(),
             ),
           );
+          // Refresh categories stream when returning from add page
+          if (result == true || result == 'added') {
+            _refreshCategoriesStream();
+          }
         },
-        onEditCategory: () {
-          Navigator.push(
+        onEditCategory: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => const EditCategoriesPage(),
             ),
           );
+          // Refresh categories stream when returning from edit page
+          if (result == true || result == 'updated' || result == 'deleted') {
+            _refreshCategoriesStream();
+          }
         },
       ),
     );

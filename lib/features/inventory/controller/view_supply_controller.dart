@@ -1,32 +1,34 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/inventory_item.dart';
 import 'package:flutter/material.dart';
 import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
 
 class ViewSupplyController {
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   Stream<InventoryItem?> supplyStream(String id) {
-    return FirebaseFirestore.instance
-        .collection('supplies')
-        .doc(id)
-        .snapshots()
-        .map((doc) {
-      if (!doc.exists) return null;
-      final data = doc.data() as Map<String, dynamic>;
-      return InventoryItem(
-        id: doc.id,
-        name: data['name'] ?? '',
-        imageUrl: data['imageUrl'] ?? '',
-        category: data['category'] ?? '',
-        cost: (data['cost'] ?? 0).toDouble(),
-        stock: (data['stock'] ?? 0) as int,
-        unit: data['unit'] ?? '',
-        supplier: data['supplier'] ?? '',
-        brand: data['brand'] ?? '',
-        expiry: data['expiry'],
-        noExpiry: data['noExpiry'] ?? false,
-        archived: data['archived'] ?? false,
-      );
-    });
+    return _supabase
+        .from('supplies')
+        .stream(primaryKey: ['id'])
+        .eq('id', id)
+        .map((data) {
+          if (data.isEmpty) return null;
+          final row = data.first;
+          return InventoryItem(
+            id: row['id'] as String,
+            name: row['name'] ?? '',
+            imageUrl: row['image_url'] ?? '',
+            category: row['category'] ?? '',
+            cost: (row['cost'] ?? 0).toDouble(),
+            stock: (row['stock'] ?? 0).toInt(),
+            unit: row['unit'] ?? '',
+            supplier: row['supplier'] ?? '',
+            brand: row['brand'] ?? '',
+            expiry: row['expiry'],
+            noExpiry: row['no_expiry'] ?? false,
+            archived: row['archived'] ?? false,
+          );
+        });
   }
 
   String getStatus(InventoryItem item) {
@@ -85,103 +87,89 @@ class ViewSupplyController {
 
   Future<void> archiveSupply(String docId) async {
     // Get supply data before archiving for activity logging and name-based bulk archive
-    final suppliesRef = FirebaseFirestore.instance.collection('supplies');
-    final supplyDoc = await suppliesRef.doc(docId).get();
+    final supplyResponse =
+        await _supabase.from('supplies').select('*').eq('id', docId).single();
 
-    if (!supplyDoc.exists) return;
+    if (supplyResponse.isEmpty) return;
 
-    final supplyData = supplyDoc.data() as Map<String, dynamic>;
-    final String name = (supplyData['name'] ?? '').toString();
+    final String name = (supplyResponse['name'] ?? '').toString();
 
     // Archive all stocks that share the same name
-    final query = await suppliesRef.where('name', isEqualTo: name).get();
-    final batch = FirebaseFirestore.instance.batch();
-    for (final doc in query.docs) {
-      batch.update(doc.reference, {'archived': true});
-    }
-    await batch.commit();
+    await _supabase
+        .from('supplies')
+        .update({'archived': true}).eq('name', name);
 
     // Log the archive activity for the initiating item (single log to avoid spam)
     await InventoryActivityController().logInventorySupplyArchived(
-      itemName: supplyData['name'] ?? 'Unknown Item',
-      category: supplyData['category'] ?? 'Unknown Category',
-      stock: supplyData['stock'] ?? 0,
-      unit: supplyData['unit'] ?? 'Unknown Unit',
-      cost: supplyData['cost'],
-      brand: supplyData['brand'],
-      supplier: supplyData['supplier'],
-      expiryDate: supplyData['expiryDate'],
-      noExpiry: supplyData['noExpiry'] ?? false,
+      itemName: supplyResponse['name'] ?? 'Unknown Item',
+      category: supplyResponse['category'] ?? 'Unknown Category',
+      stock: supplyResponse['stock'] ?? 0,
+      unit: supplyResponse['unit'] ?? 'Unknown Unit',
+      cost: supplyResponse['cost'],
+      brand: supplyResponse['brand'],
+      supplier: supplyResponse['supplier'],
+      expiryDate: supplyResponse['expiry'],
+      noExpiry: supplyResponse['no_expiry'] ?? false,
     );
   }
 
   Future<void> unarchiveSupply(String docId) async {
     // Get initiating doc to determine supply name
-    final suppliesRef = FirebaseFirestore.instance.collection('supplies');
-    final supplyDoc = await suppliesRef.doc(docId).get();
+    final supplyResponse =
+        await _supabase.from('supplies').select('*').eq('id', docId).single();
 
-    if (!supplyDoc.exists) return;
+    if (supplyResponse.isEmpty) return;
 
-    final supplyData = supplyDoc.data() as Map<String, dynamic>;
-    final String name = (supplyData['name'] ?? '').toString();
+    final String name = (supplyResponse['name'] ?? '').toString();
 
     // Unarchive all stocks sharing the same name
-    final query = await suppliesRef
-        .where('name', isEqualTo: name)
-        .where('archived', isEqualTo: true)
-        .get();
-    final batch = FirebaseFirestore.instance.batch();
-    for (final doc in query.docs) {
-      batch.update(doc.reference, {'archived': false});
-    }
-    await batch.commit();
+    await _supabase
+        .from('supplies')
+        .update({'archived': false})
+        .eq('name', name)
+        .eq('archived', true);
 
     // Single activity log for the action
     await InventoryActivityController().logInventorySupplyUnarchived(
-      itemName: supplyData['name'] ?? 'Unknown Item',
-      category: supplyData['category'] ?? 'Unknown Category',
-      stock: supplyData['stock'] ?? 0,
-      unit: supplyData['unit'] ?? 'Unknown Unit',
-      cost: supplyData['cost'],
-      brand: supplyData['brand'],
-      supplier: supplyData['supplier'],
-      expiryDate: supplyData['expiryDate'],
-      noExpiry: supplyData['noExpiry'] ?? false,
+      itemName: supplyResponse['name'] ?? 'Unknown Item',
+      category: supplyResponse['category'] ?? 'Unknown Category',
+      stock: supplyResponse['stock'] ?? 0,
+      unit: supplyResponse['unit'] ?? 'Unknown Unit',
+      cost: supplyResponse['cost'],
+      brand: supplyResponse['brand'],
+      supplier: supplyResponse['supplier'],
+      expiryDate: supplyResponse['expiry'],
+      noExpiry: supplyResponse['no_expiry'] ?? false,
     );
   }
 
   Future<void> deleteSupply(String docId) async {
     // Get initiating doc to determine supply name
-    final suppliesRef = FirebaseFirestore.instance.collection('supplies');
-    final supplyDoc = await suppliesRef.doc(docId).get();
+    final supplyResponse =
+        await _supabase.from('supplies').select('*').eq('id', docId).single();
 
-    if (!supplyDoc.exists) return;
+    if (supplyResponse.isEmpty) return;
 
-    final supplyData = supplyDoc.data() as Map<String, dynamic>;
-    final String name = (supplyData['name'] ?? '').toString();
+    final String name = (supplyResponse['name'] ?? '').toString();
 
     // Delete all archived stocks sharing the same name
-    final query = await suppliesRef
-        .where('name', isEqualTo: name)
-        .where('archived', isEqualTo: true)
-        .get();
-    final batch = FirebaseFirestore.instance.batch();
-    for (final doc in query.docs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
+    await _supabase
+        .from('supplies')
+        .delete()
+        .eq('name', name)
+        .eq('archived', true);
 
     // Single activity log
     await InventoryActivityController().logInventorySupplyDeleted(
-      itemName: supplyData['name'] ?? 'Unknown Item',
-      category: supplyData['category'] ?? 'Unknown Category',
-      stock: supplyData['stock'] ?? 0,
-      unit: supplyData['unit'] ?? 'Unknown Unit',
-      cost: supplyData['cost'],
-      brand: supplyData['brand'],
-      supplier: supplyData['supplier'],
-      expiryDate: supplyData['expiryDate'],
-      noExpiry: supplyData['noExpiry'] ?? false,
+      itemName: supplyResponse['name'] ?? 'Unknown Item',
+      category: supplyResponse['category'] ?? 'Unknown Category',
+      stock: supplyResponse['stock'] ?? 0,
+      unit: supplyResponse['unit'] ?? 'Unknown Unit',
+      cost: supplyResponse['cost'],
+      brand: supplyResponse['brand'],
+      supplier: supplyResponse['supplier'],
+      expiryDate: supplyResponse['expiry'],
+      noExpiry: supplyResponse['no_expiry'] ?? false,
     );
   }
 }

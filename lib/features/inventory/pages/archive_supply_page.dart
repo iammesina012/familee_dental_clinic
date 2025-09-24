@@ -18,6 +18,16 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
 
+  // ─── Real-time State ─────────────────────────────────────────────────────
+  Key _streamKey = UniqueKey();
+
+  // Method to refresh the stream
+  void _refreshStream() {
+    setState(() {
+      _streamKey = UniqueKey();
+    });
+  }
+
   @override
   void dispose() {
     searchController.dispose();
@@ -137,132 +147,147 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
               const SizedBox(height: 16),
               // ─── Filtered Grid ────────────────────────────────────────
               Expanded(
-                child: StreamBuilder<List<InventoryItem>>(
-                  stream: controller.getArchivedSupplies(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    _refreshStream();
+                    // Wait a bit for the stream to update
+                    await Future.delayed(Duration(milliseconds: 500));
+                  },
+                  child: StreamBuilder<List<InventoryItem>>(
+                    key: _streamKey,
+                    stream: controller.getArchivedSupplies(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text('Error: ${snapshot.error}'),
-                      );
-                    }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text('Error: ${snapshot.error}'),
+                        );
+                      }
 
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.archive_outlined,
-                              size: 64,
-                              color: theme.iconTheme.color?.withOpacity(0.6),
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'No archived supplies found',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 18,
-                                color: theme.textTheme.bodyMedium?.color,
-                                fontWeight: FontWeight.w500,
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.archive_outlined,
+                                size: 64,
+                                color: theme.iconTheme.color?.withOpacity(0.6),
                               ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Archived supplies will appear here',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 14,
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withOpacity(0.7),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    final supplies = filterSupplies(snapshot.data!);
-
-                    if (supplies.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.search_off,
-                              size: 64,
-                              color: theme.iconTheme.color?.withOpacity(0.6),
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'No supplies match your search',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 18,
-                                color: theme.textTheme.bodyMedium?.color,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    final groups = _groupByName(supplies);
-                    return GridView.builder(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.75,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: groups.length,
-                      itemBuilder: (context, index) {
-                        final group = groups[index];
-                        return LayoutBuilder(
-                          builder: (context, box) {
-                            final bool bounded = box.hasBoundedHeight;
-                            final double maxH = bounded ? box.maxHeight : 260;
-                            return ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxHeight: maxH,
-                                minHeight: 0,
-                              ),
-                              child: InkWell(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => InventoryViewSupplyPage(
-                                        item: group.representative,
-                                        skipAutoRedirect: true,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(12),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    Expanded(
-                                      child: InventoryItemCard(
-                                        item: group.representative,
-                                        showExpiryDate: true,
-                                        hideStock: true,
-                                        hideExpiry: true,
-                                      ),
-                                    ),
-                                  ],
+                              SizedBox(height: 16),
+                              Text(
+                                'No archived supplies found',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontSize: 18,
+                                  color: theme.textTheme.bodyMedium?.color,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            );
-                          },
+                              SizedBox(height: 8),
+                              Text(
+                                'Archived supplies will appear here',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontSize: 14,
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.7),
+                                ),
+                              ),
+                            ],
+                          ),
                         );
-                      },
-                    );
-                  },
+                      }
+
+                      final supplies = filterSupplies(snapshot.data!);
+
+                      if (supplies.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.search_off,
+                                size: 64,
+                                color: theme.iconTheme.color?.withOpacity(0.6),
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'No supplies match your search',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontSize: 18,
+                                  color: theme.textTheme.bodyMedium?.color,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      final groups = _groupByName(supplies);
+                      return GridView.builder(
+                        physics: AlwaysScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.75,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                        ),
+                        itemCount: groups.length,
+                        itemBuilder: (context, index) {
+                          final group = groups[index];
+                          return LayoutBuilder(
+                            builder: (context, box) {
+                              final bool bounded = box.hasBoundedHeight;
+                              final double maxH = bounded ? box.maxHeight : 260;
+                              return ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxHeight: maxH,
+                                  minHeight: 0,
+                                ),
+                                child: InkWell(
+                                  onTap: () async {
+                                    final result = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => InventoryViewSupplyPage(
+                                          item: group.representative,
+                                          skipAutoRedirect: true,
+                                        ),
+                                      ),
+                                    );
+                                    // Refresh the stream when returning from view page
+                                    // This ensures real-time updates after unarchiving
+                                    if (result == true ||
+                                        result == 'unarchived') {
+                                      _refreshStream();
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.max,
+                                    children: [
+                                      Expanded(
+                                        child: InventoryItemCard(
+                                          item: group.representative,
+                                          showExpiryDate: true,
+                                          hideStock: true,
+                                          hideExpiry: true,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
             ],

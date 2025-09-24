@@ -13,6 +13,16 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
   final Map<String, TextEditingController> editControllers = {};
   final Map<String, bool> isEditing = {};
 
+  // ─── Real-time State ─────────────────────────────────────────────────────
+  Key _streamKey = UniqueKey();
+
+  // Method to refresh the stream
+  void _refreshStream() {
+    setState(() {
+      _streamKey = UniqueKey();
+    });
+  }
+
   @override
   void dispose() {
     editControllers.values.forEach((controller) => controller.dispose());
@@ -55,6 +65,8 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
 
     try {
       await categoriesController.updateCategory(oldName, newName);
+      // Refresh the stream to show updated categories
+      _refreshStream();
       if (!mounted) return;
       setState(() {
         isEditing[oldName] = false;
@@ -93,6 +105,8 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     if (confirmed == true) {
       try {
         await categoriesController.deleteCategory(categoryName);
+        // Refresh the stream to show updated categories
+        _refreshStream();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -142,263 +156,273 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
         elevation: theme.appBarTheme.elevation,
         shadowColor: theme.appBarTheme.shadowColor,
       ),
-      body: StreamBuilder<List<String>>(
-        stream: categoriesController.getCategoriesStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(Color(0xFF4E38D4)),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Loading categories...',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro',
-                      fontSize: 16,
-                      color: Colors.grey[600],
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _refreshStream();
+          // Wait a bit for the stream to update
+          await Future.delayed(Duration(milliseconds: 500));
+        },
+        child: StreamBuilder<List<String>>(
+          key: _streamKey,
+          stream: categoriesController.getCategoriesStream(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFF4E38D4)),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.category_outlined,
-                      size: 48,
-                      color: Color(0xFF4E38D4),
-                    ),
-                  ),
-                  SizedBox(height: 24),
-                  Text(
-                    'No categories found',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Add some categories to get started',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro',
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final categories = snapshot.data!;
-          return ListView.builder(
-            padding: EdgeInsets.all(20),
-            itemCount: categories.length,
-            itemBuilder: (context, index) {
-              final categoryName = categories[index];
-              final isCurrentlyEditing = isEditing[categoryName] == true;
-
-              return Container(
-                margin: EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
+                    SizedBox(height: 16),
+                    Text(
+                      'Loading categories...',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
                     ),
                   ],
                 ),
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      // Category icon
-                      Container(
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Color(0xFF4E38D4).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.category,
-                          color: Color(0xFF4E38D4),
-                          size: 24,
-                        ),
-                      ),
-                      SizedBox(width: 16),
+              );
+            }
 
-                      // Category name or edit field
-                      Expanded(
-                        child: isCurrentlyEditing
-                            ? TextField(
-                                controller: editControllers[categoryName],
-                                decoration: InputDecoration(
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide:
-                                        BorderSide(color: Color(0xFF4E38D4)),
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.category_outlined,
+                        size: 48,
+                        color: Color(0xFF4E38D4),
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'No categories found',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Add some categories to get started',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 14,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final categories = snapshot.data!;
+            return ListView.builder(
+              physics: AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.all(20),
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final categoryName = categories[index];
+                final isCurrentlyEditing = isEditing[categoryName] == true;
+
+                return Container(
+                  margin: EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        // Category icon
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF4E38D4).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.category,
+                            color: Color(0xFF4E38D4),
+                            size: 24,
+                          ),
+                        ),
+                        SizedBox(width: 16),
+
+                        // Category name or edit field
+                        Expanded(
+                          child: isCurrentlyEditing
+                              ? TextField(
+                                  controller: editControllers[categoryName],
+                                  decoration: InputDecoration(
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide:
+                                          BorderSide(color: Color(0xFF4E38D4)),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                          color: theme.dividerColor
+                                              .withOpacity(0.2)),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                          color: Color(0xFF4E38D4), width: 2),
+                                    ),
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                    hintText: 'Enter category name',
+                                    hintStyle: TextStyle(
+                                      fontFamily: 'SF Pro',
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.5),
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FontStyle.normal,
+                                    ),
                                   ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                        color: theme.dividerColor
-                                            .withOpacity(0.2)),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                        color: Color(0xFF4E38D4), width: 2),
-                                  ),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 12),
-                                  hintText: 'Enter category name',
-                                  hintStyle: TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'SF Pro',
-                                    color: theme.textTheme.bodyMedium?.color
-                                        ?.withOpacity(0.5),
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w500,
                                     fontStyle: FontStyle.normal,
                                   ),
+                                  textCapitalization: TextCapitalization.words,
+                                )
+                              : Text(
+                                  categoryName,
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                  ),
                                 ),
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  fontStyle: FontStyle.normal,
-                                ),
-                                textCapitalization: TextCapitalization.words,
-                              )
-                            : Text(
-                                categoryName,
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.textTheme.bodyMedium?.color,
-                                ),
-                              ),
-                      ),
+                        ),
 
-                      SizedBox(width: 12),
+                        SizedBox(width: 12),
 
-                      // Action buttons
-                      if (isCurrentlyEditing) ...[
-                        // Save button
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(8),
+                        // Action buttons
+                        if (isCurrentlyEditing) ...[
+                          // Save button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.check,
+                                  color: Colors.white, size: 20),
+                              onPressed: () => _saveEdit(categoryName),
+                              padding: EdgeInsets.all(8),
+                              constraints:
+                                  BoxConstraints(minWidth: 40, minHeight: 40),
+                            ),
                           ),
-                          child: IconButton(
-                            icon: Icon(Icons.check,
-                                color: Colors.white, size: 20),
-                            onPressed: () => _saveEdit(categoryName),
-                            padding: EdgeInsets.all(8),
-                            constraints:
-                                BoxConstraints(minWidth: 40, minHeight: 40),
+                          SizedBox(width: 8),
+                          // Cancel button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.close,
+                                  color: Colors.white, size: 20),
+                              onPressed: () => _cancelEditing(categoryName),
+                              padding: EdgeInsets.all(8),
+                              constraints:
+                                  BoxConstraints(minWidth: 40, minHeight: 40),
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 8),
-                        // Cancel button
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(8),
+                        ] else ...[
+                          // Edit button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Color(0xFF4E38D4).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.edit,
+                                  color: Color(0xFF4E38D4), size: 20),
+                              onPressed: () => _startEditing(categoryName),
+                              padding: EdgeInsets.all(8),
+                              constraints:
+                                  BoxConstraints(minWidth: 40, minHeight: 40),
+                            ),
                           ),
-                          child: IconButton(
-                            icon: Icon(Icons.close,
-                                color: Colors.white, size: 20),
-                            onPressed: () => _cancelEditing(categoryName),
-                            padding: EdgeInsets.all(8),
-                            constraints:
-                                BoxConstraints(minWidth: 40, minHeight: 40),
+                          SizedBox(width: 8),
+                          // Delete button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.delete,
+                                  color: Colors.red, size: 20),
+                              onPressed: () => _deleteCategory(categoryName),
+                              padding: EdgeInsets.all(8),
+                              constraints:
+                                  BoxConstraints(minWidth: 40, minHeight: 40),
+                            ),
                           ),
-                        ),
-                      ] else ...[
-                        // Edit button
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Color(0xFF4E38D4).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: IconButton(
-                            icon: Icon(Icons.edit,
-                                color: Color(0xFF4E38D4), size: 20),
-                            onPressed: () => _startEditing(categoryName),
-                            padding: EdgeInsets.all(8),
-                            constraints:
-                                BoxConstraints(minWidth: 40, minHeight: 40),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        // Delete button
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: IconButton(
-                            icon:
-                                Icon(Icons.delete, color: Colors.red, size: 20),
-                            onPressed: () => _deleteCategory(categoryName),
-                            padding: EdgeInsets.all(8),
-                            constraints:
-                                BoxConstraints(minWidth: 40, minHeight: 40),
-                          ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
 
   Widget _buildDeleteDialog(BuildContext context, String categoryName) {
+    final theme = Theme.of(context);
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
       elevation: 8,
-      backgroundColor: Colors.white,
+      backgroundColor: theme.dialogBackgroundColor,
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: Colors.white,
+          color: theme.dialogBackgroundColor,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
@@ -432,7 +456,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                 fontFamily: 'SF Pro',
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: theme.textTheme.titleLarge?.color,
               ),
               textAlign: TextAlign.center,
             ),
@@ -445,7 +469,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                 fontFamily: 'SF Pro',
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                color: Colors.black54,
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                 height: 1.4,
               ),
               textAlign: TextAlign.center,
@@ -462,7 +486,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.grey.shade300),
+                        side: BorderSide(color: theme.dividerColor),
                       ),
                     ),
                     child: Text(
@@ -470,7 +494,8 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontWeight: FontWeight.w500,
-                        color: Colors.black54,
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                         fontSize: 16,
                       ),
                     ),

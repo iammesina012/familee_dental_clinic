@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/inventory_item.dart';
 
 /// CatalogController provides a product catalog stream that includes
@@ -6,28 +6,26 @@ import '../data/inventory_item.dart';
 /// This is intended for pickers like Purchase Order and Stock Deduction,
 /// so users can still find products even if all current batches are expired.
 class CatalogController {
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   Stream<List<GroupedInventoryItem>> getAllProductsStream(
       {bool archived = false}) {
-    return FirebaseFirestore.instance
-        .collection('supplies')
-        .snapshots()
-        .map((snapshot) {
-      final items = snapshot.docs
-          .map((doc) {
-            final data = doc.data();
+    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
+      final items = data
+          .map((row) {
             return InventoryItem(
-              id: doc.id,
-              name: data['name'] ?? '',
-              imageUrl: data['imageUrl'] ?? '',
-              category: data['category'] ?? '',
-              cost: (data['cost'] ?? 0).toDouble(),
-              stock: (data['stock'] ?? 0) as int,
-              unit: data['unit'] ?? '',
-              supplier: data['supplier'] ?? '',
-              brand: data['brand'] ?? '',
-              expiry: data['expiry'],
-              noExpiry: data['noExpiry'] ?? false,
-              archived: data['archived'] ?? false,
+              id: row['id'] as String,
+              name: row['name'] ?? '',
+              imageUrl: row['image_url'] ?? '',
+              category: row['category'] ?? '',
+              cost: (row['cost'] ?? 0).toDouble(),
+              stock: (row['stock'] ?? 0) as int,
+              unit: row['unit'] ?? '',
+              supplier: row['supplier'] ?? '',
+              brand: row['brand'] ?? '',
+              expiry: row['expiry'],
+              noExpiry: row['no_expiry'] ?? false,
+              archived: row['archived'] ?? false,
             );
           })
           .where((it) => it.archived == archived)

@@ -1,26 +1,21 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/inventory_item.dart';
 import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
 
 class FilterController {
-  final FirebaseFirestore firestore;
-
-  FilterController({FirebaseFirestore? firestore})
-      : firestore = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   // Get all brands for filter
   Stream<List<Brand>> getBrandsStream() {
-    return firestore.collection('brands').snapshots().map((snapshot) =>
-        snapshot.docs.map((doc) => Brand.fromMap(doc.id, doc.data())).toList()
+    return _supabase.from('brands').stream(primaryKey: ['id']).map((data) =>
+        data.map((row) => Brand.fromMap(row['id'] as String, row)).toList()
           ..sort((a, b) => a.name.compareTo(b.name)));
   }
 
   // Get all suppliers for filter
   Stream<List<Supplier>> getSuppliersStream() {
-    return firestore.collection('suppliers').snapshots().map((snapshot) =>
-        snapshot.docs
-            .map((doc) => Supplier.fromMap(doc.id, doc.data()))
-            .toList()
+    return _supabase.from('suppliers').stream(primaryKey: ['id']).map((data) =>
+        data.map((row) => Supplier.fromMap(row['id'] as String, row)).toList()
           ..sort((a, b) => a.name.compareTo(b.name)));
   }
 
@@ -28,12 +23,13 @@ class FilterController {
   Future<bool> brandExists(String brandName) async {
     if (brandName.trim().isEmpty) return false;
 
-    final existingBrands = await firestore
-        .collection('brands')
-        .where('name', isEqualTo: brandName.trim())
-        .get();
+    final response = await _supabase
+        .from('brands')
+        .select('id')
+        .eq('name', brandName.trim())
+        .limit(1);
 
-    return existingBrands.docs.isNotEmpty;
+    return response.isNotEmpty;
   }
 
   // Add new brand if it doesn't exist
@@ -41,17 +37,17 @@ class FilterController {
     if (brandName.trim().isEmpty) return false;
 
     // Check if brand already exists (case-insensitive)
-    final existingBrands = await firestore.collection('brands').get();
+    final existingBrands = await _supabase.from('brands').select('name');
 
     final normalizedInput = brandName.trim().toLowerCase();
-    final exists = existingBrands.docs.any((doc) =>
-        doc.data()['name']?.toString().trim().toLowerCase() == normalizedInput);
+    final exists = existingBrands.any(
+        (row) => (row['name'] as String?)?.toLowerCase() == normalizedInput);
 
     if (!exists) {
       // Add new brand
-      await firestore.collection('brands').add({
+      await _supabase.from('brands').insert({
         'name': brandName.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
+        'created_at': DateTime.now().toIso8601String(),
       });
 
       // Log the brand creation activity
@@ -67,15 +63,15 @@ class FilterController {
   Future<int> getSuppliesWithNABrand(String brandName) async {
     if (brandName.trim().isEmpty) return 0;
 
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('brand', isEqualTo: 'N/A')
-        .get();
+    final supplies = await _supabase
+        .from('supplies')
+        .select('original_brand')
+        .eq('brand', 'N/A');
 
     // Count supplies that have this brand as their original brand
     int count = 0;
-    for (final doc in suppliesDocs.docs) {
-      final originalBrand = doc.data()['originalBrand']?.toString() ?? '';
+    for (final supply in supplies) {
+      final originalBrand = (supply['original_brand'] as String?) ?? '';
       if (originalBrand.toLowerCase() == brandName.trim().toLowerCase()) {
         count++;
       }
@@ -88,35 +84,33 @@ class FilterController {
   Future<void> restoreSuppliesToBrand(String brandName) async {
     if (brandName.trim().isEmpty) return;
 
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('brand', isEqualTo: 'N/A')
-        .get();
+    final supplies = await _supabase
+        .from('supplies')
+        .select('id, original_brand')
+        .eq('brand', 'N/A');
 
-    final batch = firestore.batch();
-    for (final doc in suppliesDocs.docs) {
-      final originalBrand = doc.data()['originalBrand']?.toString() ?? '';
+    for (final supply in supplies) {
+      final originalBrand = (supply['original_brand'] as String?) ?? '';
       if (originalBrand.toLowerCase() == brandName.trim().toLowerCase()) {
-        batch.update(doc.reference, {
+        await _supabase.from('supplies').update({
           'brand': brandName.trim(),
-          'originalBrand':
-              FieldValue.delete(), // Remove the original brand field
-        });
+          'original_brand': null, // Remove the original brand field
+        }).eq('id', supply['id']);
       }
     }
-    await batch.commit();
   }
 
   // Check if supplier name already exists
   Future<bool> supplierExists(String supplierName) async {
     if (supplierName.trim().isEmpty) return false;
 
-    final existingSuppliers = await firestore
-        .collection('suppliers')
-        .where('name', isEqualTo: supplierName.trim())
-        .get();
+    final response = await _supabase
+        .from('suppliers')
+        .select('id')
+        .eq('name', supplierName.trim())
+        .limit(1);
 
-    return existingSuppliers.docs.isNotEmpty;
+    return response.isNotEmpty;
   }
 
   // Add new supplier if it doesn't exist
@@ -124,17 +118,17 @@ class FilterController {
     if (supplierName.trim().isEmpty) return false;
 
     // Check if supplier already exists (case-insensitive)
-    final existingSuppliers = await firestore.collection('suppliers').get();
+    final existingSuppliers = await _supabase.from('suppliers').select('name');
 
     final normalizedInput = supplierName.trim().toLowerCase();
-    final exists = existingSuppliers.docs.any((doc) =>
-        doc.data()['name']?.toString().trim().toLowerCase() == normalizedInput);
+    final exists = existingSuppliers.any(
+        (row) => (row['name'] as String?)?.toLowerCase() == normalizedInput);
 
     if (!exists) {
       // Add new supplier
-      await firestore.collection('suppliers').add({
+      await _supabase.from('suppliers').insert({
         'name': supplierName.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
+        'created_at': DateTime.now().toIso8601String(),
       });
 
       // Log the supplier creation activity
@@ -150,15 +144,15 @@ class FilterController {
   Future<int> getSuppliesWithNASupplier(String supplierName) async {
     if (supplierName.trim().isEmpty) return 0;
 
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('supplier', isEqualTo: 'N/A')
-        .get();
+    final supplies = await _supabase
+        .from('supplies')
+        .select('original_supplier')
+        .eq('supplier', 'N/A');
 
     // Count supplies that have this supplier as their original supplier
     int count = 0;
-    for (final doc in suppliesDocs.docs) {
-      final originalSupplier = doc.data()['originalSupplier']?.toString() ?? '';
+    for (final supply in supplies) {
+      final originalSupplier = (supply['original_supplier'] as String?) ?? '';
       if (originalSupplier.toLowerCase() == supplierName.trim().toLowerCase()) {
         count++;
       }
@@ -171,23 +165,20 @@ class FilterController {
   Future<void> restoreSuppliesToSupplier(String supplierName) async {
     if (supplierName.trim().isEmpty) return;
 
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('supplier', isEqualTo: 'N/A')
-        .get();
+    final supplies = await _supabase
+        .from('supplies')
+        .select('id, original_supplier')
+        .eq('supplier', 'N/A');
 
-    final batch = firestore.batch();
-    for (final doc in suppliesDocs.docs) {
-      final originalSupplier = doc.data()['originalSupplier']?.toString() ?? '';
+    for (final supply in supplies) {
+      final originalSupplier = (supply['original_supplier'] as String?) ?? '';
       if (originalSupplier.toLowerCase() == supplierName.trim().toLowerCase()) {
-        batch.update(doc.reference, {
+        await _supabase.from('supplies').update({
           'supplier': supplierName.trim(),
-          'originalSupplier':
-              FieldValue.delete(), // Remove the original supplier field
-        });
+          'original_supplier': null, // Remove the original supplier field
+        }).eq('id', supply['id']);
       }
     }
-    await batch.commit();
   }
 
   // Update brand name across all supplies
@@ -195,31 +186,25 @@ class FilterController {
     if (oldName.trim().isEmpty || newName.trim().isEmpty) return;
 
     // Update brand in brands collection
-    final brandDocs = await firestore
-        .collection('brands')
-        .where('name', isEqualTo: oldName.trim())
-        .get();
+    final brandResponse = await _supabase
+        .from('brands')
+        .select('id')
+        .eq('name', oldName.trim())
+        .limit(1);
 
-    if (brandDocs.docs.isNotEmpty) {
-      await brandDocs.docs.first.reference.update({
-        'name': newName.trim(),
-      });
+    if (brandResponse.isNotEmpty) {
+      await _supabase
+          .from('brands')
+          .update({'name': newName.trim()}).eq('id', brandResponse.first['id']);
     } else {
       // If old brand doesn't exist in brands collection, add the new one
       await addBrandIfNotExists(newName.trim());
     }
 
     // Update all supplies with this brand
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('brand', isEqualTo: oldName.trim())
-        .get();
-
-    final batch = firestore.batch();
-    for (final doc in suppliesDocs.docs) {
-      batch.update(doc.reference, {'brand': newName.trim()});
-    }
-    await batch.commit();
+    await _supabase
+        .from('supplies')
+        .update({'brand': newName.trim()}).eq('brand', oldName.trim());
 
     // Log the brand update activity
     await InventoryActivityController().logBrandUpdated(
@@ -233,31 +218,24 @@ class FilterController {
     if (oldName.trim().isEmpty || newName.trim().isEmpty) return;
 
     // Update supplier in suppliers collection
-    final supplierDocs = await firestore
-        .collection('suppliers')
-        .where('name', isEqualTo: oldName.trim())
-        .get();
+    final supplierResponse = await _supabase
+        .from('suppliers')
+        .select('id')
+        .eq('name', oldName.trim())
+        .limit(1);
 
-    if (supplierDocs.docs.isNotEmpty) {
-      await supplierDocs.docs.first.reference.update({
-        'name': newName.trim(),
-      });
+    if (supplierResponse.isNotEmpty) {
+      await _supabase.from('suppliers').update({'name': newName.trim()}).eq(
+          'id', supplierResponse.first['id']);
     } else {
       // If old supplier doesn't exist in suppliers collection, add the new one
       await addSupplierIfNotExists(newName.trim());
     }
 
     // Update all supplies with this supplier
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('supplier', isEqualTo: oldName.trim())
-        .get();
-
-    final batch = firestore.batch();
-    for (final doc in suppliesDocs.docs) {
-      batch.update(doc.reference, {'supplier': newName.trim()});
-    }
-    await batch.commit();
+    await _supabase
+        .from('supplies')
+        .update({'supplier': newName.trim()}).eq('supplier', oldName.trim());
 
     // Log the supplier update activity
     await InventoryActivityController().logSupplierUpdated(
@@ -282,16 +260,16 @@ class FilterController {
   Future<void> migrateExistingBrandsAndSuppliers() async {
     try {
       // Get all supplies
-      final suppliesSnapshot = await firestore.collection('supplies').get();
+      final supplies =
+          await _supabase.from('supplies').select('brand, supplier');
 
       final Set<String> existingBrands = {};
       final Set<String> existingSuppliers = {};
 
       // Extract unique brands and suppliers from existing supplies
-      for (final doc in suppliesSnapshot.docs) {
-        final data = doc.data();
-        final brand = data['brand']?.toString().trim();
-        final supplier = data['supplier']?.toString().trim();
+      for (final supply in supplies) {
+        final brand = (supply['brand'] as String?)?.trim();
+        final supplier = (supply['supplier'] as String?)?.trim();
 
         if (brand != null && brand.isNotEmpty) {
           existingBrands.add(brand);
@@ -319,13 +297,15 @@ class FilterController {
   Future<void> removeDuplicates() async {
     try {
       // Remove duplicate brands
-      final brandsSnapshot = await firestore.collection('brands').get();
+      final brands = await _supabase.from('brands').select('id, name');
       final Map<String, List<String>> brandGroups = {};
 
-      for (final doc in brandsSnapshot.docs) {
-        final brandName = doc.data()['name']?.toString().trim() ?? '';
+      for (final brand in brands) {
+        final brandName = (brand['name'] as String?)?.trim() ?? '';
         if (brandName.isNotEmpty) {
-          brandGroups.putIfAbsent(brandName, () => []).add(doc.id);
+          brandGroups
+              .putIfAbsent(brandName, () => [])
+              .add(brand['id'] as String);
         }
       }
 
@@ -334,19 +314,21 @@ class FilterController {
         if (entry.value.length > 1) {
           // Keep the first document, delete the rest
           for (int i = 1; i < entry.value.length; i++) {
-            await firestore.collection('brands').doc(entry.value[i]).delete();
+            await _supabase.from('brands').delete().eq('id', entry.value[i]);
           }
         }
       }
 
       // Remove duplicate suppliers
-      final suppliersSnapshot = await firestore.collection('suppliers').get();
+      final suppliers = await _supabase.from('suppliers').select('id, name');
       final Map<String, List<String>> supplierGroups = {};
 
-      for (final doc in suppliersSnapshot.docs) {
-        final supplierName = doc.data()['name']?.toString().trim() ?? '';
+      for (final supplier in suppliers) {
+        final supplierName = (supplier['name'] as String?)?.trim() ?? '';
         if (supplierName.isNotEmpty) {
-          supplierGroups.putIfAbsent(supplierName, () => []).add(doc.id);
+          supplierGroups
+              .putIfAbsent(supplierName, () => [])
+              .add(supplier['id'] as String);
         }
       }
 
@@ -355,10 +337,7 @@ class FilterController {
         if (entry.value.length > 1) {
           // Keep the first document, delete the rest
           for (int i = 1; i < entry.value.length; i++) {
-            await firestore
-                .collection('suppliers')
-                .doc(entry.value[i])
-                .delete();
+            await _supabase.from('suppliers').delete().eq('id', entry.value[i]);
           }
         }
       }
@@ -372,14 +351,7 @@ class FilterController {
     if (brandName.trim().isEmpty) return;
 
     // Delete brand from brands collection
-    final brandDocs = await firestore
-        .collection('brands')
-        .where('name', isEqualTo: brandName.trim())
-        .get();
-
-    for (final doc in brandDocs.docs) {
-      await doc.reference.delete();
-    }
+    await _supabase.from('brands').delete().eq('name', brandName.trim());
 
     // Log the brand deletion activity
     await InventoryActivityController().logBrandDeleted(
@@ -387,20 +359,11 @@ class FilterController {
     );
 
     // Update all supplies with this brand to use "N/A" and store original brand
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('brand', isEqualTo: brandName.trim())
-        .get();
-
-    final batch = firestore.batch();
-    for (final doc in suppliesDocs.docs) {
-      batch.update(doc.reference, {
-        'brand': 'N/A',
-        'originalBrand':
-            brandName.trim(), // Store original brand for restoration
-      });
-    }
-    await batch.commit();
+    await _supabase.from('supplies').update({
+      'brand': 'N/A',
+      'original_brand':
+          brandName.trim(), // Store original brand for restoration
+    }).eq('brand', brandName.trim());
   }
 
   // Delete supplier and update all supplies to use "N/A"
@@ -408,14 +371,7 @@ class FilterController {
     if (supplierName.trim().isEmpty) return;
 
     // Delete supplier from suppliers collection
-    final supplierDocs = await firestore
-        .collection('suppliers')
-        .where('name', isEqualTo: supplierName.trim())
-        .get();
-
-    for (final doc in supplierDocs.docs) {
-      await doc.reference.delete();
-    }
+    await _supabase.from('suppliers').delete().eq('name', supplierName.trim());
 
     // Log the supplier deletion activity
     await InventoryActivityController().logSupplierDeleted(
@@ -423,19 +379,10 @@ class FilterController {
     );
 
     // Update all supplies with this supplier to use "N/A" and store original supplier
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('supplier', isEqualTo: supplierName.trim())
-        .get();
-
-    final batch = firestore.batch();
-    for (final doc in suppliesDocs.docs) {
-      batch.update(doc.reference, {
-        'supplier': 'N/A',
-        'originalSupplier':
-            supplierName.trim(), // Store original supplier for restoration
-      });
-    }
-    await batch.commit();
+    await _supabase.from('supplies').update({
+      'supplier': 'N/A',
+      'original_supplier':
+          supplierName.trim(), // Store original supplier for restoration
+    }).eq('supplier', supplierName.trim());
   }
 }

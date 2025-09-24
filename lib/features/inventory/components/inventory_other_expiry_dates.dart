@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/pages/view_supply_page.dart'; // for status helpers
 import '../controller/view_supply_controller.dart';
 
-class FirestoreOtherExpiryBatches extends StatelessWidget {
+class SupabaseOtherExpiryBatches extends StatelessWidget {
   final InventoryItem item;
-  const FirestoreOtherExpiryBatches({super.key, required this.item});
+  const SupabaseOtherExpiryBatches({super.key, required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -37,11 +37,10 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
 
     final controller = ViewSupplyController();
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('supplies')
-          .where('name', isEqualTo: item.name)
-          .snapshots(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: Supabase.instance.client
+          .from('supplies')
+          .stream(primaryKey: ['id']).eq('name', item.name),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
@@ -49,7 +48,7 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
             child: Center(child: CircularProgressIndicator()),
           );
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Container(
             width: double.infinity,
             margin: const EdgeInsets.symmetric(vertical: 12),
@@ -73,21 +72,20 @@ class FirestoreOtherExpiryBatches extends StatelessWidget {
         }
 
         // Parse and filter batches
-        final batches = snapshot.data!.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+        final batches = snapshot.data!.map((row) {
           return InventoryItem(
-            id: doc.id,
-            name: data['name'] ?? '',
-            imageUrl: data['imageUrl'] ?? '',
-            category: data['category'] ?? '',
-            cost: (data['cost'] ?? 0).toDouble(),
-            stock: (data['stock'] ?? 0) as int,
-            unit: data['unit'] ?? '',
-            supplier: data['supplier'] ?? '',
-            brand: data['brand'] ?? '',
-            expiry: data['expiry'] ?? 'No expiry',
-            noExpiry: data['noExpiry'] ?? false,
-            archived: data['archived'] ?? false,
+            id: row['id'] as String,
+            name: row['name'] ?? '',
+            imageUrl: row['image_url'] ?? '',
+            category: row['category'] ?? '',
+            cost: (row['cost'] ?? 0).toDouble(),
+            stock: (row['stock'] ?? 0).toInt(),
+            unit: row['unit'] ?? '',
+            supplier: row['supplier'] ?? '',
+            brand: row['brand'] ?? '',
+            expiry: row['expiry'] ?? 'No expiry',
+            noExpiry: row['no_expiry'] ?? false,
+            archived: row['archived'] ?? false,
           );
         }).where((batch) {
           // Keep only same category using normalized comparison

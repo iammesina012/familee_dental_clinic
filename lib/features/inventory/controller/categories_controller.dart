@@ -1,17 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
 
 class CategoriesController {
-  final FirebaseFirestore firestore;
-
-  CategoriesController({FirebaseFirestore? firestore})
-      : firestore = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   // Get all categories as stream
   Stream<List<String>> getCategoriesStream() {
-    return firestore.collection('categories').snapshots().map((snapshot) =>
-        snapshot.docs.map((doc) => doc.data()['name'] as String).toList()
-          ..sort());
+    return _supabase.from('categories').stream(primaryKey: ['id']).map(
+        (data) => data.map((row) => row['name'] as String).toList()..sort());
   }
 
   // Add new category
@@ -19,16 +15,17 @@ class CategoriesController {
     if (categoryName.trim().isEmpty) return;
 
     // Check if category already exists
-    final existingCategories = await firestore
-        .collection('categories')
-        .where('name', isEqualTo: categoryName.trim())
-        .get();
+    final existingCategories = await _supabase
+        .from('categories')
+        .select('id')
+        .eq('name', categoryName.trim())
+        .limit(1);
 
-    if (existingCategories.docs.isEmpty) {
+    if (existingCategories.isEmpty) {
       // Add new category
-      await firestore.collection('categories').add({
+      await _supabase.from('categories').insert({
         'name': categoryName.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
+        'created_at': DateTime.now().toIso8601String(),
       });
 
       // Log the category creation activity
@@ -43,28 +40,21 @@ class CategoriesController {
     if (oldName.trim().isEmpty || newName.trim().isEmpty) return;
 
     // Update category in categories collection
-    final categoryDocs = await firestore
-        .collection('categories')
-        .where('name', isEqualTo: oldName.trim())
-        .get();
+    final categoryResponse = await _supabase
+        .from('categories')
+        .select('id')
+        .eq('name', oldName.trim())
+        .limit(1);
 
-    if (categoryDocs.docs.isNotEmpty) {
-      await categoryDocs.docs.first.reference.update({
-        'name': newName.trim(),
-      });
+    if (categoryResponse.isNotEmpty) {
+      await _supabase.from('categories').update({'name': newName.trim()}).eq(
+          'id', categoryResponse.first['id']);
     }
 
     // Update all supplies with this category
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('category', isEqualTo: oldName.trim())
-        .get();
-
-    final batch = firestore.batch();
-    for (final doc in suppliesDocs.docs) {
-      batch.update(doc.reference, {'category': newName.trim()});
-    }
-    await batch.commit();
+    await _supabase
+        .from('supplies')
+        .update({'category': newName.trim()}).eq('category', oldName.trim());
 
     // Log the category update activity
     await InventoryActivityController().logCategoryUpdated(
@@ -78,24 +68,29 @@ class CategoriesController {
     if (categoryName.trim().isEmpty) return;
 
     // Check if category is used by any supplies
-    final suppliesDocs = await firestore
-        .collection('supplies')
-        .where('category', isEqualTo: categoryName.trim())
-        .get();
+    final suppliesResponse = await _supabase
+        .from('supplies')
+        .select('id')
+        .eq('category', categoryName.trim())
+        .limit(1);
 
-    if (suppliesDocs.docs.isNotEmpty) {
+    if (suppliesResponse.isNotEmpty) {
       throw Exception(
           'Cannot delete category: It is used by existing supplies');
     }
 
     // Delete category from categories collection
-    final categoryDocs = await firestore
-        .collection('categories')
-        .where('name', isEqualTo: categoryName.trim())
-        .get();
+    final categoryResponse = await _supabase
+        .from('categories')
+        .select('id')
+        .eq('name', categoryName.trim())
+        .limit(1);
 
-    if (categoryDocs.docs.isNotEmpty) {
-      await categoryDocs.docs.first.reference.delete();
+    if (categoryResponse.isNotEmpty) {
+      await _supabase
+          .from('categories')
+          .delete()
+          .eq('id', categoryResponse.first['id']);
 
       // Log the category deletion activity
       await InventoryActivityController().logCategoryDeleted(
@@ -106,33 +101,43 @@ class CategoriesController {
 
   // Initialize default categories if none exist
   Future<void> initializeDefaultCategories() async {
-    final categoriesSnapshot = await firestore.collection('categories').get();
+    // Check if user is authenticated
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      print('User not authenticated, skipping category initialization');
+      return;
+    }
 
-    if (categoriesSnapshot.docs.isEmpty) {
-      // Add default categories
-      final defaultCategories = [
-        "PPE Disposable",
-        "Dental Materials",
-        "Medicaments",
-        "Miscellaneous",
-      ];
+    try {
+      final categoriesResponse =
+          await _supabase.from('categories').select('id');
 
-      final batch = firestore.batch();
-      for (final categoryName in defaultCategories) {
-        final docRef = firestore.collection('categories').doc();
-        batch.set(docRef, {
-          'name': categoryName,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+      if (categoriesResponse.isEmpty) {
+        // Add default categories
+        final defaultCategories = [
+          "PPE Disposable",
+          "Dental Materials",
+          "Medicaments",
+          "Miscellaneous",
+        ];
+
+        for (final categoryName in defaultCategories) {
+          await _supabase.from('categories').insert({
+            'name': categoryName,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+
+        // Log the default categories initialization
+        for (final categoryName in defaultCategories) {
+          await InventoryActivityController().logCategoryAdded(
+            categoryName: categoryName,
+          );
+        }
       }
-      await batch.commit();
-
-      // Log the default categories initialization
-      for (final categoryName in defaultCategories) {
-        await InventoryActivityController().logCategoryAdded(
-          categoryName: categoryName,
-        );
-      }
+    } catch (e) {
+      print('Error initializing categories: $e');
+      // Don't throw the error, just log it
     }
   }
 }

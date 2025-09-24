@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
@@ -8,6 +7,7 @@ import 'package:projects/features/activity_log/controller/inventory_activity_con
 import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
 class AddSupplyController {
+  final SupabaseClient _supabase = Supabase.instance.client;
   final nameController = TextEditingController();
   final costController = TextEditingController();
   final stockController = TextEditingController(text: "0");
@@ -134,7 +134,7 @@ class AddSupplyController {
   Map<String, dynamic> buildSupplyData() {
     return {
       "name": nameController.text.trim(),
-      "imageUrl": imageUrl ?? "", // Make image optional
+      "image_url": imageUrl ?? "", // Make image optional
       "category": selectedCategory ?? "",
       "cost": double.tryParse(costController.text.trim()) ?? 0.0,
       "stock": int.tryParse(stockController.text.trim()) ?? 0,
@@ -148,8 +148,9 @@ class AddSupplyController {
       "expiry": noExpiry || expiryController.text.isEmpty
           ? null
           : expiryController.text,
-      "noExpiry": noExpiry,
-      "createdAt": FieldValue.serverTimestamp(),
+      "no_expiry": noExpiry,
+      "archived": false,
+      "created_at": DateTime.now().toIso8601String(),
     };
   }
 
@@ -158,8 +159,8 @@ class AddSupplyController {
     if (error != null) return error;
     final supplyData = buildSupplyData();
     try {
-      // Add supply to Firestore
-      await FirebaseFirestore.instance.collection('supplies').add(supplyData);
+      // Add supply to Supabase
+      await _supabase.from('supplies').insert(supplyData);
 
       // Auto-manage brands and suppliers
       await filterController.addBrandIfNotExists(brandController.text.trim());

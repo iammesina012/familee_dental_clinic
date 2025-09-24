@@ -1,6 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../data/inventory_item.dart';
@@ -9,6 +8,7 @@ import 'package:projects/features/activity_log/controller/inventory_activity_con
 import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
 class EditSupplyController {
+  final SupabaseClient _supabase = Supabase.instance.client;
   final nameController = TextEditingController();
   final costController = TextEditingController();
   final stockController = TextEditingController();
@@ -201,7 +201,7 @@ class EditSupplyController {
   Map<String, dynamic> buildUpdatedData() {
     return {
       "name": nameController.text.trim(),
-      "imageUrl": imageUrl ?? "", // Make image optional
+      "image_url": imageUrl ?? "", // Make image optional
       "category": selectedCategory ?? "",
       "cost": double.tryParse(costController.text.trim()) ?? 0.0,
       "stock": int.tryParse(stockController.text.trim()) ?? 0,
@@ -216,7 +216,7 @@ class EditSupplyController {
       "expiry": noExpiry || expiryController.text.isEmpty
           ? null
           : expiryController.text.replaceAll('/', '-'),
-      "noExpiry": noExpiry,
+      "no_expiry": noExpiry,
     };
   }
 
@@ -225,8 +225,6 @@ class EditSupplyController {
     if (error != null) return error;
     final updatedData = buildUpdatedData();
     try {
-      final suppliesRef = FirebaseFirestore.instance.collection('supplies');
-
       // Try to merge with an existing batch if name + brand + expiry match
       final String name = (updatedData['name'] ?? '').toString();
       final String brand = (updatedData['brand'] ?? '').toString();
@@ -243,17 +241,17 @@ class EditSupplyController {
 
       final DateTime? newExpiryDate = parseExpiry(newExpiry);
 
-      final existingQuery = await suppliesRef
-          .where('name', isEqualTo: name)
-          .where('brand', isEqualTo: brand)
-          .get();
+      final existingQuery = await _supabase
+          .from('supplies')
+          .select('*')
+          .eq('name', name)
+          .eq('brand', brand);
 
       // Find a matching document (excluding current) with the same expiry (null == null allowed)
-      QueryDocumentSnapshot<Map<String, dynamic>>? mergeTarget;
-      for (final doc in existingQuery.docs) {
-        if (doc.id == docId) continue;
-        final data = doc.data();
-        final dynamic otherExpiryRaw = data['expiry'];
+      Map<String, dynamic>? mergeTarget;
+      for (final row in existingQuery) {
+        if (row['id'] == docId) continue;
+        final dynamic otherExpiryRaw = row['expiry'];
         final String? otherExpiry =
             (otherExpiryRaw == null || otherExpiryRaw.toString().isEmpty)
                 ? null
@@ -267,33 +265,35 @@ class EditSupplyController {
                     newExpiryDate.month == otherExpiryDate.month &&
                     newExpiryDate.day == otherExpiryDate.day);
         if (expiryMatches) {
-          mergeTarget = doc;
+          mergeTarget = row;
           break;
         }
       }
 
       if (mergeTarget != null) {
         // Merge stock into the target and delete the current document
-        final targetData = mergeTarget.data();
-        final int targetStock = (targetData['stock'] ?? 0) as int;
+        final int targetStock = (mergeTarget['stock'] ?? 0) as int;
         final int thisStock = (updatedData['stock'] ?? 0) as int;
         final int mergedStock = targetStock + thisStock;
 
         final Map<String, dynamic> updates = {'stock': mergedStock};
         // Fill missing fields on target if needed
-        if ((targetData['imageUrl'] ?? '').toString().isEmpty &&
-            (updatedData['imageUrl'] ?? '').toString().isNotEmpty) {
-          updates['imageUrl'] = updatedData['imageUrl'];
+        if ((mergeTarget['image_url'] ?? '').toString().isEmpty &&
+            (updatedData['image_url'] ?? '').toString().isNotEmpty) {
+          updates['image_url'] = updatedData['image_url'];
         }
-        if (targetData['archived'] == null) {
+        if (mergeTarget['archived'] == null) {
           updates['archived'] = false;
         }
 
-        await suppliesRef.doc(mergeTarget.id).update(updates);
-        await suppliesRef.doc(docId).delete();
+        await _supabase
+            .from('supplies')
+            .update(updates)
+            .eq('id', mergeTarget['id']);
+        await _supabase.from('supplies').delete().eq('id', docId);
       } else {
         // No merge target; just update this document normally
-        await suppliesRef.doc(docId).update(updatedData);
+        await _supabase.from('supplies').update(updatedData).eq('id', docId);
       }
 
       // Auto-manage brands and suppliers

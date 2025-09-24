@@ -1,71 +1,43 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/inventory_item.dart';
 
 class InventoryController {
-  final FirebaseFirestore firestore;
-
-  InventoryController({FirebaseFirestore? firestore})
-      : firestore = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   // Stream to get all supplies ordered by name, with optional archived filter
   Stream<List<InventoryItem>> getSuppliesStream({bool? archived}) {
-    Query query = firestore.collection('supplies');
-
-    if (archived != null) {
-      if (archived == true) {
-        // For archived supplies: get only those with archived = true
-        query = query.where('archived', isEqualTo: true);
-      } else {
-        // For non-archived supplies: get those with archived = false OR where archived field doesn't exist
-        // We'll need to get all supplies and filter in the app since Firestore doesn't support OR queries easily
-        query = query.orderBy('name');
-        return query.snapshots().map(
-              (snapshot) => snapshot.docs
-                  .map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    return InventoryItem(
-                      id: doc.id,
-                      name: data['name'] ?? '',
-                      imageUrl: data['imageUrl'] ?? '',
-                      category: data['category'] ?? '',
-                      cost: (data['cost'] ?? 0).toDouble(),
-                      stock: (data['stock'] ?? 0) as int,
-                      unit: data['unit'] ?? '',
-                      supplier: data['supplier'] ?? '',
-                      brand: data['brand'] ?? '',
-                      expiry: data['expiry'],
-                      noExpiry: data['noExpiry'] ?? false,
-                      archived: data['archived'] ?? false,
-                    );
-                  })
-                  .where((item) => !item.archived)
-                  .toList(),
-            );
-      }
-    } else {
-      // No filter - get all supplies
-      query = query.orderBy('name');
-    }
-
-    return query.snapshots().map(
-          (snapshot) => snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return InventoryItem(
-              id: doc.id,
-              name: data['name'] ?? '',
-              imageUrl: data['imageUrl'] ?? '',
-              category: data['category'] ?? '',
-              cost: (data['cost'] ?? 0).toDouble(),
-              stock: (data['stock'] ?? 0) as int,
-              unit: data['unit'] ?? '',
-              supplier: data['supplier'] ?? '',
-              brand: data['brand'] ?? '',
-              expiry: data['expiry'],
-              noExpiry: data['noExpiry'] ?? false,
-              archived: data['archived'] ?? false,
-            );
-          }).toList(),
+    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
+      List<InventoryItem> items = data.map((row) {
+        return InventoryItem(
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: (row['stock'] ?? 0) as int,
+          unit: row['unit'] ?? '',
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
         );
+      }).toList();
+
+      // Apply archived filter
+      if (archived != null) {
+        if (archived == true) {
+          items = items.where((item) => item.archived == true).toList();
+        } else {
+          items = items.where((item) => item.archived != true).toList();
+        }
+      }
+
+      // Sort by name
+      items
+          .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return items;
+    });
   }
 
   // New method to get grouped supplies for main inventory display
@@ -285,7 +257,12 @@ class InventoryController {
   // Sorting logic for grouped items
   List<GroupedInventoryItem> sortGroupedItems(
       List<GroupedInventoryItem> items, String? selectedSort) {
-    final sorted = List<GroupedInventoryItem>.from(items);
+    // Early return if no items or no sort selected
+    if (items.isEmpty || selectedSort == null) return items;
+
+    // Limit the number of items to sort to prevent performance issues
+    final itemsToSort = items.length > 1000 ? items.take(1000).toList() : items;
+    final sorted = List<GroupedInventoryItem>.from(itemsToSort);
     switch (selectedSort) {
       case "Name (A → Z)":
         sorted.sort((a, b) => a.mainItem.name
@@ -326,7 +303,12 @@ class InventoryController {
   // Sorting logic
   List<InventoryItem> sortItems(
       List<InventoryItem> items, String? selectedSort) {
-    final sorted = List<InventoryItem>.from(items);
+    // Early return if no items or no sort selected
+    if (items.isEmpty || selectedSort == null) return items;
+
+    // Limit the number of items to sort to prevent performance issues
+    final itemsToSort = items.length > 1000 ? items.take(1000).toList() : items;
+    final sorted = List<InventoryItem>.from(itemsToSort);
     switch (selectedSort) {
       case "Name (A → Z)":
         sorted.sort(
@@ -365,10 +347,17 @@ class InventoryController {
   }
 
   int _expiryOrder(InventoryItem item) {
+    // Cache the result to avoid repeated calculations
     if (item.noExpiry == true) return 999999;
     if (item.expiry == null || item.expiry!.isEmpty) return 999999;
-    final date = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
-    return date != null ? date.millisecondsSinceEpoch : 999999;
+
+    try {
+      final date = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+      return date != null ? date.millisecondsSinceEpoch : 999999;
+    } catch (e) {
+      // Handle any parsing errors gracefully
+      return 999999;
+    }
   }
 
   // Helper method to get item status for filtering
@@ -415,46 +404,36 @@ class InventoryController {
   // One-time cleanup: delete zero-stock duplicate batches when another batch has stock
   Future<void> cleanupZeroStockDuplicates() async {
     try {
-      final snapshot = await firestore.collection('supplies').get();
-      final docs = snapshot.docs;
-      if (docs.isEmpty) return;
+      final response = await _supabase.from('supplies').select('*');
+      final supplies = response;
+      if (supplies.isEmpty) return;
 
       // Group by name + brand
-      final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-          groups = {};
-      for (final doc in docs) {
-        final data = doc.data();
-        final key = '${data['name'] ?? ''}_${data['brand'] ?? ''}';
+      final Map<String, List<Map<String, dynamic>>> groups = {};
+      for (final supply in supplies) {
+        final key = '${supply['name'] ?? ''}_${supply['brand'] ?? ''}';
         groups.putIfAbsent(key, () => []);
-        groups[key]!.add(doc);
+        groups[key]!.add(supply);
       }
 
-      final WriteBatch batch = firestore.batch();
-      int deleteCount = 0;
+      for (final entry in groups.entries) {
+        final groupSupplies = entry.value;
 
-      groups.forEach((key, groupDocs) {
-        final bool anyHasStock = groupDocs.any((d) {
-          final data = d.data();
-          final int stock = (data['stock'] ?? 0) as int;
-          final bool archived = (data['archived'] ?? false) as bool;
+        final bool anyHasStock = groupSupplies.any((supply) {
+          final int stock = (supply['stock'] ?? 0) as int;
+          final bool archived = (supply['archived'] ?? false) as bool;
           return !archived && stock > 0;
         });
 
-        if (!anyHasStock) return; // keep zero-stock if it's the only batch
+        if (!anyHasStock) continue; // keep zero-stock if it's the only batch
 
-        for (final d in groupDocs) {
-          final data = d.data();
-          final int stock = (data['stock'] ?? 0) as int;
-          final bool archived = (data['archived'] ?? false) as bool;
+        for (final supply in groupSupplies) {
+          final int stock = (supply['stock'] ?? 0) as int;
+          final bool archived = (supply['archived'] ?? false) as bool;
           if (!archived && stock == 0) {
-            batch.delete(d.reference);
-            deleteCount++;
+            await _supabase.from('supplies').delete().eq('id', supply['id']);
           }
         }
-      });
-
-      if (deleteCount > 0) {
-        await batch.commit();
       }
     } catch (_) {
       // Swallow errors; cleanup is best-effort

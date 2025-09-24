@@ -17,12 +17,12 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   final TextEditingController _newPassword = TextEditingController();
   final TextEditingController _confirmPassword = TextEditingController();
 
-  bool _showCurrent = false;
+  // bool _showCurrent = false; // TEMPORARILY UNUSED
   bool _showNew = false;
   bool _showConfirm = false;
   bool _isSaving = false;
 
-  String? _currentPasswordServerError;
+  // String? _currentPasswordServerError; // TEMPORARILY UNUSED
 
   @override
   void dispose() {
@@ -65,28 +65,29 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildPasswordField(
-                label: 'Current Password',
-                controller: _currentPassword,
-                isVisible: _showCurrent,
-                onToggle: () => setState(() => _showCurrent = !_showCurrent),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Enter your current password';
-                  }
-                  if (_currentPasswordServerError != null) {
-                    return _currentPasswordServerError;
-                  }
-                  return null;
-                },
-                onChanged: (_) {
-                  if (_currentPasswordServerError != null) {
-                    setState(() => _currentPasswordServerError = null);
-                    _formKey.currentState?.validate();
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
+              // TEMPORARILY REMOVED: Current Password Field
+              // _buildPasswordField(
+              //   label: 'Current Password',
+              //   controller: _currentPassword,
+              //   isVisible: _showCurrent,
+              //   onToggle: () => setState(() => _showCurrent = !_showCurrent),
+              //   validator: (value) {
+              //     if (value == null || value.isEmpty) {
+              //       return 'Enter your current password';
+              //     }
+              //     if (_currentPasswordServerError != null) {
+              //       return _currentPasswordServerError;
+              //     }
+              //     return null;
+              //   },
+              //   onChanged: (_) {
+              //     if (_currentPasswordServerError != null) {
+              //       setState(() => _currentPasswordServerError = null);
+              //       _formKey.currentState?.validate();
+              //     }
+              //   },
+              // ),
+              // const SizedBox(height: 16),
               _buildPasswordField(
                 label: 'New Password',
                 controller: _newPassword,
@@ -256,11 +257,12 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
     setState(() {
       _isSaving = true;
-      _currentPasswordServerError = null;
+      // _currentPasswordServerError = null; // TEMPORARILY UNUSED
     });
 
     final result = await _controller.changePassword(
-      currentPassword: _currentPassword.text,
+      currentPassword:
+          '', // TEMPORARILY: Pass empty string since current password field is removed
       newPassword: _newPassword.text,
     );
 
@@ -285,6 +287,15 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       return;
     }
 
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+
     final errText = message.toLowerCase();
     final isWrongPassword = errText.contains('incorrect') ||
         errText.contains('wrong-password') ||
@@ -293,13 +304,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         errText.contains('invalid credential');
 
     if (isWrongPassword) {
-      setState(
-          () => _currentPasswordServerError = 'Current password is incorrect.');
-      _formKey.currentState?.validate();
+      // setState(
+      //     () => _currentPasswordServerError = 'Current password is incorrect.');
+      // _formKey.currentState?.validate();
     } else {
       // No error snackbar; show inline error on current field
-      setState(() => _currentPasswordServerError = message);
-      _formKey.currentState?.validate();
+      // setState(() => _currentPasswordServerError = message);
+      // _formKey.currentState?.validate();
     }
   }
 }
