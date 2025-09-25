@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
-import '../controller/expired_view_supply_controller.dart';
+import 'package:projects/features/inventory/controller/expired_view_supply_controller.dart';
 
 class ExpiredOtherExpiryBatches extends StatelessWidget {
   final InventoryItem item;

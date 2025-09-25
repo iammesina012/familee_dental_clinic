@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:projects/features/notifications/controller/notifications_controller.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -257,28 +257,28 @@ class _NotificationTile extends StatelessWidget {
                 final String code = notification.poCode!;
                 // Check live status before navigating; if missing, show banner here
                 try {
-                  final qs = await FirebaseFirestore.instance
-                      .collection('purchase_orders')
-                      .where('code', isEqualTo: code)
-                      .limit(1)
-                      .get();
-                  if (qs.docs.isEmpty) {
+                  final data = await Supabase.instance.client
+                      .from('purchase_orders')
+                      .select('*')
+                      .eq('code', code)
+                      .limit(1);
+                  if (data.isEmpty) {
                     _showNotFoundOverlay(context,
                         title: 'Purchase Order Not Found',
                         message:
                             'This purchase order ($code) no longer exists.');
                     return;
                   }
-                  final data = qs.docs.first.data();
-                  if ((data['status'] as String?) == null ||
-                      (data['id'] as String?) == null) {
+                  final poData = data.first;
+                  if ((poData['status'] as String?) == null ||
+                      (poData['id'] as String?) == null) {
                     // Defensive: malformed doc treated as unavailable
                     _showNotFoundOverlay(context,
                         title: 'Purchase Order Not Available',
                         message: 'Please try again in a moment.');
                     return;
                   }
-                  final String status = (data['status'] ?? 'Open') as String;
+                  final String status = (poData['status'] ?? 'Open') as String;
                   int desiredTab;
                   switch (status) {
                     case 'Approval':
@@ -311,20 +311,19 @@ class _NotificationTile extends StatelessWidget {
                 if (notification.type == 'expired') {
                   // Open specific expired batch directly
                   try {
-                    final qs = await FirebaseFirestore.instance
-                        .collection('supplies')
-                        .where('name', isEqualTo: name)
-                        .get();
-                    if (qs.docs.isNotEmpty) {
+                    final data = await Supabase.instance.client
+                        .from('supplies')
+                        .select('*')
+                        .eq('name', name);
+                    if (data.isNotEmpty) {
                       final now = DateTime.now();
                       final today = DateTime(now.year, now.month, now.day);
                       InventoryItem? chosen;
                       DateTime? earliest;
-                      for (final d in qs.docs) {
-                        final data = d.data();
-                        if ((data['expiry'] ?? '').toString().isEmpty) continue;
+                      for (final d in data) {
+                        if ((d['expiry'] ?? '').toString().isEmpty) continue;
                         final parsed = DateTime.tryParse(
-                            (data['expiry'] as String).replaceAll('/', '-'));
+                            (d['expiry'] as String).replaceAll('/', '-'));
                         if (parsed == null) continue;
                         final dateOnly =
                             DateTime(parsed.year, parsed.month, parsed.day);
@@ -335,18 +334,18 @@ class _NotificationTile extends StatelessWidget {
                         if (earliest == null || dateOnly.isBefore(earliest)) {
                           earliest = dateOnly;
                           chosen = InventoryItem(
-                            id: d.id,
-                            name: (data['name'] ?? '').toString(),
-                            imageUrl: (data['imageUrl'] ?? '').toString(),
-                            category: (data['category'] ?? '').toString(),
-                            cost: ((data['cost'] ?? 0) as num).toDouble(),
-                            stock: (data['stock'] ?? 0) as int,
-                            unit: (data['unit'] ?? '').toString(),
-                            supplier: (data['supplier'] ?? '').toString(),
-                            brand: (data['brand'] ?? '').toString(),
-                            expiry: (data['expiry'] ?? '').toString(),
-                            noExpiry: (data['noExpiry'] ?? false) as bool,
-                            archived: (data['archived'] ?? false) as bool,
+                            id: d['id'] as String,
+                            name: (d['name'] ?? '').toString(),
+                            imageUrl: (d['image_url'] ?? '').toString(),
+                            category: (d['category'] ?? '').toString(),
+                            cost: ((d['cost'] ?? 0) as num).toDouble(),
+                            stock: (d['stock'] ?? 0) as int,
+                            unit: (d['unit'] ?? '').toString(),
+                            supplier: (d['supplier'] ?? '').toString(),
+                            brand: (d['brand'] ?? '').toString(),
+                            expiry: (d['expiry'] ?? '').toString(),
+                            noExpiry: (d['no_expiry'] ?? false) as bool,
+                            archived: (d['archived'] ?? false) as bool,
                           );
                         }
                       }

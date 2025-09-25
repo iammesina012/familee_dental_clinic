@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppNotification {
@@ -23,16 +23,15 @@ class AppNotification {
   });
 
   factory AppNotification.fromMap(String id, Map<String, dynamic> data) {
-    final Timestamp ts = (data['createdAt'] as Timestamp?) ?? Timestamp.now();
     return AppNotification(
       id: id,
       title: (data['title'] ?? '').toString(),
       message: (data['message'] ?? '').toString(),
-      createdAt: ts.toDate(),
+      createdAt: _parseDateTime(data['created_at']),
       type: (data['type'] ?? 'general').toString(),
-      isRead: (data['isRead'] ?? false) as bool,
-      supplyName: data['supplyName']?.toString(),
-      poCode: data['poCode']?.toString(),
+      isRead: (data['is_read'] ?? false) as bool,
+      supplyName: data['supply_name']?.toString(),
+      poCode: data['po_code']?.toString(),
     );
   }
 
@@ -40,44 +39,60 @@ class AppNotification {
     return {
       'title': title,
       'message': message,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'created_at': createdAt.toIso8601String(),
       'type': type,
-      'isRead': isRead,
-      if (supplyName != null) 'supplyName': supplyName,
-      if (poCode != null) 'poCode': poCode,
+      'is_read': isRead,
+      if (supplyName != null) 'supply_name': supplyName,
+      if (poCode != null) 'po_code': poCode,
     };
+  }
+
+  static DateTime _parseDateTime(dynamic timestamp) {
+    if (timestamp == null) return DateTime.now();
+
+    if (timestamp is String) {
+      // Try parsing as ISO8601 string
+      final parsed = DateTime.tryParse(timestamp);
+      if (parsed != null) {
+        print('Parsed timestamp: $timestamp -> $parsed');
+        return parsed;
+      } else {
+        print('Failed to parse timestamp: $timestamp');
+      }
+    }
+
+    // Fallback to current time
+    print('Using fallback time for timestamp: $timestamp');
+    return DateTime.now();
   }
 }
 
 class NotificationsController {
-  final FirebaseFirestore firestore;
+  final SupabaseClient _supabase = Supabase.instance.client;
   // Local preferences keys
   static const String _kInventoryPref = 'settings.notify_inventory';
   static const String _kApprovalPref = 'settings.notify_approval';
 
-  NotificationsController({FirebaseFirestore? firestore})
-      : firestore = firestore ?? FirebaseFirestore.instance;
-
   // Default stream (unbounded)
   Stream<List<AppNotification>> getNotificationsStream() {
-    return firestore
-        .collection('notifications')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => AppNotification.fromMap(doc.id, doc.data()))
+    return _supabase
+        .from('notifications')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((data) => data
+            .map((row) => AppNotification.fromMap(row['id'] as String, row))
             .toList());
   }
 
   // Limited stream (keeps UI responsive and pairs with enforceMaxNotifications)
   Stream<List<AppNotification>> getNotificationsStreamLimited({int max = 20}) {
-    return firestore
-        .collection('notifications')
-        .orderBy('createdAt', descending: true)
+    return _supabase
+        .from('notifications')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
         .limit(max)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => AppNotification.fromMap(doc.id, doc.data()))
+        .map((data) => data
+            .map((row) => AppNotification.fromMap(row['id'] as String, row))
             .toList());
   }
 
@@ -105,15 +120,14 @@ class NotificationsController {
       return; // Respect preferences: do not create notification
     }
 
-    final docRef = firestore.collection('notifications').doc();
-    await docRef.set({
+    await _supabase.from('notifications').insert({
       'title': title,
       'message': message,
-      'createdAt': FieldValue.serverTimestamp(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
       'type': type,
-      'isRead': false,
-      if (supplyName != null) 'supplyName': supplyName,
-      if (poCode != null) 'poCode': poCode,
+      'is_read': false,
+      if (supplyName != null) 'supply_name': supplyName,
+      if (poCode != null) 'po_code': poCode,
     });
   }
 
@@ -195,43 +209,40 @@ class NotificationsController {
   }
 
   Future<void> markAsRead(String id) async {
-    await firestore.collection('notifications').doc(id).update({
-      'isRead': true,
-    });
+    await _supabase.from('notifications').update({
+      'is_read': true,
+    }).eq('id', id);
   }
 
   Future<void> deleteNotification(String id) async {
-    await firestore.collection('notifications').doc(id).delete();
+    await _supabase.from('notifications').delete().eq('id', id);
   }
 
   Future<void> clearAll() async {
-    final snap = await firestore.collection('notifications').get();
-    final batch = firestore.batch();
-    for (final doc in snap.docs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
+    await _supabase.from('notifications').delete().neq('id', '');
   }
 
   // Delete older notifications so only the most recent [max] remain
   Future<void> enforceMaxNotifications({int max = 20}) async {
-    final snap = await firestore
-        .collection('notifications')
-        .orderBy('createdAt', descending: true)
-        .get();
-    if (snap.docs.length <= max) return;
+    final data = await _supabase
+        .from('notifications')
+        .select('id')
+        .order('created_at', ascending: false);
 
-    final older = snap.docs.skip(max);
-    final batch = firestore.batch();
-    for (final doc in older) {
-      batch.delete(doc.reference);
+    if (data.length <= max) return;
+
+    final olderIds = data.skip(max).map((row) => row['id'] as String).toList();
+    if (olderIds.isNotEmpty) {
+      await _supabase.from('notifications').delete().inFilter('id', olderIds);
     }
-    await batch.commit();
   }
 
   String getRelativeTime(DateTime createdAt) {
     final now = DateTime.now();
     final difference = now.difference(createdAt);
+
+    print(
+        'Relative time calculation: now=$now, createdAt=$createdAt, difference=${difference.inSeconds}s');
 
     if (difference.inSeconds < 60) {
       return '${difference.inSeconds}s ago';

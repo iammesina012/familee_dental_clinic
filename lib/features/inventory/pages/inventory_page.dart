@@ -9,10 +9,11 @@ import 'package:projects/features/inventory/pages/add_supply_page.dart';
 import 'package:projects/features/inventory/pages/view_supply_page.dart';
 import 'package:projects/features/inventory/pages/add_category_page.dart';
 import 'package:projects/features/inventory/pages/edit_categories_page.dart';
-import '../controller/inventory_controller.dart';
+import 'package:projects/features/inventory/controller/inventory_controller.dart';
 import 'package:projects/features/inventory/pages/expired_supply_page.dart';
-import '../controller/filter_controller.dart';
-import '../controller/categories_controller.dart';
+import 'package:projects/features/inventory/controller/filter_controller.dart';
+import 'package:projects/features/inventory/controller/categories_controller.dart';
+import 'package:projects/features/inventory/controller/expired_supply_controller.dart';
 import 'package:projects/features/inventory/pages/archive_supply_page.dart';
 import 'package:projects/shared/themes/font.dart';
 
@@ -41,6 +42,7 @@ class _InventoryState extends State<Inventory> {
   final InventoryController controller = InventoryController();
   final FilterController filterController = FilterController();
   final CategoriesController categoriesController = CategoriesController();
+  final ExpiredSupplyController expiredController = ExpiredSupplyController();
 
   // ─── Real-time State ─────────────────────────────────────────────────────
   Key _categoriesStreamKey = UniqueKey();
@@ -153,6 +155,8 @@ class _InventoryState extends State<Inventory> {
     _initializeData();
     // Best-effort cleanup of zero-stock duplicates when there are stocked batches
     controller.cleanupZeroStockDuplicates();
+    // Convert expired supplies to placeholders
+    _convertExpiredToPlaceholders();
   }
 
   @override
@@ -167,11 +171,21 @@ class _InventoryState extends State<Inventory> {
       }
       // removed: applyStatusFilter deep-link
     }
+    // Convert expired supplies to placeholders when page becomes visible
+    _convertExpiredToPlaceholders();
   }
 
   Future<void> _initializeData() async {
     await categoriesController.initializeDefaultCategories();
     await filterController.migrateExistingBrandsAndSuppliers();
+  }
+
+  void _convertExpiredToPlaceholders() async {
+    try {
+      await expiredController.convertExpiredToPlaceholders();
+    } catch (e) {
+      // Handle error silently for now
+    }
   }
 
   @override
@@ -217,6 +231,8 @@ class _InventoryState extends State<Inventory> {
         child: RefreshIndicator(
           onRefresh: () async {
             _refreshAllStreams();
+            // Convert expired supplies to placeholders
+            _convertExpiredToPlaceholders();
             // Wait a bit for the streams to update
             await Future.delayed(Duration(milliseconds: 500));
           },
@@ -517,28 +533,15 @@ class _InventoryState extends State<Inventory> {
                               _deepLinkHandled = true;
                               final t = target;
                               WidgetsBinding.instance.addPostFrameCallback((_) {
-                                // Check if this is a placeholder (0 stock, no expiry, and not expired)
-                                if (t.mainItem.stock == 0 &&
-                                    t.mainItem.noExpiry &&
-                                    t.getStatus() != "Expired") {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          '${t.mainItem.name} has expired and is no longer available.'),
-                                      backgroundColor: Colors.orange,
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                } else {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          InventoryViewSupplyPage(
-                                              item: t.mainItem),
-                                    ),
-                                  );
-                                }
+                                // Allow access to all items, including out-of-stock placeholders
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        InventoryViewSupplyPage(
+                                            item: t.mainItem),
+                                  ),
+                                );
                               });
                             }
                           }
@@ -563,25 +566,7 @@ class _InventoryState extends State<Inventory> {
                                     final groupedItem = visibleItems[index];
                                     return GestureDetector(
                                       onTap: () {
-                                        // Check if this is a placeholder (0 stock, no expiry, and not expired)
-                                        // Only show message for true placeholders, not expired items
-                                        if (groupedItem.mainItem.stock == 0 &&
-                                            groupedItem.mainItem.noExpiry &&
-                                            groupedItem.getStatus() !=
-                                                "Expired") {
-                                          // Show a message for placeholder items
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                  '${groupedItem.mainItem.name} has expired and is no longer available.'),
-                                              backgroundColor: Colors.orange,
-                                              duration: Duration(seconds: 2),
-                                            ),
-                                          );
-                                          return;
-                                        }
-                                        // Allow navigation for all other items, including expired ones
+                                        // Allow navigation for all items, including out-of-stock placeholders
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(

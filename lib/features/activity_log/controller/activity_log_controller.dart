@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
 class ActivityLogController extends ChangeNotifier {
@@ -8,12 +8,12 @@ class ActivityLogController extends ChangeNotifier {
   String _selectedCategory = 'All Categories';
   String _searchQuery = '';
 
-  // Firebase instance
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Supabase instance
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Real-time activities from Firebase
+  // Real-time activities from Supabase
   List<Map<String, dynamic>> _allActivities = [];
-  StreamSubscription<QuerySnapshot>? _activitiesSubscription;
+  StreamSubscription? _activitiesSubscription;
 
   // Getters
   DateTime get selectedDate => _selectedDate;
@@ -108,31 +108,36 @@ class ActivityLogController extends ChangeNotifier {
     super.dispose();
   }
 
-  // Start listening to activities from Firebase
+  // Start listening to activities from Supabase
   void _startListeningToActivities() {
-    _activitiesSubscription = _firestore
-        .collection('activity_logs')
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      _allActivities = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          'userName': data['userName'] ?? 'Unknown User',
-          'description': data['description'] ?? '',
-          'date': data['date'] is Timestamp
-              ? (data['date'] as Timestamp).toDate()
-              : DateTime.now(),
-          'time': data['time'] ?? '',
-          'category': data['category'] ?? '',
-          'action': data['action'] ?? '',
-          'metadata': data['metadata'] ?? {},
-        };
-      }).toList();
+    try {
+      _activitiesSubscription = _supabase
+          .from('activity_logs')
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: false)
+          .listen((data) {
+            if (data is List<Map<String, dynamic>>) {
+              _allActivities = data.map((row) {
+                return {
+                  'id': row['id'],
+                  'userName': row['user_name'] ?? 'Unknown User',
+                  'description': row['description'] ?? '',
+                  'date': row['date'] != null
+                      ? DateTime.parse(row['date'] as String)
+                      : DateTime.now(),
+                  'time': row['time'] ?? '',
+                  'category': row['category'] ?? '',
+                  'action': row['action'] ?? '',
+                  'metadata': row['metadata'] ?? {},
+                };
+              }).toList();
 
-      notifyListeners();
-    });
+              notifyListeners();
+            }
+          });
+    } catch (e) {
+      print('Error starting activity stream: $e');
+    }
   }
 
   // Methods to update filters
@@ -170,11 +175,11 @@ class ActivityLogController extends ChangeNotifier {
     // This method is kept for backward compatibility
   }
 
-  // Method to delete activity from Firebase
+  // Method to delete activity from Supabase
   Future<void> deleteActivity(String activityId) async {
     try {
-      // Delete from Firebase
-      await _firestore.collection('activity_logs').doc(activityId).delete();
+      // Delete from Supabase
+      await _supabase.from('activity_logs').delete().eq('id', activityId);
 
       // The stream will automatically update the UI
       // success

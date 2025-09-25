@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import '../controller/add_supply_controller.dart';
-import '../controller/categories_controller.dart';
+import 'package:projects/features/inventory/controller/add_supply_controller.dart';
+import 'package:projects/features/inventory/controller/categories_controller.dart';
 
 class AddSupplyPage extends StatefulWidget {
   const AddSupplyPage({super.key});

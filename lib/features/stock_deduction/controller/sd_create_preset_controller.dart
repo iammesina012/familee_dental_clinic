@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:projects/features/stock_deduction/controller/sd_preset_management_controller.dart';
 
 class SdCreatePresetController {
@@ -73,7 +72,7 @@ class SdCreatePresetController {
     return {
       'name': presetName.trim(),
       'supplies': presetSupplies,
-      'createdAt': DateTime.now().toString().split(' ')[0], // YYYY-MM-DD format
+      'created_at': DateTime.now().toIso8601String(), // ISO format for Supabase
     };
   }
 

@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/components/inventory_other_expiry_dates.dart';
 import 'package:projects/features/inventory/pages/edit_supply_page.dart';
-import '../controller/view_supply_controller.dart';
+import 'package:projects/features/inventory/controller/view_supply_controller.dart';
 import 'package:projects/features/inventory/pages/archive_supply_page.dart';
 import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
 

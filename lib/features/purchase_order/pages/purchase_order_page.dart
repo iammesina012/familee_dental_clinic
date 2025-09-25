@@ -18,7 +18,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   final POListController _controller = POListController();
   List<PurchaseOrder> _orders = [];
   List<PurchaseOrder> _closedOrders =
-      []; // Separate list for closed POs from Firebase
+      []; // Separate list for closed POs from Supabase
   List<PurchaseOrder> _approvalOrders = []; // Separate list for approval POs
   List<PurchaseOrder> _openOrders = []; // Separate list for open POs
   int activeTabIndex = 0;
@@ -48,15 +48,15 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       // Check current sequence
       await _controller.getCurrentSequence();
 
-      // Load ALL POs from Firebase (real-time)
-      _loadAllPOsFromFirebase();
+      // Load ALL POs from Supabase (real-time)
+      _loadAllPOsFromSupabase();
     } catch (e) {
       // Don't show error UI in async operations to avoid context issues
       // The error is logged for debugging purposes
     }
   }
 
-  void _loadAllPOsFromFirebase() {
+  void _loadAllPOsFromSupabase() {
     try {
       // Load Open POs
       _openSubscription = _controller.getOpenPOsStream().listen(

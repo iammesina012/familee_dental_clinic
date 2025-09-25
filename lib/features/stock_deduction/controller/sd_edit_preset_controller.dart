@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:projects/features/stock_deduction/controller/sd_preset_management_controller.dart';
 
 class SdEditPresetController {
@@ -82,7 +81,7 @@ class SdEditPresetController {
       ...originalPreset,
       'name': presetName,
       'supplies': presetSupplies,
-      'updatedAt': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
     };
   }
 

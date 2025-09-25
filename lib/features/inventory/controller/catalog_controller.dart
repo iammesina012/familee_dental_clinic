@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../data/inventory_item.dart';
+import 'package:projects/features/inventory/data/inventory_item.dart';
 
 /// CatalogController provides a product catalog stream that includes
 /// all non-archived products regardless of expiry/stock.
@@ -54,6 +54,7 @@ class CatalogController {
             .where((v) => !_isExpired(v, today) && v.stock > 0)
             .toList();
         if (candidates.isEmpty) {
+          // Include placeholders (stock = 0, no expiry) in the fallback
           candidates = variants.where((v) => !_isExpired(v, today)).toList();
         }
         if (candidates.isEmpty) {

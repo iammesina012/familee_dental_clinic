@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../data/inventory_item.dart';
+import 'package:projects/features/inventory/data/inventory_item.dart';
 
 class InventoryController {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -86,7 +86,7 @@ class InventoryController {
         return !(dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today));
       }).toList();
 
-      // Only create groups for non-expired items
+      // Create groups for non-expired items (including placeholders with 0 stock)
       if (nonExpiredItems.isNotEmpty) {
         // Sort by expiry date (earliest first)
         nonExpiredItems.sort((a, b) {
@@ -108,9 +108,13 @@ class InventoryController {
           return aExpiry.compareTo(bExpiry);
         });
 
+        // Find main item - prefer items with stock > 0, but include placeholders (stock = 0, no expiry)
         final mainItem = nonExpiredItems.firstWhere(
           (it) => it.stock > 0,
-          orElse: () => nonExpiredItems.first,
+          orElse: () => nonExpiredItems.firstWhere(
+            (it) => it.stock == 0 && it.noExpiry, // Placeholder items
+            orElse: () => nonExpiredItems.first,
+          ),
         );
         final variants =
             nonExpiredItems.where((it) => it.id != mainItem.id).toList();
@@ -425,12 +429,21 @@ class InventoryController {
           return !archived && stock > 0;
         });
 
+        // Only clean up if there are items with stock > 0 AND there are duplicate 0-stock items
         if (!anyHasStock) continue; // keep zero-stock if it's the only batch
 
-        for (final supply in groupSupplies) {
+        // Count 0-stock items that are NOT placeholders
+        final zeroStockItems = groupSupplies.where((supply) {
           final int stock = (supply['stock'] ?? 0) as int;
           final bool archived = (supply['archived'] ?? false) as bool;
-          if (!archived && stock == 0) {
+          final bool noExpiry = (supply['no_expiry'] ?? false) as bool;
+          return !archived && stock == 0 && !noExpiry; // Not placeholders
+        }).toList();
+
+        // Only delete if there are multiple 0-stock non-placeholder items
+        if (zeroStockItems.length > 1) {
+          for (final supply in zeroStockItems.skip(1)) {
+            // Keep one, delete the rest
             await _supabase.from('supplies').delete().eq('id', supply['id']);
           }
         }

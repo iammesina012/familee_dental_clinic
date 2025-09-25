@@ -50,7 +50,7 @@ class SdAddSupplyPresetController {
       'imageUrl': item.mainItem.imageUrl,
       'expiry': item.mainItem.expiry,
       'noExpiry': item.mainItem.noExpiry,
-      'stock': item.totalStock,
+      'stock': item.mainItem.stock, // Use individual batch stock, not total
     };
   }
 

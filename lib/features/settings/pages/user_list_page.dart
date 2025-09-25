@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../controller/user_list_controller.dart';
+import 'package:projects/features/settings/controller/user_list_controller.dart';
 import 'edit_user_page.dart';
 import 'add_user_page.dart';
 

@@ -3,7 +3,7 @@ import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/components/inventory_item_card.dart';
 import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
-import '../controller/expired_supply_controller.dart';
+import 'package:projects/features/inventory/controller/expired_supply_controller.dart';
 
 class ExpiredSupplyPage extends StatefulWidget {
   const ExpiredSupplyPage({super.key});
@@ -30,6 +30,21 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
         setState(() {});
       }
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Convert expired supplies to placeholders when page loads
+    _convertExpiredToPlaceholders();
+  }
+
+  void _convertExpiredToPlaceholders() async {
+    try {
+      await controller.convertExpiredToPlaceholders();
+    } catch (e) {
+      // Handle error silently for now
+    }
   }
 
   @override

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../controller/categories_controller.dart';
+import 'package:projects/features/inventory/controller/categories_controller.dart';
 
 class AddCategoryPage extends StatefulWidget {
   const AddCategoryPage({super.key});

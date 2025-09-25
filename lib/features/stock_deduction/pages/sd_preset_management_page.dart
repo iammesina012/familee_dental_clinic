@@ -22,14 +22,19 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
   Timer? _debounceTimer;
   // Track which preset dropdown is expanded
   String? _expandedPresetId;
-  // Initialize the cached stream at declaration so hot reloads don't cause late-init errors
-  final Stream<List<Map<String, dynamic>>> _presetsStream =
-      PresetController().getPresetsStream();
+  // Stream key for forcing refresh
+  late Stream<List<Map<String, dynamic>>> _presetsStream;
+  int _streamKey = 0;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _initializeStream();
+  }
+
+  void _initializeStream() {
+    _presetsStream = PresetController().getPresetsStream();
   }
 
   @override
@@ -74,6 +79,14 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
     }
   }
 
+  // Pull-to-refresh method
+  Future<void> _refreshPresets() async {
+    // Force stream refresh by recreating it
+    _streamKey++;
+    _initializeStream();
+    setState(() {});
+  }
+
   void _createNewPreset() async {
     final result =
         await Navigator.of(context).pushNamed('/stock-deduction/create-preset');
@@ -91,6 +104,10 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
         );
 
         if (!mounted) return;
+
+        // Force refresh the stream to show the new preset immediately
+        _refreshPresets();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -154,111 +171,118 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
         backgroundColor: const Color(0xFF00D4AA),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _presetsStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF00D4AA),
-              ),
-            );
-          }
+      body: RefreshIndicator(
+        onRefresh: _refreshPresets,
+        color: const Color(0xFF00D4AA),
+        child: StreamBuilder<List<Map<String, dynamic>>>(
+          key: ValueKey(_streamKey),
+          stream: _presetsStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFF00D4AA),
+                ),
+              );
+            }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'Error loading presets: ${snapshot.error}',
-                style: AppFonts.sfProStyle(fontSize: 16, color: Colors.red),
-              ),
-            );
-          }
+            if (snapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Error loading presets: ${snapshot.error}',
+                  style: AppFonts.sfProStyle(fontSize: 16, color: Colors.red),
+                ),
+              );
+            }
 
-          _allPresets = snapshot.data ?? [];
-          _filterPresets();
+            _allPresets = snapshot.data ?? [];
+            _filterPresets();
 
-          return SafeArea(
-            child: Padding(
-              padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
-              child: Column(
-                children: [
-                  // Search bar
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              Theme.of(context).shadowColor.withOpacity(0.08),
-                          spreadRadius: 1,
-                          blurRadius: 3,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: Theme.of(context).dividerColor.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search presets...',
-                        hintStyle: AppFonts.sfProStyle(
-                          fontSize: 16,
-                          color: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.color
-                              ?.withOpacity(0.6),
-                        ),
-                        prefixIcon: Icon(Icons.search,
-                            color: Theme.of(context).iconTheme.color),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        filled: true,
-                        fillColor: Theme.of(context).colorScheme.surface,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                      ),
-                      style: AppFonts.sfProStyle(fontSize: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: Container(
+            return SafeArea(
+              child: Padding(
+                padding:
+                    EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
+                child: Column(
+                  children: [
+                    // Search bar
+                    Container(
                       decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Theme.of(context).colorScheme.surface
-                            : const Color(0xFFE8D5E8),
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                Theme.of(context).shadowColor.withOpacity(0.08),
+                            spreadRadius: 1,
+                            blurRadius: 3,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
                         border: Border.all(
-                            color: Theme.of(context)
-                                .dividerColor
-                                .withOpacity(0.2)),
+                          color:
+                              Theme.of(context).dividerColor.withOpacity(0.2),
+                          width: 1,
+                        ),
                       ),
-                      child: _filteredPresets.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(12),
-                              itemCount: _filteredPresets.length,
-                              itemBuilder: (context, index) {
-                                final preset = _filteredPresets[index];
-                                return _buildPresetCard(preset, index);
-                              },
-                            ),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search presets...',
+                          hintStyle: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withOpacity(0.6),
+                          ),
+                          prefixIcon: Icon(Icons.search,
+                              color: Theme.of(context).iconTheme.color),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Theme.of(context).colorScheme.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        style: AppFonts.sfProStyle(fontSize: 16),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Theme.of(context).colorScheme.surface
+                              : const Color(0xFFE8D5E8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: Theme.of(context)
+                                  .dividerColor
+                                  .withOpacity(0.2)),
+                        ),
+                        child: _filteredPresets.isEmpty
+                            ? _buildEmptyState()
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(12),
+                                itemCount: _filteredPresets.length,
+                                itemBuilder: (context, index) {
+                                  final preset = _filteredPresets[index];
+                                  return _buildPresetCard(preset, index);
+                                },
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -623,6 +647,10 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                   );
                   if (!mounted) return;
                   Navigator.of(context).pop();
+
+                  // Force refresh the stream to remove the deleted preset immediately
+                  _refreshPresets();
+
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(

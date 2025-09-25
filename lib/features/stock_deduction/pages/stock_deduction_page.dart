@@ -259,7 +259,6 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   void _showUndoBanner(List<Map<String, dynamic>> deductionsToApply) {
     _removeUndoOverlay();
     final overlay = Overlay.of(context);
-    if (overlay == null) return;
 
     _undoOverlayEntry = OverlayEntry(
       builder: (ctx) {
@@ -425,9 +424,15 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
       }
 
       // Get current inventory data to update stock and expiry information
-      final currentInventory = await _inventoryController
-          .getGroupedSuppliesStream(archived: false)
-          .first;
+      List<GroupedInventoryItem> currentInventory = [];
+      try {
+        currentInventory = await _inventoryController
+            .getGroupedSuppliesStream(archived: false)
+            .first;
+      } catch (e) {
+        print('Error loading current inventory: $e');
+        // Continue with empty inventory - will handle as missing items
+      }
 
       setState(() {
         _deductions.clear();
@@ -462,6 +467,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                   'deductQty': 0,
                 });
               } else {
+                // Use current inventory data instead of stored preset values
                 _deductions.add({
                   'docId': currentItem.mainItem.id,
                   'name': currentItem.mainItem.name,
@@ -469,8 +475,9 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                   'imageUrl': currentItem.mainItem.imageUrl,
                   'expiry': currentItem.mainItem.expiry,
                   'noExpiry': currentItem.mainItem.noExpiry,
-                  'stock': currentItem.totalStock,
-                  'deductQty': currentItem.totalStock > 0 ? 1 : 0,
+                  'stock': currentItem
+                      .mainItem.stock, // Use current stock from inventory
+                  'deductQty': currentItem.mainItem.stock > 0 ? 1 : 0,
                 });
               }
             } else {

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../data/purchase_order.dart';
-import '../controller/po_details_controller.dart';
-import '../controller/po_firebase_controller.dart';
-import '../../../shared/themes/font.dart';
+import 'package:projects/features/purchase_order/data/purchase_order.dart';
+import 'package:projects/features/purchase_order/controller/po_details_controller.dart';
+import 'package:projects/features/purchase_order/controller/po_supabase_controller.dart';
+import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
 import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
@@ -29,7 +29,7 @@ class _ReceiptDetails {
 class _PODetailsPageState extends State<PODetailsPage> {
   late PurchaseOrder _purchaseOrder;
   final PODetailsController _controller = PODetailsController();
-  final POFirebaseController _poFirebase = POFirebaseController();
+  final POSupabaseController _poSupabase = POSupabaseController();
   bool _isLoading = false;
   final Map<String, int> _supplierPageIndex = {};
   final Set<String> _expandedSuppliers = {};
@@ -1259,7 +1259,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
         receivedCount: newReceivedCount,
       );
 
-      await _poFirebase.updatePOInFirebase(updatedPO);
+      await _poSupabase.updatePOInSupabase(updatedPO);
 
       // Log Received activity (quick path)
       await PoActivityController().logPurchaseOrderReceived(
@@ -1385,7 +1385,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
         receivedCount: newReceivedCount,
       );
 
-      await _poFirebase.updatePOInFirebase(updatedPO);
+      await _poSupabase.updatePOInSupabase(updatedPO);
 
       await PoActivityController().logPurchaseOrderReceived(
         poCode: updatedPO.code,

@@ -1,12 +1,12 @@
-import '../data/purchase_order.dart';
-import 'po_firebase_controller.dart';
-import 'po_calculations.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:projects/features/purchase_order/data/purchase_order.dart';
+import 'package:projects/features/purchase_order/controller/po_supabase_controller.dart';
+import 'package:projects/features/purchase_order/controller/po_calculations.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
 
 class CreatePOController {
-  final POFirebaseController _poController = POFirebaseController();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final POSupabaseController _poController = POSupabaseController();
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   static const String _suggestionsCollection = 'po_suggestions';
 
@@ -33,7 +33,7 @@ class CreatePOController {
     Map<String, Map<String, dynamic>> fieldChanges = {};
     // Prefer the previousPO passed in from the edit page; fall back to fetch
     PurchaseOrder? baseline = previousPO;
-    baseline ??= await _poController.getPOByIdFromFirebase(po.id);
+    baseline ??= await _poController.getPOByIdFromSupabase(po.id);
 
     if (baseline != null) {
       // Compare PO Name
@@ -159,7 +159,7 @@ class CreatePOController {
     }
 
     // Persist the update
-    await _poController.updatePOInFirebase(po);
+    await _poController.updatePOInSupabase(po);
 
     // Log the purchase order edited activity
     await PoActivityController().logPurchaseOrderEdited(
@@ -257,7 +257,7 @@ class CreatePOController {
         .where((suggestion) => suggestion.toLowerCase().contains(query))
         .toList();
 
-    // Return top 5 suggestions (already sorted by frequency from Firebase)
+    // Return top 5 suggestions (already sorted by frequency from Supabase)
     return filtered.take(5).toList();
   }
 
@@ -271,82 +271,59 @@ class CreatePOController {
     await _incrementFrequency(normalizedName);
   }
 
-  // Get all suggestions from Firebase
+  // Get all suggestions from Supabase
   Future<List<String>> _getAllSuggestions() async {
     try {
-      final querySnapshot = await _firestore
-          .collection(_suggestionsCollection)
-          .orderBy('frequency', descending: true)
-          .limit(20)
-          .get();
+      final response = await _supabase
+          .from(_suggestionsCollection)
+          .select('name')
+          .order('frequency', ascending: false)
+          .limit(20);
 
-      return querySnapshot.docs
-          .map((doc) => doc.data()['name'] as String)
-          .toList();
+      return response.map((row) => row['name'] as String).toList();
     } catch (e) {
       return [];
     }
   }
 
-  // Save suggestion to Firebase
-  Future<void> _saveSuggestion(String name, int frequency) async {
-    try {
-      await _firestore
-          .collection(_suggestionsCollection)
-          .doc(name.toLowerCase().replaceAll(' ', '_'))
-          .set({
-        'name': name,
-        'frequency': frequency,
-        'lastUsed': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      // Handle error silently
-    }
-  }
-
-  // Get frequency of a suggestion from Firebase
+  // Get frequency of a suggestion from Supabase
   Future<int> _getFrequency(String name) async {
     try {
-      final doc = await _firestore
-          .collection(_suggestionsCollection)
-          .doc(name.toLowerCase().replaceAll(' ', '_'))
-          .get();
+      final response = await _supabase
+          .from(_suggestionsCollection)
+          .select('frequency')
+          .eq('id', name.toLowerCase().replaceAll(' ', '_'))
+          .single();
 
-      if (doc.exists) {
-        return doc.data()?['frequency'] ?? 0;
-      }
-      return 0;
+      return response['frequency'] ?? 0;
     } catch (e) {
       return 0;
     }
   }
 
-  // Increment frequency for a suggestion in Firebase
+  // Increment frequency for a suggestion in Supabase
   Future<void> _incrementFrequency(String name) async {
     try {
-      final docRef = _firestore
-          .collection(_suggestionsCollection)
-          .doc(name.toLowerCase().replaceAll(' ', '_'));
+      final docId = name.toLowerCase().replaceAll(' ', '_');
 
-      await _firestore.runTransaction((transaction) async {
-        final doc = await transaction.get(docRef);
+      // Try to get existing frequency
+      final currentFreq = await _getFrequency(name);
 
-        if (doc.exists) {
-          // Increment existing frequency
-          final currentFreq = doc.data()?['frequency'] ?? 0;
-          transaction.update(docRef, {
-            'frequency': currentFreq + 1,
-            'lastUsed': FieldValue.serverTimestamp(),
-          });
-        } else {
-          // Create new suggestion with frequency 1
-          transaction.set(docRef, {
-            'name': name,
-            'frequency': 1,
-            'lastUsed': FieldValue.serverTimestamp(),
-          });
-        }
-      });
+      if (currentFreq > 0) {
+        // Increment existing frequency
+        await _supabase.from(_suggestionsCollection).update({
+          'frequency': currentFreq + 1,
+          'last_used': DateTime.now().toIso8601String(),
+        }).eq('id', docId);
+      } else {
+        // Create new suggestion with frequency 1
+        await _supabase.from(_suggestionsCollection).insert({
+          'id': docId,
+          'name': name,
+          'frequency': 1,
+          'last_used': DateTime.now().toIso8601String(),
+        });
+      }
     } catch (e) {
       // Handle error silently
     }
@@ -356,6 +333,6 @@ class CreatePOController {
   Future<void> initializeDefaultSuggestions() async {
     // This method now does nothing - suggestions will be populated
     // only when users create POs and the names are added via addSuggestion()
-    // Suggestions are now stored in Firebase for multi-user sync
+    // Suggestions are now stored in Supabase for multi-user sync
   }
 }

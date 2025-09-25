@@ -1,24 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class InventoryActivityController {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   /// Get inventory activities stream
   Stream<List<Map<String, dynamic>>> getInventoryActivitiesStream() {
-    return _firestore
-        .collection('activity_logs')
-        .where('category', isEqualTo: 'Inventory')
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return data;
-      }).toList();
-    });
+    return _supabase
+        .from('activity_logs')
+        .stream(primaryKey: ['id'])
+        .eq('category', 'Inventory')
+        .order('created_at', ascending: false);
   }
 
   /// Filter inventory activities by search query
@@ -65,7 +56,7 @@ class InventoryActivityController {
 
   /// Delete inventory activity
   Future<void> deleteInventoryActivity(String activityId) async {
-    await _firestore.collection('activity_logs').doc(activityId).delete();
+    await _supabase.from('activity_logs').delete().eq('id', activityId);
   }
 
   // LOGGING METHODS
@@ -80,7 +71,7 @@ class InventoryActivityController {
   }) async {
     try {
       // Get current user
-      final User? currentUser = _auth.currentUser;
+      final User? currentUser = _supabase.auth.currentUser;
       if (currentUser == null) return; // Don't log if no user
 
       // Get current timestamp
@@ -89,20 +80,20 @@ class InventoryActivityController {
 
       // Create activity data
       final Map<String, dynamic> activityData = {
-        'userName': _getDisplayName(currentUser),
+        'user_name': _getDisplayName(currentUser),
         'description': description,
-        'date': now,
+        'date': now.toIso8601String(),
         'time': timeString,
         'category': category,
         'action': action,
-        'userId': currentUser.uid,
-        'userEmail': currentUser.email,
+        'user_id': currentUser.id,
+        'user_email': currentUser.email,
         'metadata': metadata ?? {},
-        'timestamp': FieldValue.serverTimestamp(),
+        'created_at': now.toIso8601String(),
       };
 
-      // Save to Firebase
-      await _firestore.collection('activity_logs').add(activityData);
+      // Save to Supabase
+      await _supabase.from('activity_logs').insert(activityData);
 
       print('Activity logged: $action - $description'); // Debug log
     } catch (e) {
@@ -113,8 +104,9 @@ class InventoryActivityController {
 
   /// Get user-friendly display name
   String _getDisplayName(User user) {
-    if (user.displayName != null && user.displayName!.isNotEmpty) {
-      return user.displayName!;
+    if (user.userMetadata?['display_name'] != null &&
+        (user.userMetadata?['display_name'] as String).isNotEmpty) {
+      return user.userMetadata!['display_name'] as String;
     }
 
     // Extract username from email if no display name

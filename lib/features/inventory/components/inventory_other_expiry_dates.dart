@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/inventory/pages/view_supply_page.dart'; // for status helpers
-import '../controller/view_supply_controller.dart';
+import 'package:projects/features/inventory/controller/view_supply_controller.dart';
 
 class SupabaseOtherExpiryBatches extends StatelessWidget {
   final InventoryItem item;

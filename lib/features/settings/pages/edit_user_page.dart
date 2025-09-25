@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../controller/edit_user_controller.dart';
+import 'package:projects/features/settings/controller/edit_user_controller.dart';
 
 class EditUserPage extends StatefulWidget {
   final Map<String, dynamic> user;

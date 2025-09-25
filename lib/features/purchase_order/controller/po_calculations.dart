@@ -1,4 +1,4 @@
-import '../data/purchase_order.dart';
+import 'package:projects/features/purchase_order/data/purchase_order.dart';
 
 class POBusinessService {
   // Business logic methods that don't involve direct data access

@@ -1,26 +1,26 @@
-import '../data/purchase_order.dart';
-import 'po_firebase_controller.dart';
-import 'po_calculations.dart';
+import 'package:projects/features/purchase_order/data/purchase_order.dart';
+import 'package:projects/features/purchase_order/controller/po_supabase_controller.dart';
+import 'package:projects/features/purchase_order/controller/po_calculations.dart';
 
 class POListController {
-  final POFirebaseController _poController = POFirebaseController();
+  final POSupabaseController _poController = POSupabaseController();
 
-  // Load all POs from Firebase stream
+  // Load all POs from Supabase stream
   Stream<List<PurchaseOrder>> getAllPOsStream() {
     return _poController.getAllPOsStream();
   }
 
-  // Load closed POs from Firebase stream
+  // Load closed POs from Supabase stream
   Stream<List<PurchaseOrder>> getClosedPOsStream() {
     return _poController.getClosedPOsStream();
   }
 
-  // Load approval POs from Firebase stream
+  // Load approval POs from Supabase stream
   Stream<List<PurchaseOrder>> getApprovalPOsStream() {
     return _poController.getApprovalPOsStream();
   }
 
-  // Load open POs from Firebase stream
+  // Load open POs from Supabase stream
   Stream<List<PurchaseOrder>> getOpenPOsStream() {
     return _poController.getOpenPOsStream();
   }
@@ -35,7 +35,7 @@ class POListController {
     return await _poController.getCurrentSequence();
   }
 
-  // Clear all POs (local and Firebase)
+  // Clear all POs (local and Supabase)
   Future<void> clearAllPOs() async {
     await _poController.clearAllPOs();
   }
@@ -50,12 +50,12 @@ class POListController {
     final query = searchQuery.trim().toLowerCase();
     List<PurchaseOrder> filtered;
 
-    // Use Firebase data for all tabs
+    // Use Supabase data for all tabs
     if (activeTabIndex == 2) {
-      // Closed tab - use Firebase closed POs
+      // Closed tab - use Supabase closed POs
       filtered = closedPOs;
     } else {
-      // Open and Approval tabs - use Firebase data filtered by status
+      // Open and Approval tabs - use Supabase data filtered by status
       final tabStatus = activeTabIndex == 0 ? 'Open' : 'Approval';
       filtered = allPOs.where((po) => po.status == tabStatus).toList();
     }
@@ -112,8 +112,8 @@ class POListController {
     return POBusinessService.calculateProgressPercentage(po);
   }
 
-  // Delete a PO from Firebase
+  // Delete a PO from Supabase
   Future<void> deletePO(String poId) async {
-    await _poController.deletePOFromFirebase(poId);
+    await _poController.deletePOFromSupabase(poId);
   }
 }

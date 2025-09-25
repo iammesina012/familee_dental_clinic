@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:projects/shared/drawer.dart';
 import 'package:projects/features/activity_log/controller/activity_log_controller.dart';
-// Removed backend-specific controller imports to keep this page UI-only
 
 class ActivityLogPage extends StatefulWidget {
   const ActivityLogPage({super.key});
@@ -173,6 +172,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
       context: parentContext,
       builder: (BuildContext context) {
         return Dialog(
+          backgroundColor: Theme.of(context).dialogBackgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -202,13 +202,13 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                 const SizedBox(height: 20),
 
                 // Title
-                const Text(
+                Text(
                   'Delete Activity',
                   style: TextStyle(
                     fontFamily: 'SF Pro',
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: Theme.of(context).textTheme.titleLarge?.color,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -217,10 +217,10 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                 // Description
                 Text(
                   'Are you sure you want to delete this activity?',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'SF Pro',
                     fontSize: 16,
-                    color: Colors.black54,
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -231,9 +231,9 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
+                    color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(color: Theme.of(context).dividerColor),
                   ),
                   child: Row(
                     children: [
@@ -246,11 +246,11 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                       Expanded(
                         child: Text(
                           '"$description"',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'SF Pro',
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
-                            color: Colors.black87,
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
                             fontStyle: FontStyle.italic,
                           ),
                         ),
@@ -268,9 +268,10 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                       child: Container(
                         height: 48,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: Theme.of(context).cardColor,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300),
+                          border:
+                              Border.all(color: Theme.of(context).dividerColor),
                         ),
                         child: TextButton(
                           onPressed: () => Navigator.of(context).pop(),
@@ -279,13 +280,14 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Cancel',
                             style: TextStyle(
                               fontFamily: 'SF Pro',
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Colors.black54,
+                              color:
+                                  Theme.of(context).textTheme.bodyMedium?.color,
                             ),
                           ),
                         ),
@@ -377,6 +379,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
       context: context,
       builder: (BuildContext context) {
         return Dialog(
+          backgroundColor: Theme.of(context).dialogBackgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -403,6 +406,8 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             fontFamily: 'SF Pro',
+                            color:
+                                Theme.of(context).textTheme.titleLarge?.color,
                           ),
                         ),
                       ),
@@ -532,9 +537,9 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: Theme.of(context).dividerColor),
           ),
           child: Column(
             children: children,
@@ -559,7 +564,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.black,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
                 fontFamily: 'SF Pro',
               ),
             ),
@@ -569,7 +574,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
               value,
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.black,
+                color: Theme.of(context).textTheme.bodyMedium?.color,
                 fontFamily: 'SF Pro',
               ),
             ),
@@ -593,7 +598,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.black,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
                 fontFamily: 'SF Pro',
               ),
             ),

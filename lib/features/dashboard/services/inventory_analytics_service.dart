@@ -1,33 +1,29 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/inventory/data/inventory_item.dart';
 
 class InventoryAnalyticsService {
-  final FirebaseFirestore firestore;
-
-  InventoryAnalyticsService({FirebaseFirestore? firestore})
-      : firestore = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   // Get inventory statistics
   Future<Map<String, dynamic>> getInventoryStats() async {
     try {
-      // Get all supplies and filter in code
-      final snapshot = await firestore.collection('supplies').get();
+      // Get all supplies from Supabase
+      final response = await _supabase.from('supplies').select('*');
 
-      final allSupplies = snapshot.docs.map((doc) {
-        final data = doc.data();
+      final allSupplies = response.map((row) {
         return InventoryItem(
-          id: doc.id,
-          name: data['name'] ?? '',
-          imageUrl: data['imageUrl'] ?? '',
-          category: data['category'] ?? '',
-          cost: (data['cost'] ?? 0).toDouble(),
-          stock: (data['stock'] ?? 0) as int,
-          unit: data['unit'] ?? '',
-          supplier: data['supplier'] ?? '',
-          brand: data['brand'] ?? '',
-          expiry: data['expiry'],
-          noExpiry: data['noExpiry'] ?? false,
-          archived: data['archived'] ?? false,
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: (row['stock'] ?? 0).toInt(),
+          unit: row['unit'] ?? '',
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
         );
       }).toList();
 
@@ -40,30 +36,15 @@ class InventoryAnalyticsService {
       int lowStock = 0;
       int outOfStock = 0;
 
-      // Debug: Print each supply for verification
-      print('=== INVENTORY DEBUG ===');
-      print('Total supplies (non-archived): $totalSupplies');
-      print('All supplies count: ${allSupplies.length}');
-
       for (var supply in supplies) {
-        print(
-            'Supply: ${supply.name}, Stock: ${supply.stock}, Archived: ${supply.archived}');
-
         if (supply.stock == 0) {
           outOfStock++;
-          print('  → Out of Stock');
         } else if (supply.stock <= 2) {
           lowStock++;
-          print('  → Low Stock');
         } else {
           inStock++;
-          print('  → In Stock');
         }
       }
-
-      print(
-          'Final counts - In Stock: $inStock, Low Stock: $lowStock, Out of Stock: $outOfStock');
-      print('=== END DEBUG ===');
 
       // Calculate percentages
       double inStockPercentage =
@@ -83,7 +64,6 @@ class InventoryAnalyticsService {
         'outOfStockPercentage': outOfStockPercentage.round(),
       };
     } catch (e) {
-      print('Error in getInventoryStats: $e');
       // Return default values if there's an error
       return {
         'totalSupplies': 0,
@@ -99,22 +79,21 @@ class InventoryAnalyticsService {
 
   // Stream for real-time updates
   Stream<Map<String, dynamic>> getInventoryStatsStream() {
-    return firestore.collection('supplies').snapshots().map((snapshot) {
-      final allSupplies = snapshot.docs.map((doc) {
-        final data = doc.data();
+    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
+      final allSupplies = data.map((row) {
         return InventoryItem(
-          id: doc.id,
-          name: data['name'] ?? '',
-          imageUrl: data['imageUrl'] ?? '',
-          category: data['category'] ?? '',
-          cost: (data['cost'] ?? 0).toDouble(),
-          stock: (data['stock'] ?? 0) as int,
-          unit: data['unit'] ?? '',
-          supplier: data['supplier'] ?? '',
-          brand: data['brand'] ?? '',
-          expiry: data['expiry'],
-          noExpiry: data['noExpiry'] ?? false,
-          archived: data['archived'] ?? false,
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: (row['stock'] ?? 0).toInt(),
+          unit: row['unit'] ?? '',
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
         );
       }).toList();
 
@@ -159,22 +138,21 @@ class InventoryAnalyticsService {
 
   // Stream for expired and expiring counts
   Stream<Map<String, int>> getExpiryCountsStream() {
-    return firestore.collection('supplies').snapshots().map((snapshot) {
-      final allSupplies = snapshot.docs.map((doc) {
-        final data = doc.data();
+    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
+      final allSupplies = data.map((row) {
         return InventoryItem(
-          id: doc.id,
-          name: data['name'] ?? '',
-          imageUrl: data['imageUrl'] ?? '',
-          category: data['category'] ?? '',
-          cost: (data['cost'] ?? 0).toDouble(),
-          stock: (data['stock'] ?? 0) as int,
-          unit: data['unit'] ?? '',
-          supplier: data['supplier'] ?? '',
-          brand: data['brand'] ?? '',
-          expiry: data['expiry'],
-          noExpiry: data['noExpiry'] ?? false,
-          archived: data['archived'] ?? false,
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: (row['stock'] ?? 0).toInt(),
+          unit: row['unit'] ?? '',
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
         );
       }).toList();
 

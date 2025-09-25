@@ -1,15 +1,12 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../data/purchase_order.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:projects/features/purchase_order/data/purchase_order.dart';
 
-class POFirebaseController {
+class POSupabaseController {
   static const String _storageKey = 'purchase_orders_v1';
   static const String _sequenceKey = 'purchase_order_sequence_v1';
 
-  final FirebaseFirestore _firestore;
-
-  POFirebaseController({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   int _extractPoNumber(String code) {
     final String trimmed = code.trim();
@@ -44,9 +41,9 @@ class POFirebaseController {
     final jsonList = all.map((e) => e.toJson()).toList();
     await prefs.setStringList(_storageKey, jsonList);
 
-    // Save ALL POs to Firebase (not just closed ones)
+    // Save ALL POs to Supabase (not just closed ones)
     try {
-      await savePOToFirebase(po);
+      await savePOToSupabase(po);
     } catch (e) {
       // Don't rethrow - local save was successful
     }
@@ -72,22 +69,21 @@ class POFirebaseController {
       final jsonList = all.map((e) => e.toJson()).toList();
       await prefs.setStringList(_storageKey, jsonList);
 
-      // Update Firebase immediately for real-time updates
+      // Update Supabase immediately for real-time updates
       try {
-        await updatePOInFirebase(updatedPO);
+        await updatePOInSupabase(updatedPO);
       } catch (e) {
         // Error handling
       }
     }
   }
 
-  // Update PO status in Firebase only (for real-time updates)
-  Future<void> updatePOStatusInFirebase(String poId, String newStatus) async {
+  // Update PO status in Supabase only (for real-time updates)
+  Future<void> updatePOStatusInSupabase(String poId, String newStatus) async {
     try {
-      await _firestore
-          .collection('purchase_orders')
-          .doc(poId)
-          .update({'status': newStatus});
+      await _supabase
+          .from('purchase_orders')
+          .update({'status': newStatus}).eq('id', poId);
     } catch (e) {
       rethrow;
     }
@@ -95,13 +91,12 @@ class POFirebaseController {
 
   Future<String> getNextCodeAndIncrement() async {
     try {
-      // Prefer Firebase as the source of truth to respect deletions
-      final snapshot = await _firestore.collection('purchase_orders').get();
+      // Prefer Supabase as the source of truth to respect deletions
+      final response = await _supabase.from('purchase_orders').select('code');
 
       final Set<int> existingNumbers = {};
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final code = (data['code'] ?? '').toString();
+      for (final row in response) {
+        final code = (row['code'] ?? '').toString();
         if (code.startsWith('#PO')) {
           final numberStr = code.substring(3);
           final number = int.tryParse(numberStr);
@@ -117,7 +112,7 @@ class POFirebaseController {
       }
       return '#PO$nextNumber';
     } catch (e) {
-      // Fallback to local storage if Firebase read fails
+      // Fallback to local storage if Supabase read fails
       final existingPOs = await getAll();
       final Set<int> existingNumbers = {};
       for (final po in existingPOs) {
@@ -145,118 +140,112 @@ class POFirebaseController {
       await prefs.remove(_storageKey);
       await prefs.remove(_sequenceKey);
 
-      // Clear Firebase data
-      final snapshot = await _firestore.collection('purchase_orders').get();
-      for (final doc in snapshot.docs) {
-        await doc.reference.delete();
-      }
+      // Clear Supabase data
+      await _supabase.from('purchase_orders').delete().neq('id', '');
     } catch (e) {
       rethrow;
     }
   }
 
-  // ===== FIREBASE OPERATIONS =====
+  // ===== SUPABASE OPERATIONS =====
 
-  Future<void> savePOToFirebase(PurchaseOrder po) async {
+  Future<void> savePOToSupabase(PurchaseOrder po) async {
     try {
-      await _firestore.collection('purchase_orders').doc(po.id).set(po.toMap());
+      await _supabase.from('purchase_orders').upsert(po.toMap());
     } catch (e) {
       rethrow;
     }
   }
 
   // Keep the old method for backward compatibility
-  Future<void> saveClosedPOToFirebase(PurchaseOrder po) async {
-    return savePOToFirebase(po);
+  Future<void> saveClosedPOToSupabase(PurchaseOrder po) async {
+    return savePOToSupabase(po);
   }
 
   Stream<List<PurchaseOrder>> getClosedPOsStream() {
-    return _firestore
-        .collection('purchase_orders')
-        .where('status', isEqualTo: 'Closed')
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return PurchaseOrder.fromMap(data);
-      }).toList();
-      list.sort((a, b) =>
-          _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
-      return list;
-    });
+    return _supabase
+        .from('purchase_orders')
+        .stream(primaryKey: ['id'])
+        .eq('status', 'Closed')
+        .map((data) {
+          final list = data.map((row) {
+            return PurchaseOrder.fromMap(row);
+          }).toList();
+          list.sort((a, b) =>
+              _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
+          return list;
+        });
   }
 
   Stream<List<PurchaseOrder>> getApprovalPOsStream() {
-    return _firestore
-        .collection('purchase_orders')
-        .where('status', isEqualTo: 'Approval')
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return PurchaseOrder.fromMap(data);
-      }).toList();
-      list.sort((a, b) =>
-          _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
-      return list;
-    });
+    return _supabase
+        .from('purchase_orders')
+        .stream(primaryKey: ['id'])
+        .eq('status', 'Approval')
+        .map((data) {
+          final list = data.map((row) {
+            return PurchaseOrder.fromMap(row);
+          }).toList();
+          list.sort((a, b) =>
+              _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
+          return list;
+        });
   }
 
   Stream<List<PurchaseOrder>> getOpenPOsStream() {
-    return _firestore
-        .collection('purchase_orders')
-        .where('status', isEqualTo: 'Open')
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return PurchaseOrder.fromMap(data);
-      }).toList();
-      list.sort((a, b) =>
-          _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
-      return list;
-    });
+    return _supabase
+        .from('purchase_orders')
+        .stream(primaryKey: ['id'])
+        .eq('status', 'Open')
+        .map((data) {
+          final list = data.map((row) {
+            return PurchaseOrder.fromMap(row);
+          }).toList();
+          list.sort((a, b) =>
+              _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
+          return list;
+        });
   }
 
   Stream<List<PurchaseOrder>> getAllPOsStream() {
-    return _firestore
-        .collection('purchase_orders')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        return PurchaseOrder.fromMap(data);
-      }).toList();
-    });
+    return _supabase
+        .from('purchase_orders')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((data) {
+          return data.map((row) {
+            return PurchaseOrder.fromMap(row);
+          }).toList();
+        });
   }
 
-  Future<PurchaseOrder?> getPOByIdFromFirebase(String id) async {
+  Future<PurchaseOrder?> getPOByIdFromSupabase(String id) async {
     try {
-      final doc = await _firestore.collection('purchase_orders').doc(id).get();
-      if (doc.exists) {
-        return PurchaseOrder.fromMap(doc.data()!);
-      }
-      return null;
+      final response = await _supabase
+          .from('purchase_orders')
+          .select('*')
+          .eq('id', id)
+          .single();
+      return PurchaseOrder.fromMap(response);
     } catch (e) {
       return null;
     }
   }
 
-  Future<void> updatePOInFirebase(PurchaseOrder po) async {
+  Future<void> updatePOInSupabase(PurchaseOrder po) async {
     try {
-      await _firestore
-          .collection('purchase_orders')
-          .doc(po.id)
-          .set(po.toMap(), SetOptions(merge: true));
+      await _supabase
+          .from('purchase_orders')
+          .update(po.toMap())
+          .eq('id', po.id);
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<void> deletePOFromFirebase(String id) async {
+  Future<void> deletePOFromSupabase(String id) async {
     try {
-      await _firestore.collection('purchase_orders').doc(id).delete();
+      await _supabase.from('purchase_orders').delete().eq('id', id);
     } catch (e) {
       rethrow;
     }
@@ -266,12 +255,11 @@ class POFirebaseController {
 
   Future<int> getClosedPOCount() async {
     try {
-      final snapshot = await _firestore
-          .collection('purchase_orders')
-          .where('status', isEqualTo: 'Closed')
-          .count()
-          .get();
-      return snapshot.count ?? 0;
+      final response = await _supabase
+          .from('purchase_orders')
+          .select('id')
+          .eq('status', 'Closed');
+      return response.length;
     } catch (e) {
       return 0;
     }
@@ -279,14 +267,14 @@ class POFirebaseController {
 
   Future<double> getClosedPOTotalValue() async {
     try {
-      final snapshot = await _firestore
-          .collection('purchase_orders')
-          .where('status', isEqualTo: 'Closed')
-          .get();
+      final response = await _supabase
+          .from('purchase_orders')
+          .select('*')
+          .eq('status', 'Closed');
 
       double totalValue = 0.0;
-      for (final doc in snapshot.docs) {
-        final po = PurchaseOrder.fromMap(doc.data());
+      for (final row in response) {
+        final po = PurchaseOrder.fromMap(row);
         for (final supply in po.supplies) {
           final cost = (supply['cost'] ?? 0.0).toDouble();
           final quantity = (supply['quantity'] ?? 0).toInt();
@@ -318,14 +306,14 @@ class POFirebaseController {
 
   // ===== MIGRATION OPERATIONS =====
 
-  Future<void> migrateClosedPOsToFirebase() async {
+  Future<void> migrateClosedPOsToSupabase() async {
     try {
       final allPOs = await getAll();
       final closedPOs = allPOs.where((po) => po.status == 'Closed').toList();
 
       for (final po in closedPOs) {
         try {
-          await saveClosedPOToFirebase(po);
+          await saveClosedPOToSupabase(po);
         } catch (e) {
           // Error handling
         }
@@ -335,13 +323,13 @@ class POFirebaseController {
     }
   }
 
-  Future<void> syncAllLocalPOsToFirebase() async {
+  Future<void> syncAllLocalPOsToSupabase() async {
     try {
       final allPOs = await getAll();
 
       for (final po in allPOs) {
         try {
-          await savePOToFirebase(po);
+          await savePOToSupabase(po);
         } catch (e) {
           // Error handling
         }

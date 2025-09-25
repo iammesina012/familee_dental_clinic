@@ -1,12 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:projects/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:projects/features/notifications/controller/notifications_controller.dart';
 
 class StockDeductionController {
-  final FirebaseFirestore firestore;
-
-  StockDeductionController({FirebaseFirestore? firestore})
-      : firestore = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   /// Applies stock deductions for the provided items.
   /// Each item map is expected to contain at least: 'docId' and 'deductQty'.
@@ -24,26 +21,35 @@ class StockDeductionController {
         continue;
       }
 
-      await firestore.runTransaction((transaction) async {
-        final DocumentReference<Map<String, dynamic>> ref =
-            firestore.collection('supplies').doc(docId);
-        final snapshot = await transaction.get(ref);
-        if (!snapshot.exists) {
-          results[docId] = 0;
-          return;
-        }
+      try {
+        // Get current stock from Supabase for this specific batch only
+        final response = await _supabase
+            .from('supplies')
+            .select('*')
+            .eq('id', docId)
+            .single();
 
-        final data = snapshot.data()!;
+        final data = response;
         final int currentStock = (data['stock'] ?? 0) as int;
+
+        // Debug logging
+        print(
+            'Stock Deduction Debug - Item: ${data['name']}, Current Stock: $currentStock, Requested: $requestedQty');
+
         if (currentStock <= 0) {
           results[docId] = 0;
-          return;
+          continue;
         }
 
         final int deductQty =
             requestedQty > currentStock ? currentStock : requestedQty;
         final int newStock = currentStock - deductQty;
-        transaction.update(ref, {'stock': newStock});
+
+        // Update stock in Supabase for this specific batch only
+        await _supabase
+            .from('supplies')
+            .update({'stock': newStock}).eq('id', docId);
+
         results[docId] = deductQty;
 
         // Store notification data for after transaction
@@ -61,7 +67,10 @@ class StockDeductionController {
           'quantity': deductQty,
           'supplier': data['supplier'] ?? 'Unknown Supplier',
         };
-      });
+      } catch (e) {
+        // If item doesn't exist or other error, set result to 0
+        results[docId] = 0;
+      }
     }
 
     // Log all successful deductions and check for notifications
@@ -128,19 +137,23 @@ class StockDeductionController {
         continue;
       }
 
-      await firestore.runTransaction((transaction) async {
-        final DocumentReference<Map<String, dynamic>> ref =
-            firestore.collection('supplies').doc(docId);
-        final snapshot = await transaction.get(ref);
-        if (!snapshot.exists) {
-          results[docId] = 0;
-          return;
-        }
+      try {
+        // Get current stock from Supabase
+        final response = await _supabase
+            .from('supplies')
+            .select('*')
+            .eq('id', docId)
+            .single();
 
-        final data = snapshot.data()!;
+        final data = response;
         final int currentStock = (data['stock'] ?? 0) as int;
         final int newStock = currentStock + revertQty;
-        transaction.update(ref, {'stock': newStock});
+
+        // Update stock in Supabase
+        await _supabase
+            .from('supplies')
+            .update({'stock': newStock}).eq('id', docId);
+
         results[docId] = revertQty;
 
         // Store notification data for after transaction
@@ -157,7 +170,10 @@ class StockDeductionController {
           'quantity': revertQty,
           'supplier': data['supplier'] ?? 'Unknown Supplier',
         };
-      });
+      } catch (e) {
+        // If item doesn't exist or other error, set result to 0
+        results[docId] = 0;
+      }
     }
 
     // Check for stock level notifications after reverting and log activities

@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
-import '../data/inventory_item.dart';
+import 'package:projects/features/inventory/data/inventory_item.dart';
 import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
 
 class ExpiredViewSupplyController {

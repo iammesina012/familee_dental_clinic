@@ -26,22 +26,24 @@ class PurchaseOrder {
       'id': id,
       'code': code,
       'name': name,
-      'createdAt': createdAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
       'status': status,
       'supplies': supplies,
-      'receivedCount': receivedCount,
+      'received_count': receivedCount,
     };
   }
 
   factory PurchaseOrder.fromMap(Map<String, dynamic> map) {
     return PurchaseOrder(
-      id: map['id'] as String,
-      code: map['code'] as String,
-      name: map['name'] as String,
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      status: map['status'] as String,
-      supplies: (map['supplies'] as List).cast<Map<String, dynamic>>(),
-      receivedCount: (map['receivedCount'] as num?)?.toInt() ?? 0,
+      id: map['id'] as String? ?? '',
+      code: map['code'] as String? ?? '',
+      name: map['name'] as String? ?? '',
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'] as String)
+          : DateTime.now(),
+      status: map['status'] as String? ?? 'Open',
+      supplies: (map['supplies'] as List?)?.cast<Map<String, dynamic>>() ?? [],
+      receivedCount: (map['received_count'] as num?)?.toInt() ?? 0,
     );
   }
 
