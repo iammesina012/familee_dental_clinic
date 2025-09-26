@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/settings/pages/user_list_page.dart';
-import 'package:projects/features/settings/pages/choose_account_page.dart';
+import 'package:projects/features/settings/pages/employee_list_page.dart';
+import 'package:projects/features/settings/pages/edit_profile_page.dart';
 import 'package:projects/features/settings/controller/settings_controller.dart';
 import 'package:projects/features/backup_restore/pages/backup_restore_page.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -42,6 +43,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final userRoleProvider = UserRoleProvider();
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
@@ -67,112 +70,127 @@ class _SettingsPageState extends State<SettingsPage> {
         elevation: theme.appBarTheme.elevation,
         shadowColor: theme.appBarTheme.shadowColor,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // General Section
-            _buildSectionHeader("General"),
-            _buildSettingItem(
-              icon: Icons.palette_outlined,
-              title: "Appearance",
-              subtitle: "Dark Mode",
-              trailing: Switch(
-                value: _darkMode,
-                onChanged: (value) {
-                  setState(() {
-                    _darkMode = value;
-                  });
-                  _settingsController.setDarkMode(value);
-                  AppTheme.themeMode.value =
-                      value ? ThemeMode.dark : ThemeMode.light;
-                },
-                activeColor: scheme.primary,
-              ),
+      body: ListenableBuilder(
+        listenable: userRoleProvider,
+        builder: (context, child) {
+          final isStaff = userRoleProvider.isStaff;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // General Section
+                _buildSectionHeader("General"),
+                _buildSettingItem(
+                  icon: Icons.palette_outlined,
+                  title: "Appearance",
+                  subtitle: "Dark Mode",
+                  trailing: Switch(
+                    value: _darkMode,
+                    onChanged: (value) {
+                      setState(() {
+                        _darkMode = value;
+                      });
+                      _settingsController.setDarkMode(value);
+                      AppTheme.themeMode.value =
+                          value ? ThemeMode.dark : ThemeMode.light;
+                    },
+                    activeColor: scheme.primary,
+                  ),
+                ),
+                _buildNotificationCard(),
+
+                const SizedBox(height: 24),
+
+                // User Management Section - Only for Admin users
+                if (!isStaff) ...[
+                  _buildSectionHeader("Account Management"),
+
+                  _buildSettingItem(
+                    icon: Icons.person_3_outlined,
+                    title: "Edit Profile",
+                    subtitle: "Update user credentials",
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: null,
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const EditProfilePage(user: null),
+                        ),
+                      );
+                    },
+                  ),
+
+                  _buildSettingItem(
+                    icon: Icons.people_outline,
+                    title: "Employee List",
+                    subtitle: "Manage employees and roles",
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: null,
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const EmployeeListPage()),
+                      );
+                    },
+                  ),
+
+                  // Change Password (sub-item)
+
+                  const SizedBox(height: 24),
+
+                  // System Section - Only for Admin users
+                  _buildSectionHeader("System"),
+                  _buildSettingItem(
+                    icon: Icons.backup_outlined,
+                    title: "Backup & Restore",
+                    subtitle: "Manage data backup and restore",
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: null,
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const BackupRestorePage()),
+                      );
+                    },
+                  ),
+                ],
+
+                const SizedBox(height: 32),
+
+                // Standalone Settings
+                Divider(height: 1, thickness: 1, color: theme.dividerColor),
+                const SizedBox(height: 20),
+                _buildSettingItem(
+                  icon: Icons.help_outline,
+                  title: "App Tutorial",
+                  subtitle: "Learn how to use the app",
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: null,
+                  ),
+                  onTap: () {
+                    // TODO: Navigate to app tutorial
+                  },
+                ),
+              ],
             ),
-            _buildNotificationCard(),
-
-            const SizedBox(height: 24),
-
-            // User Management Section
-            _buildSectionHeader("User Management"),
-            _buildSettingItem(
-              icon: Icons.people_outline,
-              title: "User List",
-              subtitle: "Manage users and roles",
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: null,
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const UserListPage()),
-                );
-              },
-            ),
-
-            // Change Password (sub-item)
-            _buildSettingItem(
-              icon: Icons.lock_outline,
-              title: "Change Password",
-              subtitle: "Update users' account password",
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: null,
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ChooseAccountPage()),
-                );
-              },
-            ),
-
-            const SizedBox(height: 24),
-
-            // System Section
-            _buildSectionHeader("System"),
-            _buildSettingItem(
-              icon: Icons.backup_outlined,
-              title: "Backup & Restore",
-              subtitle: "Manage data backup and restore",
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: null,
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const BackupRestorePage()),
-                );
-              },
-            ),
-
-            const SizedBox(height: 32),
-
-            // Standalone Settings
-            Divider(height: 1, thickness: 1, color: theme.dividerColor),
-            const SizedBox(height: 20),
-            _buildSettingItem(
-              icon: Icons.help_outline,
-              title: "App Tutorial",
-              subtitle: "Learn how to use the app",
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: null,
-              ),
-              onTap: () {
-                // TODO: Navigate to app tutorial
-              },
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

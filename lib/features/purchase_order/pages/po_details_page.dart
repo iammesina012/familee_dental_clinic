@@ -7,6 +7,7 @@ import 'package:projects/features/purchase_order/controller/po_supabase_controll
 import 'package:projects/shared/themes/font.dart';
 import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
 import 'package:projects/features/notifications/controller/notifications_controller.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 
 class PODetailsPage extends StatefulWidget {
   final PurchaseOrder purchaseOrder;
@@ -322,8 +323,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                           mainAxisAlignment:
                                               MainAxisAlignment.end,
                                           children: [
-                                            if (_controller
-                                                .canRejectPO(_purchaseOrder))
+                                            // Approve/Reject buttons - Only for Admin users
+                                            if (!UserRoleProvider().isStaff &&
+                                                _controller.canRejectPO(
+                                                    _purchaseOrder))
                                               Container(
                                                 decoration: BoxDecoration(
                                                   gradient:
@@ -393,11 +396,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                         ),
                                                 ),
                                               ),
-                                            if (_controller
-                                                .canApprovePO(_purchaseOrder))
+                                            if (!UserRoleProvider().isStaff &&
+                                                _controller.canApprovePO(
+                                                    _purchaseOrder))
                                               const SizedBox(width: 8),
-                                            if (_controller
-                                                .canApprovePO(_purchaseOrder))
+                                            if (!UserRoleProvider().isStaff &&
+                                                _controller.canApprovePO(
+                                                    _purchaseOrder))
                                               Container(
                                                 decoration: BoxDecoration(
                                                   gradient:

@@ -7,6 +7,7 @@ import 'package:projects/features/inventory/pages/edit_supply_page.dart';
 import 'package:projects/features/inventory/controller/view_supply_controller.dart';
 import 'package:projects/features/inventory/pages/archive_supply_page.dart';
 import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 
 class InventoryViewSupplyPage extends StatefulWidget {
   final InventoryItem item;
@@ -183,148 +184,158 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         actions: [
           // Show different buttons based on archived status
           if (!updatedItem.archived) ...[
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.green),
-              tooltip: "Edit",
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditSupplyPage(
-                      item: updatedItem,
-                    ),
-                  ),
-                );
-                if (result == true) {
-                  // Refresh the stream to get updated data
-                  _refreshStream();
-                  // Avoid showing a snackbar if the item is now expired,
-                  // because this page may immediately redirect to the Expired view
-                  try {
-                    final response = await Supabase.instance.client
-                        .from('supplies')
-                        .select('expiry')
-                        .eq('id', updatedItem.id)
-                        .single();
-                    final expiryStr = response['expiry']?.toString();
-                    bool isExpiredNow = false;
-                    if (expiryStr != null && expiryStr.isNotEmpty) {
-                      final dt = DateTime.tryParse(expiryStr) ??
-                          DateTime.tryParse(expiryStr.replaceAll('/', '-'));
-                      if (dt != null) {
-                        final today = DateTime.now();
-                        final d = DateTime(dt.year, dt.month, dt.day);
-                        final t = DateTime(today.year, today.month, today.day);
-                        isExpiredNow = d.isBefore(t) || d.isAtSameMomentAs(t);
-                      }
-                    }
-                    if (!isExpiredNow) {
-                      final messenger = ScaffoldMessenger.maybeOf(context);
-                      if (messenger != null) {
-                        messenger.showSnackBar(
-                          const SnackBar(content: Text('Supply updated!')),
-                        );
-                      }
-                    }
-                  } catch (_) {
-                    // Best-effort only; ignore errors
-                  }
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.archive, color: Colors.orange),
-              tooltip: "Archive",
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => _buildCustomDialog(
+            // Edit button - Only for Admin users
+            if (!UserRoleProvider().isStaff)
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.green),
+                tooltip: "Edit",
+                onPressed: () async {
+                  final result = await Navigator.push(
                     context,
-                    title: 'Archive Supply',
-                    content: 'Are you sure you want to archive this supply?',
-                    confirmText: 'Archive',
-                    confirmColor: Colors.orange,
-                    icon: Icons.archive,
-                  ),
-                );
-                if (confirmed == true) {
-                  await controller.archiveSupply(updatedItem.id);
-                  // Refresh the stream to show updated status
-                  _refreshStream();
-                  if (!context.mounted) return;
-                  Navigator.of(context).pushReplacement(
                     MaterialPageRoute(
-                      builder: (context) => ArchiveSupplyPage(),
+                      builder: (context) => EditSupplyPage(
+                        item: updatedItem,
+                      ),
                     ),
                   );
-                }
-              },
-            ),
-          ] else ...[
-            IconButton(
-              icon: const Icon(Icons.unarchive, color: Colors.blue),
-              tooltip: "Unarchive",
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => _buildCustomDialog(
-                    context,
-                    title: 'Unarchive Supply',
-                    content: 'Are you sure you want to unarchive this supply?',
-                    confirmText: 'Unarchive',
-                    confirmColor: Colors.blue,
-                    icon: Icons.unarchive,
-                  ),
-                );
-                if (confirmed == true) {
-                  await controller.unarchiveSupply(updatedItem.id);
-                  // Refresh the stream to show updated status
-                  _refreshStream();
-                  if (!context.mounted) return;
-                  Navigator.of(context)
-                      .pop('unarchived'); // Go back to archive page with result
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              tooltip: "Delete",
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => _buildCustomDialog(
-                    context,
-                    title: 'Delete Supply',
-                    content:
-                        'Are you sure you want to delete this supply?\n\nThis action cannot be undone.',
-                    confirmText: 'Delete',
-                    confirmColor: Colors.red,
-                    icon: Icons.delete,
-                  ),
-                );
-                if (confirmed == true) {
-                  try {
-                    await controller.deleteSupply(updatedItem.id);
+                  if (result == true) {
+                    // Refresh the stream to get updated data
+                    _refreshStream();
+                    // Avoid showing a snackbar if the item is now expired,
+                    // because this page may immediately redirect to the Expired view
+                    try {
+                      final response = await Supabase.instance.client
+                          .from('supplies')
+                          .select('expiry')
+                          .eq('id', updatedItem.id)
+                          .single();
+                      final expiryStr = response['expiry']?.toString();
+                      bool isExpiredNow = false;
+                      if (expiryStr != null && expiryStr.isNotEmpty) {
+                        final dt = DateTime.tryParse(expiryStr) ??
+                            DateTime.tryParse(expiryStr.replaceAll('/', '-'));
+                        if (dt != null) {
+                          final today = DateTime.now();
+                          final d = DateTime(dt.year, dt.month, dt.day);
+                          final t =
+                              DateTime(today.year, today.month, today.day);
+                          isExpiredNow = d.isBefore(t) || d.isAtSameMomentAs(t);
+                        }
+                      }
+                      if (!isExpiredNow) {
+                        final messenger = ScaffoldMessenger.maybeOf(context);
+                        if (messenger != null) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Supply updated!')),
+                          );
+                        }
+                      }
+                    } catch (_) {
+                      // Best-effort only; ignore errors
+                    }
+                  }
+                },
+              ),
+            // Archive button - Only for Admin users
+            if (!UserRoleProvider().isStaff)
+              IconButton(
+                icon: const Icon(Icons.archive, color: Colors.orange),
+                tooltip: "Archive",
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => _buildCustomDialog(
+                      context,
+                      title: 'Archive Supply',
+                      content: 'Are you sure you want to archive this supply?',
+                      confirmText: 'Archive',
+                      confirmColor: Colors.orange,
+                      icon: Icons.archive,
+                    ),
+                  );
+                  if (confirmed == true) {
+                    await controller.archiveSupply(updatedItem.id);
+                    // Refresh the stream to show updated status
+                    _refreshStream();
                     if (!context.mounted) return;
-                    Navigator.of(context).pop(); // Go back to archive page
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Supply deleted permanently!'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  } catch (e) {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to delete supply: $e'),
-                        backgroundColor: Colors.red,
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => ArchiveSupplyPage(),
                       ),
                     );
                   }
-                }
-              },
-            ),
+                },
+              ),
+          ] else ...[
+            // Unarchive button - Only for Admin users
+            if (!UserRoleProvider().isStaff)
+              IconButton(
+                icon: const Icon(Icons.unarchive, color: Colors.blue),
+                tooltip: "Unarchive",
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => _buildCustomDialog(
+                      context,
+                      title: 'Unarchive Supply',
+                      content:
+                          'Are you sure you want to unarchive this supply?',
+                      confirmText: 'Unarchive',
+                      confirmColor: Colors.blue,
+                      icon: Icons.unarchive,
+                    ),
+                  );
+                  if (confirmed == true) {
+                    await controller.unarchiveSupply(updatedItem.id);
+                    // Refresh the stream to show updated status
+                    _refreshStream();
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop(
+                        'unarchived'); // Go back to archive page with result
+                  }
+                },
+              ),
+            // Delete button - Only for Admin users
+            if (!UserRoleProvider().isStaff)
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                tooltip: "Delete",
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => _buildCustomDialog(
+                      context,
+                      title: 'Delete Supply',
+                      content:
+                          'Are you sure you want to delete this supply?\n\nThis action cannot be undone.',
+                      confirmText: 'Delete',
+                      confirmColor: Colors.red,
+                      icon: Icons.delete,
+                    ),
+                  );
+                  if (confirmed == true) {
+                    try {
+                      await controller.deleteSupply(updatedItem.id);
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop(); // Go back to archive page
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Supply deleted permanently!'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to delete supply: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
           ],
         ],
       ),
@@ -703,7 +714,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                           ),
                         ),
                       ),
-                      // Show live batches from Firestore; if none, fall back to embedded expiryBatches if present
+                      // Show live batches from Supabase; if none, fall back to embedded expiryBatches if present
                       SupabaseOtherExpiryBatches(item: updatedItem),
                       _EmbeddedExpiryBatchesFallback(item: updatedItem),
                     ],

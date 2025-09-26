@@ -414,7 +414,7 @@ class _InventoryState extends State<Inventory> {
                 ),
                 const SizedBox(height: 16),
 
-                // Firestore-powered, category-filtered, search-filtered, responsive grid
+                // Supabase-powered, category-filtered, search-filtered, responsive grid
                 Expanded(
                   child: StreamBuilder<List<String>>(
                     key: _categoriesStreamKey,

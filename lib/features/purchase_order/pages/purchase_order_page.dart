@@ -6,6 +6,7 @@ import 'package:projects/features/purchase_order/controller/po_list_controller.d
 import 'package:projects/features/purchase_order/data/purchase_order.dart';
 import 'dart:async'; // Added for StreamSubscription
 import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 
 class PurchaseOrderPage extends StatefulWidget {
   const PurchaseOrderPage({super.key});
@@ -221,12 +222,6 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           elevation: theme.appBarTheme.elevation ?? 5,
           shadowColor: theme.appBarTheme.shadowColor ?? theme.shadowColor,
           actions: [
-            // Clear all POs button (for testing)
-            IconButton(
-              icon: const Icon(Icons.clear_all, color: Colors.red, size: 24),
-              tooltip: 'Clear All POs (Testing)',
-              onPressed: () => _showClearAllDialog(),
-            ),
             Padding(
               padding: const EdgeInsets.only(right: 5.0),
               child: IconButton(
@@ -932,7 +927,6 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const SizedBox(width: 8),
                       Icon(Icons.chevron_right,
                           size: 20,
                           color: Theme.of(context)
@@ -951,44 +945,75 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
     // Only add slidable functionality for "Open" POs
     if (po.status == 'Open') {
-      return Slidable(
-        key: Key('slidable-${po.id}'),
-        closeOnScroll: true,
-        startActionPane: ActionPane(
-          motion: const DrawerMotion(),
-          extentRatio: 0.35,
-          children: [
-            SlidableAction(
-              onPressed: (_) => _editPO(po),
-              backgroundColor: const Color(0xFF00D4AA),
-              foregroundColor: Colors.white,
-              icon: Icons.edit,
-              label: 'Edit',
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ],
-        ),
-        endActionPane: ActionPane(
-          motion: const DrawerMotion(),
-          extentRatio: 0.35,
-          children: [
-            SlidableAction(
-              onPressed: (_) async {
-                final confirmed = await _showDeleteConfirmation(po);
-                if (confirmed) {
-                  // PO will be deleted in the confirmation dialog
-                }
-              },
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              icon: Icons.delete,
-              label: 'Delete',
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ],
-        ),
-        child: cardContent,
-      );
+      final userRoleProvider = UserRoleProvider();
+      final isStaff = userRoleProvider.isStaff;
+
+      if (isStaff) {
+        // For staff users: only right slide (Edit), no left slide
+        return Slidable(
+          key: Key('slidable-${po.id}'),
+          closeOnScroll: true,
+          startActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            extentRatio: 0.35,
+            children: [
+              // Edit action - Available for Staff
+              SlidableAction(
+                onPressed: (_) => _editPO(po),
+                backgroundColor: const Color(0xFF00D4AA),
+                foregroundColor: Colors.white,
+                icon: Icons.edit,
+                label: 'Edit',
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ],
+          ),
+          // No endActionPane for staff - no left slide
+          child: cardContent,
+        );
+      } else {
+        // For admin users: both left and right slides
+        return Slidable(
+          key: Key('slidable-${po.id}'),
+          closeOnScroll: true,
+          startActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            extentRatio: 0.35,
+            children: [
+              // Edit action - Available for Admin
+              SlidableAction(
+                onPressed: (_) => _editPO(po),
+                backgroundColor: const Color(0xFF00D4AA),
+                foregroundColor: Colors.white,
+                icon: Icons.edit,
+                label: 'Edit',
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ],
+          ),
+          endActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            extentRatio: 0.35,
+            children: [
+              // Delete action - Only for Admin users
+              SlidableAction(
+                onPressed: (_) async {
+                  final confirmed = await _showDeleteConfirmation(po);
+                  if (confirmed) {
+                    // PO will be deleted in the confirmation dialog
+                  }
+                },
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                icon: Icons.delete,
+                label: 'Delete',
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ],
+          ),
+          child: cardContent,
+        );
+      }
     }
 
     // Return regular card for non-Open POs
@@ -1138,69 +1163,5 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           },
         ) ??
         false;
-  }
-
-  void _showClearAllDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(
-            'Clear All Purchase Orders',
-            style: AppFonts.sfProStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            'This will permanently delete all purchase orders. This action cannot be undone.',
-            style: AppFonts.sfProStyle(
-              fontSize: 14,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Cancel',
-                style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                try {
-                  await _controller.clearAllPOs();
-
-                  // Clear local lists immediately
-                  setState(() {
-                    _openOrders.clear();
-                    _approvalOrders.clear();
-                    _closedOrders.clear();
-                    _orders.clear();
-                  });
-
-                  // Reload to ensure everything is in sync
-                  await _load();
-                } catch (e) {
-                  // Error handling - don't use ScaffoldMessenger to avoid context issues
-                }
-              },
-              child: Text(
-                'Clear All',
-                style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.red,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 }

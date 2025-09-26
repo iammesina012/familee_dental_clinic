@@ -103,6 +103,7 @@ class LoginController {
 
       if (e.message.contains('invalid') || e.message.contains('Invalid')) {
         hasEmailError = true;
+        hasPasswordError = true;
         message = "Enter a valid email or username.";
       } else if (e.message.contains('inactive') ||
           e.message.contains('disabled')) {

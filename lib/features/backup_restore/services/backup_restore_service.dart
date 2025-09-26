@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 
 /// Simple models for backup metadata and results
@@ -30,16 +28,13 @@ class RestoreResult {
   const RestoreResult({required this.storagePath, required this.totalItems});
 }
 
-/// Service handling Firestore <-> JSON <-> Storage backup/restore
+/// Service handling Supabase <-> JSON <-> Storage backup/restore
 class BackupRestoreService {
-  final FirebaseAuth _auth;
-  final FirebaseFirestore _firestore;
   final supa.SupabaseClient _supabase;
 
-  static const String collectionName = 'supplies';
   static const String _bucket = 'backups';
   static const int _maxBackups = 10;
-  static const List<String> _allCollections = <String>[
+  static const List<String> _allTables = <String>[
     'supplies',
     'brands',
     'suppliers',
@@ -53,12 +48,8 @@ class BackupRestoreService {
   ];
 
   BackupRestoreService({
-    FirebaseAuth? auth,
-    FirebaseFirestore? firestore,
     supa.SupabaseClient? supabase,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance,
-        _supabase = supabase ?? supa.Supabase.instance.client;
+  }) : _supabase = supabase ?? supa.Supabase.instance.client;
 
   /// List available backup files under backups/{uid}/
   Future<List<BackupFileMeta>> listBackups() async {
@@ -84,50 +75,44 @@ class BackupRestoreService {
     return files;
   }
 
-  /// Create a backup JSON for all collections and upload to Storage.
+  /// Create a backup JSON for all tables and upload to Storage.
   /// onProgress returns processed document count.
   Future<BackupResult> createBackup(
       {void Function(int processed)? onProgress, bool force = false}) async {
     _requireUser();
 
     const int pageSize = 500;
-    final Map<String, List<Map<String, dynamic>>> collections =
+    final Map<String, List<Map<String, dynamic>>> tables =
         <String, List<Map<String, dynamic>>>{};
     int processed = 0;
 
-    for (final String coll in _allCollections) {
+    for (final String table in _allTables) {
       final List<Map<String, dynamic>> items = <Map<String, dynamic>>[];
-      Query<Map<String, dynamic>> baseQuery = _firestore
-          .collection(coll)
-          .orderBy(FieldPath.documentId)
-          .limit(pageSize);
 
-      QueryDocumentSnapshot<Map<String, dynamic>>? lastDoc;
-      while (true) {
-        Query<Map<String, dynamic>> q = baseQuery;
-        if (lastDoc != null) {
-          q = q.startAfterDocument(lastDoc);
-        }
-        final snap = await q.get();
-        if (snap.docs.isEmpty) break;
-        for (final doc in snap.docs) {
-          final data = Map<String, dynamic>.from(doc.data());
-          items.add(<String, dynamic>{
-            'id': doc.id,
-            'data': _serializeForJson(data),
+      try {
+        final response =
+            await _supabase.from(table).select('*').order('id').limit(pageSize);
+
+        for (final item in response) {
+          items.add({
+            'id': item['id']?.toString() ?? '',
+            'data': item,
           });
         }
-        processed += snap.docs.length;
+
+        processed += items.length;
         if (onProgress != null) onProgress(processed);
-        lastDoc = snap.docs.last;
-        if (snap.docs.length < pageSize) break;
+      } catch (e) {
+        print('Error backing up table $table: $e');
+        // Continue with other tables even if one fails
       }
-      collections[coll] = items;
+
+      tables[table] = items;
     }
 
-    // Compute a simple checksum of the collections content to detect no-op backups
-    final String collectionsJsonForHash = jsonEncode(collections);
-    final String checksum = _simpleChecksum(collectionsJsonForHash);
+    // Compute a simple checksum of the tables content to detect no-op backups
+    final String tablesJsonForHash = jsonEncode(tables);
+    final String checksum = _simpleChecksum(tablesJsonForHash);
 
     // Compare with latest backup checksum (if available)
     try {
@@ -153,7 +138,7 @@ class BackupRestoreService {
       'version': 1,
       'generatedAt': DateTime.now().toUtc().toIso8601String(),
       'checksum': checksum,
-      'collections': collections,
+      'collections': tables,
     };
 
     final String jsonStr = jsonEncode(payload);
@@ -184,7 +169,7 @@ class BackupRestoreService {
     }
 
     int totalItems = 0;
-    for (final entry in collections.entries) {
+    for (final entry in tables.entries) {
       totalItems += entry.value.length;
     }
     return BackupResult(storagePath: '$_bucket/$path', totalItems: totalItems);
@@ -220,29 +205,32 @@ class BackupRestoreService {
     }
 
     final bool hasCollections = decoded['collections'] is Map<String, dynamic>;
-    final Map<String, dynamic> collectionsMap = hasCollections
+    final Map<String, dynamic> tablesMap = hasCollections
         ? Map<String, dynamic>.from(decoded['collections'] as Map)
         : <String, dynamic>{
-            collectionName: decoded['items'] ?? <dynamic>[],
+            'supplies': decoded['items'] ?? <dynamic>[],
           };
 
     int total = 0;
-    collectionsMap.forEach((key, value) {
+    tablesMap.forEach((key, value) {
       if (value is List) total += value.length;
     });
     int processed = 0;
 
-    WriteBatch batch = _firestore.batch();
-    int batchCount = 0;
+    // Process each table
+    for (final entry in tablesMap.entries) {
+      final String table = entry.key;
+      final dynamic listDyn = entry.value;
 
-    collectionsMap.forEach((String coll, dynamic listDyn) {
-      if (listDyn is! List) return;
+      if (listDyn is! List) continue;
+
       for (final item in listDyn) {
         if (item is! Map<String, dynamic>) {
           processed++;
           if (onProgress != null) onProgress(processed, total);
           continue;
         }
+
         final String? id = item['id'] as String?;
         final dynamic dataDyn = item['data'];
         if (id == null || id.isEmpty || dataDyn is! Map<String, dynamic>) {
@@ -251,30 +239,25 @@ class BackupRestoreService {
           continue;
         }
 
-        final Map<String, dynamic> restored =
-            _deserializeFromJson(Map<String, dynamic>.from(dataDyn));
-        final DocumentReference<Map<String, dynamic>> docRef =
-            _firestore.collection(coll).doc(id);
-        batch.set(docRef, restored, SetOptions(merge: false));
-        batchCount++;
-
-        if (batchCount >= 500) {
-          // commit and throttle
-          // simple throttling to avoid rate limits
-          // (keep code minimal, UX handles progress)
-          batch.commit();
-          Future<void>.delayed(const Duration(milliseconds: 200));
-          batch = _firestore.batch();
-          batchCount = 0;
+        try {
+          // Use upsert to handle both insert and update
+          await _supabase.from(table).upsert(
+                Map<String, dynamic>.from(dataDyn),
+                onConflict: 'id',
+              );
+        } catch (e) {
+          print('Error restoring item $id to table $table: $e');
+          // Continue with other items even if one fails
         }
 
         processed++;
         if (onProgress != null) onProgress(processed, total);
-      }
-    });
 
-    if (batchCount > 0) {
-      await batch.commit();
+        // Simple throttling to avoid rate limits
+        if (processed % 100 == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
     }
 
     return RestoreResult(storagePath: storagePath, totalItems: total);
@@ -294,8 +277,8 @@ class BackupRestoreService {
 
   // --- Helpers ---
 
-  User _requireUser() {
-    final user = _auth.currentUser;
+  supa.User _requireUser() {
+    final user = _supabase.auth.currentUser;
     if (user == null) {
       throw StateError('Not authenticated');
     }
@@ -330,90 +313,6 @@ class BackupRestoreService {
     }
   }
 
-  Map<String, dynamic> _serializeForJson(Map<String, dynamic> original) {
-    Map<String, dynamic> out = <String, dynamic>{};
-    original.forEach((key, value) {
-      out[key] = _toJsonSafe(value);
-    });
-    return out;
-  }
-
-  dynamic _toJsonSafe(dynamic value) {
-    if (value == null) return null;
-    if (value is Timestamp) {
-      return value.toDate().toUtc().toIso8601String();
-    }
-    if (value is DateTime) {
-      return value.toUtc().toIso8601String();
-    }
-    if (value is GeoPoint) {
-      return {
-        '__type__': 'geopoint',
-        'latitude': value.latitude,
-        'longitude': value.longitude,
-      };
-    }
-    if (value is DocumentReference) {
-      return {
-        '__type__': 'docref',
-        'path': value.path,
-      };
-    }
-    if (value is List) {
-      return value.map(_toJsonSafe).toList();
-    }
-    if (value is Map) {
-      return value.map((k, v) => MapEntry(k.toString(), _toJsonSafe(v)));
-    }
-    return value;
-  }
-
-  Map<String, dynamic> _deserializeFromJson(Map<String, dynamic> jsonMap) {
-    Map<String, dynamic> out = <String, dynamic>{};
-    jsonMap.forEach((key, value) {
-      out[key] = _fromJsonSafe(key, value);
-    });
-    return out;
-  }
-
-  dynamic _fromJsonSafe(String key, dynamic value) {
-    if (value == null) return null;
-    if (value is Map && value['__type__'] == 'geopoint') {
-      final lat = (value['latitude'] as num).toDouble();
-      final lon = (value['longitude'] as num).toDouble();
-      return GeoPoint(lat, lon);
-    }
-    if (value is Map && value['__type__'] == 'docref') {
-      final path = value['path'] as String;
-      return _firestore.doc(path);
-    }
-    if (value is String &&
-        _looksLikeIso8601(value) &&
-        _likelyTimestampField(key)) {
-      try {
-        final dt = DateTime.parse(value);
-        return Timestamp.fromDate(dt);
-      } catch (_) {}
-    }
-    if (value is List) {
-      return value.map((v) => _fromJsonSafe(key, v)).toList();
-    }
-    if (value is Map) {
-      return value.map(
-          (k, v) => MapEntry(k.toString(), _fromJsonSafe(k.toString(), v)));
-    }
-    return value;
-  }
-
-  bool _looksLikeIso8601(String s) {
-    return RegExp(r'^\d{4}-\d{2}-\d{2}T').hasMatch(s);
-  }
-
-  bool _likelyTimestampField(String key) {
-    final lower = key.toLowerCase();
-    return lower.endsWith('at') || lower.contains('date');
-  }
-
   // Lightweight deterministic checksum (FNV-1a 32-bit) to avoid extra deps
   String _simpleChecksum(String input) {
     const int fnvPrime = 0x01000193;
@@ -428,22 +327,10 @@ class BackupRestoreService {
 }
 
 /*
-Security rules guidance (add to your Firebase rules, adjust as needed):
+Security guidance for Supabase:
 
-// Firestore rules (pseudo):
-// match /databases/{database}/documents {
-//   match /inventory_items/{docId} {
-//     allow read, write: if request.auth != null && request.resource.data.uid == request.auth.uid;
-//   }
-// }
-
-// Storage rules (pseudo):
-// rules_version = '2';
-// service firebase.storage {
-//   match /b/{bucket}/o {
-//     match /backups/{uid}/{fileName} {
-//       allow read, write: if request.auth != null && request.auth.uid == uid;
-//     }
-//   }
-// }
+1. Enable Row Level Security (RLS) on all tables
+2. Create policies for user_roles table to allow users to manage their own data
+3. Set up storage policies for the backups bucket to allow authenticated users
+4. Consider using service role key for admin operations like backup/restore
 */

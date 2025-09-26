@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:projects/features/activity_log/controller/login_activity_controller.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -55,6 +56,9 @@ class AuthService {
     } else {
       await prefs.remove(_rememberedEmailKey);
     }
+
+    // Load user role after successful login
+    await UserRoleProvider().loadUserRole();
   }
 
   /// Login with username instead of email
@@ -121,6 +125,9 @@ class AuthService {
     } else {
       await prefs.remove(_rememberedEmailKey);
     }
+
+    // Load user role after successful login
+    await UserRoleProvider().loadUserRole();
   }
 
   Future<bool> isRememberMeEnabled() async {
@@ -149,6 +156,9 @@ class AuthService {
     await prefs.setBool(_rememberMeKey, false);
     await prefs.remove(_rememberedEmailKey);
     await _supabase.auth.signOut();
+
+    // Clear user role on logout
+    UserRoleProvider().clearUserRole();
   }
 
   User? get currentUser => _supabase.auth.currentUser;

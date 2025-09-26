@@ -25,6 +25,10 @@ class _AddUserPageState extends State<AddUserPage> {
   bool _isConfirmPasswordVisible = false;
   bool _isCreating = false;
 
+  // Validation state
+  String? _usernameError;
+  String? _emailError;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -94,7 +98,27 @@ class _AddUserPageState extends State<AddUserPage> {
                     if (value == null || value.isEmpty) {
                       return 'Username is required';
                     }
+                    if (_usernameError != null) {
+                      return _usernameError;
+                    }
                     return null;
+                  },
+                  onChanged: (value) async {
+                    // Clear previous error
+                    setState(() {
+                      _usernameError = null;
+                    });
+
+                    // Real-time username validation
+                    if (value.isNotEmpty) {
+                      final isTaken =
+                          await _controller.isUsernameTaken(value.trim());
+                      if (isTaken && mounted) {
+                        setState(() {
+                          _usernameError = 'Username is already taken';
+                        });
+                      }
+                    }
                   },
                   theme: theme,
                 ),
@@ -113,7 +137,27 @@ class _AddUserPageState extends State<AddUserPage> {
                     if (!_controller.isEmailValid(value)) {
                       return 'Please enter a valid email';
                     }
+                    if (_emailError != null) {
+                      return _emailError;
+                    }
                     return null;
+                  },
+                  onChanged: (value) async {
+                    // Clear previous error
+                    setState(() {
+                      _emailError = null;
+                    });
+
+                    // Real-time email validation
+                    if (value.isNotEmpty && _controller.isEmailValid(value)) {
+                      final isTaken =
+                          await _controller.isEmailTaken(value.trim());
+                      if (isTaken && mounted) {
+                        setState(() {
+                          _emailError = 'Email is already taken';
+                        });
+                      }
+                    }
                   },
                   theme: theme,
                 ),
@@ -218,6 +262,7 @@ class _AddUserPageState extends State<AddUserPage> {
     required String hint,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    Function(String)? onChanged,
     required ThemeData theme,
   }) {
     return Column(
@@ -236,6 +281,7 @@ class _AddUserPageState extends State<AddUserPage> {
           controller: controller,
           keyboardType: keyboardType,
           validator: validator,
+          onChanged: onChanged,
           style: const TextStyle(
             fontFamily: 'SF Pro',
             fontSize: 16,
@@ -418,24 +464,18 @@ class _AddUserPageState extends State<AddUserPage> {
         await _controller.isEmailTaken(_emailController.text.trim());
 
     if (isUsernameTaken) {
-      setState(() => _isCreating = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Username is already taken'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        _isCreating = false;
+        _usernameError = 'Username is already taken';
+      });
       return;
     }
 
     if (isEmailTaken) {
-      setState(() => _isCreating = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email is already taken'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        _isCreating = false;
+        _emailError = 'Email is already taken';
+      });
       return;
     }
 
@@ -448,7 +488,11 @@ class _AddUserPageState extends State<AddUserPage> {
       isActive: true, // Always create new users as active
     );
 
-    setState(() => _isCreating = false);
+    setState(() {
+      _isCreating = false;
+      _usernameError = null;
+      _emailError = null;
+    });
 
     if (result['success']) {
       if (mounted) {

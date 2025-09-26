@@ -145,7 +145,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
     final presetData = _controller.createPresetData(
         _presetNameController.text, _presetSupplies);
 
-    // Return to preset management page for Firebase saving
+    // Return to preset management page for Supabase saving
     Navigator.of(context).pop(presetData);
   }
 

@@ -195,6 +195,13 @@ class _LoginState extends State<Login> {
                       ),
                       child: TextField(
                         controller: controller.password,
+                        onChanged: (value) {
+                          if (controller.hasPasswordError) {
+                            setState(() {
+                              controller.hasPasswordError = false;
+                            });
+                          }
+                        },
                         obscureText: controller.obscure,
                         style: AppFonts.interStyle(
                           fontWeight: FontWeight.w500,

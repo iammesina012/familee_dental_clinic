@@ -97,7 +97,7 @@ class ActivityLogController extends ChangeNotifier {
     return filtered;
   }
 
-  // Constructor - start listening to Firebase
+  // Constructor - start listening to Supabase
   ActivityLogController() {
     _startListeningToActivities();
   }
@@ -171,7 +171,7 @@ class ActivityLogController extends ChangeNotifier {
 
   // Method to fetch activities from database (for future use)
   Future<void> fetchActivities() async {
-    // Activities are automatically fetched via Firebase stream
+    // Activities are automatically fetched via Supabase stream
     // This method is kept for backward compatibility
   }
 

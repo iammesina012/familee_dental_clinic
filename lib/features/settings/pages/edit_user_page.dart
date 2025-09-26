@@ -171,6 +171,33 @@ class _EditUserPageState extends State<EditUserPage> {
                       ),
                       const SizedBox(height: 20),
 
+                      // Reset Password Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => _showResetPasswordDialog(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 1,
+                          ),
+                          child: const Text(
+                            'Reset Password',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
                       // Save Button
                       SizedBox(
                         width: double.infinity,
@@ -554,6 +581,183 @@ class _EditUserPageState extends State<EditUserPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating user: $errMsg'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showResetPasswordDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        final theme = Theme.of(context);
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          elevation: 8,
+          backgroundColor: theme.dialogBackgroundColor,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: theme.dialogBackgroundColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon and Title
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_reset,
+                    color: Colors.red,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title
+                Text(
+                  'Reset Password',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Content
+                Text(
+                  'Are you sure you want to reset the password for "${widget.user['name'] ?? widget.user['displayName']}"?\n\nThis will set their password to the default password.',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(color: theme.dividerColor),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.7),
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          await _resetPassword();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          'Reset Password',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _resetPassword() async {
+    setState(() => _isSaving = true);
+
+    try {
+      final result = await _controller.resetPassword(
+        uid: widget.user['uid'],
+        newPassword: 'familee2021',
+      );
+
+      setState(() => _isSaving = false);
+
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Password reset successfully to default password'),
+              backgroundColor: Color(0xFF00D4AA),
+            ),
+          );
+        }
+      } else {
+        final errMsg = (result['error'] as String?) ??
+            (result['message'] as String?) ??
+            'Password reset failed. Please try again.';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error resetting password: $errMsg'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error resetting password: $e'),
             backgroundColor: Colors.red,
           ),
         );

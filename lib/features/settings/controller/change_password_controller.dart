@@ -1,28 +1,18 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChangePasswordController {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   Future<Map<String, dynamic>> changePassword({
     required String currentPassword, // Still required for function signature
     required String newPassword,
   }) async {
     try {
-      await _auth.currentUser?.reload();
-      final user = _auth.currentUser;
+      final user = _supabase.auth.currentUser;
       if (user == null) {
         return {
           'success': false,
           'message': 'Not signed in.',
-        };
-      }
-
-      final providerIds = user.providerData.map((p) => p.providerId).toList();
-      final usesEmailPassword = providerIds.contains('password');
-      if (!usesEmailPassword) {
-        return {
-          'success': false,
-          'message': 'Password change requires email/password sign-in.',
         };
       }
 
@@ -33,30 +23,31 @@ class ChangePasswordController {
         };
       }
 
-      // TEMPORARY WORKAROUND: Try to update password directly
-      // This might fail with 'requires-recent-login' error
       try {
-        await user.updatePassword(newPassword);
+        // Update password using Supabase Auth
+        await _supabase.auth.updateUser(
+          UserAttributes(password: newPassword),
+        );
         return {
           'success': true,
           'message': 'Password updated successfully.',
         };
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'requires-recent-login') {
+      } catch (e) {
+        if (e.toString().contains('weak-password')) {
+          return {
+            'success': false,
+            'message': 'New password is too weak. Use at least 6 characters.',
+          };
+        } else if (e.toString().contains('requires-recent-login')) {
           return {
             'success': false,
             'message':
                 'Security: Please sign out and sign in again, then try changing your password.',
           };
-        } else if (e.code == 'weak-password') {
-          return {
-            'success': false,
-            'message': 'New password is too weak. Use at least 6 characters.',
-          };
         } else {
           return {
             'success': false,
-            'message': 'Unable to update password: ${e.message}',
+            'message': 'Unable to update password: ${e.toString()}',
           };
         }
       }

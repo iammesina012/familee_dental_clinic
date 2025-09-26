@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:projects/features/auth/pages/login_page.dart';
 import 'package:projects/features/dashboard/pages/dashboard_page.dart';
 import 'package:projects/features/inventory/pages/inventory_page.dart';
@@ -21,12 +21,15 @@ import 'package:projects/features/settings/pages/settings_page.dart';
 import 'package:projects/features/backup_restore/pages/backup_restore_page.dart';
 import 'package:projects/features/auth/services/auth_service.dart';
 import 'package:projects/shared/themes/font.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+
   await Supabase.initialize(
       url: "https://mjczybgsgjnrmddcomoc.supabase.co",
       anonKey:
@@ -105,6 +108,7 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   final AuthService _authService = AuthService();
+  final UserRoleProvider _userRoleProvider = UserRoleProvider();
   bool _isLoading = true;
   bool _isLoggedIn = false;
 
@@ -116,6 +120,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Future<void> _checkAuthStatus() async {
     final isLoggedIn = await _authService.isUserLoggedIn();
+
+    // Load user role if user is logged in
+    if (isLoggedIn) {
+      await _userRoleProvider.loadUserRole();
+    }
+
     setState(() {
       _isLoggedIn = isLoggedIn;
       _isLoading = false;

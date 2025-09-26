@@ -108,7 +108,7 @@ class SdEditPresetController {
     return validSupplies;
   }
 
-  // Update preset in Firebase
+  // Update preset in Supabase
   Future<void> updatePreset(
       String presetId, Map<String, dynamic> updatedPreset) async {
     await _presetController.updatePreset(presetId, updatedPreset);

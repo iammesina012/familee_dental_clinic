@@ -1,44 +1,39 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// UserListController
 ///
 /// Purpose: Encapsulate all backend/data operations related to User Management.
-/// - Firebase/Supabase reads and writes for user data
+/// - Supabase reads and writes for user data
 /// - User creation, deletion, and modification
 /// - User role management
 ///
 /// The UI page should use this controller for data access and mutations,
 /// keeping all non-UI logic out of the widget layer.
 class UserListController {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Get all Firebase Auth users
-  /// Note: This requires Firebase Admin SDK in a real app
-  /// For now, we'll get the current user and simulate the list
+  /// Get all Supabase users
   Future<List<Map<String, dynamic>>> getUsers() async {
     try {
-      // Ensure admin user exists in Firestore
+      // Ensure admin user exists in Supabase
       await _ensureAdminUserExists();
 
-      // Get all users from Firestore user_roles collection (active and inactive)
-      final querySnapshot = await _firestore.collection('user_roles').get();
+      // Get all users from Supabase user_roles table (active and inactive)
+      final response = await _supabase.from('user_roles').select('*');
 
       List<Map<String, dynamic>> users = [];
 
-      for (var doc in querySnapshot.docs) {
-        final userData = doc.data();
+      for (var userData in response) {
         final user = {
-          'uid': doc.id,
+          'uid': userData['id'] ?? '',
           'email': userData['email'] ?? '',
           'displayName': userData['name'] ?? 'User',
           'name': userData['name'] ?? 'User',
           'username': userData['username'] ?? '',
           'role': userData['role'] ?? 'Staff',
-          'isActive': userData['isActive'] ?? true,
-          'createdAt': userData['createdAt'],
-          'updatedAt': userData['updatedAt'],
+          'isActive': userData['is_active'] ?? true,
+          'createdAt': userData['created_at'],
+          'updatedAt': userData['updated_at'],
         };
         users.add(user);
       }
@@ -62,26 +57,29 @@ class UserListController {
     }
   }
 
-  /// Ensure admin user exists in Firestore
+  /// Ensure admin user exists in Supabase
   Future<void> _ensureAdminUserExists() async {
     try {
-      final currentUser = _auth.currentUser;
+      final currentUser = _supabase.auth.currentUser;
       if (currentUser == null) return;
 
-      final doc =
-          await _firestore.collection('user_roles').doc(currentUser.uid).get();
+      final response = await _supabase
+          .from('user_roles')
+          .select('id')
+          .eq('id', currentUser.id)
+          .limit(1);
 
-      if (!doc.exists) {
-        // Create admin user record in Firestore
-        await _firestore.collection('user_roles').doc(currentUser.uid).set({
+      if (response.isEmpty) {
+        // Create admin user record in Supabase
+        await _supabase.from('user_roles').insert({
+          'id': currentUser.id,
           'name': 'Michael William Mesina',
           'username': 'iammesina012',
           'email': currentUser.email,
-          'firebaseAuthEmail': currentUser.email,
           'role': 'Admin',
-          'isActive': true,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
+          'is_active': true,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
         });
       }
     } catch (e) {
@@ -107,27 +105,30 @@ class UserListController {
     }
   }
 
-  /// Get user role from Firestore (if stored there)
+  /// Get user role from Supabase (if stored there)
   Future<String> getUserRole(String uid) async {
     try {
-      final doc = await _firestore.collection('user_roles').doc(uid).get();
-      if (doc.exists && doc.data() != null) {
-        return doc.data()!['role'] ?? 'Staff';
-      }
-      return 'Staff'; // Default role
+      final response = await _supabase
+          .from('user_roles')
+          .select('role')
+          .eq('id', uid)
+          .limit(1)
+          .single();
+
+      return response['role'] ?? 'Staff';
     } catch (e) {
       print('Error getting user role: $e');
       return 'Staff';
     }
   }
 
-  /// Update user role in Firestore
+  /// Update user role in Supabase
   Future<bool> updateUserRole(String uid, String role) async {
     try {
-      await _firestore.collection('user_roles').doc(uid).set({
+      await _supabase.from('user_roles').update({
         'role': role,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', uid);
       return true;
     } catch (e) {
       print('Error updating user role: $e');

@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:projects/features/settings/controller/user_list_controller.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_user_page.dart';
 import 'add_user_page.dart';
 
-class UserListPage extends StatefulWidget {
-  const UserListPage({super.key});
+class EmployeeListPage extends StatefulWidget {
+  const EmployeeListPage({super.key});
 
   @override
-  State<UserListPage> createState() => _UserListPageState();
+  State<EmployeeListPage> createState() => _EmployeeListPageState();
 }
 
-class _UserListPageState extends State<UserListPage> {
+class _EmployeeListPageState extends State<EmployeeListPage> {
   final UserListController _controller = UserListController();
   List<Map<String, dynamic>> _users = [];
   bool _isLoading = true;
@@ -27,9 +28,20 @@ class _UserListPageState extends State<UserListPage> {
     final result = await _controller.loadUsers();
 
     if (mounted) {
+      // Get current user ID to filter out admin from the list
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      final currentUserId = currentUser?.id;
+
+      // Filter out the current admin user from the list
+      List<Map<String, dynamic>> allUsers = result['users'] ?? [];
+      List<Map<String, dynamic>> filteredUsers = allUsers.where((user) {
+        // Exclude current user and only show staff accounts
+        return user['id'] != currentUserId && user['role'] != 'Admin';
+      }).toList();
+
       setState(() {
         _isLoading = false;
-        _users = result['users'] ?? [];
+        _users = filteredUsers;
       });
     }
 
@@ -53,7 +65,7 @@ class _UserListPageState extends State<UserListPage> {
           },
         ),
         title: const Text(
-          'User List',
+          'Employee List',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -82,7 +94,7 @@ class _UserListPageState extends State<UserListPage> {
                     icon: const Icon(Icons.person_add,
                         color: Colors.white, size: 18),
                     label: const Text(
-                      'Add User',
+                      'Add Employee',
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontWeight: FontWeight.w600,
@@ -130,7 +142,7 @@ class _UserListPageState extends State<UserListPage> {
                       : _users.isEmpty
                           ? Center(
                               child: Text(
-                                'No users found',
+                                'No employees found',
                                 style: TextStyle(
                                   fontFamily: 'SF Pro',
                                   fontSize: 16,
@@ -276,7 +288,7 @@ class _UserListPageState extends State<UserListPage> {
               color: Color(0xFF00D4AA),
               size: 24,
             ),
-            tooltip: 'Edit User',
+            tooltip: 'Edit Employee',
             padding: const EdgeInsets.all(8),
             constraints: const BoxConstraints(
               minWidth: 40,
@@ -317,34 +329,5 @@ class _UserListPageState extends State<UserListPage> {
     if (result == true) {
       _loadUsers();
     }
-  }
-
-  void _showDuplicateUsers() async {
-    final duplicates = await _controller.getDuplicateUsers();
-
-    if (duplicates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No duplicate users found'),
-          backgroundColor: Color(0xFF00D4AA),
-        ),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Duplicate Users Found'),
-        content: Text(
-            'Found ${duplicates.length} duplicate users. Check Firebase Console to delete them manually.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 }

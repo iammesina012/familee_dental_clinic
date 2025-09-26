@@ -129,7 +129,7 @@ class InventoryItemCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Show Firestore image (or placeholder)
+            // Show Supabase image (or placeholder)
             item.imageUrl.isNotEmpty
                 ? Image.network(
                     item.imageUrl,

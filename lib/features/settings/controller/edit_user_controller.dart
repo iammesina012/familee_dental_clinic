@@ -1,5 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:convert';
+import 'dart:io';
 
 /// EditUserController
 ///
@@ -9,8 +11,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// The UI page should use this controller for all user modification
 /// operations, keeping all non-UI logic out of the widget layer.
 class EditUserController {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   /// Update user profile information
   Future<Map<String, dynamic>> updateUserProfile({
@@ -18,30 +19,41 @@ class EditUserController {
     required String name,
     required String username,
     required String email,
+    String? role,
   }) async {
     try {
-      // Get the current Firebase Auth email
-      final currentUser = _auth.currentUser;
-      final firebaseAuthEmail = currentUser?.email ??
-          'iammesina012@gmail.com'; // Fallback to known email
+      // Get the current Supabase Auth user
+      final currentUser = _supabase.auth.currentUser;
 
-      // Create or update in Firestore user_roles collection
-      await _firestore.collection('user_roles').doc(uid).set({
+      // Create or update in Supabase user_roles table
+      final data = {
+        'id': uid,
+        'auth_id': uid, // Add auth_id field
         'name': name,
         'username': username,
-        'email': email, // This is the "fixed email" for display and login
-        'firebaseAuthEmail':
-            firebaseAuthEmail, // Store the actual Firebase Auth email
-        'updatedAt': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'isActive': true,
-      }, SetOptions(merge: true));
+        'email': email,
+        'updated_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toIso8601String(),
+        'is_active': true,
+      };
 
-      // Update Firebase Auth profile if it's the current user
-      if (currentUser != null && currentUser.uid == uid) {
-        await currentUser.updateDisplayName(name);
-        // Note: We don't update email in Firebase Auth to avoid complications
-        // The email in Firestore is for display purposes only
+      // Add role if provided
+      if (role != null) {
+        data['role'] = role;
+      }
+
+      await _supabase.from('user_roles').upsert(data);
+
+      // Update Supabase Auth profile if it's the current user
+      if (currentUser != null && currentUser.id == uid) {
+        await _supabase.auth.updateUser(
+          UserAttributes(
+            data: {
+              'display_name': name,
+              'username': username,
+            },
+          ),
+        );
       }
 
       return {
@@ -64,22 +76,125 @@ class EditUserController {
   }) async {
     try {
       // Note: This requires the user to be authenticated
-      // For admin changing other users' passwords, you'd need Firebase Admin SDK
-      final currentUser = _auth.currentUser;
-      if (currentUser != null && currentUser.uid == uid) {
-        await currentUser.updatePassword(newPassword);
+      // For admin changing other users' passwords, you'd need Supabase Admin API
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser != null && currentUser.id == uid) {
+        await _supabase.auth.updateUser(
+          UserAttributes(password: newPassword),
+        );
         return true;
       }
 
-      // For now, just update in Firestore (real implementation needs Admin SDK)
-      await _firestore.collection('user_roles').doc(uid).update({
-        'passwordUpdatedAt': FieldValue.serverTimestamp(),
-      });
+      // For now, just update in Supabase (real implementation needs Admin API)
+      await _supabase.from('user_roles').update({
+        'password_updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', uid);
 
       return true;
     } catch (e) {
       print('Error updating password: $e');
       return false;
+    }
+  }
+
+  /// Reset user password to default
+  Future<Map<String, dynamic>> resetPassword({
+    required String uid,
+    required String newPassword,
+  }) async {
+    try {
+      // Get service role key from environment
+      final serviceRoleKey = dotenv.env['SUPABASE_SERVICE_ROLE_KEY'];
+
+      if (serviceRoleKey == null || serviceRoleKey.isEmpty) {
+        return {
+          'success': false,
+          'error': 'Service role key not found. Please check your .env file.',
+        };
+      }
+
+      // Update user_roles table with available columns
+      await _supabase.from('user_roles').update({
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', uid);
+
+      // Use Supabase Admin API to actually change the password
+      final supabaseUrl = "https://mjczybgsgjnrmddcomoc.supabase.co";
+      final response = await _makeAdminRequest(
+        supabaseUrl: supabaseUrl,
+        serviceRoleKey: serviceRoleKey,
+        endpoint: '/auth/v1/admin/users/$uid',
+        method: 'PUT',
+        body: {
+          'password': newPassword,
+        },
+      );
+
+      if (response['success']) {
+        return {
+          'success': true,
+          'message':
+              'Password reset successfully to default password: $newPassword',
+        };
+      } else {
+        return {
+          'success': false,
+          'error': response['error'] ?? 'Failed to reset password',
+        };
+      }
+    } catch (e) {
+      print('Error resetting password: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Make admin request to Supabase Auth API
+  Future<Map<String, dynamic>> _makeAdminRequest({
+    required String supabaseUrl,
+    required String serviceRoleKey,
+    required String endpoint,
+    required String method,
+    Map<String, dynamic>? body,
+  }) async {
+    try {
+      final client = HttpClient();
+      final request = await client.openUrl(
+        method,
+        Uri.parse('$supabaseUrl$endpoint'),
+      );
+
+      // Set headers
+      request.headers.set('Authorization', 'Bearer $serviceRoleKey');
+      request.headers.set('Content-Type', 'application/json');
+      request.headers.set('apikey', serviceRoleKey);
+
+      // Add body if provided
+      if (body != null) {
+        request.write(jsonEncode(body));
+      }
+
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return {
+          'success': true,
+          'data': jsonDecode(responseBody),
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'HTTP ${response.statusCode}: $responseBody',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
     }
   }
 
@@ -89,10 +204,10 @@ class EditUserController {
     required String role,
   }) async {
     try {
-      await _firestore.collection('user_roles').doc(uid).update({
+      await _supabase.from('user_roles').update({
         'role': role,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', uid);
       return true;
     } catch (e) {
       print('Error updating user role: $e');
@@ -106,10 +221,10 @@ class EditUserController {
     required bool isActive,
   }) async {
     try {
-      await _firestore.collection('user_roles').doc(uid).set({
-        'isActive': isActive,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await _supabase.from('user_roles').update({
+        'is_active': isActive,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', uid);
       return {
         'success': true,
         'error': null,
@@ -139,6 +254,7 @@ class EditUserController {
         name: name,
         username: username,
         email: email,
+        role: role,
       );
 
       if (!profileResult['success']) {
@@ -183,22 +299,34 @@ class EditUserController {
   /// Get user details for editing
   Future<Map<String, dynamic>?> getUserDetails(String uid) async {
     try {
-      // Get from Firestore user_roles collection
-      final doc = await _firestore.collection('user_roles').doc(uid).get();
-      if (doc.exists && doc.data() != null) {
+      // Get from Supabase user_roles table
+      final response = await _supabase
+          .from('user_roles')
+          .select('*')
+          .eq('id', uid)
+          .limit(1)
+          .single();
+
+      if (response.isNotEmpty) {
         return {
           'uid': uid,
-          ...doc.data()!,
+          'name': response['name'] ?? '',
+          'username': response['username'] ?? '',
+          'email': response['email'] ?? '',
+          'role': response['role'] ?? 'Staff',
+          'isActive': response['is_active'] ?? true,
+          'createdAt': response['created_at'],
+          'updatedAt': response['updated_at'],
         };
       }
 
-      // Fallback to Firebase Auth if not in Firestore
-      final currentUser = _auth.currentUser;
-      if (currentUser != null && currentUser.uid == uid) {
+      // Fallback to Supabase Auth if not in database
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser != null && currentUser.id == uid) {
         return {
           'uid': uid,
-          'name': currentUser.displayName ?? '',
-          'username': currentUser.displayName ?? '',
+          'name': currentUser.userMetadata?['display_name'] ?? '',
+          'username': currentUser.userMetadata?['username'] ?? '',
           'email': currentUser.email ?? '',
           'role': 'Admin', // Default for current user
           'isActive': true,

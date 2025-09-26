@@ -212,7 +212,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // Show Firestore image (or placeholder) - NO BACKGROUND
+                                  // Show Supabase image (or placeholder) - NO BACKGROUND
                                   item.imageUrl.isNotEmpty
                                       ? Image.network(
                                           item.imageUrl,
