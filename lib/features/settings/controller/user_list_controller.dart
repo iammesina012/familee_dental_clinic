@@ -38,13 +38,21 @@ class UserListController {
         users.add(user);
       }
 
-      // Sort: Admin accounts first, then by name A-Z
+      // Sort: Owner first, then Admin, then Staff, then by name A-Z
       users.sort((a, b) {
-        final aIsAdmin = (a['role'] == 'Admin');
-        final bIsAdmin = (b['role'] == 'Admin');
-        if (aIsAdmin != bIsAdmin) {
-          return aIsAdmin ? -1 : 1;
+        final aRole = a['role'] ?? 'Staff';
+        final bRole = b['role'] ?? 'Staff';
+
+        // Role hierarchy: Owner > Admin > Staff
+        final roleOrder = {'Owner': 0, 'Admin': 1, 'Staff': 2};
+        final aRoleOrder = roleOrder[aRole] ?? 2;
+        final bRoleOrder = roleOrder[bRole] ?? 2;
+
+        if (aRoleOrder != bRoleOrder) {
+          return aRoleOrder.compareTo(bRoleOrder);
         }
+
+        // If same role, sort by name A-Z
         final aName = (a['name'] ?? '').toString().toLowerCase();
         final bName = (b['name'] ?? '').toString().toLowerCase();
         return aName.compareTo(bName);

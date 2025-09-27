@@ -103,7 +103,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
                 const SizedBox(height: 24),
 
-                // User Management Section - Only for Admin users
+                // User Management Section - Only for Owner and Admin users
                 if (!isStaff) ...[
                   _buildSectionHeader("Account Management"),
 
@@ -148,7 +148,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   const SizedBox(height: 24),
 
-                  // System Section - Only for Admin users
+                  // System Section - Only for Owner and Admin users
                   _buildSectionHeader("System"),
                   _buildSettingItem(
                     icon: Icons.backup_outlined,

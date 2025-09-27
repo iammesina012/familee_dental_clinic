@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:projects/features/settings/controller/user_list_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 import 'edit_user_page.dart';
 import 'add_user_page.dart';
 
@@ -32,11 +33,25 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
       final currentUser = Supabase.instance.client.auth.currentUser;
       final currentUserId = currentUser?.id;
 
-      // Filter out the current admin user from the list
+      // Filter users based on current user's role hierarchy
       List<Map<String, dynamic>> allUsers = result['users'] ?? [];
+      final userRoleProvider = UserRoleProvider();
       List<Map<String, dynamic>> filteredUsers = allUsers.where((user) {
-        // Exclude current user and only show staff accounts
-        return user['id'] != currentUserId && user['role'] != 'Admin';
+        // Always exclude current user
+        if (user['uid'] == currentUserId) return false;
+
+        final userRole = user['role'] ?? 'Staff';
+
+        // Owner can see all users (Admin and Staff)
+        if (userRoleProvider.isOwner) {
+          return true;
+        }
+        // Admin can only see Staff users
+        else if (userRoleProvider.isAdmin) {
+          return userRole == 'Staff';
+        }
+        // Staff cannot see any users (should not have access to this page)
+        return false;
       }).toList();
 
       setState(() {
@@ -55,6 +70,8 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final userRoleProvider = UserRoleProvider();
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
@@ -86,34 +103,37 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Spacer(),
-                  ElevatedButton.icon(
-                    onPressed: () => _addUser(),
-                    icon: const Icon(Icons.person_add,
-                        color: Colors.white, size: 18),
-                    label: const Text(
-                      'Add Employee',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: Colors.white,
+              // Only show Add Employee button if user can manage users
+              if (userRoleProvider.canManageUsers()) ...[
+                Row(
+                  children: [
+                    const Spacer(),
+                    ElevatedButton.icon(
+                      onPressed: () => _addUser(),
+                      icon: const Icon(Icons.person_add,
+                          color: Colors.white, size: 18),
+                      label: const Text(
+                        'Add Employee',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00D4AA),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        elevation: 1,
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00D4AA),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      elevation: 1,
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               Expanded(
                 child: Container(
@@ -235,9 +255,8 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: (user['role'] == 'Admin')
-                            ? const Color(0xFF00D4AA).withOpacity(0.1)
-                            : Colors.blue.withOpacity(0.1),
+                        color: _getRoleColor(user['role'] ?? 'Staff')
+                            .withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -246,9 +265,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                           fontFamily: 'SF Pro',
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: (user['role'] == 'Admin')
-                              ? const Color(0xFF00D4AA)
-                              : Colors.blue,
+                          color: _getRoleColor(user['role'] ?? 'Staff'),
                         ),
                       ),
                     ),
@@ -328,6 +345,20 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
     // Refresh the user list if a new user was created
     if (result == true) {
       _loadUsers();
+    }
+  }
+
+  /// Get color for role chip
+  Color _getRoleColor(String role) {
+    switch (role) {
+      case 'Owner':
+        return const Color(0xFFFF6B35); // Orange for Owner
+      case 'Admin':
+        return const Color(0xFF00D4AA); // Teal for Admin
+      case 'Staff':
+        return Colors.blue; // Blue for Staff
+      default:
+        return Colors.grey; // Grey for unknown roles
     }
   }
 }

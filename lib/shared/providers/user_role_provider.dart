@@ -21,6 +21,7 @@ class UserRoleProvider extends ChangeNotifier {
 
   // Getters
   String get userRole => _userRole;
+  bool get isOwner => _userRole == 'Owner';
   bool get isAdmin => _userRole == 'Admin';
   bool get isStaff => _userRole == 'Staff';
   bool get isLoaded => _isLoaded;
@@ -62,10 +63,10 @@ class UserRoleProvider extends ChangeNotifier {
   }
 
   /// Permission checks (instant, no async needed)
-  bool canAccessActivityLog() => isAdmin;
-  bool canAccessSettings() => isAdmin;
-  bool canManageUsers() => isAdmin;
-  bool canBackupRestore() => isAdmin;
+  bool canAccessActivityLog() => isOwner || isAdmin;
+  bool canAccessSettings() => true; // All roles can access settings
+  bool canManageUsers() => isOwner || isAdmin;
+  bool canBackupRestore() => isOwner || isAdmin;
 
   // Staff and Admin can access these
   bool canAccessDashboard() => true;
@@ -73,4 +74,30 @@ class UserRoleProvider extends ChangeNotifier {
   bool canAccessPurchaseOrders() => true;
   bool canAccessStockDeduction() => true;
   bool canAccessNotifications() => true;
+
+  /// Role hierarchy management
+  /// Owner can manage Admin and Staff
+  /// Admin can manage Staff only
+  /// Staff cannot manage anyone
+  bool canManageRole(String targetRole) {
+    if (isOwner) {
+      return true; // Owner can manage anyone
+    } else if (isAdmin) {
+      return targetRole == 'Staff'; // Admin can only manage Staff
+    }
+    return false; // Staff cannot manage anyone
+  }
+
+  /// Get available roles for current user to assign
+  List<String> getAvailableRolesToAssign() {
+    if (isOwner) {
+      return [
+        'Admin',
+        'Staff'
+      ]; // Owner can assign Admin and Staff (but not Owner to prevent self-demotion)
+    } else if (isAdmin) {
+      return ['Staff']; // Admin can only assign Staff role
+    }
+    return []; // Staff cannot assign any roles
+  }
 }

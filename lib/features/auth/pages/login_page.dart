@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:projects/features/auth/controller/login_controller.dart';
+import 'package:projects/features/auth/pages/forgot_password_page.dart';
 import 'package:projects/shared/themes/font.dart';
 
 class Login extends StatefulWidget {
@@ -242,35 +243,59 @@ class _LoginState extends State<Login> {
                     ),
                     const SizedBox(height: 6),
                     Padding(
-                      padding: const EdgeInsets.only(left: 12),
+                      padding: const EdgeInsets.only(left: 12, right: 12),
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Transform.scale(
-                            scale: 1.2,
-                            child: Checkbox(
-                              value: rememberMe,
-                              onChanged: (value) {
-                                setState(() {
-                                  rememberMe = value ?? false;
-                                });
-                              },
-                              activeColor: const Color(0xFF00D4AA),
-                              checkColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
+                          Row(
+                            children: [
+                              Transform.scale(
+                                scale: 1.2,
+                                child: Checkbox(
+                                  value: rememberMe,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      rememberMe = value ?? false;
+                                    });
+                                  },
+                                  activeColor: const Color(0xFF00D4AA),
+                                  checkColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  side: BorderSide(
+                                    color: const Color(0xFF2D2D2D)
+                                        .withOpacity(0.3),
+                                    width: 1.5,
+                                  ),
+                                ),
                               ),
-                              side: BorderSide(
-                                color: const Color(0xFF2D2D2D).withOpacity(0.3),
-                                width: 1.5,
+                              Text(
+                                "Remember me",
+                                style: AppFonts.interStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF2D2D2D),
+                                  fontSize: 14,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                          Text(
-                            "Remember me",
-                            style: AppFonts.interStyle(
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF2D2D2D),
-                              fontSize: 14,
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ForgotPasswordPage(),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              "Forgot Password?",
+                              style: AppFonts.interStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2D2D2D),
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ],

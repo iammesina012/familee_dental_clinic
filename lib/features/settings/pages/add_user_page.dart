@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:projects/features/settings/controller/add_user_controller.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 
 class AddUserPage extends StatefulWidget {
   const AddUserPage({super.key});
@@ -30,6 +31,25 @@ class _AddUserPageState extends State<AddUserPage> {
   String? _emailError;
 
   @override
+  void initState() {
+    super.initState();
+    _initializeRole();
+  }
+
+  void _initializeRole() {
+    final availableRoles = _controller.getAvailableRoles();
+
+    // If only one role available (Admin can only assign Staff), auto-select it
+    if (availableRoles.length == 1) {
+      _selectedRole = availableRoles.first;
+    }
+    // Otherwise, default to first available role (Owner can choose between Admin/Staff)
+    else if (availableRoles.isNotEmpty) {
+      _selectedRole = availableRoles.first;
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _usernameController.dispose();
@@ -42,6 +62,7 @@ class _AddUserPageState extends State<AddUserPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final userRoleProvider = UserRoleProvider();
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -211,9 +232,20 @@ class _AddUserPageState extends State<AddUserPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Role Field
-                _buildRoleDropdown(theme),
-                const SizedBox(height: 32),
+                // Role Field - Only show if there are multiple role options
+                if (_controller.getAvailableRoles().length > 1) ...[
+                  _buildRoleDropdown(theme),
+                  const SizedBox(height: 16),
+                ],
+
+                // Show role info if Admin (since they can only assign Staff)
+                if (userRoleProvider.isAdmin &&
+                    _controller.getAvailableRoles().length == 1) ...[
+                  _buildRoleInfo(theme),
+                  const SizedBox(height: 16),
+                ],
+
+                const SizedBox(height: 16),
 
                 // Create User Button
                 SizedBox(
@@ -446,6 +478,61 @@ class _AddUserPageState extends State<AddUserPage> {
                 }
               },
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRoleInfo(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Role',
+          style: TextStyle(
+            fontFamily: 'SF Pro',
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.brightness == Brightness.dark
+                ? theme.colorScheme.surface
+                : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.person,
+                color: Colors.blue,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Staff',
+                style: TextStyle(
+                  fontFamily: 'SF Pro',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Auto-assigned',
+                style: TextStyle(
+                  fontFamily: 'SF Pro',
+                  fontSize: 12,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                ),
+              ),
+            ],
           ),
         ),
       ],

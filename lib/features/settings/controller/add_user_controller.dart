@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:projects/shared/providers/user_role_provider.dart';
 
 /// AddUserController
 ///
@@ -129,9 +130,10 @@ class AddUserController {
     return password.length >= 6;
   }
 
-  /// Get available roles
+  /// Get available roles based on current user's role hierarchy
   List<String> getAvailableRoles() {
-    return ['Admin', 'Staff'];
+    final userRoleProvider = UserRoleProvider();
+    return userRoleProvider.getAvailableRolesToAssign();
   }
 
   /// Sync existing Supabase users with user_roles table
