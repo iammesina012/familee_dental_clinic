@@ -109,27 +109,23 @@ flutter:
   assets:
     - assets/images/
     - assets/images/logo/
-    - assets/images/dental_materials/
-    - assets/images/medicaments/
-    - assets/images/ppe_disposables/
-    - assets/images/miscellaneous/
     - .env
 
 # Flutter Launcher Icons configuration
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/images/logo/logo_101.png"
+  image_path: "assets/images/logo/familee_dental.png"
   min_sdk_android: 23
   web:
     generate: true
-    image_path: "assets/images/logo/logo_101.png"
+    image_path: "assets/images/logo/familee_dental.png"
     background_color: "#hexcode"
     theme_color: "#hexcode"
   windows:
     generate: true
-    image_path: "assets/images/logo/logo_101.png"
+    image_path: "assets/images/logo/familee_dental.png"
     icon_size: 48
   macos:
     generate: true
-    image_path: "assets/images/logo/logo_101.png"
+    image_path: "assets/images/logo/familee_dental.png"

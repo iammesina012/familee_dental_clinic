@@ -103,28 +103,33 @@ class _SettingsPageState extends State<SettingsPage> {
 
                 const SizedBox(height: 24),
 
+                // Personal Account Section - Available for all users
+                _buildSectionHeader("Personal Account"),
+
+                _buildSettingItem(
+                  icon: Icons.person_3_outlined,
+                  title: "Edit Profile",
+                  subtitle: "Update your personal details",
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: null,
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const EditProfilePage(user: null),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 24),
+
                 // User Management Section - Only for Owner and Admin users
                 if (!isStaff) ...[
-                  _buildSectionHeader("Account Management"),
-
-                  _buildSettingItem(
-                    icon: Icons.person_3_outlined,
-                    title: "Edit Profile",
-                    subtitle: "Update user credentials",
-                    trailing: const Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: null,
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const EditProfilePage(user: null),
-                        ),
-                      );
-                    },
-                  ),
+                  _buildSectionHeader("User Management"),
 
                   _buildSettingItem(
                     icon: Icons.people_outline,

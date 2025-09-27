@@ -4,7 +4,7 @@ import 'package:familee_dental/features/activity_log/controller/login_activity_c
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class AuthService {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   static const String _rememberMeKey = 'remember_me';
   static const String _rememberedEmailKey = 'remembered_email';
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:familee_dental/features/settings/controller/user_list_controller.dart';
+import 'package:familee_dental/features/settings/controller/employee_list_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'edit_user_page.dart';
@@ -13,7 +13,7 @@ class EmployeeListPage extends StatefulWidget {
 }
 
 class _EmployeeListPageState extends State<EmployeeListPage> {
-  final UserListController _controller = UserListController();
+  final EmployeeListController _controller = EmployeeListController();
   List<Map<String, dynamic>> _users = [];
   bool _isLoading = true;
 

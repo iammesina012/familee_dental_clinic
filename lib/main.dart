@@ -33,9 +33,8 @@ Future<void> main() async {
   await dotenv.load(fileName: ".env");
 
   await Supabase.initialize(
-      url: "https://mjczybgsgjnrmddcomoc.supabase.co",
-      anonKey:
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qY3p5YmdzZ2pucm1kZGNvbW9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NzQzNzAsImV4cCI6MjA2ODI1MDM3MH0.zMfnCIRGY27IfJEf8XSDr1ZKaviwlw5rbeU6GPdiQsM");
+      url: dotenv.env['SUPABASE_URL']!,
+      anonKey: dotenv.env['SUPABASE_ANON_KEY']!);
 
   // Note: Deep link handling is now managed in AuthWrapper
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:familee_dental/features/settings/controller/change_password_controller.dart';
+import 'package:familee_dental/features/settings/controller/edit_profile_controller.dart';
 import 'package:familee_dental/features/settings/controller/edit_user_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,8 +13,11 @@ class EditProfilePage extends StatefulWidget {
 
 class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
-  final _passwordController = ChangePasswordController();
+  final _passwordController = EditProfileController();
   final _editUserController = EditUserController();
+
+  // ✅ Stable key for the Change Password dialog's form
+  final GlobalKey<FormState> _passwordFormKey = GlobalKey<FormState>();
 
   // Profile fields
   final TextEditingController _nameController = TextEditingController();
@@ -560,7 +563,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
                     // Password Fields
                     Form(
-                      key: GlobalKey<FormState>(),
+                      key: _passwordFormKey, // ✅ stable key
                       child: Column(
                         children: [
                           _buildPasswordField(
@@ -578,10 +581,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               }
                               return null;
                             },
+                            // ✅ clear external error and re-validate without rebuilding dialog
                             onChanged: (value) {
                               if (_currentPasswordError != null) {
-                                setDialogState(
-                                    () => _currentPasswordError = null);
+                                _currentPasswordError = null;
+                                _passwordFormKey.currentState?.validate();
                               }
                             },
                             theme: theme,
@@ -594,11 +598,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             onToggle: () =>
                                 setDialogState(() => _showNew = !_showNew),
                             validator: (value) {
-                              final text = value ?? '';
+                              final text = (value ?? '').trim();
                               if (text.isEmpty) return 'Enter a new password';
+
+                              // Inline validation if new == current
+                              if (text == _currentPassword.text.trim()) {
+                                return 'New password should be different from the old password.';
+                              }
+
                               return _passwordController.isPasswordValid(text)
                                   ? null
-                                  : 'Use 8+ chars with letters and numbers';
+                                  : 'Use 8+ chars with letters, numbers, and uppercase';
                             },
                             theme: theme,
                           ),
@@ -654,7 +664,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () async {
-                              Navigator.of(context).pop();
+                              // ✅ validate inside the dialog first
+                              final isValid =
+                                  _passwordFormKey.currentState?.validate() ??
+                                      false;
+                              if (!isValid) return;
+
                               await _handlePasswordChange();
                             },
                             style: ElevatedButton.styleFrom(
@@ -691,14 +706,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<void> _handlePasswordChange() async {
     // Clear previous errors
-    setState(() {
-      _currentPasswordError = null;
-    });
+    _currentPasswordError = null;
+    _passwordFormKey.currentState?.validate();
 
     if (_currentPassword.text.isEmpty) {
-      setState(() {
-        _currentPasswordError = 'Please enter your current password';
-      });
+      _currentPasswordError = 'Please enter your current password';
+      _passwordFormKey.currentState
+          ?.validate(); // show inline error immediately
       return;
     }
 
@@ -739,9 +753,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final currentUser = supabase.auth.currentUser;
 
       if (currentUser?.email == null) {
-        setState(() {
-          _currentPasswordError = 'No email found for current user';
-        });
+        _currentPasswordError = 'No email found for current user';
+        _passwordFormKey.currentState?.validate();
         return;
       }
 
@@ -751,9 +764,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         password: _currentPassword.text.trim(),
       );
     } catch (e) {
-      setState(() {
-        _currentPasswordError = 'Current password is incorrect';
-      });
+      // Wrong current password -> show inline error, keep dialog open
+      _currentPasswordError = 'Current password is incorrect';
+      _passwordFormKey.currentState?.validate();
       return;
     }
 
@@ -783,6 +796,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
           _currentPassword.clear();
           _newPassword.clear();
           _confirmPassword.clear();
+
+          // ✅ Close dialog only on success
+          Navigator.of(context).pop();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
