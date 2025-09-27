@@ -2,10 +2,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'filter_controller.dart';
-import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
-import 'package:projects/features/notifications/controller/notifications_controller.dart';
+import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
+import 'package:familee_dental/features/notifications/controller/notifications_controller.dart';
 
 class EditSupplyController {
   final SupabaseClient _supabase = Supabase.instance.client;

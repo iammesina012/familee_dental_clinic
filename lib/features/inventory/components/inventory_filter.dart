@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:projects/features/inventory/controller/filter_controller.dart';
-import 'package:projects/features/inventory/pages/manage_brands_suppliers_page.dart';
+import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
+import 'package:familee_dental/features/inventory/pages/manage_brands_suppliers_page.dart';
 
 class InventoryFilterModal extends StatefulWidget {
   final void Function(Map<String, dynamic> filters)? onApply;

@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:projects/shared/drawer.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/components/inventory_item_card.dart';
-import 'package:projects/features/inventory/components/inventory_fab.dart';
-import 'package:projects/features/inventory/components/inventory_filter.dart';
-import 'package:projects/features/inventory/components/inventory_sort.dart'; // Your sort modal
-import 'package:projects/features/inventory/pages/add_supply_page.dart';
-import 'package:projects/features/inventory/pages/view_supply_page.dart';
-import 'package:projects/features/inventory/pages/add_category_page.dart';
-import 'package:projects/features/inventory/pages/edit_categories_page.dart';
-import 'package:projects/features/inventory/controller/inventory_controller.dart';
-import 'package:projects/features/inventory/pages/expired_supply_page.dart';
-import 'package:projects/features/inventory/controller/filter_controller.dart';
-import 'package:projects/features/inventory/controller/categories_controller.dart';
-import 'package:projects/features/inventory/controller/expired_supply_controller.dart';
-import 'package:projects/features/inventory/pages/archive_supply_page.dart';
-import 'package:projects/shared/themes/font.dart';
+import 'package:familee_dental/shared/drawer.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/components/inventory_item_card.dart';
+import 'package:familee_dental/features/inventory/components/inventory_fab.dart';
+import 'package:familee_dental/features/inventory/components/inventory_filter.dart';
+import 'package:familee_dental/features/inventory/components/inventory_sort.dart'; // Your sort modal
+import 'package:familee_dental/features/inventory/pages/add_supply_page.dart';
+import 'package:familee_dental/features/inventory/pages/view_supply_page.dart';
+import 'package:familee_dental/features/inventory/pages/add_category_page.dart';
+import 'package:familee_dental/features/inventory/pages/edit_categories_page.dart';
+import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
+import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart';
+import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
+import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
+import 'package:familee_dental/features/inventory/controller/expired_supply_controller.dart';
+import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 
 class Inventory extends StatefulWidget {
   const Inventory({super.key});

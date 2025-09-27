@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:projects/shared/drawer.dart';
-import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/stock_deduction/controller/stock_deduction_controller.dart';
-import 'package:projects/features/inventory/controller/inventory_controller.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/activity_log/controller/sd_activity_controller.dart';
+import 'package:familee_dental/shared/drawer.dart';
+import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/features/stock_deduction/controller/stock_deduction_controller.dart';
+import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 
 class StockDeductionPage extends StatefulWidget {
   const StockDeductionPage({super.key});

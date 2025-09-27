@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:projects/features/settings/controller/change_password_controller.dart';
-import 'package:projects/features/settings/controller/edit_user_controller.dart';
+import 'package:familee_dental/features/settings/controller/change_password_controller.dart';
+import 'package:familee_dental/features/settings/controller/edit_user_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditProfilePage extends StatefulWidget {

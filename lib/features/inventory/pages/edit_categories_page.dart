@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:projects/features/inventory/controller/categories_controller.dart';
+import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
 
 class EditCategoriesPage extends StatefulWidget {
   const EditCategoriesPage({super.key});

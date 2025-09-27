@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:projects/features/purchase_order/data/purchase_order.dart';
-import 'package:projects/features/purchase_order/controller/po_details_controller.dart';
-import 'package:projects/features/purchase_order/controller/po_supabase_controller.dart';
-import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/activity_log/controller/po_activity_controller.dart';
-import 'package:projects/features/notifications/controller/notifications_controller.dart';
-import 'package:projects/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
+import 'package:familee_dental/features/purchase_order/controller/po_details_controller.dart';
+import 'package:familee_dental/features/purchase_order/controller/po_supabase_controller.dart';
+import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/features/activity_log/controller/po_activity_controller.dart';
+import 'package:familee_dental/features/notifications/controller/notifications_controller.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class PODetailsPage extends StatefulWidget {
   final PurchaseOrder purchaseOrder;

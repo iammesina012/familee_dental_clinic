@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/controller/catalog_controller.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/controller/catalog_controller.dart';
 
 class SdAddSupplyController {
   final CatalogController _catalogController = CatalogController();

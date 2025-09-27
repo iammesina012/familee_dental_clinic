@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/stock_deduction/controller/sd_add_supply_controller.dart';
+import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/stock_deduction/controller/sd_add_supply_controller.dart';
 
 class StockDeductionAddSupplyPage extends StatefulWidget {
   const StockDeductionAddSupplyPage({super.key});

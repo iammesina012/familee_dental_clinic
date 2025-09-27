@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:projects/features/dashboard/pages/dashboard_page.dart';
-import 'package:projects/features/auth/services/auth_service.dart';
-import 'package:projects/features/activity_log/controller/login_activity_controller.dart';
+import 'package:familee_dental/features/dashboard/pages/dashboard_page.dart';
+import 'package:familee_dental/features/auth/services/auth_service.dart';
+import 'package:familee_dental/features/activity_log/controller/login_activity_controller.dart';
 
 class LoginController {
   final email = TextEditingController();

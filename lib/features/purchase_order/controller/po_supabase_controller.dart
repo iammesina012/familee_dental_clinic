@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:projects/features/purchase_order/data/purchase_order.dart';
+import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
 
 class POSupabaseController {
   static const String _storageKey = 'purchase_orders_v1';

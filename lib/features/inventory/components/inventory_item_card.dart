@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 
 class InventoryItemCard extends StatelessWidget {
   final InventoryItem item;

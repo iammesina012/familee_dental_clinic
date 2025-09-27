@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:projects/features/auth/services/auth_service.dart';
-import 'package:projects/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/auth/services/auth_service.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class MyDrawer extends StatelessWidget {
   const MyDrawer({super.key, this.beforeNavigate});

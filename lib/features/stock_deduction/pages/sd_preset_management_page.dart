@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/stock_deduction/controller/sd_preset_management_controller.dart';
-import 'package:projects/features/stock_deduction/pages/sd_edit_preset_page.dart';
-import 'package:projects/features/activity_log/controller/sd_activity_controller.dart';
+import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/features/stock_deduction/controller/sd_preset_management_controller.dart';
+import 'package:familee_dental/features/stock_deduction/pages/sd_edit_preset_page.dart';
+import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 
 class PresetManagementPage extends StatefulWidget {
   const PresetManagementPage({super.key});

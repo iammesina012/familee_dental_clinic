@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/components/inventory_other_expiry_dates.dart';
-import 'package:projects/features/inventory/pages/edit_supply_page.dart';
-import 'package:projects/features/inventory/controller/view_supply_controller.dart';
-import 'package:projects/features/inventory/pages/archive_supply_page.dart';
-import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
-import 'package:projects/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/components/inventory_other_expiry_dates.dart';
+import 'package:familee_dental/features/inventory/pages/edit_supply_page.dart';
+import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
+import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
+import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class InventoryViewSupplyPage extends StatefulWidget {
   final InventoryItem item;

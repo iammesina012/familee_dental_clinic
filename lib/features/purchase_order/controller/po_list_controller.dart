@@ -1,6 +1,6 @@
-import 'package:projects/features/purchase_order/data/purchase_order.dart';
-import 'package:projects/features/purchase_order/controller/po_supabase_controller.dart';
-import 'package:projects/features/purchase_order/controller/po_calculations.dart';
+import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
+import 'package:familee_dental/features/purchase_order/controller/po_supabase_controller.dart';
+import 'package:familee_dental/features/purchase_order/controller/po_calculations.dart';
 
 class POListController {
   final POSupabaseController _poController = POSupabaseController();

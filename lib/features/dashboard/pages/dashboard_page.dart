@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:projects/shared/drawer.dart';
-import 'package:projects/features/dashboard/services/inventory_analytics_service.dart';
-import 'package:projects/features/dashboard/services/fast_moving_service.dart';
+import 'package:familee_dental/shared/drawer.dart';
+import 'package:familee_dental/features/dashboard/services/inventory_analytics_service.dart';
+import 'package:familee_dental/features/dashboard/services/fast_moving_service.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});

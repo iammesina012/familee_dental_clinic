@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/components/inventory_item_card.dart';
-import 'package:projects/features/inventory/pages/expired_view_supply_page.dart';
-import 'package:projects/features/inventory/controller/expired_supply_controller.dart';
+import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/components/inventory_item_card.dart';
+import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
+import 'package:familee_dental/features/inventory/controller/expired_supply_controller.dart';
 
 class ExpiredSupplyPage extends StatefulWidget {
   const ExpiredSupplyPage({super.key});

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:projects/shared/drawer.dart';
-import 'package:projects/features/activity_log/controller/activity_log_controller.dart';
+import 'package:familee_dental/shared/drawer.dart';
+import 'package:familee_dental/features/activity_log/controller/activity_log_controller.dart';
 
 class ActivityLogPage extends StatefulWidget {
   const ActivityLogPage({super.key});

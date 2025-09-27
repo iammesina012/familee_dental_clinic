@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:projects/features/inventory/controller/edit_supply_controller.dart';
-import 'package:projects/features/inventory/controller/categories_controller.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/controller/edit_supply_controller.dart';
+import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 
 class EditSupplyPage extends StatefulWidget {
   final InventoryItem item;

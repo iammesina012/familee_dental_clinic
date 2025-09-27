@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:projects/features/settings/controller/add_user_controller.dart';
-import 'package:projects/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/settings/controller/add_user_controller.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class AddUserPage extends StatefulWidget {
   const AddUserPage({super.key});

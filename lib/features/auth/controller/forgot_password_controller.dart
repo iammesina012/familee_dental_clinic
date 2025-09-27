@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:projects/features/auth/services/auth_service.dart';
-import 'package:projects/features/auth/pages/password_reset_confirmation_page.dart';
+import 'package:familee_dental/features/auth/services/auth_service.dart';
+import 'package:familee_dental/features/auth/pages/password_reset_confirmation_page.dart';
 
 class ForgotPasswordController {
   final email = TextEditingController();

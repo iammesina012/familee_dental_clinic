@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-import 'package:projects/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class InventoryFAB extends StatelessWidget {
   final Function()? onAddSupply;

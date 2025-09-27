@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/inventory/controller/inventory_controller.dart';
-import 'package:projects/features/inventory/controller/catalog_controller.dart';
-import 'package:projects/features/purchase_order/pages/po_edit_supply_page.dart';
+import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
+import 'package:familee_dental/features/inventory/controller/catalog_controller.dart';
+import 'package:familee_dental/features/purchase_order/pages/po_edit_supply_page.dart';
 
 class AddSupplyPage extends StatefulWidget {
   const AddSupplyPage({super.key});

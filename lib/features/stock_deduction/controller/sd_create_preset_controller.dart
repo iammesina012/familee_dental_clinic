@@ -1,4 +1,4 @@
-import 'package:projects/features/stock_deduction/controller/sd_preset_management_controller.dart';
+import 'package:familee_dental/features/stock_deduction/controller/sd_preset_management_controller.dart';
 
 class SdCreatePresetController {
   final PresetController _presetController = PresetController();

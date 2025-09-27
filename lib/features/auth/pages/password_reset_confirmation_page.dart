@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:projects/shared/themes/font.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 
 class PasswordResetConfirmationPage extends StatelessWidget {
   final String email;

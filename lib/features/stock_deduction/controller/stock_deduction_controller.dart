@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:projects/features/activity_log/controller/sd_activity_controller.dart';
-import 'package:projects/features/notifications/controller/notifications_controller.dart';
+import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
+import 'package:familee_dental/features/notifications/controller/notifications_controller.dart';
 
 class StockDeductionController {
   final SupabaseClient _supabase = Supabase.instance.client;

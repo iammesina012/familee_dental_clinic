@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:projects/features/auth/controller/password_reset_controller.dart';
-import 'package:projects/shared/themes/font.dart';
+import 'package:familee_dental/features/auth/controller/password_reset_controller.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 
 class PasswordResetPage extends StatefulWidget {
   const PasswordResetPage({super.key});

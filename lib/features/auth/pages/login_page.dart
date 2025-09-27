@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:projects/features/auth/controller/login_controller.dart';
-import 'package:projects/features/auth/pages/forgot_password_page.dart';
-import 'package:projects/shared/themes/font.dart';
+import 'package:familee_dental/features/auth/controller/login_controller.dart';
+import 'package:familee_dental/features/auth/pages/forgot_password_page.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});

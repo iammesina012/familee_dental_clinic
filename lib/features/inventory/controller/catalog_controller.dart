@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 
 /// CatalogController provides a product catalog stream that includes
 /// all non-archived products regardless of expiry/stock.

@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:projects/features/inventory/data/inventory_item.dart';
-import 'package:projects/features/activity_log/controller/inventory_activity_controller.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
 
 class ExpiredSupplyController {
   final SupabaseClient _supabase = Supabase.instance.client;

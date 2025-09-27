@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:projects/features/auth/controller/forgot_password_controller.dart';
-import 'package:projects/shared/themes/font.dart';
+import 'package:familee_dental/features/auth/controller/forgot_password_controller.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});

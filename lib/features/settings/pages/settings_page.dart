@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:projects/shared/themes/font.dart';
-import 'package:projects/features/settings/pages/employee_list_page.dart';
-import 'package:projects/features/settings/pages/edit_profile_page.dart';
-import 'package:projects/features/settings/controller/settings_controller.dart';
-import 'package:projects/features/backup_restore/pages/backup_restore_page.dart';
-import 'package:projects/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/features/settings/pages/employee_list_page.dart';
+import 'package:familee_dental/features/settings/pages/edit_profile_page.dart';
+import 'package:familee_dental/features/settings/controller/settings_controller.dart';
+import 'package:familee_dental/features/backup_restore/pages/backup_restore_page.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});

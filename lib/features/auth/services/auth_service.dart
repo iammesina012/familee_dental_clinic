@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:projects/features/activity_log/controller/login_activity_controller.dart';
-import 'package:projects/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/activity_log/controller/login_activity_controller.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;

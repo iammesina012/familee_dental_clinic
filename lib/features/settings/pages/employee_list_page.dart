@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:projects/features/settings/controller/user_list_controller.dart';
+import 'package:familee_dental/features/settings/controller/user_list_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:projects/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'edit_user_page.dart';
 import 'add_user_page.dart';
 
