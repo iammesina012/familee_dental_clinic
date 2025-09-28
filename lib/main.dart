@@ -29,13 +29,30 @@ import 'package:app_links/app_links.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
+  // Load environment variables (for service role key)
+  try {
+    await dotenv.load(fileName: ".env");
+    final serviceRoleKey = dotenv.env['SUPABASE_SERVICE_ROLE_KEY'];
+    if (serviceRoleKey != null && serviceRoleKey.isNotEmpty) {
+      debugPrint("Service role key loaded successfully!");
+    } else {
+      debugPrint("Service role key not found in .env");
+    }
+  } catch (e) {
+    debugPrint("Could not load .env file: $e");
+    // Continue without .env - service role key will be handled elsewhere
+  }
 
-  await Supabase.initialize(
-      url: dotenv.env['SUPABASE_URL']!,
-      anonKey: dotenv.env['SUPABASE_ANON_KEY']!);
-
+  try {
+    await Supabase.initialize(
+      url: "https://mjczybgsgjnrmddcomoc.supabase.co",
+      anonKey:
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qY3p5YmdzZ2pucm1kZGNvbW9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NzQzNzAsImV4cCI6MjA2ODI1MDM3MH0.zMfnCIRGY27IfJEf8XSDr1ZKaviwlw5rbeU6GPdiQsM", // one line only
+    );
+    debugPrint("Supabase initialized successfully!");
+  } catch (e) {
+    debugPrint("Supabase init failed: $e");
+  }
   // Note: Deep link handling is now managed in AuthWrapper
 
   // Initialize theme mode from persisted preference before running app
