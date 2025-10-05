@@ -40,7 +40,7 @@ class UserRoleProvider extends ChangeNotifier {
       final response = await _supabase
           .from('user_roles')
           .select('role')
-          .eq('auth_id', currentUser.id)
+          .eq('id', currentUser.id)
           .limit(1)
           .single();
 

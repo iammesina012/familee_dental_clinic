@@ -29,7 +29,6 @@ class EditUserController {
       // Create or update in Supabase user_roles table
       final data = {
         'id': uid,
-        'auth_id': uid, // Add auth_id field
         'name': name,
         'username': username,
         'email': email,

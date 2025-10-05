@@ -43,7 +43,6 @@ class AddUserController {
       // Create user profile in Supabase
       await _supabase.from('user_roles').insert({
         'id': user.id,
-        'auth_id': user.id, // Add auth_id field
         'name': name,
         'username': username,
         'email': email,
@@ -158,7 +157,6 @@ class AddUserController {
             // User doesn't exist in user_roles, create profile
             await _supabase.from('user_roles').insert({
               'id': user.id,
-              'auth_id': user.id, // Add auth_id field
               'name': user.userMetadata?['display_name'] ??
                   user.email?.split('@')[0] ??
                   'Unknown User',
@@ -220,7 +218,6 @@ class AddUserController {
       // Add current user to user_roles table
       await _supabase.from('user_roles').insert({
         'id': currentUser.id,
-        'auth_id': currentUser.id, // Add auth_id field
         'name': currentUser.userMetadata?['display_name'] ??
             currentUser.email?.split('@')[0] ??
             'Current User',

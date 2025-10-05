@@ -64,35 +64,6 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Required fields note
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: theme.dividerColor.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline,
-                            color: theme.iconTheme.color?.withOpacity(0.8),
-                            size: 20),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Fields marked with * are required. Supplier and Brand names are optional.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 12,
-                              color: theme.textTheme.bodyMedium?.color
-                                  ?.withOpacity(0.8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 20),
                   // Image picker + upload
                   GestureDetector(
                     onTap: () async {
@@ -122,7 +93,19 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                           if (url == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                  content: Text('Failed to upload image!')),
+                                content: Text(
+                                    'Failed to upload image! Please try again.'),
+                                backgroundColor: Colors.red,
+                                duration: Duration(seconds: 5),
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Image uploaded successfully!'),
+                                backgroundColor: Colors.green,
+                                duration: Duration(seconds: 2),
+                              ),
                             );
                           }
                         }
@@ -375,9 +358,9 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                           child: TextField(
                             controller: controller.supplierController,
                             decoration: InputDecoration(
-                              labelText: 'Supplier Name (Optional)',
+                              labelText: 'Supplier Name *',
                               border: OutlineInputBorder(),
-                              hintText: 'Leave empty for "N/A"',
+                              errorStyle: TextStyle(color: Colors.red),
                             ),
                           ),
                         ),
@@ -388,9 +371,9 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                           child: TextField(
                             controller: controller.brandController,
                             decoration: InputDecoration(
-                              labelText: 'Brand Name (Optional)',
+                              labelText: 'Brand Name *',
                               border: OutlineInputBorder(),
-                              hintText: 'Leave empty for "N/A"',
+                              errorStyle: TextStyle(color: Colors.red),
                             ),
                           ),
                         ),

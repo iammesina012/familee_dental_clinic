@@ -48,29 +48,48 @@ class AddSupplyController {
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
       Uint8List bytes = await imageFile.readAsBytes();
-      final response =
-          await supabase.storage.from('inventory-images').uploadBinary(
-                'uploads/$fileName',
-                bytes,
-                fileOptions: FileOptions(contentType: contentType),
-              );
-      if (response.isEmpty) {
-        debugPrint("Upload failed: empty response");
-        return null;
-      }
+
+      debugPrint("Attempting to upload image to inventory-images bucket...");
+      debugPrint("File size: ${bytes.length} bytes");
+      debugPrint("Content type: $contentType");
+      debugPrint("File name: $fileName");
+      debugPrint("Full path: uploads/$fileName");
+
+      // Use uploadBinary for Uint8List data
+      await supabase.storage
+          .from('inventory-images')
+          .uploadBinary('uploads/$fileName', bytes);
+
+      debugPrint("Upload completed successfully");
+
       final publicUrl = supabase.storage
           .from('inventory-images')
           .getPublicUrl('uploads/$fileName');
+
+      debugPrint("Generated public URL: $publicUrl");
       return publicUrl;
     } catch (e) {
-      debugPrint("Upload error: $e");
+      debugPrint("Upload error details: $e");
+      debugPrint("Error type: ${e.runtimeType}");
+      debugPrint("Error toString: ${e.toString()}");
+
+      // Try to get more specific error information
+      if (e.toString().contains('bucket')) {
+        debugPrint("Bucket-related error detected");
+      } else if (e.toString().contains('permission')) {
+        debugPrint("Permission-related error detected");
+      } else if (e.toString().contains('auth')) {
+        debugPrint("Authentication-related error detected");
+      }
+
       return null;
     }
   }
 
   // Helper function to validate alphanumeric input
   bool _isValidAlphanumeric(String text) {
-    if (text.trim().isEmpty) return true; // Allow empty for optional fields
+    if (text.trim().isEmpty)
+      return false; // Empty is not valid for required fields
     // Check if the text contains only numbers
     if (RegExp(r'^[0-9]+$').hasMatch(text.trim())) {
       return false;
@@ -110,15 +129,19 @@ class AddSupplyController {
       return 'Stock must be a valid number.';
     }
 
-    // Validate supplier name if provided
-    if (supplierController.text.trim().isNotEmpty &&
-        !_isValidAlphanumeric(supplierController.text.trim())) {
+    // Validate supplier name (now required)
+    if (supplierController.text.trim().isEmpty) {
+      return 'Please enter the supplier name.';
+    }
+    if (!_isValidAlphanumeric(supplierController.text.trim())) {
       return 'Supplier name must contain letters and cannot be only numbers.';
     }
 
-    // Validate brand name if provided
-    if (brandController.text.trim().isNotEmpty &&
-        !_isValidAlphanumeric(brandController.text.trim())) {
+    // Validate brand name (now required)
+    if (brandController.text.trim().isEmpty) {
+      return 'Please enter the brand name.';
+    }
+    if (!_isValidAlphanumeric(brandController.text.trim())) {
       return 'Brand name must contain letters and cannot be only numbers.';
     }
 

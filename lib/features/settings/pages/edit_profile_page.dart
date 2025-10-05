@@ -60,7 +60,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         final response = await supabase
             .from('user_roles')
             .select('*')
-            .eq('auth_id', currentUser.id)
+            .eq('id', currentUser.id)
             .limit(1)
             .maybeSingle();
 

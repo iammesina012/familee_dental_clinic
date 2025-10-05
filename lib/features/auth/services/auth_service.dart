@@ -30,7 +30,7 @@ class AuthService {
     final statusSnap = await _supabase
         .from('user_roles')
         .select('*')
-        .eq('auth_id', currentUser.id)
+        .eq('id', currentUser.id)
         .limit(1);
 
     if (statusSnap.isNotEmpty) {
@@ -101,7 +101,7 @@ class AuthService {
     final statusSnap = await _supabase
         .from('user_roles')
         .select('*')
-        .eq('auth_id', currentUser.id)
+        .eq('id', currentUser.id)
         .limit(1);
 
     if (statusSnap.isNotEmpty) {

@@ -149,7 +149,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
       if (event == AuthChangeEvent.passwordRecovery && session != null) {
         // User clicked password reset link, navigate to password reset page
-        print('Password recovery event detected: ${session.user?.email}');
+        print('Password recovery event detected: ${session.user.email}');
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             Navigator.of(context).pushNamed('/password-reset');
