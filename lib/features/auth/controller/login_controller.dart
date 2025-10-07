@@ -17,15 +17,23 @@ class LoginController {
   bool isUsernameLogin = false; // Toggle between email and username login
 
   Future<void> loadRememberedCredentials() async {
-    final rememberedEmail = await auth.getRememberedEmail();
-    if (rememberedEmail != null) {
-      email.text = rememberedEmail;
+    final rememberedCredential = await auth.getRememberedCredential();
+    if (rememberedCredential != null) {
+      email.text = rememberedCredential;
     }
   }
 
-  void toggleLoginMode() {
+  void toggleLoginMode() async {
     isUsernameLogin = !isUsernameLogin;
-    // Clear the email field when switching modes
+
+    // Don't clear the email field if it contains remembered credentials
+    final rememberedCredential = await auth.getRememberedCredential();
+    if (rememberedCredential != null && email.text == rememberedCredential) {
+      // Keep the remembered credential when switching modes
+      return;
+    }
+
+    // Only clear if it's not a remembered email
     email.clear();
   }
 
@@ -122,6 +130,27 @@ class LoginController {
         message = "Login failed. Check your connection.";
       }
 
+      onStateUpdate();
+      _showErrorDialog(context, title, message);
+    } catch (e) {
+      // Catch any other exceptions (like network errors)
+      String title = "Connection Error";
+      String message =
+          "Unable to connect to the server. Please check your internet connection and try again.";
+
+      // Check if it's a network-related error
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('No address associated with hostname')) {
+        message =
+            "No internet connection. Please check your WiFi or mobile data and try again.";
+      } else if (e.toString().contains('timeout')) {
+        message =
+            "Connection timeout. Please check your internet connection and try again.";
+      }
+
+      hasEmailError = true;
+      hasPasswordError = true;
       onStateUpdate();
       _showErrorDialog(context, title, message);
     }
@@ -228,7 +257,7 @@ class _AnimatedNotificationState extends State<_AnimatedNotification>
               opacity: _fadeAnimation,
               child: Container(
                 constraints: const BoxConstraints(
-                    maxWidth: 350, minHeight: 60, maxHeight: 80),
+                    maxWidth: 350, minHeight: 60, maxHeight: 120),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFFFF6B6B), Color(0xFFEE5A52)],
@@ -292,7 +321,7 @@ class _AnimatedNotificationState extends State<_AnimatedNotification>
                               const SizedBox(height: 1),
                               Text(
                                 widget.message,
-                                maxLines: 1,
+                                maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontFamily: 'Inter',
@@ -300,7 +329,7 @@ class _AnimatedNotificationState extends State<_AnimatedNotification>
                                   fontSize: 11,
                                   color: Colors.white,
                                   letterSpacing: -0.2,
-                                  height: 1.1,
+                                  height: 1.2,
                                 ),
                               ),
                             ],

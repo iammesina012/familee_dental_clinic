@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 import 'package:familee_dental/features/inventory/pages/manage_brands_suppliers_page.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class InventoryFilterModal extends StatefulWidget {
   final void Function(Map<String, dynamic> filters)? onApply;
@@ -682,18 +683,30 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                       style: theme.textTheme.titleLarge
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.edit, size: 24, color: Colors.green),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ManageBrandsSuppliersPage(),
-                          ),
-                        );
+                    // Only show edit icon for Admin and Owner roles
+                    ListenableBuilder(
+                      listenable: UserRoleProvider(),
+                      builder: (context, child) {
+                        final userRoleProvider = UserRoleProvider();
+                        if (!userRoleProvider.isStaff) {
+                          return IconButton(
+                            icon:
+                                Icon(Icons.edit, size: 24, color: Colors.green),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ManageBrandsSuppliersPage(),
+                                ),
+                              );
+                            },
+                            tooltip: 'Manage Brands & Suppliers',
+                          );
+                        }
+                        return SizedBox.shrink(); // Hide for staff
                       },
-                      tooltip: 'Manage Brands & Suppliers',
                     ),
                   ],
                 ),

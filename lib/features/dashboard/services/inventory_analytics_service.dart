@@ -27,19 +27,78 @@ class InventoryAnalyticsService {
         );
       }).toList();
 
-      // Filter out archived supplies
-      final supplies = allSupplies.where((supply) => !supply.archived).toList();
+      // Filter out archived supplies AND expired supplies (same logic as main inventory page)
+      final supplies = allSupplies.where((supply) {
+        if (supply.archived) return false;
 
-      // Calculate statistics
-      int totalSupplies = supplies.length;
+        // Also filter out expired supplies (same as inventory page)
+        if (!supply.noExpiry &&
+            supply.expiry != null &&
+            supply.expiry!.isNotEmpty) {
+          final expiryDate =
+              DateTime.tryParse(supply.expiry!.replaceAll('/', '-'));
+          if (expiryDate != null) {
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            final dateOnly =
+                DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+
+            if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
+              return false; // Filter out expired items
+            }
+          }
+        }
+
+        return true;
+      }).toList();
+
+      // Group supplies by product (name + category) to match main inventory logic
+      final Map<String, List<InventoryItem>> grouped = {};
+
+      for (final item in supplies) {
+        final nameKey = item.name.trim().toLowerCase();
+        final categoryKey = item.category.trim().toLowerCase();
+        final key = '${nameKey}_${categoryKey}';
+        if (!grouped.containsKey(key)) {
+          grouped[key] = [];
+        }
+        grouped[key]!.add(item);
+      }
+
+      // Calculate statistics based on total stock per product
+      int totalProducts = grouped.length;
       int inStock = 0;
       int lowStock = 0;
       int outOfStock = 0;
 
-      for (var supply in supplies) {
-        if (supply.stock == 0) {
+      for (final productGroup in grouped.values) {
+        // Calculate total stock for this product (excluding expired batches)
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+
+        int totalStock = 0;
+        for (final item in productGroup) {
+          // Only count non-expired stock
+          if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
+            totalStock += item.stock;
+          } else {
+            final expiryDate =
+                DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+            if (expiryDate != null) {
+              final dateOnly =
+                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+              if (!(dateOnly.isBefore(today) ||
+                  dateOnly.isAtSameMomentAs(today))) {
+                totalStock += item.stock; // Only count non-expired stock
+              }
+            }
+          }
+        }
+
+        // Determine status based on total stock
+        if (totalStock == 0) {
           outOfStock++;
-        } else if (supply.stock <= 2) {
+        } else if (totalStock <= 2) {
           lowStock++;
         } else {
           inStock++;
@@ -48,14 +107,14 @@ class InventoryAnalyticsService {
 
       // Calculate percentages
       double inStockPercentage =
-          totalSupplies > 0 ? (inStock / totalSupplies) * 100 : 0;
+          totalProducts > 0 ? (inStock / totalProducts) * 100 : 0;
       double lowStockPercentage =
-          totalSupplies > 0 ? (lowStock / totalSupplies) * 100 : 0;
+          totalProducts > 0 ? (lowStock / totalProducts) * 100 : 0;
       double outOfStockPercentage =
-          totalSupplies > 0 ? (outOfStock / totalSupplies) * 100 : 0;
+          totalProducts > 0 ? (outOfStock / totalProducts) * 100 : 0;
 
       return {
-        'totalSupplies': totalSupplies,
+        'totalSupplies': totalProducts,
         'inStock': inStock,
         'lowStock': lowStock,
         'outOfStock': outOfStock,
@@ -97,19 +156,78 @@ class InventoryAnalyticsService {
         );
       }).toList();
 
-      // Filter out archived supplies
-      final supplies = allSupplies.where((supply) => !supply.archived).toList();
+      // Filter out archived supplies AND expired supplies (same logic as main inventory page)
+      final supplies = allSupplies.where((supply) {
+        if (supply.archived) return false;
 
-      // Calculate statistics
-      int totalSupplies = supplies.length;
+        // Also filter out expired supplies (same as inventory page)
+        if (!supply.noExpiry &&
+            supply.expiry != null &&
+            supply.expiry!.isNotEmpty) {
+          final expiryDate =
+              DateTime.tryParse(supply.expiry!.replaceAll('/', '-'));
+          if (expiryDate != null) {
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            final dateOnly =
+                DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+
+            if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
+              return false; // Filter out expired items
+            }
+          }
+        }
+
+        return true;
+      }).toList();
+
+      // Group supplies by product (name + category) to match main inventory logic
+      final Map<String, List<InventoryItem>> grouped = {};
+
+      for (final item in supplies) {
+        final nameKey = item.name.trim().toLowerCase();
+        final categoryKey = item.category.trim().toLowerCase();
+        final key = '${nameKey}_${categoryKey}';
+        if (!grouped.containsKey(key)) {
+          grouped[key] = [];
+        }
+        grouped[key]!.add(item);
+      }
+
+      // Calculate statistics based on total stock per product
+      int totalProducts = grouped.length;
       int inStock = 0;
       int lowStock = 0;
       int outOfStock = 0;
 
-      for (var supply in supplies) {
-        if (supply.stock == 0) {
+      for (final productGroup in grouped.values) {
+        // Calculate total stock for this product (excluding expired batches)
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+
+        int totalStock = 0;
+        for (final item in productGroup) {
+          // Only count non-expired stock
+          if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
+            totalStock += item.stock;
+          } else {
+            final expiryDate =
+                DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+            if (expiryDate != null) {
+              final dateOnly =
+                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+              if (!(dateOnly.isBefore(today) ||
+                  dateOnly.isAtSameMomentAs(today))) {
+                totalStock += item.stock; // Only count non-expired stock
+              }
+            }
+          }
+        }
+
+        // Determine status based on total stock
+        if (totalStock == 0) {
           outOfStock++;
-        } else if (supply.stock <= 2) {
+        } else if (totalStock <= 2) {
           lowStock++;
         } else {
           inStock++;
@@ -118,14 +236,14 @@ class InventoryAnalyticsService {
 
       // Calculate percentages
       double inStockPercentage =
-          totalSupplies > 0 ? (inStock / totalSupplies) * 100 : 0;
+          totalProducts > 0 ? (inStock / totalProducts) * 100 : 0;
       double lowStockPercentage =
-          totalSupplies > 0 ? (lowStock / totalSupplies) * 100 : 0;
+          totalProducts > 0 ? (lowStock / totalProducts) * 100 : 0;
       double outOfStockPercentage =
-          totalSupplies > 0 ? (outOfStock / totalSupplies) * 100 : 0;
+          totalProducts > 0 ? (outOfStock / totalProducts) * 100 : 0;
 
       return {
-        'totalSupplies': totalSupplies,
+        'totalSupplies': totalProducts,
         'inStock': inStock,
         'lowStock': lowStock,
         'outOfStock': outOfStock,

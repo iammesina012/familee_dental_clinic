@@ -6,7 +6,7 @@ import 'package:familee_dental/shared/providers/user_role_provider.dart';
 class AuthService {
   SupabaseClient get _supabase => Supabase.instance.client;
   static const String _rememberMeKey = 'remember_me';
-  static const String _rememberedEmailKey = 'remembered_email';
+  static const String _rememberedCredentialKey = 'remembered_credential';
 
   Future<void> login({
     required String email,
@@ -52,9 +52,9 @@ class AuthService {
 
     if (rememberMe) {
       await prefs.setString(
-          _rememberedEmailKey, email); // Store original email for display
+          _rememberedCredentialKey, email); // Store original email for display
     } else {
-      await prefs.remove(_rememberedEmailKey);
+      await prefs.remove(_rememberedCredentialKey);
     }
 
     // Load user role after successful login
@@ -121,9 +121,10 @@ class AuthService {
     await prefs.setBool(_rememberMeKey, rememberMe);
 
     if (rememberMe) {
-      await prefs.setString(_rememberedEmailKey, email);
+      await prefs.setString(
+          _rememberedCredentialKey, username); // Store original username
     } else {
-      await prefs.remove(_rememberedEmailKey);
+      await prefs.remove(_rememberedCredentialKey);
     }
 
     // Load user role after successful login
@@ -135,9 +136,9 @@ class AuthService {
     return prefs.getBool(_rememberMeKey) ?? false;
   }
 
-  Future<String?> getRememberedEmail() async {
+  Future<String?> getRememberedCredential() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_rememberedEmailKey);
+    return prefs.getString(_rememberedCredentialKey);
   }
 
   Future<bool> isUserLoggedIn() async {
@@ -153,8 +154,19 @@ class AuthService {
     // Log logout activity before signing out
     await LoginActivityController().logLogout();
     final prefs = await SharedPreferences.getInstance();
+
+    // Check if Remember Me was enabled
+    final rememberMe = prefs.getBool(_rememberMeKey) ?? false;
+
+    if (!rememberMe) {
+      // Only remove remembered credential if Remember Me was not enabled
+      await prefs.remove(_rememberedCredentialKey);
+    }
+    // If Remember Me was enabled, keep the email for next login
+
+    // Always disable Remember Me on logout (user needs to check it again)
     await prefs.setBool(_rememberMeKey, false);
-    await prefs.remove(_rememberedEmailKey);
+
     await _supabase.auth.signOut();
 
     // Clear user role on logout

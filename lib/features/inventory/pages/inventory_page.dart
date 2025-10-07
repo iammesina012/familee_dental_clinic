@@ -28,6 +28,7 @@ class _InventoryState extends State<Inventory> {
   int selectedCategory = 0;
   String? _highlightSupplyName; // for deep-link from notifications
   bool _deepLinkHandled = false;
+  bool _expiringFilterApplied = false;
   // summary filter removed
 
   final TextEditingController searchController = TextEditingController();
@@ -87,6 +88,8 @@ class _InventoryState extends State<Inventory> {
         onApply: (filters) {
           setState(() {
             currentFilters = filters;
+            // Reset the expiring filter flag when filters are manually applied
+            _expiringFilterApplied = false;
           });
         },
         currentFilters: currentFilters,
@@ -157,6 +160,11 @@ class _InventoryState extends State<Inventory> {
     controller.cleanupZeroStockDuplicates();
     // Convert expired supplies to placeholders
     _convertExpiredToPlaceholders();
+
+    // Handle route arguments after initialization
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleRouteArguments();
+    });
   }
 
   @override
@@ -169,10 +177,28 @@ class _InventoryState extends State<Inventory> {
           args['highlightSupplyName'] is String) {
         _highlightSupplyName = (args['highlightSupplyName'] as String).trim();
       }
-      // removed: applyStatusFilter deep-link
     }
     // Convert expired supplies to placeholders when page becomes visible
     _convertExpiredToPlaceholders();
+  }
+
+  void _handleRouteArguments() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      // Handle expiring filter from dashboard
+      if (args['filter'] == 'expiring') {
+        _applyExpiringFilter();
+        _expiringFilterApplied = true;
+      }
+    } else {
+      // No arguments - reset the expiring filter flag and clear filters
+      _expiringFilterApplied = false;
+      if (currentFilters['expiry'] != null) {
+        setState(() {
+          currentFilters.remove('expiry');
+        });
+      }
+    }
   }
 
   Future<void> _initializeData() async {
@@ -186,6 +212,13 @@ class _InventoryState extends State<Inventory> {
     } catch (e) {
       // Handle error silently for now
     }
+  }
+
+  void _applyExpiringFilter() {
+    // Set the expiry filter to show only expiring items
+    setState(() {
+      currentFilters['expiry'] = ['Expiring'];
+    });
   }
 
   @override

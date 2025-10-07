@@ -202,17 +202,20 @@ class MyDrawer extends StatelessWidget {
   }
 
   Widget _buildLogoutDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
       elevation: 8,
-      backgroundColor: Colors.white,
+      backgroundColor: theme.dialogBackgroundColor,
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: Colors.white,
+          color: theme.dialogBackgroundColor,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
@@ -246,7 +249,7 @@ class MyDrawer extends StatelessWidget {
                 fontFamily: 'SF Pro',
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: theme.textTheme.titleLarge?.color,
               ),
               textAlign: TextAlign.center,
             ),
@@ -259,7 +262,7 @@ class MyDrawer extends StatelessWidget {
                 fontFamily: 'SF Pro',
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                color: Colors.black54,
+                color: theme.textTheme.bodyMedium?.color,
                 height: 1.4,
               ),
               textAlign: TextAlign.center,
@@ -276,7 +279,11 @@ class MyDrawer extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.grey.shade300),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                     child: Text(
@@ -284,7 +291,7 @@ class MyDrawer extends StatelessWidget {
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontWeight: FontWeight.w500,
-                        color: Colors.black54,
+                        color: theme.textTheme.bodyMedium?.color,
                         fontSize: 16,
                       ),
                     ),

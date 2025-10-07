@@ -23,7 +23,10 @@ class _LoginState extends State<Login> {
   @override
   void initState() {
     super.initState();
-    _loadRememberedCredentials();
+    // Load remembered credentials after the widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRememberedCredentials();
+    });
   }
 
   void _loadRememberedCredentials() async {
@@ -171,7 +174,7 @@ class _LoginState extends State<Login> {
                             color: const Color(0xFF2D2D2D).withOpacity(0.6),
                           ),
                           prefixIcon: Icon(
-                            Icons.email_outlined,
+                            Icons.person_outline,
                             color: const Color(0xFF2D2D2D).withOpacity(0.6),
                           ),
                           border: InputBorder.none,

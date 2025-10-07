@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/features/dashboard/services/inventory_analytics_service.dart';
 import 'package:familee_dental/features/dashboard/services/fast_moving_service.dart';
+import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -118,23 +119,28 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                             color: theme.textTheme.bodyMedium?.color,
                           ),
                         ),
-                        Row(
-                          children: [
-                            Text(
-                              "View",
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: theme.textTheme.bodyMedium?.color,
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pushNamed(context, '/inventory');
+                          },
+                          child: Row(
+                            children: [
+                              Text(
+                                "View",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: theme.textTheme.bodyMedium?.color,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              size: 12,
-                              color: theme.iconTheme.color,
-                            ),
-                          ],
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 12,
+                                color: theme.iconTheme.color,
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -654,52 +660,70 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         borderRadius: BorderRadius.circular(10),
       ),
       margin: EdgeInsets.zero,
-      child: Container(
-        constraints: BoxConstraints(minHeight: height),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    '$count',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: accentColor,
+      child: InkWell(
+        onTap: () {
+          if (label == 'Expired') {
+            // Navigate to expired page
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ExpiredSupplyPage(),
+              ),
+            );
+          } else if (label == 'Expiring') {
+            // Navigate to inventory with expiring filter
+            Navigator.pushNamed(context, '/inventory',
+                arguments: {'filter': 'expiring'});
+          }
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          constraints: BoxConstraints(minHeight: height),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: accentColor,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: theme.textTheme.bodyMedium?.color,
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Container(
-              width: 55,
-              height: 55,
-              decoration: BoxDecoration(
-                color: accentColor.withOpacity(0.12),
-                shape: BoxShape.circle,
+              Container(
+                width: 55,
+                height: 55,
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: accentColor,
+                  size: 35,
+                ),
               ),
-              child: Icon(
-                icon,
-                color: accentColor,
-                size: 35,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
