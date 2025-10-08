@@ -218,60 +218,25 @@ class PODetailsController {
               .eq('name', supplyName);
           final freshDocs = freshResponse;
 
-          bool foundMatchingExpiry = false;
-          Map<String, dynamic>? zeroStockDoc;
-          Map<String, dynamic>? sameExpiryDoc;
+          // Check for exact batch match (name + brand + supplier + cost + unit + expiry)
+          bool foundExactBatch = false;
           for (final doc in freshDocs) {
             final data = doc;
-            final int s = (data['stock'] ?? 0) as int;
-            final bool isArchived = (data['archived'] ?? false) as bool;
-            if (!isArchived && s == 0) {
-              zeroStockDoc = doc;
-            }
-            final dynamic otherExpiryRaw = data['expiry'];
-            final String? otherExpiry =
-                (otherExpiryRaw == null || otherExpiryRaw.toString().isEmpty)
-                    ? null
-                    : otherExpiryRaw.toString();
-            final String? otherNorm = normalize(otherExpiry);
-            final bool expiryMatches = (expNorm == null &&
-                    (data['no_expiry'] ?? false) == true) ||
-                (expNorm != null && otherNorm != null && otherNorm == expNorm);
-            if (expiryMatches) {
-              sameExpiryDoc = doc;
-            }
-          }
+            final existingBrand = (data['brand'] ?? '').toString().trim();
+            final existingSupplier = (data['supplier'] ?? '').toString().trim();
+            final existingCost = (data['cost'] ?? 0).toDouble();
+            final existingUnit = (data['unit'] ?? '').toString().trim();
+            final existingExpiry = data['expiry'];
+            final existingNoExpiry = (data['no_expiry'] ?? false) as bool;
 
-          if (zeroStockDoc != null) {
-            int mergedStock = qty;
-            if (sameExpiryDoc != null &&
-                sameExpiryDoc['id'] != zeroStockDoc['id']) {
-              final int matchStock = (sameExpiryDoc['stock'] ?? 0) as int;
-              mergedStock += matchStock;
-            }
-
-            await _supabase.from('supplies').update({
-              'stock': mergedStock,
-              'expiry': expNorm,
-              'no_expiry': expNorm == null,
-              'archived': false,
-            }).eq('id', zeroStockDoc['id']);
-
-            if (sameExpiryDoc != null &&
-                sameExpiryDoc['id'] != zeroStockDoc['id']) {
-              await _supabase
-                  .from('supplies')
-                  .delete()
-                  .eq('id', sameExpiryDoc['id']);
-            }
-
-            foundMatchingExpiry = true;
-          }
-
-          for (final doc in freshDocs) {
-            final existingData = doc;
-            final existingExpiry = existingData['expiry'];
-            final existingNoExpiry = existingData['no_expiry'] ?? false;
+            // Check if this is an exact batch match
+            bool brandMatches =
+                existingBrand.toLowerCase() == brandName.toLowerCase();
+            bool supplierMatches =
+                existingSupplier.toLowerCase() == supplierName.toLowerCase();
+            bool costMatches = existingCost == (supply['cost'] ?? 0.0);
+            bool unitMatches = existingUnit.toLowerCase() ==
+                (supply['unit'] ?? '').toString().toLowerCase();
 
             bool expiryMatches = false;
             if (expNorm == null && existingNoExpiry) {
@@ -281,30 +246,35 @@ class PODetailsController {
               expiryMatches = true;
             }
 
-            if (!foundMatchingExpiry && expiryMatches) {
-              final currentStock = existingData['stock'] ?? 0;
+            // If all criteria match, merge with this batch
+            if (brandMatches &&
+                supplierMatches &&
+                costMatches &&
+                unitMatches &&
+                expiryMatches) {
+              final currentStock = (data['stock'] ?? 0) as int;
               final newStock = currentStock + qty;
 
               await _supabase.from('supplies').update({
                 'stock': newStock,
               }).eq('id', doc['id']);
 
-              foundMatchingExpiry = true;
+              foundExactBatch = true;
               break;
             }
           }
 
-          if (!foundMatchingExpiry) {
+          // If no exact batch found, create a new batch
+          if (!foundExactBatch) {
             // Derive canonical metadata from existing docs
             String category = "Dental Materials";
-            String unit = "pcs";
+            String unit = (supply['unit'] ?? 'pcs').toString();
             String imageUrl = "";
-            double itemCost = 0.0;
+            double itemCost = (supply['cost'] ?? 0.0).toDouble();
+
             if (freshDocs.isNotEmpty) {
               String canonicalCategory = '';
-              String canonicalUnit = '';
               String canonicalImageUrl = '';
-              double? canonicalCost;
               for (final d in freshDocs) {
                 final data = d;
                 final cat = (data['category'] ?? '').toString();
@@ -313,24 +283,14 @@ class PODetailsController {
                     cat != 'Restocked') {
                   canonicalCategory = cat;
                 }
-                final unitVal = (data['unit'] ?? '').toString();
-                if (canonicalUnit.isEmpty && unitVal.isNotEmpty) {
-                  canonicalUnit = unitVal;
-                }
                 final img = (data['image_url'] ?? '').toString();
                 if (canonicalImageUrl.isEmpty && img.isNotEmpty) {
                   canonicalImageUrl = img;
                 }
-                final costVal = (data['cost'] ?? 0).toDouble();
-                if (canonicalCost == null || costVal > 0) {
-                  canonicalCost = costVal;
-                }
               }
               category =
                   canonicalCategory.isNotEmpty ? canonicalCategory : category;
-              unit = canonicalUnit.isNotEmpty ? canonicalUnit : unit;
               imageUrl = canonicalImageUrl;
-              itemCost = canonicalCost ?? 0.0;
             }
 
             final newSupplyData = {
@@ -419,5 +379,142 @@ class PODetailsController {
   // Check if PO is closed
   bool isPOClosed(PurchaseOrder po) {
     return po.status == 'Closed';
+  }
+
+  // ===== RECIPIENT SUGGESTIONS METHODS =====
+  static const String _recipientSuggestionsCollection = 'recipient_suggestions';
+
+  // Get recipient suggestions based on input text
+  Future<List<String>> getRecipientSuggestions(String input) async {
+    if (input.trim().isEmpty) return [];
+
+    final suggestions = await _getAllRecipientSuggestions();
+    final query = input.toLowerCase().trim();
+
+    // Filter suggestions that contain the input text
+    final filtered = suggestions
+        .where((suggestion) => suggestion.toLowerCase().contains(query))
+        .toList();
+
+    // Return top 5 suggestions (already sorted by frequency from Supabase)
+    return filtered.take(5).toList();
+  }
+
+  // Add a new recipient name to suggestions (called when receipt is saved)
+  Future<void> addRecipientSuggestion(String recipientName) async {
+    if (recipientName.trim().isEmpty) return;
+
+    final normalizedName = recipientName.trim();
+
+    // Increment frequency (this will create or update the suggestion)
+    await _incrementRecipientFrequency(normalizedName);
+  }
+
+  // Get all recipient suggestions from Supabase
+  Future<List<String>> _getAllRecipientSuggestions() async {
+    try {
+      final response = await _supabase
+          .from(_recipientSuggestionsCollection)
+          .select('name')
+          .order('frequency', ascending: false)
+          .limit(20);
+
+      return response.map((row) => row['name'] as String).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Get frequency of a recipient suggestion from Supabase
+  Future<int> _getRecipientFrequency(String name) async {
+    try {
+      final response = await _supabase
+          .from(_recipientSuggestionsCollection)
+          .select('frequency')
+          .eq('name', name)
+          .maybeSingle();
+
+      return response?['frequency'] ?? 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  // Increment frequency for a recipient suggestion in Supabase
+  Future<void> _incrementRecipientFrequency(String name) async {
+    try {
+      // Use timestamp for unique ID to avoid conflicts
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final docId = timestamp.toString();
+
+      // Check if this exact name already exists
+      final existingSuggestion = await _findExistingSuggestion(name);
+
+      if (existingSuggestion != null) {
+        // Update existing suggestion
+        await _supabase.from(_recipientSuggestionsCollection).update({
+          'frequency': existingSuggestion['frequency'] + 1,
+          'last_used': DateTime.now().toIso8601String(),
+        }).eq('id', existingSuggestion['id']);
+      } else {
+        // Create new suggestion with frequency 1
+        await _supabase.from(_recipientSuggestionsCollection).insert({
+          'id': docId,
+          'name': name,
+          'frequency': 1,
+          'last_used': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      // Handle error silently
+    }
+  }
+
+  // Find existing suggestion by name (not ID)
+  Future<Map<String, dynamic>?> _findExistingSuggestion(String name) async {
+    try {
+      final response = await _supabase
+          .from(_recipientSuggestionsCollection)
+          .select('*')
+          .eq('name', name)
+          .maybeSingle();
+
+      return response;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ===== RECEIPT NUMBER VALIDATION =====
+
+  // Check if receipt number already exists in any PO
+  Future<bool> isReceiptNumberDuplicate(String receiptNumber) async {
+    if (receiptNumber.trim().isEmpty) return false;
+
+    try {
+      // Search through all purchase orders for this receipt number
+      final response = await _supabase
+          .from('purchase_orders')
+          .select('supplies')
+          .not('supplies', 'is', null);
+
+      for (final po in response) {
+        final supplies = po['supplies'] as List<dynamic>?;
+        if (supplies != null) {
+          for (final supply in supplies) {
+            final receiptDrNo = supply['receiptDrNo'] as String?;
+            if (receiptDrNo != null &&
+                receiptDrNo.trim().toLowerCase() ==
+                    receiptNumber.trim().toLowerCase()) {
+              return true; // Found duplicate
+            }
+          }
+        }
+      }
+
+      return false; // No duplicate found
+    } catch (e) {
+      return false; // On error, allow the receipt number
+    }
   }
 }

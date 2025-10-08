@@ -9,20 +9,20 @@ class InventorySortModal extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sortOptions = [
+      "Expiry Date (Soonest First)",
+      "Expiry Date (Latest First)",
       "Name (A → Z)",
       "Name (Z → A)",
       "Quantity (Low → High)",
       "Quantity (High → Low)",
-      "Expiry Date (Soonest First)",
-      "Expiry Date (Latest First)",
     ];
     final sortDescriptions = [
+      "Earliest expiry date first, then later, no expiry last",
+      "Farthest expiry date first, no expiry last",
       "Alphabetical by item name (ascending)",
       "Alphabetical by item name (descending)",
       "Smallest stock first",
       "Largest stock first",
-      "Earliest expiry date first, then later, no expiry last",
-      "Farthest expiry date first, no expiry last",
     ];
 
     return DraggableScrollableSheet(

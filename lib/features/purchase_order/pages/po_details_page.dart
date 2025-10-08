@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
 import 'package:familee_dental/features/purchase_order/controller/po_details_controller.dart';
 import 'package:familee_dental/features/purchase_order/controller/po_supabase_controller.dart';
+import 'package:familee_dental/features/purchase_order/services/receipt_storage_service.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/activity_log/controller/po_activity_controller.dart';
 import 'package:familee_dental/features/notifications/controller/notifications_controller.dart';
@@ -31,6 +32,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
   late PurchaseOrder _purchaseOrder;
   final PODetailsController _controller = PODetailsController();
   final POSupabaseController _poSupabase = POSupabaseController();
+  final ReceiptStorageService _receiptStorage = ReceiptStorageService();
   bool _isLoading = false;
   final Map<String, int> _supplierPageIndex = {};
   final Set<String> _expandedSuppliers = {};
@@ -1042,7 +1044,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                 Icons.branding_watermark),
             SizedBox(height: 8),
             _buildEnhancedDetailRow(
-                'Quantity', '${supply['quantity'] ?? 0}', Icons.inventory),
+                'Quantity & Inventory Unit',
+                '${supply['quantity'] ?? 0} ${supply['unit'] ?? 'Box'}',
+                Icons.inventory),
             SizedBox(height: 8),
             _buildEnhancedDetailRow(
                 'Subtotal',
@@ -1358,6 +1362,24 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
     setState(() => _isLoading = true);
     try {
+      // Upload receipt image to cloud storage first
+      String? receiptImageUrl;
+      if (receiptDetails.image != null) {
+        receiptImageUrl =
+            await _receiptStorage.uploadReceiptImage(receiptDetails.image!);
+        if (receiptImageUrl == null) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Failed to upload receipt image. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
+
       final updatedSupplies =
           List<Map<String, dynamic>>.from(_purchaseOrder.supplies);
       final String nowIso = DateTime.now().toIso8601String();
@@ -1368,10 +1390,14 @@ class _PODetailsPageState extends State<PODetailsPage> {
           'status': 'Received',
           'receiptDrNo': receiptDetails.drNumber,
           'receiptRecipient': receiptDetails.recipient,
-          'receiptImagePath': receiptDetails.image?.path,
+          'receiptImagePath':
+              receiptImageUrl, // Now stores cloud URL instead of local path
           'receiptDate': nowIso,
         };
       }
+
+      // Add recipient name to suggestions for future use
+      await _controller.addRecipientSuggestion(receiptDetails.recipient);
 
       final newReceivedCount =
           updatedSupplies.where((s) => s['status'] == 'Received').length;
@@ -1519,14 +1545,14 @@ class _PODetailsPageState extends State<PODetailsPage> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Delivery Receipt No.',
+                            Text('Receipt No.',
                                 style: AppFonts.sfProStyle(
                                     fontSize: 13, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 6),
                             TextField(
                               controller: drController,
                               decoration: InputDecoration(
-                                hintText: 'Enter DR number',
+                                hintText: 'Enter receipt number',
                                 border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10)),
                                 errorText: drError,
@@ -1538,16 +1564,44 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 style: AppFonts.sfProStyle(
                                     fontSize: 13, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 6),
-                            TextField(
-                              controller: recipientController,
-                              decoration: InputDecoration(
-                                hintText: 'Enter recipient name',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                                errorText: recipientError,
-                              ),
-                              onChanged: (_) =>
-                                  setLocal(() => recipientError = null),
+                            Autocomplete<String>(
+                              fieldViewBuilder: (context, textEditingController,
+                                  focusNode, onFieldSubmitted) {
+                                // Use the existing recipientController
+                                textEditingController.text =
+                                    recipientController.text;
+                                textEditingController.addListener(() {
+                                  recipientController.text =
+                                      textEditingController.text;
+                                });
+
+                                return TextField(
+                                  controller: textEditingController,
+                                  focusNode: focusNode,
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter recipient name',
+                                    border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                    errorText: recipientError,
+                                  ),
+                                  onChanged: (_) =>
+                                      setLocal(() => recipientError = null),
+                                );
+                              },
+                              optionsBuilder:
+                                  (TextEditingValue textEditingValue) async {
+                                if (textEditingValue.text.trim().isEmpty) {
+                                  return const Iterable<String>.empty();
+                                }
+                                return await _controller
+                                    .getRecipientSuggestions(
+                                        textEditingValue.text);
+                              },
+                              onSelected: (String selection) {
+                                // This is called when a suggestion is selected
+                                // The text field will be automatically updated
+                              },
                             ),
                             const SizedBox(height: 12),
                             Text('Attach Receipt',
@@ -1672,6 +1726,17 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               final dr = drController.text.trim();
                               final rec = recipientController.text.trim();
                               bool ok = true;
+
+                              // Check for duplicate receipt number
+                              if (dr.isNotEmpty) {
+                                final isDuplicate = await _controller
+                                    .isReceiptNumberDuplicate(dr);
+                                if (isDuplicate) {
+                                  drError = 'Receipt number already exists';
+                                  ok = false;
+                                }
+                              }
+
                               if (dr.isEmpty || !drPattern.hasMatch(dr)) {
                                 drError = 'Please enter alphanumeric only';
                                 ok = false;
@@ -1751,45 +1816,203 @@ class _PODetailsPageState extends State<PODetailsPage> {
     return result;
   }
 
-  void _showAttachmentImage(String path) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.all(16),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.9,
-            maxHeight: MediaQuery.of(context).size.height * 0.7,
-          ),
-          child: Stack(
-            children: [
-              Center(
-                child: InteractiveViewer(
-                  child: AspectRatio(
-                    aspectRatio: 3 / 4,
-                    child: Image.file(File(path), fit: BoxFit.contain),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 14,
-                right: 14,
-                child: Material(
-                  color: Colors.black54,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => Navigator.of(context).pop(),
-                    child: const Padding(
-                      padding: EdgeInsets.all(6),
-                      child: Icon(Icons.close, color: Colors.white, size: 18),
+  void _showAttachmentImage(String pathOrUrl) {
+    try {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          insetPadding: const EdgeInsets.all(16),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.9,
+              maxHeight: MediaQuery.of(context).size.height * 0.7,
+            ),
+            child: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    child: AspectRatio(
+                      aspectRatio: 3 / 4,
+                      child: _buildReceiptImage(pathOrUrl),
                     ),
                   ),
+                ),
+                Positioned(
+                  top: 16,
+                  right: 8,
+                  child: Material(
+                    color: Colors.black54,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => Navigator.of(context).pop(),
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.close, color: Colors.white, size: 18),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      _showErrorDialog('Error loading attachment',
+          'Unable to open the attachment. Please try again.');
+    }
+  }
+
+  Widget _buildReceiptImage(String pathOrUrl) {
+    // Check if it's a URL (starts with http) or a local file path
+    if (pathOrUrl.startsWith('http')) {
+      // Cloud URL - use Image.network
+      return Image.network(
+        pathOrUrl,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                      : null,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Loading receipt...',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.cloud_off, size: 48, color: Colors.grey[600]),
+                SizedBox(height: 8),
+                Text(
+                  'Unable to load receipt',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Check your internet connection',
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } else {
+      // Local file path - use Image.file with existence check
+      final file = File(pathOrUrl);
+      if (!file.existsSync()) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.broken_image, size: 48, color: Colors.grey[600]),
+              SizedBox(height: 8),
+              Text(
+                'Receipt not found',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'File may have been moved or deleted',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 12,
                 ),
               ),
             ],
           ),
-        ),
+        );
+      }
+
+      return Image.file(
+        file,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.broken_image, size: 48, color: Colors.grey[600]),
+                SizedBox(height: 8),
+                Text(
+                  'Unable to load image',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'The image file may be corrupted',
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('OK'),
+          ),
+        ],
       ),
     );
   }

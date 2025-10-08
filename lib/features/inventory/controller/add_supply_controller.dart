@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'filter_controller.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
 import 'package:familee_dental/features/notifications/controller/notifications_controller.dart';
+import 'package:familee_dental/features/inventory/services/inventory_storage_service.dart';
 
 class AddSupplyController {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final InventoryStorageService _storageService = InventoryStorageService();
   final nameController = TextEditingController();
   final costController = TextEditingController();
   final stockController = TextEditingController(text: "0");
@@ -40,50 +42,7 @@ class AddSupplyController {
   }
 
   Future<String?> uploadImageToSupabase(XFile imageFile) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final isPng = imageFile.path.toLowerCase().endsWith('.png');
-      final fileExtension = isPng ? 'png' : 'jpg';
-      final contentType = isPng ? 'image/png' : 'image/jpeg';
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
-      Uint8List bytes = await imageFile.readAsBytes();
-
-      debugPrint("Attempting to upload image to inventory-images bucket...");
-      debugPrint("File size: ${bytes.length} bytes");
-      debugPrint("Content type: $contentType");
-      debugPrint("File name: $fileName");
-      debugPrint("Full path: uploads/$fileName");
-
-      // Use uploadBinary for Uint8List data
-      await supabase.storage
-          .from('inventory-images')
-          .uploadBinary('uploads/$fileName', bytes);
-
-      debugPrint("Upload completed successfully");
-
-      final publicUrl = supabase.storage
-          .from('inventory-images')
-          .getPublicUrl('uploads/$fileName');
-
-      debugPrint("Generated public URL: $publicUrl");
-      return publicUrl;
-    } catch (e) {
-      debugPrint("Upload error details: $e");
-      debugPrint("Error type: ${e.runtimeType}");
-      debugPrint("Error toString: ${e.toString()}");
-
-      // Try to get more specific error information
-      if (e.toString().contains('bucket')) {
-        debugPrint("Bucket-related error detected");
-      } else if (e.toString().contains('permission')) {
-        debugPrint("Permission-related error detected");
-      } else if (e.toString().contains('auth')) {
-        debugPrint("Authentication-related error detected");
-      }
-
-      return null;
-    }
+    return await _storageService.uploadImageToSupabase(imageFile);
   }
 
   // Helper function to validate alphanumeric input

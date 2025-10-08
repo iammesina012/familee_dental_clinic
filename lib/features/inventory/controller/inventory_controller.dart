@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:flutter/foundation.dart';
 
 class InventoryController {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -351,17 +352,36 @@ class InventoryController {
   }
 
   int _expiryOrder(InventoryItem item) {
-    // Cache the result to avoid repeated calculations
-    if (item.noExpiry == true) return 999999;
-    if (item.expiry == null || item.expiry!.isEmpty) return 999999;
+    // Priority 1: Out of stock items first
+    if (item.stock == 0) return 0;
 
-    try {
-      final date = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
-      return date != null ? date.millisecondsSinceEpoch : 999999;
-    } catch (e) {
-      // Handle any parsing errors gracefully
-      return 999999;
+    // Priority 2: Expiring soon (within 30 days)
+    if (!item.noExpiry && item.expiry != null && item.expiry!.isNotEmpty) {
+      try {
+        final date = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+        if (date != null) {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          final dateOnly = DateTime(date.year, date.month, date.day);
+          final daysUntilExpiry = dateOnly.difference(today).inDays;
+
+          // If expiring within 30 days, prioritize by days remaining
+          if (daysUntilExpiry <= 30) {
+            return 1000 + daysUntilExpiry; // 1000-1030 range
+          }
+
+          // If not expiring soon but has expiry date, put in Priority 3
+          // Use a smaller range to ensure no expiry items come last
+          final daysFromNow = dateOnly.difference(today).inDays;
+          return 2000 + daysFromNow; // 2000+ range (much smaller numbers)
+        }
+      } catch (e) {
+        // Continue to next priority
+      }
     }
+
+    // Priority 4: Items with no expiry (at the very end)
+    return 999999999999;
   }
 
   // Helper method to get item status for filtering

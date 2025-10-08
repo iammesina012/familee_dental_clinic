@@ -20,12 +20,18 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   final List<DateTime?> _batchExpiries = [];
   final List<bool> _batchNoExpirySelected = [];
 
+  // Inventory units dropdown
+  String _selectedUnit = 'Box';
+  final List<String> _availableUnits = ['Box', 'Piece', 'Pack'];
+
   @override
   void initState() {
     super.initState();
     brandController.text = widget.supply['brandName'] ?? '';
     supplierController.text = widget.supply['supplierName'] ?? '';
     costController.text = (widget.supply['cost'] ?? 0.0).toString();
+    _selectedUnit =
+        widget.supply['unit'] ?? 'Box'; // Initialize unit from existing data
     // Initialize batches from existing data if present
     final List<dynamic>? existingBatches =
         widget.supply['expiryBatches'] as List<dynamic>?;
@@ -308,6 +314,53 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                     ),
                     filled: true,
                     fillColor: scheme.surface,
+                  ),
+                ),
+              ),
+              SizedBox(height: 16),
+
+              // Inventory Units
+              _buildFieldSection(
+                title: "Inventory Units",
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: theme.dividerColor.withOpacity(0.2),
+                    ),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedUnit,
+                      isExpanded: true,
+                      style: AppFonts.sfProStyle(
+                        fontSize: 16,
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
+                      items: _availableUnits.map((String unit) {
+                        return DropdownMenuItem<String>(
+                          value: unit,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              unit,
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedUnit = newValue;
+                          });
+                        }
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -669,6 +722,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
       'supplierName': supplierController.text.trim(),
       'quantity': totalQuantity,
       'cost': cost,
+      'unit': _selectedUnit, // Add inventory units
       'imageUrl': widget.supply['imageUrl'],
       'status': 'Pending', // Initialize as pending
       // Keep first expiry for backward compatibility

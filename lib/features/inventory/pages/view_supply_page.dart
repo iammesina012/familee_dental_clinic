@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
-import 'package:familee_dental/features/inventory/components/inventory_other_expiry_dates.dart';
+import 'package:familee_dental/features/inventory/components/inventory_other_supply_batches.dart';
 import 'package:familee_dental/features/inventory/pages/edit_supply_page.dart';
 import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
@@ -11,9 +11,9 @@ import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class InventoryViewSupplyPage extends StatefulWidget {
   final InventoryItem item;
-  final bool skipAutoRedirect; // when navigating from Other Expiry Dates
+  final bool skipAutoRedirect; // when navigating from Other Supply Batches
   final bool
-      hideOtherExpirySection; // hide Other Expiry Dates section (e.g., from Expired page)
+      hideOtherExpirySection; // hide Other Supply Batches section (e.g., from Expired page)
   const InventoryViewSupplyPage(
       {super.key,
       required this.item,
@@ -705,7 +705,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                           padding:
                               const EdgeInsets.only(bottom: 10.0, top: 2.0),
                           child: Text(
-                            "Other Expiry Dates",
+                            "Other Supply Batches",
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
@@ -714,8 +714,8 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                           ),
                         ),
                       ),
-                      // Show live batches from Supabase; if none, fall back to embedded expiryBatches if present
-                      SupabaseOtherExpiryBatches(item: updatedItem),
+                      // Show live supply batches from Supabase; if none, fall back to embedded batches if present
+                      SupabaseOtherSupplyBatches(item: updatedItem),
                       _EmbeddedExpiryBatchesFallback(item: updatedItem),
                     ],
                   ],

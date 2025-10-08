@@ -34,7 +34,7 @@ class _InventoryState extends State<Inventory> {
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
 
-  String? selectedSort = "Name (A → Z)";
+  String? selectedSort = "Expiry Date (Soonest First)";
 
   // Filter state
   Map<String, dynamic> currentFilters = {};

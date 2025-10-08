@@ -1049,7 +1049,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                   size: 12, color: Color(0xFF00D4AA)),
                               SizedBox(width: 3),
                               Text(
-                                'Qty: ${supply['quantity'] ?? 0}',
+                                'Qty: ${supply['quantity'] ?? 0} ${supply['unit'] ?? 'Box'}',
                                 style: AppFonts.sfProStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w500,

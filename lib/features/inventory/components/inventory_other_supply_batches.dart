@@ -4,36 +4,15 @@ import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/inventory/pages/view_supply_page.dart'; // for status helpers
 import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 
-class SupabaseOtherExpiryBatches extends StatelessWidget {
+class SupabaseOtherSupplyBatches extends StatelessWidget {
   final InventoryItem item;
-  const SupabaseOtherExpiryBatches({super.key, required this.item});
+  const SupabaseOtherSupplyBatches({super.key, required this.item});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    if (item.noExpiry == true) {
-      return Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-        ),
-        child: Center(
-          child: Text(
-            "No expiry date.",
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 15,
-              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-            ),
-          ),
-        ),
-      );
-    }
+    // Remove the early return for noExpiry items - now we show all batches regardless of expiry
 
     final controller = ViewSupplyController();
 
@@ -60,7 +39,7 @@ class SupabaseOtherExpiryBatches extends StatelessWidget {
             ),
             child: Center(
               child: Text(
-                "No other expiry batches found.",
+                "No other supply batches found.",
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 15,
@@ -93,31 +72,30 @@ class SupabaseOtherExpiryBatches extends StatelessWidget {
           final currentCat = item.category.trim().toLowerCase();
           if (batchCat != currentCat) return false;
 
-          // Exclude the item we are viewing, zero-stock batches, and expired batches
+          // Exclude the item we are viewing and zero-stock batches
           if (batch.id == item.id || batch.stock == 0) return false;
 
-          // Filter out expired batches ONLY for non-archived view.
+          // Filter out expired batches ONLY for non-archived view and ONLY for items WITH expiry dates.
           // When viewing an archived item, include expired batches so they are visible.
+          // Items with no expiry are always included regardless of archived status.
           final bool viewingArchived = item.archived;
-          if (!viewingArchived) {
-            if (!batch.noExpiry &&
-                batch.expiry != null &&
-                batch.expiry!.isNotEmpty) {
-              final today = DateTime.now();
-              final todayDateOnly =
-                  DateTime(today.year, today.month, today.day);
+          if (!viewingArchived &&
+              !batch.noExpiry &&
+              batch.expiry != null &&
+              batch.expiry!.isNotEmpty) {
+            final today = DateTime.now();
+            final todayDateOnly = DateTime(today.year, today.month, today.day);
 
-              final expiryDate = DateTime.tryParse(batch.expiry!) ??
-                  DateTime.tryParse(batch.expiry!.replaceAll('/', '-'));
+            final expiryDate = DateTime.tryParse(batch.expiry!) ??
+                DateTime.tryParse(batch.expiry!.replaceAll('/', '-'));
 
-              if (expiryDate != null) {
-                final expiryDateOnly =
-                    DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
-                // Exclude if expired (on or before today)
-                if (expiryDateOnly.isBefore(todayDateOnly) ||
-                    expiryDateOnly.isAtSameMomentAs(todayDateOnly)) {
-                  return false;
-                }
+            if (expiryDate != null) {
+              final expiryDateOnly =
+                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+              // Exclude if expired (on or before today)
+              if (expiryDateOnly.isBefore(todayDateOnly) ||
+                  expiryDateOnly.isAtSameMomentAs(todayDateOnly)) {
+                return false;
               }
             }
           }
@@ -125,18 +103,35 @@ class SupabaseOtherExpiryBatches extends StatelessWidget {
           return true;
         }).toList();
 
-        // Sort by expiry date (earliest first, null/empty last). Normalize formats.
+        // Sort by expiry date (earliest first, no expiry last). Normalize formats.
         DateTime? parseExpiry(String? value) {
-          if (value == null || value.isEmpty) return null;
+          if (value == null || value.isEmpty || value == 'No expiry')
+            return null;
           return DateTime.tryParse(value) ??
               DateTime.tryParse(value.replaceAll('/', '-'));
         }
 
         batches.sort((a, b) {
+          // Handle no expiry items
+          final aNoExpiry = a.noExpiry ||
+              a.expiry == null ||
+              a.expiry!.isEmpty ||
+              a.expiry == 'No expiry';
+          final bNoExpiry = b.noExpiry ||
+              b.expiry == null ||
+              b.expiry!.isEmpty ||
+              b.expiry == 'No expiry';
+
+          if (aNoExpiry && bNoExpiry)
+            return 0; // Both no expiry, keep original order
+          if (aNoExpiry) return 1; // a has no expiry, put it last
+          if (bNoExpiry) return -1; // b has no expiry, put it last
+
+          // Both have expiry dates, sort by date (earliest first)
           final da = parseExpiry(a.expiry);
           final db = parseExpiry(b.expiry);
           if (da == null && db == null) return 0;
-          if (da == null) return 1; // nulls last
+          if (da == null) return 1;
           if (db == null) return -1;
           return da.compareTo(db);
         });
@@ -153,7 +148,7 @@ class SupabaseOtherExpiryBatches extends StatelessWidget {
             ),
             child: Center(
               child: Text(
-                "No other expiry batches found.",
+                "No other supply batches found.",
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 15,
@@ -281,7 +276,11 @@ class SupabaseOtherExpiryBatches extends StatelessWidget {
                   Expanded(
                     flex: 2,
                     child: Text(
-                      (batch.expiry ?? "").replaceAll('-', '/'),
+                      batch.noExpiry ||
+                              batch.expiry == null ||
+                              batch.expiry!.isEmpty
+                          ? "No expiry"
+                          : batch.expiry!.replaceAll('-', '/'),
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
