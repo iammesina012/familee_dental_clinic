@@ -85,7 +85,8 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
 
     // Previous
     buttons.add(IconButton(
-      icon: const Icon(Icons.chevron_left, color: Colors.black, size: 24),
+      icon: Icon(Icons.chevron_left,
+          color: Theme.of(context).textTheme.bodyLarge?.color, size: 24),
       onPressed: _currentPage > 1
           ? () => setState(() => _currentPage = _currentPage - 1)
           : null,
@@ -104,17 +105,20 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
             height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? const Color(0xFFE8D5E8) : Colors.transparent,
+              color: selected
+                  ? Theme.of(context).primaryColor.withOpacity(0.2)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.black12),
+              border: Border.all(
+                  color: Theme.of(context).dividerColor.withOpacity(0.3)),
             ),
             child: Text(
               i.toString(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'SF Pro',
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Colors.black,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
               ),
             ),
           ),
@@ -124,7 +128,8 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
 
     // Next
     buttons.add(IconButton(
-      icon: const Icon(Icons.chevron_right, color: Colors.black, size: 24),
+      icon: Icon(Icons.chevron_right,
+          color: Theme.of(context).textTheme.bodyLarge?.color, size: 24),
       onPressed: _currentPage < totalPages
           ? () => setState(() => _currentPage = _currentPage + 1)
           : null,

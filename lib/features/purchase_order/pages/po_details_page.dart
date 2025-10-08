@@ -1609,19 +1609,108 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                     fontSize: 13, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 6),
                             if (pickedImage == null)
-                              ElevatedButton.icon(
-                                onPressed: () async {
-                                  final img = await picker.pickImage(
-                                      source: ImageSource.gallery,
-                                      imageQuality: 85);
-                                  if (img != null)
-                                    setLocal(() {
-                                      pickedImage = img;
-                                      imageError = null;
-                                    });
-                                },
-                                icon: const Icon(Icons.photo_library_outlined),
-                                label: const Text('Pick Image'),
+                              Row(
+                                children: [
+                                  // Take Photo Button
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 80,
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          final img = await picker.pickImage(
+                                              source: ImageSource.camera,
+                                              imageQuality: 85);
+                                          if (img != null)
+                                            setLocal(() {
+                                              pickedImage = img;
+                                              imageError = null;
+                                            });
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.grey[800],
+                                          foregroundColor: Colors.white,
+                                          side: const BorderSide(
+                                              color: Color(0xFF00D4AA),
+                                              width: 1),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(
+                                              Icons.camera_alt_outlined,
+                                              color: Color(0xFF00D4AA),
+                                              size: 24,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Take Photo',
+                                              style: AppFonts.sfProStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Pick Image Button
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 80,
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          final img = await picker.pickImage(
+                                              source: ImageSource.gallery,
+                                              imageQuality: 85);
+                                          if (img != null)
+                                            setLocal(() {
+                                              pickedImage = img;
+                                              imageError = null;
+                                            });
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.grey[800],
+                                          foregroundColor: Colors.white,
+                                          side: const BorderSide(
+                                              color: Color(0xFF00D4AA),
+                                              width: 1),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(
+                                              Icons.photo_library_outlined,
+                                              color: Color(0xFF00D4AA),
+                                              size: 24,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Pick Image',
+                                              style: AppFonts.sfProStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               )
                             else
                               Stack(
