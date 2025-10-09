@@ -134,235 +134,224 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
             children: [
               // Supply Image Section
               Center(
-                child: Container(
+                child: SizedBox(
                   width: 120,
                   height: 120,
-                  decoration: BoxDecoration(
-                    color: scheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.shadowColor.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: widget.supply['imageUrl'] != null &&
-                            widget.supply['imageUrl'].isNotEmpty
-                        ? Image.network(
-                            widget.supply['imageUrl'],
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(Icons.image_not_supported,
-                                  size: 60, color: Colors.grey);
-                            },
-                          )
-                        : Icon(Icons.image_not_supported,
-                            size: 60, color: Colors.grey),
-                  ),
+                  child: widget.supply['imageUrl'] != null &&
+                          widget.supply['imageUrl'].isNotEmpty
+                      ? Image.network(
+                          widget.supply['imageUrl'],
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(Icons.image_not_supported,
+                                size: 60, color: Colors.grey);
+                          },
+                        )
+                      : Icon(Icons.image_not_supported,
+                          size: 60, color: Colors.grey),
                 ),
               ),
-              SizedBox(height: 24),
+              SizedBox(height: 10),
 
-              // Supply Name (disabled style, read-only)
-              _buildFieldSection(
-                title: "Supply Name",
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: theme.disabledColor.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: theme.disabledColor, width: 1),
-                  ),
-                  child: Text(
-                    widget.supply['supplyName'] ?? 'Unknown Supply',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      color:
-                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-
-              // Brand Name (enabled again)
-              _buildFieldSection(
-                title: "Brand Name",
-                child: TextField(
-                  controller: brandController,
-                  enabled: true,
-                  readOnly: false,
-                  enableInteractiveSelection: true,
+              // Supply Name (simple text display)
+              Center(
+                child: Text(
+                  widget.supply['supplyName'] ?? 'Unknown Supply',
                   style: AppFonts.sfProStyle(
-                    fontSize: 16,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
                     color: theme.textTheme.bodyMedium?.color,
                   ),
-                  decoration: InputDecoration(
-                    hintText: 'Enter brand name',
-                    hintStyle: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      color:
-                          theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide:
-                          BorderSide(color: Color(0xFF00D4AA), width: 2),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 16,
-                    ),
-                    filled: true,
-                    fillColor: scheme.surface,
-                  ),
                 ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 26),
 
-              // Supplier Name
-              _buildFieldSection(
-                title: "Supplier Name",
-                child: TextField(
-                  controller: supplierController,
-                  style: AppFonts.sfProStyle(
-                      fontSize: 16, color: theme.textTheme.bodyMedium?.color),
-                  decoration: InputDecoration(
-                    hintText: 'Enter supplier name',
-                    hintStyle: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      color:
-                          theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide:
-                          BorderSide(color: Color(0xFF00D4AA), width: 2),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 16,
-                    ),
-                    filled: true,
-                    fillColor: scheme.surface,
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-
-              // Cost (moved above batches)
-              _buildFieldSection(
-                title: "Cost",
-                child: TextField(
-                  controller: costController,
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                        RegExp(r'^\d*\.?\d{0,2}')),
-                  ],
-                  style: AppFonts.sfProStyle(
-                      fontSize: 16, color: theme.textTheme.bodyMedium?.color),
-                  decoration: InputDecoration(
-                    hintText: 'Enter cost (₱)',
-                    hintStyle: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      color:
-                          theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
-                    ),
-                    prefixText: '₱ ',
-                    prefixStyle: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      color:
-                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide:
-                          BorderSide(color: Color(0xFF00D4AA), width: 2),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 16,
-                    ),
-                    filled: true,
-                    fillColor: scheme.surface,
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-
-              // Inventory Units
-              _buildFieldSection(
-                title: "Inventory Units",
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: scheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: theme.dividerColor.withOpacity(0.2),
-                    ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedUnit,
-                      isExpanded: true,
-                      style: AppFonts.sfProStyle(
-                        fontSize: 16,
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
-                      items: _availableUnits.map((String unit) {
-                        return DropdownMenuItem<String>(
-                          value: unit,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              unit,
-                              style: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                color: theme.textTheme.bodyMedium?.color,
-                              ),
-                            ),
+              // Brand Name and Supplier Name (horizontal layout)
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildFieldSection(
+                      title: "Brand Name",
+                      child: TextField(
+                        controller: brandController,
+                        enabled: true,
+                        readOnly: false,
+                        enableInteractiveSelection: true,
+                        style: AppFonts.sfProStyle(
+                          fontSize: 16,
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Enter brand name',
+                          hintStyle: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.4),
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        if (newValue != null) {
-                          setState(() {
-                            _selectedUnit = newValue;
-                          });
-                        }
-                      },
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                BorderSide(color: Color(0xFF00D4AA), width: 2),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 16,
+                          ),
+                          filled: true,
+                          fillColor: scheme.surface,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: _buildFieldSection(
+                      title: "Supplier Name",
+                      child: TextField(
+                        controller: supplierController,
+                        style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyMedium?.color),
+                        decoration: InputDecoration(
+                          hintText: 'Enter supplier name',
+                          hintStyle: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.4),
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                BorderSide(color: Color(0xFF00D4AA), width: 2),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 16,
+                          ),
+                          filled: true,
+                          fillColor: scheme.surface,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+
+              // Cost and Inventory Units (horizontal layout)
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildFieldSection(
+                      title: "Cost",
+                      child: TextField(
+                        controller: costController,
+                        keyboardType:
+                            TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d{0,2}')),
+                        ],
+                        style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyMedium?.color),
+                        decoration: InputDecoration(
+                          hintText: 'Enter cost (₱)',
+                          hintStyle: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.4),
+                          ),
+                          prefixText: '₱ ',
+                          prefixStyle: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.7),
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                BorderSide(color: Color(0xFF00D4AA), width: 2),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 16,
+                          ),
+                          filled: true,
+                          fillColor: scheme.surface,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: _buildFieldSection(
+                      title: "Unit",
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: scheme.surface,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedUnit,
+                            isExpanded: true,
+                            style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                            items: _availableUnits.map((String unit) {
+                              return DropdownMenuItem<String>(
+                                value: unit,
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    unit,
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 16,
+                                      color: theme.textTheme.bodyMedium?.color,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _selectedUnit = newValue;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: 16),
 
@@ -382,8 +371,6 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                               decoration: BoxDecoration(
                                 color: scheme.surface,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: theme.dividerColor.withOpacity(0.2)),
                               ),
                               child: Row(
                                 children: [
@@ -473,9 +460,6 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                   decoration: BoxDecoration(
                                     color: scheme.surface,
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                        color: theme.dividerColor
-                                            .withOpacity(0.2)),
                                   ),
                                   child: Row(
                                     children: [

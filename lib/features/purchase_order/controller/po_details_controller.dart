@@ -14,6 +14,23 @@ class PODetailsController {
     return POBusinessService.calculateTotalCost(po);
   }
 
+  // Group supplies by supplier
+  Map<String, List<Map<String, dynamic>>> groupSuppliesBySupplier(
+      List<Map<String, dynamic>> supplies) {
+    final Map<String, List<Map<String, dynamic>>> grouped = {};
+    for (final supply in supplies) {
+      final supplier = getSupplierName(supply);
+      grouped[supplier] ??= [];
+      grouped[supplier]!.add(supply);
+    }
+    return grouped;
+  }
+
+  // Check if PO can be received (pending status)
+  bool canReceivePO(PurchaseOrder po) {
+    return po.status == 'Pending';
+  }
+
   // Mark a supply as received with expiry date
   Future<PurchaseOrder> markSupplyAsReceived(
     PurchaseOrder po,

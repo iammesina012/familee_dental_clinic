@@ -132,14 +132,14 @@ class _CreatePOPageState extends State<CreatePOPage> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
+          padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.03),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Purchase Name Section
               Container(
                 padding:
-                    EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
+                    EdgeInsets.all(MediaQuery.of(context).size.width * 0.03),
                 decoration: BoxDecoration(
                   color: theme.brightness == Brightness.dark
                       ? theme.colorScheme.surface
@@ -710,14 +710,14 @@ class _CreatePOPageState extends State<CreatePOPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.all(16),
+          padding: EdgeInsets.all(12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 "Restocking List (${addedSupplies.length})",
                 style: AppFonts.sfProStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).brightness == Brightness.dark
                       ? Theme.of(context).textTheme.bodyMedium?.color
@@ -748,7 +748,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
         if (addedSupplies.isNotEmpty) ...[
           Container(
             margin: EdgeInsets.symmetric(horizontal: 16),
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Theme.of(context).brightness == Brightness.dark
                   ? Theme.of(context).colorScheme.surface
@@ -775,7 +775,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                 Text(
                   'Total Cost:',
                   style: AppFonts.sfProStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).brightness == Brightness.dark
                         ? Theme.of(context).textTheme.bodyMedium?.color
@@ -785,7 +785,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                 Text(
                   '₱${_calculateTotalCost().toStringAsFixed(2)}',
                   style: AppFonts.sfProStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).brightness == Brightness.dark
                         ? Theme.of(context).textTheme.bodyMedium?.color
@@ -795,7 +795,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
               ],
             ),
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 12),
         ],
         Expanded(
           child: ListView.builder(
@@ -906,38 +906,23 @@ class _CreatePOPageState extends State<CreatePOPage> {
           child: Row(
             children: [
               // Supply Image (responsive)
-              Container(
+              SizedBox(
                 width: MediaQuery.of(context).size.width * 0.13,
                 height: MediaQuery.of(context).size.width * 0.13,
-                constraints: BoxConstraints(
-                  minWidth: 52,
-                  maxWidth: 72,
-                  minHeight: 52,
-                  maxHeight: 72,
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: Theme.of(context).dividerColor.withOpacity(0.2)),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: supply['imageUrl'] != null &&
-                          supply['imageUrl'].isNotEmpty
-                      ? Image.network(
-                          supply['imageUrl'],
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(Icons.image_not_supported,
-                                size: MediaQuery.of(context).size.width * 0.08,
-                                color: Colors.grey);
-                          },
-                        )
-                      : Icon(Icons.image_not_supported,
-                          size: MediaQuery.of(context).size.width * 0.08,
-                          color: Colors.grey),
-                ),
+                child: supply['imageUrl'] != null &&
+                        supply['imageUrl'].isNotEmpty
+                    ? Image.network(
+                        supply['imageUrl'],
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(Icons.image_not_supported,
+                              size: MediaQuery.of(context).size.width * 0.08,
+                              color: Colors.grey);
+                        },
+                      )
+                    : Icon(Icons.image_not_supported,
+                        size: MediaQuery.of(context).size.width * 0.08,
+                        color: Colors.grey),
               ),
               SizedBox(width: MediaQuery.of(context).size.width * 0.035),
 
@@ -1049,7 +1034,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                   size: 12, color: Color(0xFF00D4AA)),
                               SizedBox(width: 3),
                               Text(
-                                'Qty: ${supply['quantity'] ?? 0} ${supply['unit'] ?? 'Box'}',
+                                '${supply['quantity'] ?? 0} ${supply['unit'] ?? 'Box'}',
                                 style: AppFonts.sfProStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w500,
