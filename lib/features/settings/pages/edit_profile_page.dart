@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/settings/controller/edit_profile_controller.dart';
 import 'package:familee_dental/features/settings/controller/edit_user_controller.dart';
+import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditProfilePage extends StatefulWidget {
@@ -15,6 +16,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = EditProfileController();
   final _editUserController = EditUserController();
+  final _settingsActivityController = SettingsActivityController();
 
   // ✅ Stable key for the Change Password dialog's form
   final GlobalKey<FormState> _passwordFormKey = GlobalKey<FormState>();
@@ -786,6 +788,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
         });
 
         if (result['success'] == true) {
+          // Log password change activity
+          await _settingsActivityController.logPasswordChange(
+            userName: _nameController.text.trim(),
+          );
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Password updated successfully'),
@@ -862,6 +869,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
         return;
       }
+
+      // Log profile edit activity (without additional details for privacy)
+      final newName = _nameController.text.trim();
+
+      await _settingsActivityController.logProfileEdit(
+        userName: newName,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -15,6 +15,9 @@ class ActivityLogController extends ChangeNotifier {
   List<Map<String, dynamic>> _allActivities = [];
   StreamSubscription? _activitiesSubscription;
 
+  // Current user's role (cached)
+  String _currentUserRole = 'staff';
+
   // Getters
   DateTime get selectedDate => _selectedDate;
   String get selectedCategory => _selectedCategory;
@@ -24,6 +27,9 @@ class ActivityLogController extends ChangeNotifier {
   // Filtered activities based on current filters
   List<Map<String, dynamic>> get filteredActivities {
     List<Map<String, dynamic>> filtered = _allActivities;
+
+    // Apply role-based filtering first
+    filtered = _applyRoleBasedFiltering(filtered);
 
     // Filter by category
     if (_selectedCategory != 'All Categories') {
@@ -99,6 +105,7 @@ class ActivityLogController extends ChangeNotifier {
 
   // Constructor - start listening to Supabase
   ActivityLogController() {
+    _loadCurrentUserRole();
     _startListeningToActivities();
   }
 
@@ -128,6 +135,7 @@ class ActivityLogController extends ChangeNotifier {
                   'time': row['time'] ?? '',
                   'category': row['category'] ?? '',
                   'action': row['action'] ?? '',
+                  'user_role': row['user_role'] ?? 'staff', // Include user role
                   'metadata': row['metadata'] ?? {},
                 };
               }).toList();
@@ -138,6 +146,117 @@ class ActivityLogController extends ChangeNotifier {
     } catch (e) {
       print('Error starting activity stream: $e');
     }
+  }
+
+  // Manual refresh method for pull-to-refresh
+  Future<void> refreshActivities() async {
+    try {
+      // Reload current user role first
+      await _loadCurrentUserRole();
+
+      final response = await _supabase
+          .from('activity_logs')
+          .select('*')
+          .order('created_at', ascending: false);
+
+      if (response is List<Map<String, dynamic>>) {
+        _allActivities = response.map((row) {
+          return {
+            'id': row['id'],
+            'userName': row['user_name'] ?? 'Unknown User',
+            'description': row['description'] ?? '',
+            'date': row['date'] != null
+                ? DateTime.parse(row['date'] as String)
+                : DateTime.now(),
+            'time': row['time'] ?? '',
+            'category': row['category'] ?? '',
+            'action': row['action'] ?? '',
+            'user_role': row['user_role'] ?? 'staff', // Include user role
+            'metadata': row['metadata'] ?? {},
+          };
+        }).toList();
+
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error refreshing activities: $e');
+    }
+  }
+
+  // Apply role-based filtering to activities
+  List<Map<String, dynamic>> _applyRoleBasedFiltering(
+      List<Map<String, dynamic>> activities) {
+    try {
+      final User? currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return []; // No user logged in, return empty
+
+      // Get current user's role
+      final String currentUserRole = _getCurrentUserRole();
+
+      // Filter based on role hierarchy
+      switch (currentUserRole.toLowerCase()) {
+        case 'owner':
+          // Owner can see all activities (Owner, Admin, Staff)
+          return activities;
+        case 'admin':
+          // Admin can see Admin and Staff activities (NOT Owner activities)
+          final filtered = activities.where((activity) {
+            final String activityUserRole = _getActivityUserRole(activity);
+            final String lowerRole = activityUserRole.toLowerCase();
+            final bool shouldShow =
+                lowerRole == 'admin' || lowerRole == 'staff';
+            return shouldShow;
+          }).toList();
+          return filtered;
+        case 'staff':
+          // Staff cannot see any activities
+          return [];
+        default:
+          // Unknown role, return empty for security
+          return [];
+      }
+    } catch (e) {
+      print('Error applying role-based filtering: $e');
+      return []; // Return empty for security on error
+    }
+  }
+
+  // Load current user's role
+  Future<void> _loadCurrentUserRole() async {
+    try {
+      final User? currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) {
+        _currentUserRole = 'staff';
+        return;
+      }
+
+      final response = await _supabase
+          .from('user_roles')
+          .select('role')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+      if (response != null && response['role'] != null) {
+        _currentUserRole = response['role'] as String;
+      } else {
+        _currentUserRole = 'staff'; // Default fallback
+      }
+    } catch (e) {
+      print('Error loading current user role: $e');
+      _currentUserRole = 'staff'; // Default to most restrictive on error
+    }
+  }
+
+  // Get current user's role (cached)
+  String _getCurrentUserRole() {
+    return _currentUserRole;
+  }
+
+  // Get the role of the user who performed the activity
+  String _getActivityUserRole(Map<String, dynamic> activity) {
+    // Use the stored user_role field
+    final String userRole = (activity['user_role'] ?? 'staff').toString();
+    return userRole.toLowerCase();
   }
 
   // Methods to update filters
@@ -292,6 +411,24 @@ class ActivityLogController extends ChangeNotifier {
     // Helper: add divider
     void addDivider() {
       rows.add({'label': '__DIVIDER__', 'value': ''});
+    }
+
+    // Handle Settings category - profile_edited
+    if (category == 'Settings' && action == 'profile_edited') {
+      if (metadata.containsKey('changes')) {
+        final changes = metadata['changes'] as Map<String, dynamic>;
+        // Add each change that occurred
+        changes.forEach((key, value) {
+          addRow(key, value.toString());
+        });
+      }
+      return rows;
+    }
+
+    // Handle Settings category - password_changed
+    if (category == 'Settings' && action == 'password_changed') {
+      // No additional details for privacy reasons
+      return rows;
     }
 
     // Determine if we have supplies array

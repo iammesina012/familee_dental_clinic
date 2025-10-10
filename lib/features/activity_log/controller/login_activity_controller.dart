@@ -68,6 +68,21 @@ class LoginActivityController {
       final DateTime now = DateTime.now();
       final String timeString = _formatTime(now);
 
+      // Get user role
+      String userRole = 'staff'; // Default to lowercase
+      try {
+        final response = await _supabase
+            .from('user_roles')
+            .select('role')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+        if (response != null && response['role'] != null) {
+          userRole = (response['role'] as String).toLowerCase();
+        }
+      } catch (e) {
+        print('Error getting user role: $e');
+      }
+
       // Create activity data
       final Map<String, dynamic> activityData = {
         'user_name': _getDisplayName(currentUser),
@@ -78,6 +93,7 @@ class LoginActivityController {
         'action': action,
         'user_id': currentUser.id,
         'user_email': currentUser.email,
+        'user_role': userRole, // Store the role for filtering
         'metadata': metadata ?? {},
         'created_at': now.toIso8601String(),
       };

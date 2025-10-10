@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/backup_restore/services/backup_restore_service.dart';
+import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 
 class BackupRestorePage extends StatefulWidget {
   const BackupRestorePage({super.key});
@@ -12,6 +13,8 @@ class BackupRestorePage extends StatefulWidget {
 
 class _BackupRestorePageState extends State<BackupRestorePage> {
   final BackupRestoreService _service = BackupRestoreService();
+  final SettingsActivityController _settingsActivityController =
+      SettingsActivityController();
 
   bool _isBackingUp = false;
   bool _isRestoring = false;
@@ -59,6 +62,15 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
         });
       });
       if (!mounted) return;
+
+      // Log backup created activity
+      final backupFileName =
+          res.storagePath.split('/').last; // Extract filename
+      await _settingsActivityController.logBackupCreated(
+        backupFileName: backupFileName,
+        backupTime: DateTime.now(),
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -136,6 +148,15 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
         },
       );
       if (!mounted) return;
+
+      // Log backup restored activity
+      final backupFileName = meta.fullPath.split('/').last; // Extract filename
+      await _settingsActivityController.logBackupRestored(
+        backupFileName: backupFileName,
+        backupTime:
+            meta.timestampUtc ?? DateTime.now(), // Use original backup time
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Restore complete: ${result.totalItems} items')),
       );
@@ -391,6 +412,16 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
       try {
         await _service.deleteBackup(storagePath: meta.fullPath);
         if (!mounted) return;
+
+        // Log backup deleted activity
+        final backupFileName =
+            meta.fullPath.split('/').last; // Extract filename
+        await _settingsActivityController.logBackupDeleted(
+          backupFileName: backupFileName,
+          backupTime:
+              meta.timestampUtc ?? DateTime.now(), // Use original backup time
+        );
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Backup deleted')),
         );

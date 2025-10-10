@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/settings/controller/add_user_controller.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 
 class AddUserPage extends StatefulWidget {
   const AddUserPage({super.key});
@@ -11,6 +12,7 @@ class AddUserPage extends StatefulWidget {
 
 class _AddUserPageState extends State<AddUserPage> {
   final _controller = AddUserController();
+  final _settingsActivityController = SettingsActivityController();
   final _formKey = GlobalKey<FormState>();
 
   // Form controllers
@@ -582,6 +584,12 @@ class _AddUserPageState extends State<AddUserPage> {
     });
 
     if (result['success']) {
+      // Log employee added activity
+      await _settingsActivityController.logEmployeeAdded(
+        employeeName: _nameController.text.trim(),
+        employeeRole: _selectedRole,
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

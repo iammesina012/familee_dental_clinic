@@ -56,6 +56,8 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
       case 'Dashboard':
         return const Icon(Icons.dashboard_outlined,
             color: Colors.purple, size: 20);
+      case 'Settings':
+        return const Icon(Icons.settings, color: Colors.teal, size: 20);
       default:
         return const Icon(Icons.info_outline, color: Colors.grey, size: 20);
     }
@@ -143,11 +145,11 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
         children: [
           Text(
             'Page ' + _currentPage.toString() + ' of ' + totalPages.toString(),
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'SF Pro',
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
           const SizedBox(height: 10),
@@ -509,7 +511,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: const Color(0xFF8B5A8B),
+                          color: Theme.of(context).textTheme.titleLarge?.color,
                           fontFamily: 'SF Pro',
                         ),
                       ),
@@ -534,7 +536,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: const Color(0xFF8B5A8B),
+            color: Theme.of(context).textTheme.titleLarge?.color,
             fontFamily: 'SF Pro',
           ),
         ),
@@ -755,7 +757,8 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                               'Login',
                               'Inventory',
                               'Purchase Order',
-                              'Stock Deduction'
+                              'Stock Deduction',
+                              'Settings'
                             ].map((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
@@ -969,111 +972,122 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                           return Column(
                             children: [
                               Expanded(
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 10),
-                                  itemCount: pageItems.length + 1,
-                                  itemBuilder: (context, index) {
-                                    if (index == pageItems.length) {
-                                      return _buildPagination(totalPages);
-                                    }
-                                    final activity = pageItems[index];
-                                    // Date formatting handled in details when needed
+                                child: RefreshIndicator(
+                                  onRefresh: () async {
+                                    await _controller.refreshActivities();
+                                  },
+                                  child: ListView.builder(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 20, vertical: 10),
+                                    itemCount: pageItems.length + 1,
+                                    itemBuilder: (context, index) {
+                                      if (index == pageItems.length) {
+                                        return _buildPagination(totalPages);
+                                      }
+                                      final activity = pageItems[index];
+                                      // Date formatting handled in details when needed
 
-                                    return Slidable(
-                                      endActionPane: ActionPane(
-                                        motion: const ScrollMotion(),
-                                        children: [
-                                          SlidableAction(
-                                            onPressed: (_) =>
-                                                _showDeleteConfirmation(
-                                              context,
-                                              activity['id'],
-                                              _formatDescription(
-                                                  activity['description']),
-                                            ),
-                                            backgroundColor: Colors.red,
-                                            foregroundColor: Colors.white,
-                                            icon: Icons.delete,
-                                            label: 'Delete',
-                                            borderRadius:
-                                                const BorderRadius.only(
-                                              topRight: Radius.circular(8),
-                                              bottomRight: Radius.circular(8),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      child: InkWell(
-                                        onTap: () => _showActivityDetails(
-                                            context, activity),
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Container(
-                                          margin:
-                                              const EdgeInsets.only(bottom: 12),
-                                          padding: const EdgeInsets.all(16),
-                                          height: 80, // Back to original height
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .surface,
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            border: Border.all(
-                                                color: Theme.of(context)
-                                                    .dividerColor
-                                                    .withOpacity(0.2)),
-                                          ),
-                                          child: Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              // Category icon
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    right: 8, top: 2),
-                                                child: _getCategoryIcon(
-                                                    activity['category']),
+                                      return Slidable(
+                                        endActionPane: ActionPane(
+                                          motion: const ScrollMotion(),
+                                          children: [
+                                            SlidableAction(
+                                              onPressed: (_) =>
+                                                  _showDeleteConfirmation(
+                                                context,
+                                                activity['id'],
+                                                _formatDescription(
+                                                    activity['description']),
                                               ),
-                                              // Activity description (main text) - more concise and readable
-                                              Expanded(
-                                                child: Text(
-                                                  _formatDescription(
-                                                      activity['description']),
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Theme.of(context)
-                                                        .textTheme
-                                                        .bodyMedium
-                                                        ?.color,
-                                                    fontFamily: 'SF Pro',
+                                              backgroundColor: Colors.red,
+                                              foregroundColor: Colors.white,
+                                              icon: Icons.delete,
+                                              label: 'Delete',
+                                              borderRadius:
+                                                  const BorderRadius.only(
+                                                topRight: Radius.circular(8),
+                                                bottomRight: Radius.circular(8),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        child: InkWell(
+                                          onTap: () => _showActivityDetails(
+                                              context, activity),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          child: Container(
+                                            margin: const EdgeInsets.only(
+                                                bottom: 12),
+                                            padding: const EdgeInsets.all(16),
+                                            height:
+                                                80, // Back to original height
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                  color: Theme.of(context)
+                                                      .dividerColor
+                                                      .withOpacity(0.2)),
+                                            ),
+                                            child: Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                // Category icon
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          right: 8, top: 2),
+                                                  child: _getCategoryIcon(
+                                                      activity['category']),
+                                                ),
+                                                // Activity description (main text) - more concise and readable
+                                                Expanded(
+                                                  child: Text(
+                                                    _formatDescription(activity[
+                                                        'description']),
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color,
+                                                      fontFamily: 'SF Pro',
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                              // Time aligned to the right, same level as description
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 2),
-                                                child: Text(
-                                                  activity['time'],
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: Theme.of(context)
-                                                        .textTheme
-                                                        .bodyMedium
-                                                        ?.color,
-                                                    fontFamily: 'SF Pro',
+                                                // Time aligned to the right, same level as description
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          top: 2),
+                                                  child: Text(
+                                                    activity['time'],
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color,
+                                                      fontFamily: 'SF Pro',
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    );
-                                  },
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ],

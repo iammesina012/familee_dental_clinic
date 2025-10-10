@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/settings/controller/edit_user_controller.dart';
+import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 
 class EditUserPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -12,6 +13,7 @@ class EditUserPage extends StatefulWidget {
 
 class _EditUserPageState extends State<EditUserPage> {
   final _controller = EditUserController();
+  final _settingsActivityController = SettingsActivityController();
   final _formKey = GlobalKey<FormState>();
 
   // Form controllers
@@ -562,6 +564,16 @@ class _EditUserPageState extends State<EditUserPage> {
     setState(() => _isSaving = false);
 
     if (result['success'] == true) {
+      // Log employee profile edited activity
+      await _settingsActivityController.logEmployeeProfileEdited(
+        employeeName: _nameController.text.trim(),
+        originalName: widget.user['displayName'] ?? widget.user['name'] ?? '',
+        employeeRole: _selectedRole,
+        originalRole: widget.user['role'] ?? 'Admin',
+        employeeStatus: _selectedStatus,
+        originalStatus: widget.user['isActive'] == true ? 'Active' : 'Inactive',
+      );
+
       final successMsg =
           (result['message'] as String?) ?? 'User updated successfully';
       if (mounted) {
