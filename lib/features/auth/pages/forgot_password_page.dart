@@ -14,12 +14,23 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final controller = ForgotPasswordController();
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Check if email was passed as argument
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null && args['email'] != null) {
+      controller.email.text = args['email'] as String;
+    }
+  }
+
+  @override
   void dispose() {
     controller.dispose();
     super.dispose();
   }
 
-  void _handleSendResetLink() {
+  void _handleSendResetToken() {
     controller.handleForgotPassword(context, () => setState(() {}));
   }
 
@@ -202,7 +213,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
                     const SizedBox(height: 30),
 
-                    // Send Reset Link Button
+                    // Send Reset Token Button
                     Container(
                       width: double.infinity,
                       height: 50,
@@ -223,7 +234,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       ),
                       child: ElevatedButton(
                         onPressed:
-                            controller.isLoading ? null : _handleSendResetLink,
+                            controller.isLoading ? null : _handleSendResetToken,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
@@ -243,7 +254,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                 ),
                               )
                             : Text(
-                                "SEND RESET LINK",
+                                "SEND RESET TOKEN",
                                 style: AppFonts.interStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,

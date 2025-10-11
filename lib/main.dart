@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:familee_dental/features/auth/pages/login_page.dart';
+import 'package:familee_dental/features/auth/pages/forgot_password_page.dart';
 import 'package:familee_dental/features/auth/pages/password_reset_page.dart';
 import 'package:familee_dental/features/dashboard/pages/dashboard_page.dart';
 import 'package:familee_dental/features/inventory/pages/inventory_page.dart';
@@ -18,13 +19,13 @@ import 'package:familee_dental/features/stock_deduction/pages/sd_edit_preset_pag
 import 'package:familee_dental/features/stock_deduction/pages/sd_add_supply_preset_page.dart';
 import 'package:familee_dental/features/activity_log/pages/activity_log_page.dart';
 import 'package:familee_dental/features/notifications/pages/notifications_page.dart';
+import 'package:familee_dental/features/backup_restore/services/automatic_backup_service.dart';
 import 'package:familee_dental/features/settings/pages/settings_page.dart';
 import 'package:familee_dental/features/backup_restore/pages/backup_restore_page.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:familee_dental/shared/themes/font.dart';
-import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:app_links/app_links.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +54,14 @@ Future<void> main() async {
   } catch (e) {
     debugPrint("Supabase init failed: $e");
   }
+
+  // Initialize automatic backup service
+  try {
+    await AutomaticBackupService.initialize();
+    debugPrint("Automatic backup service initialized successfully!");
+  } catch (e) {
+    debugPrint("Automatic backup service init failed: $e");
+  }
   // Note: Deep link handling is now managed in AuthWrapper
 
   // Initialize theme mode from persisted preference before running app
@@ -79,6 +88,7 @@ class MainApp extends StatelessWidget {
           home: const AuthWrapper(),
           routes: {
             '/login': (context) => const Login(),
+            '/forgot-password': (context) => const ForgotPasswordPage(),
             '/password-reset': (context) => const PasswordResetPage(),
             '/dashboard': (context) => const Dashboard(),
             '/inventory': (context) => const Inventory(),
@@ -112,7 +122,23 @@ class MainApp extends StatelessWidget {
             '/activity-log': (context) => const ActivityLogPage(),
             '/notifications': (context) => const NotificationsPage(),
             '/settings': (context) => const SettingsPage(),
-            '/backup-restore': (context) => const BackupRestorePage(),
+            '/backup-restore': (context) {
+              final userRoleProvider = UserRoleProvider();
+              if (!userRoleProvider.isOwner) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  Navigator.pushReplacementNamed(context, '/settings');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Access Denied: Only the Owner can access backup and restore functionality.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                });
+                return const SizedBox(); // Return empty widget while redirecting
+              }
+              return const BackupRestorePage();
+            },
           },
         );
       },
@@ -130,7 +156,6 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   final AuthService _authService = AuthService();
   final UserRoleProvider _userRoleProvider = UserRoleProvider();
-  final AppLinks _appLinks = AppLinks();
   bool _isLoading = true;
   bool _isLoggedIn = false;
 
@@ -138,58 +163,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
   void initState() {
     super.initState();
     _checkAuthStatus();
-    _listenToAuthChanges();
-    _listenToDeepLinks();
-  }
-
-  void _listenToAuthChanges() {
-    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-      final session = data.session;
-
-      if (event == AuthChangeEvent.passwordRecovery && session != null) {
-        // User clicked password reset link, navigate to password reset page
-        print('Password recovery event detected: ${session.user.email}');
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            Navigator.of(context).pushNamed('/password-reset');
-          }
-        });
-      }
-    });
-  }
-
-  void _listenToDeepLinks() {
-    // Listen to app links while the app is already started
-    _appLinks.uriLinkStream.listen((uri) {
-      print('Deep link received: $uri');
-      _handleDeepLink(uri);
-    }, onError: (err) {
-      print('Deep link error: $err');
-    });
-
-    // Handle deep links when app is launched from a terminated state
-    _appLinks.getInitialLink().then((uri) {
-      if (uri != null) {
-        print('Initial deep link: $uri');
-        _handleDeepLink(uri);
-      }
-    });
-  }
-
-  void _handleDeepLink(Uri uri) {
-    print('Handling deep link: ${uri.toString()}');
-
-    if (uri.scheme == 'com.example.projects') {
-      if (uri.host == 'reset-password') {
-        // Navigate to password reset page
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            Navigator.of(context).pushNamed('/password-reset');
-          }
-        });
-      }
-    }
   }
 
   Future<void> _checkAuthStatus() async {

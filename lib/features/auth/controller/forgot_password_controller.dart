@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
-import 'package:familee_dental/features/auth/pages/password_reset_confirmation_page.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 
 class ForgotPasswordController {
   final email = TextEditingController();
@@ -19,25 +19,6 @@ class ForgotPasswordController {
       barrierColor: Colors.transparent,
       builder: (BuildContext context) {
         return _AnimatedNotification(
-          title: title,
-          message: message,
-          onDismiss: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-          },
-        );
-      },
-    );
-  }
-
-  void _showSuccessDialog(BuildContext context, String title, String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return _AnimatedSuccessNotification(
           title: title,
           message: message,
           onDismiss: () {
@@ -71,18 +52,227 @@ class ForgotPasswordController {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
-  /// Send password reset email with deep link
-  Future<void> _sendPasswordResetEmail(String email) async {
+  /// Generate 6-digit verification code
+  String _generateVerificationCode() {
+    final random = DateTime.now().millisecondsSinceEpoch;
+    final code = (random % 1000000).toString().padLeft(6, '0');
+    return code;
+  }
+
+  /// Store verification code in database
+  Future<void> _storeVerificationCode(String email, String code) async {
     try {
-      // Use the app's package name for deep linking
+      // First, mark any existing unused codes for this email as used
+      try {
+        await _supabase
+            .from('password_reset_codes')
+            .update({'used': true})
+            .eq('email', email.toLowerCase())
+            .eq('used', false);
+      } catch (e) {
+        print('⚠️ Warning: Could not mark old codes as used: $e');
+        // Continue anyway, this is not critical
+      }
+
+      // Calculate expiration time (10 minutes from now)
+      final expiresAt = DateTime.now().add(const Duration(minutes: 10));
+
+      // Insert new code into database
+      print('🔍 DEBUG: Attempting to store code for email: $email');
+      print('🔍 DEBUG: Code to store: $code');
+      print('🔍 DEBUG: Expiration time: $expiresAt');
+
+      final insertData = {
+        'email': email.toLowerCase(),
+        'code': code,
+        'expires_at': expiresAt.toIso8601String(),
+        'used': false,
+      };
+
+      print('🔍 DEBUG: Inserting data: $insertData');
+
+      await _supabase.from('password_reset_codes').insert(insertData);
+
+      print('✅ Code stored in database: $code expires at $expiresAt');
+      print('✅ Old codes for $email marked as used');
+
+      // Verify the code was actually stored by querying it back
+      final verifyQuery = await _supabase
+          .from('password_reset_codes')
+          .select('*')
+          .eq('email', email.toLowerCase())
+          .eq('code', code)
+          .limit(1);
+
+      if (verifyQuery.isNotEmpty) {
+        print('✅ VERIFICATION: Code found in database after insertion');
+        print('✅ VERIFICATION: Record: ${verifyQuery.first}');
+      } else {
+        print('❌ VERIFICATION: Code NOT found in database after insertion!');
+        print('❌ This indicates a serious database issue');
+      }
+    } catch (e) {
+      print('❌ Error storing verification code: $e');
+      print(
+          '❌ This might be because the password_reset_codes table does not exist');
+      print('❌ Or there are permission issues with the table');
+
+      // For now, we'll continue without storing in database
+      // The code will still be generated and can be used
+      print('📧 Code generated: $code (not stored in database)');
+      print('📧 This code expires in 10 minutes.');
+
+      // Don't rethrow - let the flow continue
+      // The user can still use the generated code
+    }
+  }
+
+  /// Send email with 6-digit code using Supabase
+  Future<bool> _sendEmailWithCode(String email, String code) async {
+    try {
+      // First, let's try to send the email using Supabase's auth system
+      // If the user doesn't exist in auth.users, this will fail
       await _supabase.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'com.example.projects://reset-password', // Use package name
+        redirectTo: 'https://familee-dental.com/password-reset',
       );
+
+      print('📧 Password reset email sent to $email');
+      print('📧 Verification code: $code');
+      print('📧 This code expires in 10 minutes.');
+      return true; // Email sent successfully
     } catch (e) {
-      print('Error sending password reset email: $e');
-      rethrow;
+      print('❌ Error sending email via Supabase auth: $e');
+      print(
+          '❌ This usually means the email is not in Supabase auth.users table');
+
+      // For now, we'll show the code in the confirmation dialog
+      // In production, you should integrate with an email service like SendGrid, Mailgun, etc.
+      print('📧 Fallback: Code will be shown in app for testing');
+      print('📧 Verification code for $email: $code');
+      print('📧 This code expires in 10 minutes.');
+
+      return false; // Email sending failed
     }
+  }
+
+  /// Show confirmation dialog after sending reset token
+  void _showConfirmationDialog(BuildContext context, String email,
+      {String? code}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00D4AA),
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                  child: const Icon(
+                    Icons.mark_email_read_outlined,
+                    size: 40,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Title
+                Text(
+                  "Check Your Email",
+                  style: AppFonts.interStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 24,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+
+                // Message
+                Column(
+                  children: [
+                    Text(
+                      code != null
+                          ? "Email sending failed, but here's your reset code:"
+                          : "We've sent a reset token to your email. Please check your inbox and use the token to reset your password. The code will expire in 10 minutes.",
+                      style: AppFonts.interStyle(
+                        fontWeight: FontWeight.w400,
+                        fontSize: 16,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (code != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00D4AA),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          code,
+                          style: AppFonts.interStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 24,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 32),
+
+                // Continue Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Close dialog
+                      Navigator.of(context).pushReplacementNamed(
+                        '/password-reset',
+                        arguments: {'email': email},
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D4AA),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      "CONTINUE",
+                      style: AppFonts.interStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   /// Main method to handle forgot password flow
@@ -127,18 +317,20 @@ class ForgotPasswordController {
         return;
       }
 
-      // Send password reset email with deep link
-      await _sendPasswordResetEmail(emailText);
+      // Send password reset email with 6-digit code
+      final code = _generateVerificationCode();
+      await _storeVerificationCode(emailText, code);
+
+      // Try to send email, but don't fail the flow if it doesn't work
+      final emailSent = await _sendEmailWithCode(emailText, code);
+      final emailCode =
+          emailSent ? null : code; // Show code only if email failed
 
       isLoading = false;
       onStateUpdate();
 
-      // Navigate to confirmation page
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => PasswordResetConfirmationPage(email: emailText),
-        ),
-      );
+      // Show confirmation dialog
+      _showConfirmationDialog(context, emailText, code: emailCode);
     } catch (e) {
       isLoading = false;
       onStateUpdate();

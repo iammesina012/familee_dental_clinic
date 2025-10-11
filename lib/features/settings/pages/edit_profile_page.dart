@@ -150,14 +150,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // User ID (Display Only)
-              _buildDisplayField(
-                label: 'User ID',
-                value: _currentUserId,
-                theme: theme,
-              ),
-              const SizedBox(height: 20),
-
               // Name Field
               _buildTextField(
                 label: 'Name',
@@ -284,49 +276,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildDisplayField({
-    required String label,
-    required String value,
-    required ThemeData theme,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'SF Pro',
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: theme.brightness == Brightness.dark
-                ? theme.colorScheme.surface
-                : Colors.grey[100],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: theme.dividerColor.withOpacity(0.2),
-              width: 1,
-            ),
-          ),
-          child: Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'SF Pro',
-              fontSize: 16,
-              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

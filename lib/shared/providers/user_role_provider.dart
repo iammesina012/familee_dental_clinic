@@ -66,7 +66,7 @@ class UserRoleProvider extends ChangeNotifier {
   bool canAccessActivityLog() => isOwner || isAdmin;
   bool canAccessSettings() => true; // All roles can access settings
   bool canManageUsers() => isOwner || isAdmin;
-  bool canBackupRestore() => isOwner || isAdmin;
+  bool canBackupRestore() => isOwner;
 
   // Staff and Admin can access these
   bool canAccessDashboard() => true;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/backup_restore/services/backup_restore_service.dart';
+import 'package:familee_dental/features/backup_restore/services/automatic_backup_service.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 
 class BackupRestorePage extends StatefulWidget {
@@ -22,44 +23,71 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
   int _totalCount = 0;
   List<BackupFileMeta> _backups = [];
   String? _error;
+  bool _isAutoBackupEnabled = false;
+  DateTime? _lastBackupDate;
 
   @override
   void initState() {
     super.initState();
     _loadBackups();
+    _loadAutoBackupSettings();
+  }
+
+  Future<void> _loadAutoBackupSettings() async {
+    // Check if backup is needed first
+    await AutomaticBackupService.checkAndCreateBackupIfNeeded();
+
+    final isEnabled = await AutomaticBackupService.isAutoBackupEnabled();
+    final lastDate = await AutomaticBackupService.getLastBackupDate();
+    if (mounted) {
+      setState(() {
+        _isAutoBackupEnabled = isEnabled;
+        _lastBackupDate = lastDate;
+      });
+    }
   }
 
   Future<void> _loadBackups() async {
-    setState(() {
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _error = null;
+      });
+    }
     try {
       final files = await _service.listBackups();
-      setState(() {
-        _backups = files;
-      });
+      if (mounted) {
+        setState(() {
+          _backups = files;
+        });
+      }
     } catch (e) {
       // Hide raw error for no_changes; only show snackbar above
       if (!(e is StateError && e.message == 'no_changes')) {
-        setState(() {
-          _error = e.toString();
-        });
+        if (mounted) {
+          setState(() {
+            _error = e.toString();
+          });
+        }
       }
     }
   }
 
   Future<void> _backupNow() async {
-    setState(() {
-      _isBackingUp = true;
-      _progressCount = 0;
-      _totalCount = 0; // unknown until done
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _isBackingUp = true;
+        _progressCount = 0;
+        _totalCount = 0; // unknown until done
+        _error = null;
+      });
+    }
     try {
       final res = await _service.createBackup(onProgress: (processed) {
-        setState(() {
-          _progressCount = processed;
-        });
+        if (mounted) {
+          setState(() {
+            _progressCount = processed;
+          });
+        }
       });
       if (!mounted) return;
 
@@ -117,9 +145,11 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Backup failed: $e')),
         );
-        setState(() {
-          _error = e.toString();
-        });
+        if (mounted) {
+          setState(() {
+            _error = e.toString();
+          });
+        }
       }
     } finally {
       if (mounted) {
@@ -131,20 +161,24 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
   }
 
   Future<void> _restoreFrom(BackupFileMeta meta) async {
-    setState(() {
-      _isRestoring = true;
-      _progressCount = 0;
-      _totalCount = 0;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _isRestoring = true;
+        _progressCount = 0;
+        _totalCount = 0;
+        _error = null;
+      });
+    }
     try {
       final result = await _service.restoreFromBackup(
         storagePath: meta.fullPath,
         onProgress: (processed, total) {
-          setState(() {
-            _progressCount = processed;
-            _totalCount = total;
-          });
+          if (mounted) {
+            setState(() {
+              _progressCount = processed;
+              _totalCount = total;
+            });
+          }
         },
       );
       if (!mounted) return;
@@ -165,9 +199,11 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Restore failed: $e')),
       );
-      setState(() {
-        _error = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -272,6 +308,67 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
               Text(_error!, style: const TextStyle(color: Colors.red)),
               const SizedBox(height: 16),
             ],
+            // Automatic Backup Settings
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        color: const Color(0xFF00D4AA),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Automatic Daily Backup',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                      const Spacer(),
+                      Switch(
+                        value: _isAutoBackupEnabled,
+                        onChanged: _toggleAutoBackup,
+                        activeColor: const Color(0xFF00D4AA),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Automatically creates a backup at 11:59 PM daily',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  ),
+                  if (_isAutoBackupEnabled && _lastBackupDate != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Last automatic backup: ${_formatDate(_lastBackupDate!)}',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 12,
+                        color: const Color(0xFF00D4AA),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             Text(
               'Available Backups',
               style: AppFonts.sfProStyle(
@@ -521,6 +618,60 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
 
     if (confirmed == true) {
       await _restoreFrom(meta);
+    }
+  }
+
+  Future<void> _toggleAutoBackup(bool enabled) async {
+    try {
+      if (enabled) {
+        await AutomaticBackupService.enableAutoBackup();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Automatic daily backup enabled'),
+              backgroundColor: Color(0xFF00D4AA),
+            ),
+          );
+        }
+      } else {
+        await AutomaticBackupService.disableAutoBackup();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Automatic daily backup disabled'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+      await _loadAutoBackupSettings();
+    } catch (e) {
+      // Only show error for enable operation, not disable
+      if (enabled && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error enabling auto backup: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      // For disable operation, just update the UI state
+      await _loadAutoBackupSettings();
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dateOnly = DateTime(date.year, date.month, date.day);
+
+    if (dateOnly == today) {
+      return 'Today at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else if (dateOnly == yesterday) {
+      return 'Yesterday at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else {
+      return '${date.month}/${date.day}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     }
   }
 }

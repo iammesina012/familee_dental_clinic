@@ -74,6 +74,7 @@ class _SettingsPageState extends State<SettingsPage> {
         listenable: userRoleProvider,
         builder: (context, child) {
           final isStaff = userRoleProvider.isStaff;
+          final isOwner = userRoleProvider.isOwner;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
@@ -153,25 +154,27 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   const SizedBox(height: 24),
 
-                  // System Section - Only for Owner and Admin users
-                  _buildSectionHeader("System"),
-                  _buildSettingItem(
-                    icon: Icons.backup_outlined,
-                    title: "Backup & Restore",
-                    subtitle: "Manage data backup and restore",
-                    trailing: const Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: null,
+                  // System Section - Only for Owner users
+                  if (isOwner) ...[
+                    _buildSectionHeader("System"),
+                    _buildSettingItem(
+                      icon: Icons.backup_outlined,
+                      title: "Backup & Restore",
+                      subtitle: "Manage data backup and restore",
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: null,
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const BackupRestorePage()),
+                        );
+                      },
                     ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const BackupRestorePage()),
-                      );
-                    },
-                  ),
+                  ],
                 ],
 
                 const SizedBox(height: 32),

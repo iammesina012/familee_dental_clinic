@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
+import 'encryption_service.dart';
 
 /// Simple models for backup metadata and results
 class BackupFileMeta {
@@ -121,11 +122,18 @@ class BackupRestoreService {
         final latest = existing.first; // newest first
         final bytes =
             await _supabase.storage.from(_bucket).download(latest.fullPath);
-        final lastPayload =
-            jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-        final String? lastChecksum = lastPayload['checksum'] as String?;
-        if (lastChecksum != null && lastChecksum == checksum) {
-          throw StateError('no_changes');
+        final rawData = utf8.decode(bytes);
+
+        // Decrypt the previous backup to compare checksums
+        final currentUser = _supabase.auth.currentUser;
+        if (currentUser != null) {
+          final decryptedData = EncryptionService.decryptData(
+              rawData, currentUser.id, currentUser.email ?? '');
+          final lastPayload = jsonDecode(decryptedData) as Map<String, dynamic>;
+          final String? lastChecksum = lastPayload['checksum'] as String?;
+          if (lastChecksum != null && lastChecksum == checksum) {
+            throw StateError('no_changes');
+          }
         }
       }
     } on StateError catch (e) {
@@ -142,9 +150,19 @@ class BackupRestoreService {
     };
 
     final String jsonStr = jsonEncode(payload);
+
+    // Encrypt the backup data using Owner's account info
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      throw Exception('No authenticated user found for backup encryption');
+    }
+
+    final String encryptedData = EncryptionService.encryptData(
+        jsonStr, currentUser.id, currentUser.email ?? '');
+
     final String filename = _buildBackupFilename();
     final String path = 'familee-backups/$filename';
-    final data = Uint8List.fromList(utf8.encode(jsonStr));
+    final data = Uint8List.fromList(utf8.encode(encryptedData));
     await _supabase.storage.from(_bucket).uploadBinary(
           path,
           data,
@@ -191,7 +209,16 @@ class BackupRestoreService {
     }
     final bytes =
         await _supabase.storage.from(_bucket).download(normalizedPath);
-    final String jsonStr = utf8.decode(bytes);
+    final String rawData = utf8.decode(bytes);
+
+    // Decrypt the backup data using Owner's account info
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      throw Exception('No authenticated user found for backup decryption');
+    }
+
+    final String jsonStr = EncryptionService.decryptData(
+        rawData, currentUser.id, currentUser.email ?? '');
 
     Map<String, dynamic> decoded;
     try {

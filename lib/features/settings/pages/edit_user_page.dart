@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/settings/controller/edit_user_controller.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class EditUserPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -15,6 +16,7 @@ class _EditUserPageState extends State<EditUserPage> {
   final _controller = EditUserController();
   final _settingsActivityController = SettingsActivityController();
   final _formKey = GlobalKey<FormState>();
+  final _userRoleProvider = UserRoleProvider();
 
   // Form controllers
   late TextEditingController _nameController;
@@ -31,6 +33,26 @@ class _EditUserPageState extends State<EditUserPage> {
   void initState() {
     super.initState();
     _initializeForm();
+    _checkPermissions();
+  }
+
+  void _checkPermissions() {
+    // Check if current user can manage the target user's role
+    final targetUserRole = widget.user['role'] ?? 'Staff';
+    if (!_userRoleProvider.canManageRole(targetUserRole)) {
+      // If cannot manage this role, show error and go back
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You do not have permission to edit this user'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          Navigator.maybePop(context);
+        }
+      });
+    }
   }
 
   void _initializeForm() {
@@ -100,14 +122,6 @@ class _EditUserPageState extends State<EditUserPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // UID Field (Disabled)
-                      _buildDisabledField(
-                        label: 'User ID',
-                        value: widget.user['uid'] ?? '',
-                        theme: theme,
-                      ),
-                      const SizedBox(height: 12),
-
                       // Name Field
                       _buildTextField(
                         controller: _nameController,
@@ -241,46 +255,6 @@ class _EditUserPageState extends State<EditUserPage> {
     );
   }
 
-  Widget _buildDisabledField({
-    required String label,
-    required String value,
-    required ThemeData theme,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'SF Pro',
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: theme.brightness == Brightness.dark
-                ? theme.colorScheme.surface
-                : Colors.grey[100],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-          ),
-          child: Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'SF Pro',
-              fontSize: 16,
-              color: theme.textTheme.bodyLarge?.color?.withOpacity(0.6),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -339,78 +313,6 @@ class _EditUserPageState extends State<EditUserPage> {
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPasswordField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required bool isVisible,
-    required VoidCallback onToggleVisibility,
-    String? Function(String?)? validator,
-    required ThemeData theme,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'SF Pro',
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          obscureText: !isVisible,
-          validator: validator,
-          style: const TextStyle(
-            fontFamily: 'SF Pro',
-            fontSize: 16,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(
-              fontFamily: 'SF Pro',
-              color: theme.textTheme.bodyLarge?.color?.withOpacity(0.5),
-            ),
-            filled: true,
-            fillColor: theme.brightness == Brightness.dark
-                ? theme.colorScheme.surface
-                : Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF00D4AA), width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red),
-            ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            suffixIcon: IconButton(
-              onPressed: onToggleVisibility,
-              icon: Icon(
-                isVisible ? Icons.visibility_off : Icons.visibility,
-                color: theme.iconTheme.color,
-              ),
-            ),
           ),
         ),
       ],
@@ -483,6 +385,46 @@ class _EditUserPageState extends State<EditUserPage> {
   }
 
   Widget _buildRoleDropdown(ThemeData theme) {
+    // Get available roles based on current user's permissions
+    final availableRoles = _userRoleProvider.getAvailableRolesToAssign();
+
+    // If current user cannot assign any roles, show role as read-only
+    if (availableRoles.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Role',
+            style: TextStyle(
+              fontFamily: 'SF Pro',
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: theme.brightness == Brightness.dark
+                  ? theme.colorScheme.surface
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+            ),
+            child: Text(
+              _selectedRole,
+              style: TextStyle(
+                fontFamily: 'SF Pro',
+                fontSize: 16,
+                color: theme.textTheme.bodyLarge?.color?.withOpacity(0.6),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -520,7 +462,7 @@ class _EditUserPageState extends State<EditUserPage> {
                   color: theme.textTheme.bodyLarge?.color?.withOpacity(0.6),
                 ),
               ),
-              items: ['Admin', 'Staff'].map((String role) {
+              items: availableRoles.map((String role) {
                 return DropdownMenuItem<String>(
                   value: role,
                   child: Text(
@@ -549,6 +491,20 @@ class _EditUserPageState extends State<EditUserPage> {
 
   Future<void> _saveUser() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Security check: Prevent role escalation
+    final availableRoles = _userRoleProvider.getAvailableRolesToAssign();
+    if (availableRoles.isNotEmpty && !availableRoles.contains(_selectedRole)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You do not have permission to assign this role'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     setState(() => _isSaving = true);
 

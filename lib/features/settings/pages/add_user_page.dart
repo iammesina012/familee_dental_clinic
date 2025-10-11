@@ -19,13 +19,9 @@ class _AddUserPageState extends State<AddUserPage> {
   final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
 
   // Form state
   String _selectedRole = 'Staff';
-  bool _isPasswordVisible = false;
-  bool _isConfirmPasswordVisible = false;
   bool _isCreating = false;
 
   // Validation state
@@ -56,8 +52,6 @@ class _AddUserPageState extends State<AddUserPage> {
     _nameController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -97,6 +91,43 @@ class _AddUserPageState extends State<AddUserPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Default Password Info
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.brightness == Brightness.dark
+                        ? Colors.blue.withOpacity(0.1)
+                        : Colors.blue.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.blue.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.blue,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Default password: familee2021',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontSize: 14,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // Name Field
                 _buildTextField(
                   controller: _nameController,
@@ -181,54 +212,6 @@ class _AddUserPageState extends State<AddUserPage> {
                         });
                       }
                     }
-                  },
-                  theme: theme,
-                ),
-                const SizedBox(height: 16),
-
-                // Password Field
-                _buildPasswordField(
-                  controller: _passwordController,
-                  label: 'Password',
-                  hint: 'Enter password',
-                  isVisible: _isPasswordVisible,
-                  onToggleVisibility: () {
-                    setState(() {
-                      _isPasswordVisible = !_isPasswordVisible;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Password is required';
-                    }
-                    if (!_controller.isPasswordValid(value)) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                  theme: theme,
-                ),
-                const SizedBox(height: 16),
-
-                // Confirm Password Field
-                _buildPasswordField(
-                  controller: _confirmPasswordController,
-                  label: 'Confirm Password',
-                  hint: 'Confirm password',
-                  isVisible: _isConfirmPasswordVisible,
-                  onToggleVisibility: () {
-                    setState(() {
-                      _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please confirm password';
-                    }
-                    if (value != _passwordController.text) {
-                      return 'Passwords do not match';
-                    }
-                    return null;
                   },
                   theme: theme,
                 ),
@@ -350,78 +333,6 @@ class _AddUserPageState extends State<AddUserPage> {
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPasswordField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required bool isVisible,
-    required VoidCallback onToggleVisibility,
-    String? Function(String?)? validator,
-    required ThemeData theme,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'SF Pro',
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          obscureText: !isVisible,
-          validator: validator,
-          style: const TextStyle(
-            fontFamily: 'SF Pro',
-            fontSize: 16,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(
-              fontFamily: 'SF Pro',
-              color: theme.textTheme.bodyLarge?.color?.withOpacity(0.5),
-            ),
-            filled: true,
-            fillColor: theme.brightness == Brightness.dark
-                ? theme.colorScheme.surface
-                : Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: theme.dividerColor.withOpacity(0.2)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF00D4AA), width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red),
-            ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            suffixIcon: IconButton(
-              icon: Icon(
-                isVisible ? Icons.visibility_off : Icons.visibility,
-                color: theme.iconTheme.color,
-              ),
-              onPressed: onToggleVisibility,
-            ),
           ),
         ),
       ],
@@ -572,7 +483,7 @@ class _AddUserPageState extends State<AddUserPage> {
       name: _nameController.text.trim(),
       username: _usernameController.text.trim(),
       email: _emailController.text.trim(),
-      password: _passwordController.text,
+      password: 'familee2021', // Default password for all new users
       role: _selectedRole,
       isActive: true, // Always create new users as active
     );
