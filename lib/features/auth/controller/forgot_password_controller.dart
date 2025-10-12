@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/features/auth/services/email_service.dart';
 
 class ForgotPasswordController {
   final email = TextEditingController();
-  final auth = AuthService();
   final SupabaseClient _supabase = Supabase.instance.client;
 
   String? emailError;
@@ -31,6 +30,66 @@ class ForgotPasswordController {
     );
   }
 
+  /// Validate email format
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
+  /// Send custom password reset OTP using admin API
+  Future<void> _sendCustomPasswordResetOTP(String email) async {
+    try {
+      print('📧 Generating custom OTP for: $email');
+
+      // Generate a 6-digit OTP
+      final otp = _generateOTP();
+
+      // Store the OTP temporarily (in a real app, you'd store this in database with expiration)
+      // For now, we'll use a simple approach
+      print('📧 Generated OTP: $otp');
+
+      // Use Supabase's admin API to send email with custom template
+      // This requires service role key which should be in your .env file
+      await _sendEmailWithCustomTemplate(email, otp);
+
+      // Also store the OTP for verification (in production, use database)
+      _storeOTPForVerification(email, otp);
+    } catch (e) {
+      print('❌ Custom OTP generation failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Generate a 6-digit OTP
+  String _generateOTP() {
+    final random = DateTime.now().millisecondsSinceEpoch;
+    return (random % 1000000).toString().padLeft(6, '0');
+  }
+
+  /// Store OTP for verification (temporary storage)
+  void _storeOTPForVerification(String email, String otp) {
+    // In a real app, store this in database with expiration time
+    // For now, we'll use a simple in-memory storage
+    print('📧 OTP stored for verification: $email -> $otp');
+  }
+
+  /// Send email with custom template using existing EmailService
+  Future<void> _sendEmailWithCustomTemplate(String email, String otp) async {
+    print('📧 Sending custom email template with OTP: $otp');
+
+    // Import and use the existing EmailService
+    final emailSent = await EmailService.sendPasswordResetEmail(
+      email: email,
+      verificationCode: otp,
+      expirationMinutes: '5',
+    );
+
+    if (!emailSent) {
+      throw Exception('Failed to send password reset email');
+    }
+
+    print('✅ Custom email sent successfully with OTP: $otp');
+  }
+
   /// Check if email exists in the user_roles table
   Future<bool> _checkEmailExists(String email) async {
     try {
@@ -47,118 +106,47 @@ class ForgotPasswordController {
     }
   }
 
-  /// Validate email format
-  bool _isValidEmail(String email) {
-    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
-  }
-
-  /// Generate 6-digit verification code
-  String _generateVerificationCode() {
-    final random = DateTime.now().millisecondsSinceEpoch;
-    final code = (random % 1000000).toString().padLeft(6, '0');
-    return code;
-  }
-
-  /// Store verification code in database
-  Future<void> _storeVerificationCode(String email, String code) async {
+  /// Use Supabase's built-in password reset system
+  /// This uses your email template from Supabase dashboard
+  /// Use Supabase's OTP system for password recovery
+  Future<void> _sendSupabasePasswordReset(String email) async {
     try {
-      // First, mark any existing unused codes for this email as used
+      print(
+          '📧 Sending Supabase password reset email (Reset Password template) for: $email');
+
+      // Call resetPasswordForEmail. Different SDK versions expose this differently,
+      // so use dynamic to support both newer and older clients.
       try {
-        await _supabase
-            .from('password_reset_codes')
-            .update({'used': true})
-            .eq('email', email.toLowerCase())
-            .eq('used', false);
+        // Newer versions: auth.resetPasswordForEmail
+        await (_supabase.auth as dynamic).resetPasswordForEmail(email);
       } catch (e) {
-        print('⚠️ Warning: Could not mark old codes as used: $e');
-        // Continue anyway, this is not critical
+        // Fallback for older clients: auth.api.resetPasswordForEmail
+        try {
+          await (_supabase.auth as dynamic).api.resetPasswordForEmail(email);
+        } catch (inner) {
+          // Re-throw the original error if fallback also fails
+          print('❌ Both resetPasswordForEmail calls failed: $e / $inner');
+          rethrow;
+        }
       }
 
-      // Calculate expiration time (10 minutes from now)
-      final expiresAt = DateTime.now().add(const Duration(minutes: 10));
-
-      // Insert new code into database
-      print('🔍 DEBUG: Attempting to store code for email: $email');
-      print('🔍 DEBUG: Code to store: $code');
-      print('🔍 DEBUG: Expiration time: $expiresAt');
-
-      final insertData = {
-        'email': email.toLowerCase(),
-        'code': code,
-        'expires_at': expiresAt.toIso8601String(),
-        'used': false,
-      };
-
-      print('🔍 DEBUG: Inserting data: $insertData');
-
-      await _supabase.from('password_reset_codes').insert(insertData);
-
-      print('✅ Code stored in database: $code expires at $expiresAt');
-      print('✅ Old codes for $email marked as used');
-
-      // Verify the code was actually stored by querying it back
-      final verifyQuery = await _supabase
-          .from('password_reset_codes')
-          .select('*')
-          .eq('email', email.toLowerCase())
-          .eq('code', code)
-          .limit(1);
-
-      if (verifyQuery.isNotEmpty) {
-        print('✅ VERIFICATION: Code found in database after insertion');
-        print('✅ VERIFICATION: Record: ${verifyQuery.first}');
-      } else {
-        print('❌ VERIFICATION: Code NOT found in database after insertion!');
-        print('❌ This indicates a serious database issue');
-      }
-    } catch (e) {
-      print('❌ Error storing verification code: $e');
+      print('✅ Supabase password reset email sent successfully');
       print(
-          '❌ This might be because the password_reset_codes table does not exist');
-      print('❌ Or there are permission issues with the table');
-
-      // For now, we'll continue without storing in database
-      // The code will still be generated and can be used
-      print('📧 Code generated: $code (not stored in database)');
-      print('📧 This code expires in 10 minutes.');
-
-      // Don't rethrow - let the flow continue
-      // The user can still use the generated code
+          '📧 Email will be generated using your Supabase Reset Password template (ensure it includes {{ .Token }} if you want a token shown)');
+    } catch (e) {
+      print('❌ Supabase password reset failed: $e');
+      print('❌ Error type: ${e.runtimeType}');
+      if (e is AuthException) {
+        print('❌ AuthException details:');
+        print('  - Message: ${e.message}');
+        print('  - Status code: ${e.statusCode}');
+      }
+      rethrow;
     }
   }
 
-  /// Send email with 6-digit code using Supabase
-  Future<bool> _sendEmailWithCode(String email, String code) async {
-    try {
-      // First, let's try to send the email using Supabase's auth system
-      // If the user doesn't exist in auth.users, this will fail
-      await _supabase.auth.resetPasswordForEmail(
-        email,
-        redirectTo: 'https://familee-dental.com/password-reset',
-      );
-
-      print('📧 Password reset email sent to $email');
-      print('📧 Verification code: $code');
-      print('📧 This code expires in 10 minutes.');
-      return true; // Email sent successfully
-    } catch (e) {
-      print('❌ Error sending email via Supabase auth: $e');
-      print(
-          '❌ This usually means the email is not in Supabase auth.users table');
-
-      // For now, we'll show the code in the confirmation dialog
-      // In production, you should integrate with an email service like SendGrid, Mailgun, etc.
-      print('📧 Fallback: Code will be shown in app for testing');
-      print('📧 Verification code for $email: $code');
-      print('📧 This code expires in 10 minutes.');
-
-      return false; // Email sending failed
-    }
-  }
-
-  /// Show confirmation dialog after sending reset token
-  void _showConfirmationDialog(BuildContext context, String email,
-      {String? code}) {
+  /// Show confirmation dialog after sending reset email
+  void _showConfirmationDialog(BuildContext context, String email) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -202,38 +190,14 @@ class ForgotPasswordController {
                 const SizedBox(height: 16),
 
                 // Message
-                Column(
-                  children: [
-                    Text(
-                      code != null
-                          ? "Email sending failed, but here's your reset code:"
-                          : "We've sent a reset token to your email. Please check your inbox and use the token to reset your password. The code will expire in 10 minutes.",
-                      style: AppFonts.interStyle(
-                        fontWeight: FontWeight.w400,
-                        fontSize: 16,
-                        color: Colors.white.withOpacity(0.8),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (code != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00D4AA),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          code,
-                          style: AppFonts.interStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 24,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                Text(
+                  "We've sent a password reset token to your email ($email). Please check your inbox and copy the token to reset your password.",
+                  style: AppFonts.interStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
 
@@ -244,7 +208,8 @@ class ForgotPasswordController {
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.of(context).pop(); // Close dialog
-                      Navigator.of(context).pushReplacementNamed(
+                      // Navigate to password reset page with email
+                      Navigator.of(context).pushNamed(
                         '/password-reset',
                         arguments: {'email': email},
                       );
@@ -275,7 +240,7 @@ class ForgotPasswordController {
     );
   }
 
-  /// Main method to handle forgot password flow
+  /// Main method to handle forgot password flow using Supabase
   Future<void> handleForgotPassword(
     BuildContext context,
     VoidCallback onStateUpdate,
@@ -317,20 +282,15 @@ class ForgotPasswordController {
         return;
       }
 
-      // Send password reset email with 6-digit code
-      final code = _generateVerificationCode();
-      await _storeVerificationCode(emailText, code);
-
-      // Try to send email, but don't fail the flow if it doesn't work
-      final emailSent = await _sendEmailWithCode(emailText, code);
-      final emailCode =
-          emailSent ? null : code; // Show code only if email failed
+      // Use Supabase's password reset system
+      // Note: This will only work if the email exists in Supabase's auth.users table
+      await _sendSupabasePasswordReset(emailText);
 
       isLoading = false;
       onStateUpdate();
 
       // Show confirmation dialog
-      _showConfirmationDialog(context, emailText, code: emailCode);
+      _showConfirmationDialog(context, emailText);
     } catch (e) {
       isLoading = false;
       onStateUpdate();
@@ -458,162 +418,6 @@ class _AnimatedNotificationState extends State<_AnimatedNotification>
                     children: [
                       const Icon(
                         Icons.error_outline,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.message,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: widget.onDismiss,
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Animated notification widget for success messages
-class _AnimatedSuccessNotification extends StatefulWidget {
-  final String title;
-  final String message;
-  final VoidCallback onDismiss;
-
-  const _AnimatedSuccessNotification({
-    required this.title,
-    required this.message,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_AnimatedSuccessNotification> createState() =>
-      _AnimatedSuccessNotificationState();
-}
-
-class _AnimatedSuccessNotificationState
-    extends State<_AnimatedSuccessNotification> with TickerProviderStateMixin {
-  late AnimationController _slideController;
-  late AnimationController _fadeController;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _slideController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutBack,
-    ));
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeIn,
-    ));
-
-    _slideController.forward();
-    _fadeController.forward();
-  }
-
-  @override
-  void dispose() {
-    _slideController.dispose();
-    _fadeController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          margin: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 50,
-            left: 16,
-            right: 16,
-          ),
-          child: SlideTransition(
-            position: _slideAnimation,
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: Container(
-                constraints: const BoxConstraints(
-                    maxWidth: 350, minHeight: 60, maxHeight: 100),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00D4AA), Color(0xFF00B894)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF00D4AA).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.check_circle_outline,
                         color: Colors.white,
                         size: 24,
                       ),

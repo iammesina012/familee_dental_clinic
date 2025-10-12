@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/auth/controller/password_reset_controller.dart';
-import 'package:familee_dental/features/auth/controller/forgot_password_controller.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 
 class PasswordResetPage extends StatefulWidget {
@@ -15,13 +13,18 @@ class PasswordResetPage extends StatefulWidget {
 
 class _PasswordResetPageState extends State<PasswordResetPage> {
   final controller = PasswordResetController();
-  final ForgotPasswordController forgotPasswordController =
-      ForgotPasswordController();
-  String email = 'user@example.com'; // Default fallback
+  String email = 'user@example.com'; // Default fallbackimage.png
 
   @override
   void initState() {
     super.initState();
+  }
+
+  // Helper to format remaining seconds as M:SS (e.g. 4:58)
+  String _formatDuration(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${minutes}:${seconds.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -33,78 +36,28 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
     if (args != null && args['email'] != null) {
       email = args['email'] as String;
     }
+
+    // Start timers when user reaches this page
+    // Start resend cooldown (60s) if not running
+    if (!controller.isResendTimerRunning) {
+      controller.startCooldownTimer(() => setState(() {}), seconds: 60);
+    }
+
+    // Start token expiry timer (300s) if not running
+    if (!controller.isTokenTimerRunning) {
+      controller.startTokenExpiryTimer(() => setState(() {}), seconds: 300);
+    }
   }
 
   @override
   void dispose() {
     controller.dispose();
-    forgotPasswordController.dispose();
     super.dispose();
   }
 
   void _handleResetPassword() {
     controller.handlePasswordReset(context, () => setState(() {}),
         email: email);
-  }
-
-  /// Generate a 6-digit verification code
-  String _generateVerificationCode() {
-    final random = DateTime.now().millisecondsSinceEpoch;
-    final code = (random % 1000000).toString().padLeft(6, '0');
-    return code;
-  }
-
-  /// Store verification code in database
-  Future<void> _storeVerificationCode(String email, String code) async {
-    try {
-      print('🔍 DEBUG: Storing code for resend - email: $email, code: $code');
-
-      // First, mark any existing unused codes for this email as used
-      try {
-        await Supabase.instance.client
-            .from('password_reset_codes')
-            .update({'used': true})
-            .eq('email', email.toLowerCase())
-            .eq('used', false);
-      } catch (e) {
-        print('⚠️ Warning: Could not mark old codes as used: $e');
-        // Continue anyway, this is not critical
-      }
-
-      // Calculate expiration time (10 minutes from now)
-      final expiresAt = DateTime.now().add(const Duration(minutes: 10));
-
-      // Insert new code into database
-      await Supabase.instance.client.from('password_reset_codes').insert({
-        'email': email.toLowerCase(),
-        'code': code,
-        'expires_at': expiresAt.toIso8601String(),
-        'used': false,
-      });
-
-      print('✅ DEBUG: Code stored for resend: $code expires at $expiresAt');
-    } catch (e) {
-      print('❌ DEBUG: Error storing code for resend: $e');
-      // Don't rethrow - let the flow continue
-    }
-  }
-
-  /// Send email with 6-digit code using Supabase
-  Future<bool> _sendEmailWithCode(String email, String code) async {
-    try {
-      // Use Supabase's built-in password reset email functionality
-      await Supabase.instance.client.auth.resetPasswordForEmail(
-        email,
-        redirectTo: 'https://familee-dental.com/password-reset',
-      );
-
-      print('📧 DEBUG: Resend email sent to $email with code $code');
-      return true; // Email sent successfully
-    } catch (e) {
-      print('❌ DEBUG: Error sending resend email: $e');
-      print('📧 DEBUG: Fallback - showing code in app: $code');
-      return false; // Email sending failed, but code is still valid
-    }
   }
 
   Widget _buildPasswordTip(String text) {
@@ -203,86 +156,15 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
               ),
             ),
 
-            // Header with logo and clinic info
-            Positioned(
-              top: 40,
-              left: 30,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(30),
-                      child: Image.asset(
-                        'assets/images/logo/logo_101.png',
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: 60,
-                            height: 60,
-                            color: Colors.blue,
-                            child: Icon(
-                              Icons.medical_services,
-                              color: Colors.white,
-                              size: 30,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "FamiLee Dental Clinic",
-                        style: AppFonts.interStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 20,
-                          color: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        "Inventory Management",
-                        style: AppFonts.interStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14,
-                          color: Color(0xFF333333),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
             // Back button
             Positioned(
-              top: 120,
+              top: 30,
               left: 30,
               child: GestureDetector(
                 onTap: () {
-                  Navigator.of(context).pushReplacementNamed(
-                    '/forgot-password',
-                    arguments: {'email': email},
-                  );
+                  // Go back to the previous Forgot Password page instead of
+                  // pushing/replacing it (which caused duplicate pages).
+                  Navigator.of(context).pop();
                 },
                 child: Icon(
                   Icons.arrow_back_ios,
@@ -294,13 +176,12 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
 
             // Title and subtitle
             Positioned(
-              top: 140,
+              top: 100,
               left: 30,
               right: 30,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 10),
                   Text(
                     "Create New Password",
                     style: AppFonts.interStyle(
@@ -310,12 +191,35 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    "Enter the reset token from your email ($email) and set a new password.",
-                    style: AppFonts.interStyle(
-                      fontWeight: FontWeight.w400,
-                      fontSize: 14,
-                      color: Color(0xFF2D2D2D).withOpacity(0.7),
+                  // Subtitle with inline expiration timer after the sentence.
+                  RichText(
+                    text: TextSpan(
+                      style: AppFonts.interStyle(
+                        fontWeight: FontWeight.w400,
+                        fontSize: 14,
+                        color: Color(0xFF2D2D2D).withOpacity(0.7),
+                      ),
+                      children: [
+                        TextSpan(
+                          text:
+                              "Enter the reset token from your email ($email) and set a new password.",
+                        ),
+                        if (controller.isTokenTimerRunning)
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: Text(
+                                'Expires in ${_formatDuration(controller.tokenExpiryRemaining)}',
+                                style: AppFonts.interStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],
@@ -324,43 +228,41 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
 
             // Input fields and button
             Positioned(
-              top: 270,
+              top: 220,
               left: 30,
               right: 30,
               child: Column(
                 children: [
                   const SizedBox(height: 10),
-                  // 6-digit code field
+                  // Token field
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: controller.hasVerificationCodeError
+                        color: controller.hasTokenError
                             ? const Color(0xFFFF6B6B)
                             : const Color(0xFFE5E5E5),
                         width: 1,
                       ),
                     ),
                     child: TextField(
-                      controller: controller.verificationCode,
+                      controller: controller.token,
                       onChanged: (value) {
-                        if (controller.hasVerificationCodeError) {
+                        if (controller.hasTokenError) {
                           setState(() {
-                            controller.hasVerificationCodeError = false;
-                            controller.verificationCodeError = null;
+                            controller.hasTokenError = false;
+                            controller.tokenError = null;
                           });
                         }
                       },
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
                       style: AppFonts.interStyle(
                         fontWeight: FontWeight.w500,
                         color: Color(0xFF2D2D2D),
                         fontSize: 14,
                       ),
                       decoration: InputDecoration(
-                        hintText: "Reset Token",
+                        hintText: "Enter OTP Code",
                         hintStyle: AppFonts.interStyle(
                           fontWeight: FontWeight.w500,
                           fontSize: 14,
@@ -382,14 +284,12 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                                 final clipboardData =
                                     await Clipboard.getData('text/plain');
                                 if (clipboardData?.text != null) {
-                                  controller.verificationCode.text =
-                                      clipboardData!.text!;
+                                  controller.token.text = clipboardData!.text!;
                                   // Clear any existing error
-                                  if (controller.hasVerificationCodeError) {
+                                  if (controller.hasTokenError) {
                                     setState(() {
-                                      controller.hasVerificationCodeError =
-                                          false;
-                                      controller.verificationCodeError = null;
+                                      controller.hasTokenError = false;
+                                      controller.tokenError = null;
                                     });
                                   }
                                 }
@@ -410,18 +310,17 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                           horizontal: 12,
                           vertical: 12,
                         ),
-                        counterText: '', // Hide character counter
                       ),
                     ),
                   ),
 
-                  // Reset Token Error Message
-                  if (controller.hasVerificationCodeError)
+                  // Token Error Message
+                  if (controller.hasTokenError)
                     Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(top: 4),
                       child: Text(
-                        controller.verificationCodeError ?? '',
+                        controller.tokenError ?? '',
                         style: AppFonts.interStyle(
                           fontWeight: FontWeight.w400,
                           fontSize: 12,
@@ -432,44 +331,30 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
 
                   const SizedBox(height: 12),
 
-                  // Resend Code Button
+                  // Resend functionality
                   Align(
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
                       onTap: controller.canResend
                           ? () async {
                               try {
-                                print('🔄 DEBUG: Resending code for $email');
+                                print('🔄 Resending code for $email');
 
-                                // Generate new code and store it
-                                final code = _generateVerificationCode();
-                                await _storeVerificationCode(email, code);
+                                // Resend password reset email
+                                await controller.resendPasswordReset(
+                                    email, () => setState(() {}));
 
-                                // Send email with new code
-                                await _sendEmailWithCode(email, code);
-
-                                // Update the password reset controller's cooldown
-                                controller.canResend = false;
-                                controller.resendCooldown = 60;
-                                setState(() {});
-
-                                // Start countdown timer
-                                controller.startCooldownTimer(() {
-                                  setState(() {});
-                                });
-
-                                // Show success message
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                        'New verification code sent to $email'),
+                                        'New reset OTP code sent to $email'),
                                     backgroundColor: const Color(0xFF00D4AA),
                                   ),
                                 );
 
-                                print('✅ DEBUG: Resend completed successfully');
+                                print('✅ Resend completed successfully');
                               } catch (e) {
-                                print('❌ DEBUG: Resend failed: $e');
+                                print('❌ Resend failed: $e');
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
@@ -505,7 +390,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                               : [
                                   TextSpan(
                                     text:
-                                        "Resend in ${controller.resendCooldown}s",
+                                        "Resend in ${_formatDuration(controller.resendCooldown)}",
                                   ),
                                 ],
                         ),
@@ -712,6 +597,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                         _buildPasswordTip(
                             "• Include uppercase and lowercase letters"),
                         _buildPasswordTip("• Include at least one number"),
+                        // Removed special character requirement per updated policy
                       ],
                     ),
                   ),

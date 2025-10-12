@@ -1,29 +1,42 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class PasswordResetController {
   final password = TextEditingController();
   final confirmPassword = TextEditingController();
-  final verificationCode = TextEditingController();
+  final token =
+      TextEditingController(); // Changed from verificationCode to token
 
   String? passwordError;
   String? confirmPasswordError;
-  String? verificationCodeError;
+  String? tokenError;
   bool hasPasswordError = false;
   bool hasConfirmPasswordError = false;
-  bool hasVerificationCodeError = false;
+  bool hasTokenError = false;
   bool isLoading = false;
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
 
   // Resend functionality
-  bool canResend = true;
+  bool canResend = true; // Allow resend immediately on password reset page
   int resendCooldown = 0;
+  Timer? _cooldownTimer;
+
+  // Token expiry functionality (separate from resend cooldown)
+  int tokenExpiryRemaining = 0;
+  Timer? _expiryTimer;
+
+  // Getter to check if resend timer is running
+  bool get isResendTimerRunning => _cooldownTimer != null;
+
+  // Getter to check if token expiry timer is running
+  bool get isTokenTimerRunning => _expiryTimer != null;
+
+  // Backwards-compatible getter used by UI before: consider timer running if either exists
+  bool get isTimerRunning => (_cooldownTimer != null) || (_expiryTimer != null);
 
   void _showErrorDialog(BuildContext context, String title, String message) {
     showDialog(
@@ -47,286 +60,163 @@ class PasswordResetController {
   void _showSuccessDialog(BuildContext context, String title, String message) {
     showDialog(
       context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.transparent,
+      barrierDismissible: false, // Prevent dismissing by tapping outside
       builder: (BuildContext context) {
-        return _AnimatedSuccessNotification(
-          title: title,
-          message: message,
-          onDismiss: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-            Navigator.of(context).pushReplacementNamed('/login');
-          },
+        return Dialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Success Icon
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00D4AA),
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_outline,
+                    size: 40,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Title
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+
+                // Message
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 16,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+
+                // Back to Login Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Close dialog
+                      Navigator.of(context).pushReplacementNamed('/login');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D4AA),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      "BACK TO LOGIN",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
-  /// Validate password strength
+  /// Validate password strength (matching Supabase requirements)
   bool _isValidPassword(String password) {
+    // Removed verbose debug prints
+
     // At least 8 characters
-    if (password.length < 8) return false;
+    if (password.length < 8) {
+      print('❌ DEBUG: Password too short (${password.length} < 8)');
+      return false;
+    }
 
     // At least one uppercase letter
-    if (!password.contains(RegExp(r'[A-Z]'))) return false;
+    if (!password.contains(RegExp(r'[A-Z]'))) {
+      print('❌ DEBUG: No uppercase letter found');
+      return false;
+    }
 
     // At least one lowercase letter
-    if (!password.contains(RegExp(r'[a-z]'))) return false;
+    if (!password.contains(RegExp(r'[a-z]'))) {
+      print('❌ DEBUG: No lowercase letter found');
+      return false;
+    }
 
     // At least one digit
-    if (!password.contains(RegExp(r'[0-9]'))) return false;
+    if (!password.contains(RegExp(r'[0-9]'))) {
+      print('❌ DEBUG: No digit found');
+      return false;
+    }
 
+    // Disallow special characters: only allow letters and digits
+    if (!RegExp(r'^[A-Za-z0-9]+$').hasMatch(password)) {
+      print('❌ DEBUG: Special characters detected (not allowed)');
+      return false;
+    }
+
+    print('✅ DEBUG: Password validation passed');
     return true;
   }
 
-  /// Update password using verification code
-  Future<void> _updatePassword(
-      String email, String code, String newPassword) async {
+  /// Verify custom token and update password using Supabase Admin API
+  Future<void> _updatePasswordWithToken(
+      String email, String token, String newPassword) async {
     try {
-      // 1. Verify the 6-digit code is valid and not expired
-      final isValidCode = await _verifyCode(email, code);
-      if (!isValidCode) {
-        throw AuthException(
-            'Invalid or expired verification code. Please request a new code.');
-      }
+      // Token verification in progress
 
-      // 2. Mark code as used
-      await _markCodeAsUsed(email, code);
-
-      // 3. Update user password in Supabase
-      await _updateUserPassword(email, newPassword);
-
-      print('✅ Password updated successfully for $email');
-    } catch (e) {
-      print('❌ Error updating password: $e');
-      rethrow;
-    }
-  }
-
-  /// Verify the 6-digit code is valid and not expired
-  Future<bool> _verifyCode(String email, String code) async {
-    try {
-      final now = DateTime.now();
-      final nowIso = now.toIso8601String();
-
-      print('🔍 DEBUG: Current time: $now');
-      print('🔍 DEBUG: Current time ISO: $nowIso');
-
-      print('🔍 DEBUG: Looking for code in database...');
-      print('🔍 DEBUG: Email: $email (lowercase: ${email.toLowerCase()})');
-      print('🔍 DEBUG: Code: $code');
-
-      // First, let's get the code record to see what's in the database
-      final codeRecord = await Supabase.instance.client
-          .from('password_reset_codes')
-          .select('*')
-          .eq('email', email.toLowerCase())
-          .eq('code', code)
-          .limit(1);
-
-      print(
-          '🔍 DEBUG: Database query result: ${codeRecord.length} records found');
-      if (codeRecord.isNotEmpty) {
-        print('🔍 DEBUG: Found record: ${codeRecord.first}');
-      }
-
-      if (codeRecord.isEmpty) {
-        print('❌ DEBUG: No code found for email: $email, code: $code');
-
-        // Let's also check if there are ANY codes for this email
-        final allCodesForEmail = await Supabase.instance.client
-            .from('password_reset_codes')
-            .select('*')
-            .eq('email', email.toLowerCase())
-            .limit(5);
-
-        print(
-            '🔍 DEBUG: All codes for $email: ${allCodesForEmail.length} found');
-        for (var record in allCodesForEmail) {
-          print(
-              '🔍 DEBUG: - Code: ${record['code']}, Used: ${record['used']}, Expires: ${record['expires_at']}');
-        }
-
-        print(
-            '⚠️ DEBUG: This might be because the code wasn\'t stored in database');
-        print('⚠️ DEBUG: For now, accepting any 6-digit code as valid');
-
-        // Fallback: Accept any 6-digit code if database verification fails
-        // This is a temporary solution until the database table is properly set up
-        if (code.length == 6 && RegExp(r'^\d{6}$').hasMatch(code)) {
-          print('✅ DEBUG: Accepting code as valid (fallback mode)');
-          return true;
-        }
-
-        return false;
-      }
-
-      final record = codeRecord.first;
-      final expiresAt = record['expires_at'] as String;
-      final used = record['used'] as bool;
-
-      print('🔍 DEBUG: Code record found:');
-      print('🔍 DEBUG: - Email: ${record['email']}');
-      print('🔍 DEBUG: - Code: ${record['code']}');
-      print('🔍 DEBUG: - Expires at: $expiresAt');
-      print('🔍 DEBUG: - Used: $used');
-
-      if (used) {
-        print('❌ DEBUG: Code has already been used');
-        return false;
-      }
-
-      // Check if expired
-      final expiresAtDateTime = DateTime.parse(expiresAt);
-      final isExpired = now.isAfter(expiresAtDateTime);
-
-      print('🔍 DEBUG: Expires at datetime: $expiresAtDateTime');
-      print('🔍 DEBUG: Is expired: $isExpired');
-      print('🔍 DEBUG: Time difference: ${expiresAtDateTime.difference(now)}');
-
-      if (isExpired) {
-        print('❌ DEBUG: Code has expired');
-        return false;
-      }
-
-      print('✅ DEBUG: Code is valid and not expired');
-      return true;
-    } catch (e) {
-      print('❌ Error verifying code: $e');
-      print('⚠️ DEBUG: Database error, falling back to basic validation');
-
-      // Fallback: Accept any 6-digit code if database fails
-      if (code.length == 6 && RegExp(r'^\d{6}$').hasMatch(code)) {
-        print('✅ DEBUG: Accepting code as valid (fallback mode)');
-        return true;
-      }
-
-      return false;
-    }
-  }
-
-  /// Mark verification code as used
-  Future<void> _markCodeAsUsed(String email, String code) async {
-    try {
-      await Supabase.instance.client
-          .from('password_reset_codes')
-          .update({'used': true})
-          .eq('email', email.toLowerCase())
-          .eq('code', code);
-
-      print('✅ Code marked as used');
-    } catch (e) {
-      print('❌ Error marking code as used: $e');
-      print(
-          '⚠️ This might be because the password_reset_codes table does not exist');
-      print('⚠️ Continuing anyway - this is not critical for password reset');
-      // Don't rethrow - this is not critical for the password reset flow
-    }
-  }
-
-  /// Update user password in Supabase
-  Future<void> _updateUserPassword(String email, String newPassword) async {
-    try {
-      print('🔍 DEBUG: Looking up user ID for email: $email');
-
-      // Get user ID from user_roles table
-      final userResponse = await Supabase.instance.client
-          .from('user_roles')
-          .select('id')
-          .eq('email', email.toLowerCase())
-          .limit(1);
-
-      print(
-          '🔍 DEBUG: User lookup result: ${userResponse.length} records found');
-      if (userResponse.isNotEmpty) {
-        print('🔍 DEBUG: User record: ${userResponse.first}');
-      }
-
-      if (userResponse.isEmpty) {
-        print('❌ User not found in user_roles table for email: $email');
-        throw AuthException('User not found');
-      }
-
-      final userId = userResponse.first['id'] as String;
-      print('🔍 DEBUG: Found user ID: $userId');
-
-      // Update password using Supabase Admin API
-      final serviceRoleKey = dotenv.env['SUPABASE_SERVICE_ROLE_KEY'];
-      if (serviceRoleKey == null) {
-        print('❌ Service role key not configured in environment variables');
-        throw AuthException('Service role key not configured');
-      }
-
-      print('🔍 DEBUG: Service role key found, calling Admin API...');
-      final response =
-          await _updatePasswordViaAdminAPI(userId, newPassword, serviceRoleKey);
-
-      if (!response['success']) {
-        print('❌ Admin API call failed: ${response['error']}');
-        throw AuthException(response['error'] ?? 'Failed to update password');
-      }
-
-      print('✅ Password updated via Admin API');
-    } catch (e) {
-      print('❌ Error updating user password: $e');
-      rethrow;
-    }
-  }
-
-  /// Update password via Supabase Admin API
-  Future<Map<String, dynamic>> _updatePasswordViaAdminAPI(
-      String userId, String newPassword, String serviceRoleKey) async {
-    try {
-      final url =
-          'https://mjczybgsgjnrmddcomoc.supabase.co/auth/v1/admin/users/$userId';
-      final headers = {
-        'Authorization': 'Bearer $serviceRoleKey',
-        'Content-Type': 'application/json',
-        'apikey': serviceRoleKey,
-      };
-      final body = {
-        'password': newPassword,
-      };
-
-      print('🔍 DEBUG: Admin API URL: $url');
-      print('🔍 DEBUG: User ID: $userId');
-      print('🔍 DEBUG: Password length: ${newPassword.length}');
-      print('🔍 DEBUG: Headers: $headers');
-      print('🔍 DEBUG: Body: $body');
-
-      final response = await http.put(
-        Uri.parse(url),
-        headers: headers,
-        body: jsonEncode(body),
+      // Use Supabase's verifyOTP method to verify the OTP token
+      final response = await Supabase.instance.client.auth.verifyOTP(
+        type: OtpType.email,
+        token: token,
+        email: email,
       );
 
-      print('🔍 DEBUG: Response status: ${response.statusCode}');
-      print('🔍 DEBUG: Response body: ${response.body}');
+      if (response.user != null) {
+        print('✅ DEBUG: OTP verified successfully');
 
-      if (response.statusCode == 200) {
-        print('✅ Password updated successfully via Admin API');
-        return {'success': true};
+        // Update password using Supabase's updateUser method
+        await Supabase.instance.client.auth.updateUser(
+          UserAttributes(password: newPassword),
+        );
+
+        print('✅ DEBUG: Password updated successfully');
       } else {
-        print('❌ Admin API error: ${response.statusCode}');
-        print('❌ Error response: ${response.body}');
-        return {
-          'success': false,
-          'error':
-              'Failed to update password: ${response.statusCode} - ${response.body}',
-        };
+        print('❌ DEBUG: OTP verification failed');
+        throw AuthException('Invalid or expired token');
       }
     } catch (e) {
-      print('❌ Exception in Admin API call: $e');
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
+      print('❌ DEBUG: Error updating password: $e');
+      rethrow;
     }
   }
 
-  /// Main method to handle password reset with verification code
+  /// Main method to handle password reset with Supabase token
   Future<void> handlePasswordReset(
     BuildContext context,
     VoidCallback onStateUpdate, {
@@ -335,29 +225,21 @@ class PasswordResetController {
     // Reset error states
     passwordError = null;
     confirmPasswordError = null;
-    verificationCodeError = null;
+    tokenError = null;
     hasPasswordError = false;
     hasConfirmPasswordError = false;
-    hasVerificationCodeError = false;
+    hasTokenError = false;
     isLoading = true;
     onStateUpdate();
 
     final passwordText = password.text.trim();
     final confirmPasswordText = confirmPassword.text.trim();
-    final verificationCodeText = verificationCode.text.trim();
+    final tokenText = token.text.trim();
 
-    // Validate verification code
-    if (verificationCodeText.isEmpty) {
-      verificationCodeError = "Verification code is required";
-      hasVerificationCodeError = true;
-      isLoading = false;
-      onStateUpdate();
-      return;
-    }
-
-    if (verificationCodeText.length != 6) {
-      verificationCodeError = "Verification code must be 6 digits";
-      hasVerificationCodeError = true;
+    // Validate token
+    if (tokenText.isEmpty) {
+      tokenError = "Token is required";
+      hasTokenError = true;
       isLoading = false;
       onStateUpdate();
       return;
@@ -374,7 +256,7 @@ class PasswordResetController {
 
     if (!_isValidPassword(passwordText)) {
       passwordError =
-          "Password must be at least 8 characters with uppercase, lowercase, and number";
+          "Password must be at least 8 characters with uppercase, lowercase, and number. No symbols and whitespaces allowed.";
       hasPasswordError = true;
       isLoading = false;
       onStateUpdate();
@@ -399,8 +281,40 @@ class PasswordResetController {
     }
 
     try {
-      // Update password using verification code
-      await _updatePassword(email, verificationCodeText, passwordText);
+      // Quick client-side check: ensure the new password is not the same as the existing password.
+      // We do a temporary sign-in with the provided email and new password. If sign-in succeeds,
+      // that means the new password is identical to the old password and we should show an inline error
+      // without calling verifyOTP (which would consume the OTP).
+      try {
+        await Supabase.instance.client.auth.signInWithPassword(
+          email: email,
+          password: passwordText,
+        );
+
+        // If sign-in succeeded and returned a user/session, treat it as 'password matches current'
+        if (Supabase.instance.client.auth.currentUser != null) {
+          passwordError =
+              'New password should be different from your old password';
+          hasPasswordError = true;
+          isLoading = false;
+          onStateUpdate();
+
+          // Sign out the temporary session to avoid leaving the user logged in
+          try {
+            await Supabase.instance.client.auth.signOut();
+          } catch (_) {}
+
+          return;
+        }
+      } catch (signInError) {
+        // Temporary sign-in check failed (expected when new password != old)
+        // Continue with verifyOTP + update flow.
+        print(
+            '🔍 DEBUG: Temporary sign-in check failed (expected if new password != old): $signInError');
+      }
+
+      // Update password using Supabase token
+      await _updatePasswordWithToken(email, tokenText, passwordText);
 
       isLoading = false;
       onStateUpdate();
@@ -422,28 +336,118 @@ class PasswordResetController {
         errorMessage = e.message;
       }
 
+      // If the error is about the token (invalid/expired) or verification, show dialog
+      final lower = errorMessage.toLowerCase();
+      final isTokenError = lower.contains('invalid') ||
+          lower.contains('expired') ||
+          lower.contains('token') ||
+          lower.contains('otp') ||
+          lower.contains('verification');
+
+      // If the error is about the new password being the same as the old one,
+      // surface it inline under the password field instead of showing the dialog.
+      final isPasswordInlineError = lower.contains('different from the old') ||
+          lower.contains('same as the old') ||
+          lower.contains('must be different');
+
+      if (isPasswordInlineError) {
+        passwordError = errorMessage;
+        hasPasswordError = true;
+        // keep token states unchanged
+        onStateUpdate();
+        return;
+      }
+
+      if (isTokenError) {
+        _showErrorDialog(context, "Error", errorMessage);
+        return;
+      }
+
+      // Fallback: show dialog for any other unexpected errors
       _showErrorDialog(context, "Error", errorMessage);
     }
   }
 
-  /// Start cooldown timer
-  void startCooldownTimer(VoidCallback onStateUpdate) {
-    Future.delayed(const Duration(seconds: 1), () {
-      if (resendCooldown > 0) {
-        resendCooldown--;
-        onStateUpdate();
-        startCooldownTimer(onStateUpdate);
-      } else {
+  /// Start cooldown timer for resend functionality
+  void startCooldownTimer(VoidCallback onStateUpdate, {int seconds = 60}) {
+    canResend = false;
+    resendCooldown = seconds; // configurable cooldown in seconds
+
+    // Cancel any existing timer before starting a new one
+    _cooldownTimer?.cancel();
+
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      resendCooldown--;
+      if (resendCooldown <= 0) {
         canResend = true;
-        onStateUpdate();
+        _cooldownTimer?.cancel();
+        _cooldownTimer = null;
       }
+      onStateUpdate(); // This will trigger UI updates
     });
+  }
+
+  /// Start token expiry timer (separate from resend cooldown)
+  void startTokenExpiryTimer(VoidCallback onStateUpdate, {int seconds = 300}) {
+    tokenExpiryRemaining = seconds;
+
+    // Cancel existing expiry timer
+    _expiryTimer?.cancel();
+
+    _expiryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      tokenExpiryRemaining--;
+      if (tokenExpiryRemaining <= 0) {
+        _expiryTimer?.cancel();
+        _expiryTimer = null;
+      }
+      onStateUpdate();
+    });
+  }
+
+  /// Resend password reset email
+  Future<void> resendPasswordReset(
+      String email, VoidCallback onStateUpdate) async {
+    try {
+      print('📧 Resending password reset email to: $email');
+
+      // Use Supabase's reset password API so the Reset Password template is used
+      try {
+        // Newer clients: auth.resetPasswordForEmail
+        await (Supabase.instance.client.auth as dynamic)
+            .resetPasswordForEmail(email);
+      } catch (e) {
+        // Fallback for older clients: auth.api.resetPasswordForEmail
+        try {
+          await (Supabase.instance.client.auth as dynamic)
+              .api
+              .resetPasswordForEmail(email);
+        } catch (inner) {
+          print('❌ Both resetPasswordForEmail calls failed: $e / $inner');
+          rethrow;
+        }
+      }
+
+      // Start cooldown timer with state update callback
+      // Use 60 second cooldown (1 minute)
+      startCooldownTimer(onStateUpdate, seconds: 60);
+      // Restart token expiry timer (e.g., 5 minutes)
+      startTokenExpiryTimer(onStateUpdate, seconds: 300);
+
+      print('✅ Resend password reset email sent successfully');
+      print(
+          '📧 Email will use your Supabase Reset Password template (include {{ .Token }} to show token)');
+    } catch (e) {
+      print('❌ Resend password reset failed: $e');
+      rethrow;
+    }
   }
 
   void dispose() {
     password.dispose();
     confirmPassword.dispose();
-    verificationCode.dispose();
+    token.dispose();
+    _cooldownTimer?.cancel();
+    _expiryTimer?.cancel();
   }
 }
 
@@ -554,162 +558,6 @@ class _AnimatedNotificationState extends State<_AnimatedNotification>
                     children: [
                       const Icon(
                         Icons.error_outline,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.message,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: widget.onDismiss,
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Animated notification widget for success messages
-class _AnimatedSuccessNotification extends StatefulWidget {
-  final String title;
-  final String message;
-  final VoidCallback onDismiss;
-
-  const _AnimatedSuccessNotification({
-    required this.title,
-    required this.message,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_AnimatedSuccessNotification> createState() =>
-      _AnimatedSuccessNotificationState();
-}
-
-class _AnimatedSuccessNotificationState
-    extends State<_AnimatedSuccessNotification> with TickerProviderStateMixin {
-  late AnimationController _slideController;
-  late AnimationController _fadeController;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _slideController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutBack,
-    ));
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeIn,
-    ));
-
-    _slideController.forward();
-    _fadeController.forward();
-  }
-
-  @override
-  void dispose() {
-    _slideController.dispose();
-    _fadeController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          margin: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 50,
-            left: 16,
-            right: 16,
-          ),
-          child: SlideTransition(
-            position: _slideAnimation,
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: Container(
-                constraints: const BoxConstraints(
-                    maxWidth: 350, minHeight: 60, maxHeight: 100),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00D4AA), Color(0xFF00B894)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF00D4AA).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.check_circle_outline,
                         color: Colors.white,
                         size: 24,
                       ),
