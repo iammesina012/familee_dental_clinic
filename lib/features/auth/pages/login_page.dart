@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:familee_dental/features/auth/controller/login_controller.dart';
 import 'package:familee_dental/features/auth/pages/forgot_password_page.dart';
 import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/utils/responsive_layout.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -119,231 +121,251 @@ class _LoginState extends State<Login> {
               ),
             ),
 
-            // Main content
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 30),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Sign In",
-                            style: AppFonts.interStyle(
-                              fontWeight: FontWeight.w100,
-                              fontSize: 43,
-                              color: Color(0xFF2D2D2D),
-                            ),
+            // Main content with responsive container
+            ResponsiveContainer(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Sign In",
+                          style: AppFonts.interStyle(
+                            fontWeight: FontWeight.w100,
+                            fontSize: 43,
+                            color: Color(0xFF2D2D2D),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  // Email field with responsive constraints
+                  Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(
+                      maxWidth: ResponsiveLayout.isTablet(context) ||
+                              ResponsiveLayout.isDesktop(context)
+                          ? 500
+                          : double.infinity,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF2FAFE),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: controller.hasEmailError
+                            ? const Color(0xFFFF6B6B)
+                            : Colors.white,
+                        width: 2,
                       ),
                     ),
-                    const SizedBox(height: 30),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF2FAFE),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: controller.hasEmailError
-                              ? const Color(0xFFFF6B6B)
-                              : Colors.white,
-                          width: 2,
-                        ),
+                    child: TextField(
+                      controller: controller.email,
+                      onChanged: (value) {
+                        if (controller.hasEmailError) {
+                          setState(() {
+                            controller.hasEmailError = false;
+                          });
+                        }
+                      },
+                      style: AppFonts.interStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF2D2D2D),
                       ),
-                      child: TextField(
-                        controller: controller.email,
-                        onChanged: (value) {
-                          if (controller.hasEmailError) {
-                            setState(() {
-                              controller.hasEmailError = false;
-                            });
-                          }
-                        },
-                        style: AppFonts.interStyle(
+                      decoration: InputDecoration(
+                        hintText: "Email/Username",
+                        hintStyle: AppFonts.interStyle(
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF2D2D2D),
+                          color: const Color(0xFF2D2D2D).withOpacity(0.6),
                         ),
-                        decoration: InputDecoration(
-                          hintText: "Email/Username",
-                          hintStyle: AppFonts.interStyle(
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF2D2D2D).withOpacity(0.6),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.person_outline,
-                            color: const Color(0xFF2D2D2D).withOpacity(0.6),
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 16,
-                          ),
+                        prefixIcon: Icon(
+                          Icons.person_outline,
+                          color: const Color(0xFF2D2D2D).withOpacity(0.6),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF2FAFE),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: controller.hasPasswordError
-                              ? const Color(0xFFFF6B6B)
-                              : Colors.white,
-                          width: 2,
-                        ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Password field with responsive constraints
+                  Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(
+                      maxWidth: ResponsiveLayout.isTablet(context) ||
+                              ResponsiveLayout.isDesktop(context)
+                          ? 500
+                          : double.infinity,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF2FAFE),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: controller.hasPasswordError
+                            ? const Color(0xFFFF6B6B)
+                            : Colors.white,
+                        width: 2,
                       ),
-                      child: TextField(
-                        controller: controller.password,
-                        onChanged: (value) {
-                          if (controller.hasPasswordError) {
-                            setState(() {
-                              controller.hasPasswordError = false;
-                            });
-                          }
-                        },
-                        obscureText: controller.obscure,
-                        style: AppFonts.interStyle(
+                    ),
+                    child: TextField(
+                      controller: controller.password,
+                      onChanged: (value) {
+                        if (controller.hasPasswordError) {
+                          setState(() {
+                            controller.hasPasswordError = false;
+                          });
+                        }
+                      },
+                      obscureText: controller.obscure,
+                      style: AppFonts.interStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF2D2D2D),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: "Password",
+                        hintStyle: AppFonts.interStyle(
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF2D2D2D),
+                          color: const Color(0xFF2D2D2D).withOpacity(0.6),
                         ),
-                        decoration: InputDecoration(
-                          hintText: "Password",
-                          hintStyle: AppFonts.interStyle(
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF2D2D2D).withOpacity(0.6),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.lock_outline,
-                            color: const Color(0xFF2D2D2D).withOpacity(0.6),
-                          ),
-                          suffixIcon: Padding(
-                            padding: const EdgeInsets.only(right: 12.0),
-                            child: IconButton(
-                              icon: Icon(
-                                controller.obscure
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                color: const Color(0xFF2D2D2D).withOpacity(0.6),
-                              ),
-                              onPressed: () {
-                                setState(() =>
-                                    controller.obscure = !controller.obscure);
-                              },
+                        prefixIcon: Icon(
+                          Icons.lock_outline,
+                          color: const Color(0xFF2D2D2D).withOpacity(0.6),
+                        ),
+                        suffixIcon: Padding(
+                          padding: const EdgeInsets.only(right: 12.0),
+                          child: IconButton(
+                            icon: Icon(
+                              controller.obscure
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: const Color(0xFF2D2D2D).withOpacity(0.6),
                             ),
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 12, right: 12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Transform.scale(
-                                scale: 1.2,
-                                child: Checkbox(
-                                  value: rememberMe,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      rememberMe = value ?? false;
-                                    });
-                                  },
-                                  activeColor: const Color(0xFF00D4AA),
-                                  checkColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  side: BorderSide(
-                                    color: const Color(0xFF2D2D2D)
-                                        .withOpacity(0.3),
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                "Remember me",
-                                style: AppFonts.interStyle(
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF2D2D2D),
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const ForgotPasswordPage(),
-                                ),
-                              );
+                            onPressed: () {
+                              setState(() =>
+                                  controller.obscure = !controller.obscure);
                             },
-                            child: Text(
-                              "Forgot Password?",
+                          ),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, right: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Transform.scale(
+                              scale: 1.2,
+                              child: Checkbox(
+                                value: rememberMe,
+                                onChanged: (value) {
+                                  setState(() {
+                                    rememberMe = value ?? false;
+                                  });
+                                },
+                                activeColor: const Color(0xFF00D4AA),
+                                checkColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                side: BorderSide(
+                                  color:
+                                      const Color(0xFF2D2D2D).withOpacity(0.3),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              "Remember me",
                               style: AppFonts.interStyle(
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                                 color: Color(0xFF2D2D2D),
                                 fontSize: 14,
                               ),
                             ),
+                          ],
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const ForgotPasswordPage(),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            "Forgot Password?",
+                            style: AppFonts.interStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF2D2D2D),
+                              fontSize: 14,
+                            ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  // Login button with responsive constraints
+                  Container(
+                    width: double.infinity,
+                    height: 50,
+                    constraints: BoxConstraints(
+                      maxWidth: ResponsiveLayout.isTablet(context) ||
+                              ResponsiveLayout.isDesktop(context)
+                          ? 500
+                          : double.infinity,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00D4AA), Color(0xFF00B894)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00D4AA).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: _handleLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        "LOGIN",
+                        style: AppFonts.interStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 15),
-                    Container(
-                      width: double.infinity,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF00D4AA), Color(0xFF00B894)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00D4AA).withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        onPressed: _handleLogin,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: Text(
-                          "LOGIN",
-                          style: AppFonts.interStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             // Logo and clinic info at top-left

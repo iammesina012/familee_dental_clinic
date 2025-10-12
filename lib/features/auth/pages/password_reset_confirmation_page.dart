@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/utils/responsive_layout.dart';
 
 class PasswordResetConfirmationPage extends StatelessWidget {
   final String email;
@@ -92,85 +94,112 @@ class PasswordResetConfirmationPage extends StatelessWidget {
               ),
             ),
 
-            // Main content
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 30),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Success Icon
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00D4AA),
-                        borderRadius: BorderRadius.circular(40),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00D4AA).withOpacity(0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
+            // Main content with responsive container
+            ResponsiveContainer(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Success Icon
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D4AA),
+                      borderRadius: BorderRadius.circular(40),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00D4AA).withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.email_outlined,
+                      color: Colors.white,
+                      size: 40,
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  // Title and subtitle with responsive constraints
+                  Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(
+                      maxWidth: ResponsiveLayout.isTablet(context) ||
+                              ResponsiveLayout.isDesktop(context)
+                          ? 500
+                          : double.infinity,
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          "Check Your Email",
+                          style: AppFonts.interStyle(
+                            fontWeight: FontWeight.w100,
+                            fontSize: 43,
+                            color: Color(0xFF2D2D2D),
                           ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.email_outlined,
-                        color: Colors.white,
-                        size: 40,
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          "We've sent a password reset link to:",
+                          style: AppFonts.interStyle(
+                            fontWeight: FontWeight.w400,
+                            fontSize: 16,
+                            color: Color(0xFF2D2D2D).withOpacity(0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Email container with responsive constraints
+                  Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(
+                      maxWidth: ResponsiveLayout.isTablet(context) ||
+                              ResponsiveLayout.isDesktop(context)
+                          ? 500
+                          : double.infinity,
+                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFF00D4AA),
+                        width: 1,
                       ),
                     ),
-
-                    const SizedBox(height: 30),
-
-                    Text(
-                      "Check Your Email",
+                    child: Text(
+                      email,
                       style: AppFonts.interStyle(
-                        fontWeight: FontWeight.w100,
-                        fontSize: 43,
-                        color: Color(0xFF2D2D2D),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    Text(
-                      "We've sent a password reset link to:",
-                      style: AppFonts.interStyle(
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.w600,
                         fontSize: 16,
-                        color: Color(0xFF2D2D2D).withOpacity(0.7),
+                        color: Color(0xFF2D2D2D),
                       ),
                       textAlign: TextAlign.center,
                     ),
+                  ),
 
-                    const SizedBox(height: 10),
+                  const SizedBox(height: 40),
 
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: const Color(0xFF00D4AA),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        email,
-                        style: AppFonts.interStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          color: Color(0xFF2D2D2D),
-                        ),
-                      ),
+                  // Back to Login Button with responsive constraints
+                  Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(
+                      maxWidth: ResponsiveLayout.isTablet(context) ||
+                              ResponsiveLayout.isDesktop(context)
+                          ? 500
+                          : double.infinity,
                     ),
-
-                    const SizedBox(height: 40),
-
-                    // Back to Login Button
-                    GestureDetector(
+                    child: GestureDetector(
                       onTap: () {
                         Navigator.of(context).pushReplacementNamed('/login');
                       },
@@ -183,8 +212,8 @@ class PasswordResetConfirmationPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
 
