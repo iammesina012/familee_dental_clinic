@@ -214,6 +214,19 @@ class NotificationsController {
     }).eq('id', id);
   }
 
+  Future<void> markAllAsRead() async {
+    try {
+      print('Marking all notifications as read...');
+      final result = await _supabase.from('notifications').update({
+        'is_read': true,
+      }).eq('is_read', false);
+      print('Mark all as read result: $result');
+    } catch (e) {
+      print('Error in markAllAsRead: $e');
+      rethrow;
+    }
+  }
+
   Future<void> deleteNotification(String id) async {
     await _supabase.from('notifications').delete().eq('id', id);
   }

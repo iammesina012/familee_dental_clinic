@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/features/activity_log/controller/activity_log_controller.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class ActivityLogPage extends StatefulWidget {
   const ActivityLogPage({super.key});
@@ -692,414 +693,428 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
         ],
       ),
       drawer: const MyDrawer(),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Search and Filter Bar
-            Row(
-              children: [
-                // Search Bar
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color:
-                              Theme.of(context).dividerColor.withOpacity(0.2)),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search...',
-                        border: InputBorder.none,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        suffixIcon: Icon(Icons.search,
-                            color: Theme.of(context).iconTheme.color),
-                        hintStyle: TextStyle(
-                            fontFamily: 'SF Pro',
+      body: ResponsiveContainer(
+        maxWidth: 1200,
+        child: Padding(
+          padding: EdgeInsets.all(
+              MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+          child: Column(
+            children: [
+              // Search and Filter Bar
+              Row(
+                children: [
+                  // Search Bar
+                  Expanded(
+                    flex: 3,
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
                             color: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.color
-                                ?.withOpacity(0.6)),
+                                .dividerColor
+                                .withOpacity(0.2)),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Category Filter
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color:
-                              Theme.of(context).dividerColor.withOpacity(0.2)),
-                    ),
-                    child: ListenableBuilder(
-                      listenable: _controller,
-                      builder: (context, child) {
-                        return DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _controller.selectedCategory,
-                            isExpanded: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            items: [
-                              'All Categories',
-                              'Login',
-                              'Inventory',
-                              'Purchase Order',
-                              'Stock Deduction',
-                              'Settings'
-                            ].map((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(
-                                  value,
-                                  style: TextStyle(
-                                      fontSize:
-                                          value == 'All Categories' ? 13 : 15,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color,
-                                      fontWeight: FontWeight.w500,
-                                      fontFamily: 'SF Pro'),
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (String? newValue) {
-                              if (newValue != null) {
-                                _controller.updateSelectedCategory(newValue);
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Recent Activity Section
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Theme.of(context).colorScheme.surface
-                      : const Color(0xFFE8D5E8),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(context).shadowColor.withOpacity(0.08),
-                      spreadRadius: 1,
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                  border: Border.all(
-                      color: Theme.of(context).dividerColor.withOpacity(0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title and Date Picker
-                    Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Recent Activity',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color:
-                                  Theme.of(context).textTheme.bodyMedium?.color,
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search...',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          suffixIcon: Icon(Icons.search,
+                              color: Theme.of(context).iconTheme.color),
+                          hintStyle: TextStyle(
                               fontFamily: 'SF Pro',
-                            ),
-                          ),
-                          ListenableBuilder(
-                            listenable: _controller,
-                            builder: (context, child) {
-                              return Container(
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: Theme.of(context)
-                                          .dividerColor
-                                          .withOpacity(0.2)),
-                                ),
-                                child: InkWell(
-                                  onTap: () async {
-                                    final DateTime? picked =
-                                        await showDatePicker(
-                                      context: context,
-                                      initialDate: _controller.selectedDate,
-                                      firstDate: DateTime(2020),
-                                      lastDate: DateTime.now(),
-                                    );
-                                    if (picked != null) {
-                                      _controller.updateSelectedDate(picked);
-                                    }
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.calendar_today,
-                                          size: 16,
-                                          color:
-                                              Theme.of(context).iconTheme.color,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          _controller.formatDateForDisplay(
-                                              _controller.selectedDate),
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium
-                                                ?.color,
-                                            fontWeight: FontWeight.w500,
-                                            fontFamily: 'SF Pro',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.color
+                                  ?.withOpacity(0.6)),
+                        ),
                       ),
                     ),
-                    // Activity List
-                    Expanded(
+                  ),
+                  const SizedBox(width: 12),
+                  // Category Filter
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withOpacity(0.2)),
+                      ),
                       child: ListenableBuilder(
                         listenable: _controller,
                         builder: (context, child) {
-                          final filteredActivities =
-                              _controller.filteredActivities;
-
-                          if (filteredActivities.isEmpty) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 120,
-                                    height: 120,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Theme.of(context).colorScheme.surface,
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                          color: Theme.of(context)
-                                              .dividerColor
-                                              .withOpacity(0.2)),
-                                    ),
-                                    child: Icon(
-                                      Icons.history_outlined,
-                                      size: 60,
-                                      color: Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? Colors.white
-                                          : const Color(0xFF8B5A8B),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  Text(
-                                    'No Activities Yet',
+                          return DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _controller.selectedCategory,
+                              isExpanded: true,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              items: [
+                                'All Categories',
+                                'Login',
+                                'Inventory',
+                                'Purchase Order',
+                                'Stock Deduction',
+                                'Settings'
+                              ].map((String value) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(
+                                    value,
                                     style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? Colors.white
-                                          : const Color(0xFF8B5A8B),
-                                      fontFamily: 'SF Pro',
-                                    ),
+                                        fontSize:
+                                            value == 'All Categories' ? 13 : 15,
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color,
+                                        fontWeight: FontWeight.w500,
+                                        fontFamily: 'SF Pro'),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Activities will appear here once you perform actions',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? Colors.white.withOpacity(0.7)
-                                          : const Color(0xFF8B5A8B)
-                                              .withOpacity(0.7),
-                                      fontFamily: 'SF Pro',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-
-                          // Pagination calculations
-                          final int totalItems = filteredActivities.length;
-                          final int totalPages = (totalItems / _itemsPerPage)
-                              .ceil()
-                              .clamp(1, 1000000);
-                          final int startIndex =
-                              (_currentPage - 1) * _itemsPerPage;
-                          final int endIndex =
-                              (startIndex + _itemsPerPage) > totalItems
-                                  ? totalItems
-                                  : (startIndex + _itemsPerPage);
-                          final pageItems =
-                              filteredActivities.sublist(startIndex, endIndex);
-
-                          return Column(
-                            children: [
-                              Expanded(
-                                child: RefreshIndicator(
-                                  onRefresh: () async {
-                                    await _controller.refreshActivities();
-                                  },
-                                  child: ListView.builder(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 20, vertical: 10),
-                                    itemCount: pageItems.length + 1,
-                                    itemBuilder: (context, index) {
-                                      if (index == pageItems.length) {
-                                        return _buildPagination(totalPages);
-                                      }
-                                      final activity = pageItems[index];
-                                      // Date formatting handled in details when needed
-
-                                      return Slidable(
-                                        endActionPane: ActionPane(
-                                          motion: const ScrollMotion(),
-                                          children: [
-                                            SlidableAction(
-                                              onPressed: (_) =>
-                                                  _showDeleteConfirmation(
-                                                context,
-                                                activity['id'],
-                                                _formatDescription(
-                                                    activity['description']),
-                                              ),
-                                              backgroundColor: Colors.red,
-                                              foregroundColor: Colors.white,
-                                              icon: Icons.delete,
-                                              label: 'Delete',
-                                              borderRadius:
-                                                  const BorderRadius.only(
-                                                topRight: Radius.circular(8),
-                                                bottomRight: Radius.circular(8),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        child: InkWell(
-                                          onTap: () => _showActivityDetails(
-                                              context, activity),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          child: Container(
-                                            margin: const EdgeInsets.only(
-                                                bottom: 12),
-                                            padding: const EdgeInsets.all(16),
-                                            height:
-                                                80, // Back to original height
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                  color: Theme.of(context)
-                                                      .dividerColor
-                                                      .withOpacity(0.2)),
-                                            ),
-                                            child: Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                // Category icon
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          right: 8, top: 2),
-                                                  child: _getCategoryIcon(
-                                                      activity['category']),
-                                                ),
-                                                // Activity description (main text) - more concise and readable
-                                                Expanded(
-                                                  child: Text(
-                                                    _formatDescription(activity[
-                                                        'description']),
-                                                    style: TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.color,
-                                                      fontFamily: 'SF Pro',
-                                                    ),
-                                                  ),
-                                                ),
-                                                // Time aligned to the right, same level as description
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          top: 2),
-                                                  child: Text(
-                                                    activity['time'],
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.color,
-                                                      fontFamily: 'SF Pro',
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  _controller.updateSelectedCategory(newValue);
+                                }
+                              },
+                            ),
                           );
                         },
                       ),
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Recent Activity Section
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Theme.of(context).colorScheme.surface
+                        : const Color(0xFFE8D5E8),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(context).shadowColor.withOpacity(0.08),
+                        spreadRadius: 1,
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                    border: Border.all(
+                        color: Theme.of(context).dividerColor.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title and Date Picker
+                      Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Recent Activity',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
+                                fontFamily: 'SF Pro',
+                              ),
+                            ),
+                            ListenableBuilder(
+                              listenable: _controller,
+                              builder: (context, child) {
+                                return Container(
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color:
+                                        Theme.of(context).colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: Theme.of(context)
+                                            .dividerColor
+                                            .withOpacity(0.2)),
+                                  ),
+                                  child: InkWell(
+                                    onTap: () async {
+                                      final DateTime? picked =
+                                          await showDatePicker(
+                                        context: context,
+                                        initialDate: _controller.selectedDate,
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime.now(),
+                                      );
+                                      if (picked != null) {
+                                        _controller.updateSelectedDate(picked);
+                                      }
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.calendar_today,
+                                            size: 16,
+                                            color: Theme.of(context)
+                                                .iconTheme
+                                                .color,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            _controller.formatDateForDisplay(
+                                                _controller.selectedDate),
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color,
+                                              fontWeight: FontWeight.w500,
+                                              fontFamily: 'SF Pro',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Activity List
+                      Expanded(
+                        child: ListenableBuilder(
+                          listenable: _controller,
+                          builder: (context, child) {
+                            final filteredActivities =
+                                _controller.filteredActivities;
+
+                            if (filteredActivities.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 120,
+                                      height: 120,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surface,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                            color: Theme.of(context)
+                                                .dividerColor
+                                                .withOpacity(0.2)),
+                                      ),
+                                      child: Icon(
+                                        Icons.history_outlined,
+                                        size: 60,
+                                        color: Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? Colors.white
+                                            : const Color(0xFF8B5A8B),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Text(
+                                      'No Activities Yet',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? Colors.white
+                                            : const Color(0xFF8B5A8B),
+                                        fontFamily: 'SF Pro',
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Activities will appear here once you perform actions',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? Colors.white.withOpacity(0.7)
+                                            : const Color(0xFF8B5A8B)
+                                                .withOpacity(0.7),
+                                        fontFamily: 'SF Pro',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            // Pagination calculations
+                            final int totalItems = filteredActivities.length;
+                            final int totalPages = (totalItems / _itemsPerPage)
+                                .ceil()
+                                .clamp(1, 1000000);
+                            final int startIndex =
+                                (_currentPage - 1) * _itemsPerPage;
+                            final int endIndex =
+                                (startIndex + _itemsPerPage) > totalItems
+                                    ? totalItems
+                                    : (startIndex + _itemsPerPage);
+                            final pageItems = filteredActivities.sublist(
+                                startIndex, endIndex);
+
+                            return Column(
+                              children: [
+                                Expanded(
+                                  child: RefreshIndicator(
+                                    onRefresh: () async {
+                                      await _controller.refreshActivities();
+                                    },
+                                    child: ListView.builder(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 20, vertical: 10),
+                                      itemCount: pageItems.length + 1,
+                                      itemBuilder: (context, index) {
+                                        if (index == pageItems.length) {
+                                          return _buildPagination(totalPages);
+                                        }
+                                        final activity = pageItems[index];
+                                        // Date formatting handled in details when needed
+
+                                        return Slidable(
+                                          endActionPane: ActionPane(
+                                            motion: const ScrollMotion(),
+                                            children: [
+                                              SlidableAction(
+                                                onPressed: (_) =>
+                                                    _showDeleteConfirmation(
+                                                  context,
+                                                  activity['id'],
+                                                  _formatDescription(
+                                                      activity['description']),
+                                                ),
+                                                backgroundColor: Colors.red,
+                                                foregroundColor: Colors.white,
+                                                icon: Icons.delete,
+                                                label: 'Delete',
+                                                borderRadius:
+                                                    const BorderRadius.only(
+                                                  topRight: Radius.circular(8),
+                                                  bottomRight:
+                                                      Radius.circular(8),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          child: InkWell(
+                                            onTap: () => _showActivityDetails(
+                                                context, activity),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            child: Container(
+                                              margin: const EdgeInsets.only(
+                                                  bottom: 12),
+                                              padding: const EdgeInsets.all(16),
+                                              height:
+                                                  80, // Back to original height
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .surface,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                    color: Theme.of(context)
+                                                        .dividerColor
+                                                        .withOpacity(0.2)),
+                                              ),
+                                              child: Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  // Category icon
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            right: 8, top: 2),
+                                                    child: _getCategoryIcon(
+                                                        activity['category']),
+                                                  ),
+                                                  // Activity description (main text) - more concise and readable
+                                                  Expanded(
+                                                    child: Text(
+                                                      _formatDescription(
+                                                          activity[
+                                                              'description']),
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.color,
+                                                        fontFamily: 'SF Pro',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  // Time aligned to the right, same level as description
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 2),
+                                                    child: Text(
+                                                      activity['time'],
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.color,
+                                                        fontFamily: 'SF Pro',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -8,6 +8,7 @@ import 'package:familee_dental/features/inventory/controller/view_supply_control
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class InventoryViewSupplyPage extends StatefulWidget {
   final InventoryItem item;
@@ -339,390 +340,399 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
           ],
         ],
       ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            RefreshIndicator(
-              onRefresh: () async {
-                _refreshStream();
-                // Wait a bit for the stream to update
-                await Future.delayed(Duration(milliseconds: 500));
-              },
-              child: SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 18),
-                    Text(
-                      updatedItem.name,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 22,
-                          color: Theme.of(context).textTheme.bodyMedium?.color),
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      updatedItem.category,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.color
-                            ?.withOpacity(0.7),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Center(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: updatedItem.imageUrl.isNotEmpty
-                            ? Image.network(
-                                updatedItem.imageUrl,
-                                width: 130,
-                                height: 130,
-                                fit: BoxFit.cover,
-                              )
-                            : Container(
-                                width: 130,
-                                height: 130,
-                                color: Theme.of(context)
-                                    .dividerColor
-                                    .withOpacity(0.15),
-                                child: const Icon(Icons.image,
-                                    size: 40, color: Colors.grey),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: controller.getStatusBgColor(status),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          status,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: controller.getStatusTextColor(status),
+      body: ResponsiveContainer(
+        maxWidth: 1000,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: () async {
+                  _refreshStream();
+                  // Wait a bit for the stream to update
+                  await Future.delayed(Duration(milliseconds: 500));
+                },
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.symmetric(
+                    horizontal:
+                        MediaQuery.of(context).size.width < 768 ? 8.0 : 18.0,
+                    vertical:
+                        MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 18),
+                      Text(
+                        updatedItem.name,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
+                            fontSize: 22,
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color),
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        updatedItem.category,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text("Stock",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15)),
-                              const SizedBox(height: 4),
-                              Text("${updatedItem.stock}",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15),
-                                  textAlign: TextAlign.center),
-                            ],
-                          ),
+                      const SizedBox(height: 14),
+                      Center(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: updatedItem.imageUrl.isNotEmpty
+                              ? Image.network(
+                                  updatedItem.imageUrl,
+                                  width: 130,
+                                  height: 130,
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(
+                                  width: 130,
+                                  height: 130,
+                                  color: Theme.of(context)
+                                      .dividerColor
+                                      .withOpacity(0.15),
+                                  child: const Icon(Icons.image,
+                                      size: 40, color: Colors.grey),
+                                ),
                         ),
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text("Unit",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15)),
-                              const SizedBox(height: 4),
-                              Text(updatedItem.unit,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15),
-                                  textAlign: TextAlign.center),
-                            ],
+                      ),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: controller.getStatusBgColor(status),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        ),
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text("Cost",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15)),
-                              const SizedBox(height: 4),
-                              Text("₱${updatedItem.cost.toStringAsFixed(2)}",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15),
-                                  textAlign: TextAlign.center),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text("Brand Name",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15)),
-                              const SizedBox(height: 4),
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final textPainter = TextPainter(
-                                    text: TextSpan(
-                                      text: updatedItem.brand,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                    textDirection: TextDirection.ltr,
-                                  );
-                                  textPainter.layout();
-
-                                  final textWidth = textPainter.width;
-                                  final containerWidth = constraints.maxWidth;
-
-                                  if (textWidth > containerWidth) {
-                                    // Text is too long, use marquee
-                                    return SizedBox(
-                                      height: 20,
-                                      child: Marquee(
-                                        text: updatedItem.brand,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.w500,
-                                                fontSize: 15,
-                                                color: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium
-                                                    ?.color),
-                                        scrollAxis: Axis.horizontal,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        blankSpace: 20.0,
-                                        velocity: 30.0,
-                                        pauseAfterRound:
-                                            const Duration(seconds: 1),
-                                        startPadding: 10.0,
-                                        accelerationDuration:
-                                            const Duration(seconds: 1),
-                                        accelerationCurve: Curves.linear,
-                                        decelerationDuration:
-                                            const Duration(milliseconds: 500),
-                                        decelerationCurve: Curves.easeOut,
-                                      ),
-                                    );
-                                  } else {
-                                    // Text fits, use normal text
-                                    return Text(
-                                      updatedItem.brand,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.w500,
-                                              fontSize: 15),
-                                      textAlign: TextAlign.center,
-                                    );
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text("Expiry",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15)),
-                              const SizedBox(height: 4),
-                              Text(
-                                (updatedItem.expiry != null &&
-                                        updatedItem.expiry!.isNotEmpty)
-                                    ? updatedItem.expiry!.replaceAll('-', '/')
-                                    : "No expiry",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15),
-                                textAlign: TextAlign.center,
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text("Supplier",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15)),
-                              const SizedBox(height: 4),
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final textPainter = TextPainter(
-                                    text: TextSpan(
-                                      text: updatedItem.supplier,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                    textDirection: TextDirection.ltr,
-                                  );
-                                  textPainter.layout();
-
-                                  final textWidth = textPainter.width;
-                                  final containerWidth = constraints.maxWidth;
-
-                                  if (textWidth > containerWidth) {
-                                    // long text = marquee animation
-                                    return SizedBox(
-                                      height: 20,
-                                      child: Marquee(
-                                        text: updatedItem.supplier,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.w500,
-                                                fontSize: 15,
-                                                color: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium
-                                                    ?.color),
-                                        scrollAxis: Axis.horizontal,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        blankSpace: 20.0,
-                                        velocity: 30.0,
-                                        pauseAfterRound:
-                                            const Duration(seconds: 1),
-                                        startPadding: 10.0,
-                                        accelerationDuration:
-                                            const Duration(seconds: 1),
-                                        accelerationCurve: Curves.linear,
-                                        decelerationDuration:
-                                            const Duration(milliseconds: 500),
-                                        decelerationCurve: Curves.easeOut,
-                                      ),
-                                    );
-                                  } else {
-                                    // short text = no animation
-                                    return Text(
-                                      updatedItem.supplier,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.w500,
-                                              fontSize: 15),
-                                      textAlign: TextAlign.center,
-                                    );
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-                    Divider(
-                        thickness: 1.2,
-                        height: 36,
-                        color: Theme.of(context).dividerColor),
-                    if (!widget.hideOtherExpirySection) ...[
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.only(bottom: 10.0, top: 2.0),
                           child: Text(
-                            "Other Supply Batches",
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                    fontWeight: FontWeight.bold, fontSize: 18),
+                            status,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: controller.getStatusTextColor(status),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
                           ),
                         ),
                       ),
-                      // Show live supply batches from Supabase; if none, fall back to embedded batches if present
-                      SupabaseOtherSupplyBatches(item: updatedItem),
-                      _EmbeddedExpiryBatchesFallback(item: updatedItem),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text("Stock",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15)),
+                                const SizedBox(height: 4),
+                                Text("${updatedItem.stock}",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 15),
+                                    textAlign: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text("Unit",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15)),
+                                const SizedBox(height: 4),
+                                Text(updatedItem.unit,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 15),
+                                    textAlign: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text("Cost",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15)),
+                                const SizedBox(height: 4),
+                                Text("₱${updatedItem.cost.toStringAsFixed(2)}",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 15),
+                                    textAlign: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text("Brand Name",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15)),
+                                const SizedBox(height: 4),
+                                LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final textPainter = TextPainter(
+                                      text: TextSpan(
+                                        text: updatedItem.brand,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      textDirection: TextDirection.ltr,
+                                    );
+                                    textPainter.layout();
+
+                                    final textWidth = textPainter.width;
+                                    final containerWidth = constraints.maxWidth;
+
+                                    if (textWidth > containerWidth) {
+                                      // Text is too long, use marquee
+                                      return SizedBox(
+                                        height: 20,
+                                        child: Marquee(
+                                          text: updatedItem.brand,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 15,
+                                                  color: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color),
+                                          scrollAxis: Axis.horizontal,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          blankSpace: 20.0,
+                                          velocity: 30.0,
+                                          pauseAfterRound:
+                                              const Duration(seconds: 1),
+                                          startPadding: 10.0,
+                                          accelerationDuration:
+                                              const Duration(seconds: 1),
+                                          accelerationCurve: Curves.linear,
+                                          decelerationDuration:
+                                              const Duration(milliseconds: 500),
+                                          decelerationCurve: Curves.easeOut,
+                                        ),
+                                      );
+                                    } else {
+                                      // Text fits, use normal text
+                                      return Text(
+                                        updatedItem.brand,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 15),
+                                        textAlign: TextAlign.center,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text("Expiry",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  (updatedItem.expiry != null &&
+                                          updatedItem.expiry!.isNotEmpty)
+                                      ? updatedItem.expiry!.replaceAll('-', '/')
+                                      : "No expiry",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15),
+                                  textAlign: TextAlign.center,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text("Supplier",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15)),
+                                const SizedBox(height: 4),
+                                LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final textPainter = TextPainter(
+                                      text: TextSpan(
+                                        text: updatedItem.supplier,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      textDirection: TextDirection.ltr,
+                                    );
+                                    textPainter.layout();
+
+                                    final textWidth = textPainter.width;
+                                    final containerWidth = constraints.maxWidth;
+
+                                    if (textWidth > containerWidth) {
+                                      // long text = marquee animation
+                                      return SizedBox(
+                                        height: 20,
+                                        child: Marquee(
+                                          text: updatedItem.supplier,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 15,
+                                                  color: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color),
+                                          scrollAxis: Axis.horizontal,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          blankSpace: 20.0,
+                                          velocity: 30.0,
+                                          pauseAfterRound:
+                                              const Duration(seconds: 1),
+                                          startPadding: 10.0,
+                                          accelerationDuration:
+                                              const Duration(seconds: 1),
+                                          accelerationCurve: Curves.linear,
+                                          decelerationDuration:
+                                              const Duration(milliseconds: 500),
+                                          decelerationCurve: Curves.easeOut,
+                                        ),
+                                      );
+                                    } else {
+                                      // short text = no animation
+                                      return Text(
+                                        updatedItem.supplier,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 15),
+                                        textAlign: TextAlign.center,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      Divider(
+                          thickness: 1.2,
+                          height: 36,
+                          color: Theme.of(context).dividerColor),
+                      if (!widget.hideOtherExpirySection) ...[
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.only(bottom: 10.0, top: 2.0),
+                            child: Text(
+                              "Other Supply Batches",
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18),
+                            ),
+                          ),
+                        ),
+                        // Show live supply batches from Supabase; if none, fall back to embedded batches if present
+                        SupabaseOtherSupplyBatches(item: updatedItem),
+                        _EmbeddedExpiryBatchesFallback(item: updatedItem),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

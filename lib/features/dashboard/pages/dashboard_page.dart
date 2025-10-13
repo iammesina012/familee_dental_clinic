@@ -3,6 +3,7 @@ import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/features/dashboard/services/inventory_analytics_service.dart';
 import 'package:familee_dental/features/dashboard/services/fast_moving_service.dart';
 import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -89,8 +90,16 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         ],
       ),
       drawer: const MyDrawer(),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: _buildDashboardContent(theme),
+    );
+  }
+
+  Widget _buildDashboardContent(ThemeData theme) {
+    return ResponsiveContainer(
+      maxWidth: 1000,
+      child: Padding(
+        padding: EdgeInsets.all(
+            MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
         child: ListView(
           physics: const NeverScrollableScrollPhysics(),
           children: [
@@ -194,217 +203,240 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                             stats['outOfStockPercentage'] as int;
 
                         // Cache width calculations outside of AnimatedBuilder
-                        final totalWidth =
-                            MediaQuery.of(context).size.width - 80;
-                        final gapCount = (inStockPercentage > 0 &&
-                                    lowStockPercentage > 0
-                                ? 1
-                                : 0) +
-                            (lowStockPercentage > 0 && outOfStockPercentage > 0
-                                ? 1
-                                : 0);
-                        final availableWidth = totalWidth - (4.0 * gapCount);
-                        final totalPercentage = inStockPercentage +
-                            lowStockPercentage +
-                            outOfStockPercentage;
-                        final scaleFactor =
-                            totalPercentage > 0 ? 100.0 / totalPercentage : 1.0;
+                        // Use LayoutBuilder to get the actual available width
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            final totalWidth = constraints.maxWidth;
+                            final gapCount =
+                                (inStockPercentage > 0 && lowStockPercentage > 0
+                                        ? 1
+                                        : 0) +
+                                    (lowStockPercentage > 0 &&
+                                            outOfStockPercentage > 0
+                                        ? 1
+                                        : 0);
+                            final availableWidth =
+                                totalWidth - (4.0 * gapCount);
+                            final totalPercentage = inStockPercentage +
+                                lowStockPercentage +
+                                outOfStockPercentage;
+                            final scaleFactor = totalPercentage > 0
+                                ? 100.0 / totalPercentage
+                                : 1.0;
 
-                        return AnimatedBuilder(
-                          animation:
-                              _animation ?? const AlwaysStoppedAnimation(0.5),
-                          builder: (context, child) {
-                            final currentMultiplier = _animation?.value ?? 0.5;
+                            return AnimatedBuilder(
+                              animation: _animation ??
+                                  const AlwaysStoppedAnimation(0.5),
+                              builder: (context, child) {
+                                final currentMultiplier =
+                                    _animation?.value ?? 0.5;
 
-                            return Row(
-                              children: [
-                                // In Stock Rectangle (Green)
-                                if (inStockPercentage > 0)
-                                  Builder(
-                                    builder: (context) {
-                                      final barWidth = availableWidth *
-                                          (inStockPercentage *
-                                              scaleFactor /
-                                              100) *
-                                          currentMultiplier;
-                                      // final isNarrow = barWidth < 50;
-                                      // final isVeryNarrow = barWidth < 30;
+                                return Row(
+                                  children: [
+                                    // In Stock Rectangle (Green)
+                                    if (inStockPercentage > 0)
+                                      Builder(
+                                        builder: (context) {
+                                          final barWidth = availableWidth *
+                                              (inStockPercentage *
+                                                  scaleFactor /
+                                                  100) *
+                                              currentMultiplier;
+                                          // final isNarrow = barWidth < 50;
+                                          // final isVeryNarrow = barWidth < 30;
 
-                                      return AnimatedContainer(
-                                        duration: Duration(milliseconds: 200),
-                                        width: barWidth,
-                                        height: 32,
-                                        decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              Color(0xFF1ACB5D),
-                                              Color(0xFF99D711)
-                                            ],
-                                            begin: Alignment.centerLeft,
-                                            end: Alignment.centerRight,
-                                          ),
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Padding(
-                                            padding: EdgeInsets.only(left: 4),
-                                            child: Container(
-                                              padding: EdgeInsets.symmetric(
-                                                  horizontal: 4, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.3),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                                border: Border.all(
-                                                  color: Colors.black
-                                                      .withOpacity(0.4),
-                                                  width: 0.5,
-                                                ),
+                                          return AnimatedContainer(
+                                            duration:
+                                                Duration(milliseconds: 200),
+                                            width: barWidth,
+                                            height: 32,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              gradient: LinearGradient(
+                                                colors: [
+                                                  Color(0xFF1ACB5D),
+                                                  Color(0xFF99D711)
+                                                ],
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight,
                                               ),
-                                              child: Text(
-                                                "${(inStockPercentage * currentMultiplier).round()}%",
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
+                                            ),
+                                            child: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Padding(
+                                                padding:
+                                                    EdgeInsets.only(left: 4),
+                                                child: Container(
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withOpacity(0.3),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            4),
+                                                    border: Border.all(
+                                                      color: Colors.black
+                                                          .withOpacity(0.4),
+                                                      width: 0.5,
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    "${(inStockPercentage * currentMultiplier).round()}%",
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                if (inStockPercentage > 0 &&
-                                    lowStockPercentage > 0)
-                                  const SizedBox(width: 4),
-                                // Low Stock Rectangle (Orange)
-                                if (lowStockPercentage > 0)
-                                  Builder(
-                                    builder: (context) {
-                                      final barWidth = availableWidth *
-                                          (lowStockPercentage *
-                                              scaleFactor /
-                                              100) *
-                                          currentMultiplier;
-                                      // final isNarrow = barWidth < 50;
-                                      // final isVeryNarrow = barWidth < 30;
+                                          );
+                                        },
+                                      ),
+                                    if (inStockPercentage > 0 &&
+                                        lowStockPercentage > 0)
+                                      const SizedBox(width: 4),
+                                    // Low Stock Rectangle (Orange)
+                                    if (lowStockPercentage > 0)
+                                      Builder(
+                                        builder: (context) {
+                                          final barWidth = availableWidth *
+                                              (lowStockPercentage *
+                                                  scaleFactor /
+                                                  100) *
+                                              currentMultiplier;
+                                          // final isNarrow = barWidth < 50;
+                                          // final isVeryNarrow = barWidth < 30;
 
-                                      return AnimatedContainer(
-                                        duration: Duration(milliseconds: 200),
-                                        width: barWidth,
-                                        height: 32,
-                                        decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              Color(0xFFDEA805),
-                                              Color(0xFFF77436)
-                                            ],
-                                            begin: Alignment.centerLeft,
-                                            end: Alignment.centerRight,
-                                          ),
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Padding(
-                                            padding: EdgeInsets.only(left: 4),
-                                            child: Container(
-                                              padding: EdgeInsets.symmetric(
-                                                  horizontal: 4, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.3),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                                border: Border.all(
-                                                  color: Colors.black
-                                                      .withOpacity(0.4),
-                                                  width: 0.5,
-                                                ),
+                                          return AnimatedContainer(
+                                            duration:
+                                                Duration(milliseconds: 200),
+                                            width: barWidth,
+                                            height: 32,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              gradient: LinearGradient(
+                                                colors: [
+                                                  Color(0xFFDEA805),
+                                                  Color(0xFFF77436)
+                                                ],
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight,
                                               ),
-                                              child: Text(
-                                                "${(lowStockPercentage * currentMultiplier).round()}%",
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
+                                            ),
+                                            child: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Padding(
+                                                padding:
+                                                    EdgeInsets.only(left: 4),
+                                                child: Container(
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withOpacity(0.3),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            4),
+                                                    border: Border.all(
+                                                      color: Colors.black
+                                                          .withOpacity(0.4),
+                                                      width: 0.5,
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    "${(lowStockPercentage * currentMultiplier).round()}%",
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                if (lowStockPercentage > 0 &&
-                                    outOfStockPercentage > 0)
-                                  const SizedBox(width: 4),
-                                // Out of Stock Rectangle (Red)
-                                if (outOfStockPercentage > 0)
-                                  Builder(
-                                    builder: (context) {
-                                      final barWidth = availableWidth *
-                                          (outOfStockPercentage *
-                                              scaleFactor /
-                                              100) *
-                                          currentMultiplier;
-                                      // final isNarrow = barWidth < 50;
-                                      // final isVeryNarrow = barWidth < 30;
+                                          );
+                                        },
+                                      ),
+                                    if (lowStockPercentage > 0 &&
+                                        outOfStockPercentage > 0)
+                                      const SizedBox(width: 4),
+                                    // Out of Stock Rectangle (Red)
+                                    if (outOfStockPercentage > 0)
+                                      Builder(
+                                        builder: (context) {
+                                          final barWidth = availableWidth *
+                                              (outOfStockPercentage *
+                                                  scaleFactor /
+                                                  100) *
+                                              currentMultiplier;
+                                          // final isNarrow = barWidth < 50;
+                                          // final isVeryNarrow = barWidth < 30;
 
-                                      return AnimatedContainer(
-                                        duration: Duration(milliseconds: 200),
-                                        width: barWidth,
-                                        height: 32,
-                                        decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              Color(0xFFE44B4D),
-                                              Color(0xFFE02180)
-                                            ],
-                                            begin: Alignment.centerLeft,
-                                            end: Alignment.centerRight,
-                                          ),
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Padding(
-                                            padding: EdgeInsets.only(left: 4),
-                                            child: Container(
-                                              padding: EdgeInsets.symmetric(
-                                                  horizontal: 4, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.3),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                                border: Border.all(
-                                                  color: Colors.black
-                                                      .withOpacity(0.4),
-                                                  width: 0.5,
-                                                ),
+                                          return AnimatedContainer(
+                                            duration:
+                                                Duration(milliseconds: 200),
+                                            width: barWidth,
+                                            height: 32,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              gradient: LinearGradient(
+                                                colors: [
+                                                  Color(0xFFE44B4D),
+                                                  Color(0xFFE02180)
+                                                ],
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight,
                                               ),
-                                              child: Text(
-                                                "${(outOfStockPercentage * currentMultiplier).round()}%",
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 9,
+                                            ),
+                                            child: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Padding(
+                                                padding:
+                                                    EdgeInsets.only(left: 4),
+                                                child: Container(
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withOpacity(0.3),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            4),
+                                                    border: Border.all(
+                                                      color: Colors.black
+                                                          .withOpacity(0.4),
+                                                      width: 0.5,
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    "${(outOfStockPercentage * currentMultiplier).round()}%",
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 9,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                              ],
+                                          );
+                                        },
+                                      ),
+                                  ],
+                                );
+                              },
                             );
                           },
                         );

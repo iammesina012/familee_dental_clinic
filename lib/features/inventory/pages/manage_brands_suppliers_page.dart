@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class ManageBrandsSuppliersPage extends StatefulWidget {
   const ManageBrandsSuppliersPage({super.key});
@@ -39,319 +40,328 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
         elevation: theme.appBarTheme.elevation,
         shadowColor: theme.appBarTheme.shadowColor,
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Brands Section
-            Container(
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.business, color: Colors.green[600], size: 24),
-                      SizedBox(width: 12),
-                      Text(
-                        'Brands',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                  StreamBuilder<List<Brand>>(
-                    stream: filterController.getBrandsStream(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
-                      }
-                      final brands = snapshot.data ?? [];
-                      final validBrands =
-                          brands.where((b) => b.name != "N/A").toList();
-
-                      if (validBrands.isEmpty) {
-                        return Container(
-                          padding: EdgeInsets.all(20),
-                          child: Text(
-                            'No brands available',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontStyle: FontStyle.italic,
-                            ),
+      body: ResponsiveContainer(
+        maxWidth: 1000,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(
+              MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Brands Section
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      spreadRadius: 1,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.business,
+                            color: Colors.green[600], size: 24),
+                        SizedBox(width: 12),
+                        Text(
+                          'Brands',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
-                        );
-                      }
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    StreamBuilder<List<Brand>>(
+                      stream: filterController.getBrandsStream(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(child: CircularProgressIndicator());
+                        }
+                        final brands = snapshot.data ?? [];
+                        final validBrands =
+                            brands.where((b) => b.name != "N/A").toList();
 
-                      // Determine which brands to show
-                      List<Brand> displayBrands = validBrands;
-                      bool shouldShowViewMore = validBrands.length > 4;
+                        if (validBrands.isEmpty) {
+                          return Container(
+                            padding: EdgeInsets.all(20),
+                            child: Text(
+                              'No brands available',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          );
+                        }
 
-                      if (shouldShowViewMore && !showAllBrands) {
-                        displayBrands = validBrands.take(4).toList();
-                      }
+                        // Determine which brands to show
+                        List<Brand> displayBrands = validBrands;
+                        bool shouldShowViewMore = validBrands.length > 4;
 
-                      return Column(
-                        children: [
-                          ...displayBrands
-                              .map((brand) => Container(
-                                    margin: EdgeInsets.only(bottom: 12),
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.surface,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: theme.dividerColor
-                                              .withOpacity(0.2)),
-                                    ),
-                                    child: ListTile(
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 20, vertical: 8),
-                                      title: Text(
-                                        brand.name,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
+                        if (shouldShowViewMore && !showAllBrands) {
+                          displayBrands = validBrands.take(4).toList();
+                        }
+
+                        return Column(
+                          children: [
+                            ...displayBrands
+                                .map((brand) => Container(
+                                      margin: EdgeInsets.only(bottom: 12),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: theme.dividerColor
+                                                .withOpacity(0.2)),
+                                      ),
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 20, vertical: 8),
+                                        title: Text(
+                                          brand.name,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue[50],
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: IconButton(
+                                                icon: Icon(Icons.edit,
+                                                    size: 20,
+                                                    color: Colors.blue[600]),
+                                                onPressed: () =>
+                                                    _showEditBrandDialog(
+                                                        brand.name),
+                                              ),
+                                            ),
+                                            SizedBox(width: 8),
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.red[50],
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: IconButton(
+                                                icon: Icon(Icons.delete,
+                                                    size: 20,
+                                                    color: Colors.red[600]),
+                                                onPressed: () =>
+                                                    _showDeleteBrandDialog(
+                                                        brand.name),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue[50],
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: IconButton(
-                                              icon: Icon(Icons.edit,
-                                                  size: 20,
-                                                  color: Colors.blue[600]),
-                                              onPressed: () =>
-                                                  _showEditBrandDialog(
-                                                      brand.name),
-                                            ),
-                                          ),
-                                          SizedBox(width: 8),
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.red[50],
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: IconButton(
-                                              icon: Icon(Icons.delete,
-                                                  size: 20,
-                                                  color: Colors.red[600]),
-                                              onPressed: () =>
-                                                  _showDeleteBrandDialog(
-                                                      brand.name),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                    ))
+                                .toList(),
+                            // View More/Less button
+                            if (shouldShowViewMore) ...[
+                              SizedBox(height: 12),
+                              Center(
+                                child: TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      showAllBrands = !showAllBrands;
+                                    });
+                                  },
+                                  child: Text(
+                                    showAllBrands ? 'View Less' : 'View More',
+                                    style: TextStyle(
+                                      color: Color(0xFF4E38D4),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
                                     ),
-                                  ))
-                              .toList(),
-                          // View More/Less button
-                          if (shouldShowViewMore) ...[
-                            SizedBox(height: 12),
-                            Center(
-                              child: TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    showAllBrands = !showAllBrands;
-                                  });
-                                },
-                                child: Text(
-                                  showAllBrands ? 'View Less' : 'View More',
-                                  style: TextStyle(
-                                    color: Color(0xFF4E38D4),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
                                   ),
                                 ),
                               ),
-                            ),
+                            ],
                           ],
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 24),
-            // Suppliers Section
-            Container(
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.local_shipping,
-                          color: Colors.blue[600], size: 24),
-                      SizedBox(width: 12),
-                      Text(
-                        'Suppliers',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                  StreamBuilder<List<Supplier>>(
-                    stream: filterController.getSuppliersStream(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
-                      }
-                      final suppliers = snapshot.data ?? [];
-                      final validSuppliers =
-                          suppliers.where((s) => s.name != "N/A").toList();
-
-                      if (validSuppliers.isEmpty) {
-                        return Container(
-                          padding: EdgeInsets.all(20),
-                          child: Text(
-                            'No suppliers available',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
                         );
-                      }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 24),
+              // Suppliers Section
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      spreadRadius: 1,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.local_shipping,
+                            color: Colors.blue[600], size: 24),
+                        SizedBox(width: 12),
+                        Text(
+                          'Suppliers',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    StreamBuilder<List<Supplier>>(
+                      stream: filterController.getSuppliersStream(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(child: CircularProgressIndicator());
+                        }
+                        final suppliers = snapshot.data ?? [];
+                        final validSuppliers =
+                            suppliers.where((s) => s.name != "N/A").toList();
 
-                      // Determine which suppliers to show
-                      List<Supplier> displaySuppliers = validSuppliers;
-                      bool shouldShowViewMore = validSuppliers.length > 4;
+                        if (validSuppliers.isEmpty) {
+                          return Container(
+                            padding: EdgeInsets.all(20),
+                            child: Text(
+                              'No suppliers available',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          );
+                        }
 
-                      if (shouldShowViewMore && !showAllSuppliers) {
-                        displaySuppliers = validSuppliers.take(4).toList();
-                      }
+                        // Determine which suppliers to show
+                        List<Supplier> displaySuppliers = validSuppliers;
+                        bool shouldShowViewMore = validSuppliers.length > 4;
 
-                      return Column(
-                        children: [
-                          ...displaySuppliers
-                              .map((supplier) => Container(
-                                    margin: EdgeInsets.only(bottom: 12),
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.surface,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: theme.dividerColor
-                                              .withOpacity(0.2)),
-                                    ),
-                                    child: ListTile(
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 20, vertical: 8),
-                                      title: Text(
-                                        supplier.name,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
+                        if (shouldShowViewMore && !showAllSuppliers) {
+                          displaySuppliers = validSuppliers.take(4).toList();
+                        }
+
+                        return Column(
+                          children: [
+                            ...displaySuppliers
+                                .map((supplier) => Container(
+                                      margin: EdgeInsets.only(bottom: 12),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: theme.dividerColor
+                                                .withOpacity(0.2)),
+                                      ),
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 20, vertical: 8),
+                                        title: Text(
+                                          supplier.name,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue[50],
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: IconButton(
+                                                icon: Icon(Icons.edit,
+                                                    size: 20,
+                                                    color: Colors.blue[600]),
+                                                onPressed: () =>
+                                                    _showEditSupplierDialog(
+                                                        supplier.name),
+                                              ),
+                                            ),
+                                            SizedBox(width: 8),
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.red[50],
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: IconButton(
+                                                icon: Icon(Icons.delete,
+                                                    size: 20,
+                                                    color: Colors.red[600]),
+                                                onPressed: () =>
+                                                    _showDeleteSupplierDialog(
+                                                        supplier.name),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue[50],
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: IconButton(
-                                              icon: Icon(Icons.edit,
-                                                  size: 20,
-                                                  color: Colors.blue[600]),
-                                              onPressed: () =>
-                                                  _showEditSupplierDialog(
-                                                      supplier.name),
-                                            ),
-                                          ),
-                                          SizedBox(width: 8),
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.red[50],
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: IconButton(
-                                              icon: Icon(Icons.delete,
-                                                  size: 20,
-                                                  color: Colors.red[600]),
-                                              onPressed: () =>
-                                                  _showDeleteSupplierDialog(
-                                                      supplier.name),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                    ))
+                                .toList(),
+                            // View More/Less button
+                            if (shouldShowViewMore) ...[
+                              SizedBox(height: 12),
+                              Center(
+                                child: TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      showAllSuppliers = !showAllSuppliers;
+                                    });
+                                  },
+                                  child: Text(
+                                    showAllSuppliers
+                                        ? 'View Less'
+                                        : 'View More',
+                                    style: TextStyle(
+                                      color: Color(0xFF4E38D4),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
                                     ),
-                                  ))
-                              .toList(),
-                          // View More/Less button
-                          if (shouldShowViewMore) ...[
-                            SizedBox(height: 12),
-                            Center(
-                              child: TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    showAllSuppliers = !showAllSuppliers;
-                                  });
-                                },
-                                child: Text(
-                                  showAllSuppliers ? 'View Less' : 'View More',
-                                  style: TextStyle(
-                                    color: Color(0xFF4E38D4),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
                                   ),
                                 ),
                               ),
-                            ),
+                            ],
                           ],
-                        ],
-                      );
-                    },
-                  ),
-                ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
-            SizedBox(height: 24),
-          ],
+              SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/backup_restore/services/backup_restore_service.dart';
 import 'package:familee_dental/features/backup_restore/services/automatic_backup_service.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class BackupRestorePage extends StatefulWidget {
   const BackupRestorePage({super.key});
@@ -233,236 +234,243 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
         elevation: Theme.of(context).appBarTheme.elevation,
         shadowColor: Theme.of(context).appBarTheme.shadowColor,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: isBusy ? null : _confirmBackup,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00D4AA),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                    icon: const Icon(Icons.cloud_upload),
-                    label: Text(
-                      'Backup Now',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: (!_isRestoring && _backups.isNotEmpty)
-                        ? _confirmRestoreLatest
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isBusy || _backups.isEmpty
-                          ? Colors.grey[400]
-                          : const Color(0xFF00D4AA),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                    icon: const Icon(Icons.cloud_download),
-                    label: Text(
-                      'Restore Latest',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (isBusy) ...[
-              LinearProgressIndicator(
-                value: _totalCount > 0 ? _progressCount / _totalCount : null,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _totalCount > 0
-                    ? '$_progressCount / $_totalCount'
-                    : 'Processed: $_progressCount',
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (_error != null && !_error!.contains('no_changes')) ...[
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-              const SizedBox(height: 16),
-            ],
-            // Automatic Backup Settings
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).dividerColor.withOpacity(0.2),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: ResponsiveContainer(
+        maxWidth: 1000,
+        child: Padding(
+          padding: EdgeInsets.all(
+              MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.schedule,
-                        color: const Color(0xFF00D4AA),
-                        size: 20,
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: isBusy ? null : _confirmBackup,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00D4AA),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Automatic Daily Backup',
+                      icon: const Icon(Icons.cloud_upload),
+                      label: Text(
+                        'Backup Now',
                         style: AppFonts.sfProStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                          color: Colors.white,
                         ),
                       ),
-                      const Spacer(),
-                      Switch(
-                        value: _isAutoBackupEnabled,
-                        onChanged: _toggleAutoBackup,
-                        activeColor: const Color(0xFF00D4AA),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Automatically creates a backup at 11:59 PM daily',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).textTheme.bodySmall?.color,
                     ),
                   ),
-                  if (_isAutoBackupEnabled && _lastBackupDate != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Last automatic backup: ${_formatDate(_lastBackupDate!)}',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 12,
-                        color: const Color(0xFF00D4AA),
-                        fontWeight: FontWeight.w500,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: (!_isRestoring && _backups.isNotEmpty)
+                          ? _confirmRestoreLatest
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isBusy || _backups.isEmpty
+                            ? Colors.grey[400]
+                            : const Color(0xFF00D4AA),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                      icon: const Icon(Icons.cloud_download),
+                      label: Text(
+                        'Restore Latest',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Available Backups',
-              style: AppFonts.sfProStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).textTheme.bodyMedium?.color,
+              const SizedBox(height: 16),
+              if (isBusy) ...[
+                LinearProgressIndicator(
+                  value: _totalCount > 0 ? _progressCount / _totalCount : null,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _totalCount > 0
+                      ? '$_progressCount / $_totalCount'
+                      : 'Processed: $_progressCount',
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (_error != null && !_error!.contains('no_changes')) ...[
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+                const SizedBox(height: 16),
+              ],
+              // Automatic Backup Settings
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).dividerColor.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          color: const Color(0xFF00D4AA),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Automatic Daily Backup',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                        const Spacer(),
+                        Switch(
+                          value: _isAutoBackupEnabled,
+                          onChanged: _toggleAutoBackup,
+                          activeColor: const Color(0xFF00D4AA),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Automatically creates a backup at 11:59 PM daily',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                      ),
+                    ),
+                    if (_isAutoBackupEnabled && _lastBackupDate != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Last automatic backup: ${_formatDate(_lastBackupDate!)}',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 12,
+                          color: const Color(0xFF00D4AA),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadBackups,
-                child: _backups.isEmpty
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: EdgeInsets.zero,
-                        children: const [
-                          SizedBox(height: 32),
-                          Center(child: Text('No backups yet')),
-                        ],
-                      )
-                    : ListView.builder(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: EdgeInsets.zero,
-                        itemCount: _backups.length,
-                        itemBuilder: (context, index) {
-                          final meta = _backups[index];
-                          final ts = meta.timestampUtc?.toLocal().toString() ??
-                              'Unknown time';
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 6),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            clipBehavior: Clip.hardEdge,
-                            child: Slidable(
-                              key: ValueKey(meta.fullPath),
-                              endActionPane: ActionPane(
-                                motion: const ScrollMotion(),
-                                children: [
-                                  SlidableAction(
-                                    onPressed: (_) => _confirmDelete(meta),
-                                    backgroundColor: Colors.red,
-                                    foregroundColor: Colors.white,
-                                    icon: Icons.delete_outline,
-                                    label: 'Delete',
-                                  ),
-                                ],
+              const SizedBox(height: 16),
+              Text(
+                'Available Backups',
+                style: AppFonts.sfProStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _loadBackups,
+                  child: _backups.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          children: const [
+                            SizedBox(height: 32),
+                            Center(child: Text('No backups yet')),
+                          ],
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          itemCount: _backups.length,
+                          itemBuilder: (context, index) {
+                            final meta = _backups[index];
+                            final ts =
+                                meta.timestampUtc?.toLocal().toString() ??
+                                    'Unknown time';
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
+                              clipBehavior: Clip.hardEdge,
+                              child: Slidable(
+                                key: ValueKey(meta.fullPath),
+                                endActionPane: ActionPane(
+                                  motion: const ScrollMotion(),
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            meta.name,
-                                            softWrap: true,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(ts,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall),
-                                        ],
-                                      ),
-                                    ),
-                                    TextButton(
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                        ),
-                                        minimumSize: const Size(0, 36),
-                                      ),
-                                      onPressed: _isRestoring
-                                          ? null
-                                          : () => _confirmRestore(meta),
-                                      child: const Text('Restore'),
+                                    SlidableAction(
+                                      onPressed: (_) => _confirmDelete(meta),
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      icon: Icons.delete_outline,
+                                      label: 'Delete',
                                     ),
                                   ],
                                 ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              meta.name,
+                                              softWrap: true,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(ts,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall),
+                                          ],
+                                        ),
+                                      ),
+                                      TextButton(
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                          minimumSize: const Size(0, 36),
+                                        ),
+                                        onPressed: _isRestoring
+                                            ? null
+                                            : () => _confirmRestore(meta),
+                                        child: const Text('Restore'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                        ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

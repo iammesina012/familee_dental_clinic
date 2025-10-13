@@ -4,6 +4,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
 import 'package:familee_dental/features/purchase_order/controller/po_create_controller.dart';
 import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class CreatePOPage extends StatefulWidget {
   const CreatePOPage({super.key});
@@ -130,180 +131,410 @@ class _CreatePOPageState extends State<CreatePOPage> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.03),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Purchase Name Section
-              Container(
-                padding:
-                    EdgeInsets.all(MediaQuery.of(context).size.width * 0.03),
-                decoration: BoxDecoration(
-                  color: theme.brightness == Brightness.dark
-                      ? theme.colorScheme.surface
-                      : const Color(0xFFE8D5E8),
-                  borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: theme.dividerColor.withOpacity(0.2)),
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Use column layout for smaller screens
-                    if (constraints.maxWidth < 600) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Purchase Name:",
-                            style: AppFonts.sfProStyle(
-                              fontSize:
-                                  MediaQuery.of(context).size.width * 0.04,
-                              fontWeight: FontWeight.bold,
-                              color: theme.brightness == Brightness.dark
-                                  ? theme.textTheme.bodyMedium?.color
-                                  : const Color(0xFF8B5A8B),
+      body: ResponsiveContainer(
+        maxWidth: 1100,
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(
+                MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Purchase Name Section
+                Container(
+                  padding:
+                      EdgeInsets.all(MediaQuery.of(context).size.width * 0.03),
+                  decoration: BoxDecoration(
+                    color: theme.brightness == Brightness.dark
+                        ? theme.colorScheme.surface
+                        : const Color(0xFFE8D5E8),
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Use column layout for smaller screens
+                      if (constraints.maxWidth < 600) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Purchase Name:",
+                              style: AppFonts.sfProStyle(
+                                fontSize:
+                                    MediaQuery.of(context).size.width * 0.04,
+                                fontWeight: FontWeight.bold,
+                                color: theme.brightness == Brightness.dark
+                                    ? theme.textTheme.bodyMedium?.color
+                                    : const Color(0xFF8B5A8B),
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 8),
-                          Autocomplete<String>(
-                            fieldViewBuilder: (context, textEditingController,
-                                focusNode, onFieldSubmitted) {
-                              // Store reference to the autocomplete controller
-                              _autocompleteController = textEditingController;
-                              if (!_nameListenerAttached) {
-                                _autocompleteController!.addListener(() {
-                                  if (mounted) setState(() {});
-                                });
-                                _nameListenerAttached = true;
-                              }
+                            SizedBox(height: 8),
+                            Autocomplete<String>(
+                              fieldViewBuilder: (context, textEditingController,
+                                  focusNode, onFieldSubmitted) {
+                                // Store reference to the autocomplete controller
+                                _autocompleteController = textEditingController;
+                                if (!_nameListenerAttached) {
+                                  _autocompleteController!.addListener(() {
+                                    if (mounted) setState(() {});
+                                  });
+                                  _nameListenerAttached = true;
+                                }
 
-                              // Set the text if we're in editing mode and haven't set it yet
-                              if (_shouldSetAutocompleteText &&
-                                  _editingPO != null) {
-                                WidgetsBinding.instance
-                                    .addPostFrameCallback((_) {
-                                  if (mounted) {
-                                    textEditingController.text =
-                                        _editingPO!.name;
-                                    setState(() {
-                                      _shouldSetAutocompleteText = false;
-                                    });
-                                  }
-                                });
-                              }
+                                // Set the text if we're in editing mode and haven't set it yet
+                                if (_shouldSetAutocompleteText &&
+                                    _editingPO != null) {
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (mounted) {
+                                      textEditingController.text =
+                                          _editingPO!.name;
+                                      setState(() {
+                                        _shouldSetAutocompleteText = false;
+                                      });
+                                    }
+                                  });
+                                }
 
-                              return TextField(
-                                controller: textEditingController,
-                                focusNode: focusNode,
-                                style: AppFonts.sfProStyle(
-                                  fontSize:
-                                      MediaQuery.of(context).size.width * 0.04,
-                                  color: theme.textTheme.bodyMedium?.color,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: 'Type here...',
-                                  hintStyle: AppFonts.sfProStyle(
+                                return TextField(
+                                  controller: textEditingController,
+                                  focusNode: focusNode,
+                                  style: AppFonts.sfProStyle(
                                     fontSize:
                                         MediaQuery.of(context).size.width *
                                             0.04,
-                                    color: theme.textTheme.bodyMedium?.color
-                                        ?.withOpacity(0.4),
+                                    color: theme.textTheme.bodyMedium?.color,
                                   ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide.none,
+                                  decoration: InputDecoration(
+                                    hintText: 'Type here...',
+                                    hintStyle: AppFonts.sfProStyle(
+                                      fontSize:
+                                          MediaQuery.of(context).size.width *
+                                              0.04,
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.4),
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 12,
+                                      horizontal: 16,
+                                    ),
+                                    filled: true,
+                                    fillColor: scheme.surface,
                                   ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: EdgeInsets.symmetric(
-                                    vertical: 12,
-                                    horizontal: 16,
-                                  ),
-                                  filled: true,
-                                  fillColor: scheme.surface,
-                                ),
-                              );
-                            },
-                            optionsBuilder:
-                                (TextEditingValue textEditingValue) async {
-                              if (textEditingValue.text.trim().isEmpty) {
-                                return const Iterable<String>.empty();
-                              }
-                              return await _controller
-                                  .getSuggestions(textEditingValue.text);
-                            },
-                            onSelected: (String selection) {
-                              // This is called when a suggestion is selected
-                              // The text field will be automatically updated
-                            },
-                            optionsViewBuilder: (context, onSelected, options) {
-                              return Material(
-                                elevation: 4.0,
-                                child: Container(
-                                  constraints: BoxConstraints(
-                                    maxHeight: options.length *
-                                        56.0, // Increased height for better spacing
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: scheme.surface,
-                                    borderRadius: BorderRadius.circular(8),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            theme.shadowColor.withOpacity(0.12),
-                                        blurRadius: 8,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ListView.builder(
-                                    padding: EdgeInsets.zero,
-                                    shrinkWrap:
-                                        true, // Make it only as tall as needed
-                                    itemCount: options.length,
-                                    itemBuilder:
-                                        (BuildContext context, int index) {
-                                      final option = options.elementAt(index);
-                                      return ListTile(
-                                        dense: true, // Make tiles more compact
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 4,
+                                );
+                              },
+                              optionsBuilder:
+                                  (TextEditingValue textEditingValue) async {
+                                if (textEditingValue.text.trim().isEmpty) {
+                                  return const Iterable<String>.empty();
+                                }
+                                return await _controller
+                                    .getSuggestions(textEditingValue.text);
+                              },
+                              onSelected: (String selection) {
+                                // This is called when a suggestion is selected
+                                // The text field will be automatically updated
+                              },
+                              optionsViewBuilder:
+                                  (context, onSelected, options) {
+                                return Material(
+                                  elevation: 4.0,
+                                  child: Container(
+                                    constraints: BoxConstraints(
+                                      maxHeight: options.length *
+                                          56.0, // Increased height for better spacing
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: scheme.surface,
+                                      borderRadius: BorderRadius.circular(8),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: theme.shadowColor
+                                              .withOpacity(0.12),
+                                          blurRadius: 8,
+                                          offset: Offset(0, 2),
                                         ),
-                                        title: Text(
-                                          option,
-                                          style: AppFonts.sfProStyle(
+                                      ],
+                                    ),
+                                    child: ListView.builder(
+                                      padding: EdgeInsets.zero,
+                                      shrinkWrap:
+                                          true, // Make it only as tall as needed
+                                      itemCount: options.length,
+                                      itemBuilder:
+                                          (BuildContext context, int index) {
+                                        final option = options.elementAt(index);
+                                        return ListTile(
+                                          dense:
+                                              true, // Make tiles more compact
+                                          contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 4,
+                                          ),
+                                          title: Text(
+                                            option,
+                                            style: AppFonts.sfProStyle(
+                                              fontSize: 16,
+                                              color: theme
+                                                  .textTheme.bodyMedium?.color,
+                                            ),
+                                          ),
+                                          onTap: () {
+                                            onSelected(option);
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: Builder(builder: (context) {
+                                final bool disabled = _isSaving ||
+                                    (_isEditing
+                                        ? !_hasUnsavedChanges()
+                                        : addedSupplies.isEmpty);
+                                return ElevatedButton(
+                                  onPressed:
+                                      disabled ? null : _savePurchaseOrder,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: disabled
+                                        ? Colors.grey[400]
+                                        : Color(0xFF00D4AA),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _isSaving
+                                        ? (_isEditing
+                                            ? 'Updating...'
+                                            : 'Saving...')
+                                        : (_isEditing ? 'Update' : 'Save'),
+                                    style: AppFonts.sfProStyle(
+                                      fontSize:
+                                          MediaQuery.of(context).size.width *
+                                              0.04,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ],
+                        );
+                      } else {
+                        // Use row layout for larger screens
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Purchase Name:",
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.brightness == Brightness.dark
+                                          ? Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.color
+                                          : const Color(0xFF8B5A8B),
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Autocomplete<String>(
+                                    fieldViewBuilder: (context,
+                                        textEditingController,
+                                        focusNode,
+                                        onFieldSubmitted) {
+                                      // Store reference to the autocomplete controller
+                                      _autocompleteController =
+                                          textEditingController;
+                                      if (!_nameListenerAttached) {
+                                        _autocompleteController!
+                                            .addListener(() {
+                                          if (mounted) setState(() {});
+                                        });
+                                        _nameListenerAttached = true;
+                                      }
+
+                                      // Set the text if we're in editing mode and haven't set it yet
+                                      if (_shouldSetAutocompleteText &&
+                                          _editingPO != null) {
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                          if (mounted) {
+                                            textEditingController.text =
+                                                _editingPO!.name;
+                                            setState(() {
+                                              _shouldSetAutocompleteText =
+                                                  false;
+                                            });
+                                          }
+                                        });
+                                      }
+
+                                      return TextField(
+                                        controller: textEditingController,
+                                        focusNode: focusNode,
+                                        style: AppFonts.sfProStyle(
+                                          fontSize: 16,
+                                          color: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.color,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: 'Type here...',
+                                          hintStyle: AppFonts.sfProStyle(
                                             fontSize: 16,
-                                            color: theme
-                                                .textTheme.bodyMedium?.color,
+                                            color: Colors.grey[400],
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            borderSide: BorderSide(
+                                                color: Colors.white
+                                                    .withOpacity(0.2),
+                                                width: 1),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            borderSide: BorderSide(
+                                                color: Colors.white
+                                                    .withOpacity(0.2),
+                                                width: 1),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            borderSide: BorderSide(
+                                                color: Colors.white
+                                                    .withOpacity(0.3),
+                                                width: 1.2),
+                                          ),
+                                          contentPadding: EdgeInsets.symmetric(
+                                            vertical: 12,
+                                            horizontal: 16,
+                                          ),
+                                          filled: true,
+                                          fillColor: Theme.of(context)
+                                              .colorScheme
+                                              .surface,
+                                        ),
+                                      );
+                                    },
+                                    optionsBuilder: (TextEditingValue
+                                        textEditingValue) async {
+                                      if (textEditingValue.text
+                                          .trim()
+                                          .isEmpty) {
+                                        return const Iterable<String>.empty();
+                                      }
+                                      return await _controller.getSuggestions(
+                                          textEditingValue.text);
+                                    },
+                                    onSelected: (String selection) {
+                                      // This is called when a suggestion is selected
+                                      // The text field will be automatically updated
+                                    },
+                                    optionsViewBuilder:
+                                        (context, onSelected, options) {
+                                      return Material(
+                                        elevation: 4.0,
+                                        child: Container(
+                                          constraints: BoxConstraints(
+                                            maxHeight: options.length *
+                                                56.0, // Increased height for better spacing
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: scheme.surface,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: theme.shadowColor
+                                                    .withOpacity(0.12),
+                                                blurRadius: 8,
+                                                offset: Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: ListView.builder(
+                                            padding: EdgeInsets.zero,
+                                            shrinkWrap:
+                                                true, // Make it only as tall as needed
+                                            itemCount: options.length,
+                                            itemBuilder: (BuildContext context,
+                                                int index) {
+                                              final option =
+                                                  options.elementAt(index);
+                                              return ListTile(
+                                                dense:
+                                                    true, // Make tiles more compact
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 4,
+                                                ),
+                                                title: Text(
+                                                  option,
+                                                  style: AppFonts.sfProStyle(
+                                                    fontSize: 16,
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color,
+                                                  ),
+                                                ),
+                                                onTap: () {
+                                                  onSelected(option);
+                                                },
+                                              );
+                                            },
                                           ),
                                         ),
-                                        onTap: () {
-                                          onSelected(option);
-                                        },
                                       );
                                     },
                                   ),
-                                ),
-                              );
-                            },
-                          ),
-                          SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: Builder(builder: (context) {
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Builder(builder: (context) {
                               final bool disabled = _isSaving ||
                                   (_isEditing
                                       ? !_hasUnsavedChanges()
-                                      : addedSupplies.isEmpty);
+                                      : addedSupplies.isNotEmpty
+                                          ? false
+                                          : true);
                               return ElevatedButton(
                                 onPressed: disabled ? null : _savePurchaseOrder,
                                 style: ElevatedButton.styleFrom(
@@ -325,255 +556,39 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                           : 'Saving...')
                                       : (_isEditing ? 'Update' : 'Save'),
                                   style: AppFonts.sfProStyle(
-                                    fontSize:
-                                        MediaQuery.of(context).size.width *
-                                            0.04,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
                                 ),
                               );
                             }),
-                          ),
-                        ],
-                      );
-                    } else {
-                      // Use row layout for larger screens
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Purchase Name:",
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.brightness == Brightness.dark
-                                        ? Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.color
-                                        : const Color(0xFF8B5A8B),
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Autocomplete<String>(
-                                  fieldViewBuilder: (context,
-                                      textEditingController,
-                                      focusNode,
-                                      onFieldSubmitted) {
-                                    // Store reference to the autocomplete controller
-                                    _autocompleteController =
-                                        textEditingController;
-                                    if (!_nameListenerAttached) {
-                                      _autocompleteController!.addListener(() {
-                                        if (mounted) setState(() {});
-                                      });
-                                      _nameListenerAttached = true;
-                                    }
-
-                                    // Set the text if we're in editing mode and haven't set it yet
-                                    if (_shouldSetAutocompleteText &&
-                                        _editingPO != null) {
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback((_) {
-                                        if (mounted) {
-                                          textEditingController.text =
-                                              _editingPO!.name;
-                                          setState(() {
-                                            _shouldSetAutocompleteText = false;
-                                          });
-                                        }
-                                      });
-                                    }
-
-                                    return TextField(
-                                      controller: textEditingController,
-                                      focusNode: focusNode,
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 16,
-                                        color: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.color,
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: 'Type here...',
-                                        hintStyle: AppFonts.sfProStyle(
-                                          fontSize: 16,
-                                          color: Colors.grey[400],
-                                        ),
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          borderSide: BorderSide(
-                                              color:
-                                                  Colors.white.withOpacity(0.2),
-                                              width: 1),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          borderSide: BorderSide(
-                                              color:
-                                                  Colors.white.withOpacity(0.2),
-                                              width: 1),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          borderSide: BorderSide(
-                                              color:
-                                                  Colors.white.withOpacity(0.3),
-                                              width: 1.2),
-                                        ),
-                                        contentPadding: EdgeInsets.symmetric(
-                                          vertical: 12,
-                                          horizontal: 16,
-                                        ),
-                                        filled: true,
-                                        fillColor: Theme.of(context)
-                                            .colorScheme
-                                            .surface,
-                                      ),
-                                    );
-                                  },
-                                  optionsBuilder: (TextEditingValue
-                                      textEditingValue) async {
-                                    if (textEditingValue.text.trim().isEmpty) {
-                                      return const Iterable<String>.empty();
-                                    }
-                                    return await _controller
-                                        .getSuggestions(textEditingValue.text);
-                                  },
-                                  onSelected: (String selection) {
-                                    // This is called when a suggestion is selected
-                                    // The text field will be automatically updated
-                                  },
-                                  optionsViewBuilder:
-                                      (context, onSelected, options) {
-                                    return Material(
-                                      elevation: 4.0,
-                                      child: Container(
-                                        constraints: BoxConstraints(
-                                          maxHeight: options.length *
-                                              56.0, // Increased height for better spacing
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: scheme.surface,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: theme.shadowColor
-                                                  .withOpacity(0.12),
-                                              blurRadius: 8,
-                                              offset: Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: ListView.builder(
-                                          padding: EdgeInsets.zero,
-                                          shrinkWrap:
-                                              true, // Make it only as tall as needed
-                                          itemCount: options.length,
-                                          itemBuilder: (BuildContext context,
-                                              int index) {
-                                            final option =
-                                                options.elementAt(index);
-                                            return ListTile(
-                                              dense:
-                                                  true, // Make tiles more compact
-                                              contentPadding:
-                                                  EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 4,
-                                              ),
-                                              title: Text(
-                                                option,
-                                                style: AppFonts.sfProStyle(
-                                                  fontSize: 16,
-                                                  color: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.color,
-                                                ),
-                                              ),
-                                              onTap: () {
-                                                onSelected(option);
-                                              },
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(width: 16),
-                          Builder(builder: (context) {
-                            final bool disabled = _isSaving ||
-                                (_isEditing
-                                    ? !_hasUnsavedChanges()
-                                    : addedSupplies.isNotEmpty
-                                        ? false
-                                        : true);
-                            return ElevatedButton(
-                              onPressed: disabled ? null : _savePurchaseOrder,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: disabled
-                                    ? Colors.grey[400]
-                                    : Color(0xFF00D4AA),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: Text(
-                                _isSaving
-                                    ? (_isEditing ? 'Updating...' : 'Saving...')
-                                    : (_isEditing ? 'Update' : 'Save'),
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      );
-                    }
-                  },
-                ),
-              ),
-              SizedBox(height: 16),
-
-              // Supplies List Section
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: theme.brightness == Brightness.dark
-                        ? theme.colorScheme.surface
-                        : const Color(0xFFE8D5E8),
-                    borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                          ],
+                        );
+                      }
+                    },
                   ),
-                  child: addedSupplies.isEmpty
-                      ? _buildEmptyState()
-                      : _buildSuppliesList(),
                 ),
-              ),
-            ],
+                SizedBox(height: 16),
+
+                // Supplies List Section
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: theme.brightness == Brightness.dark
+                          ? theme.colorScheme.surface
+                          : const Color(0xFFE8D5E8),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.2)),
+                    ),
+                    child: addedSupplies.isEmpty
+                        ? _buildEmptyState()
+                        : _buildSuppliesList(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -851,265 +866,291 @@ class _CreatePOPageState extends State<CreatePOPage> {
 
   Widget _buildSupplyCard(
       Map<String, dynamic> supply, int baseIndex, int? batchIndex) {
-    return Slidable(
-      key: Key('slidable-$baseIndex-${batchIndex ?? 'base'}'),
-      closeOnScroll: true,
-      startActionPane: ActionPane(
-        motion: const DrawerMotion(),
-        extentRatio: 0.35, // compact reveal, entire tile slides
-        children: [
-          SlidableAction(
-            onPressed: (_) => _editSupply(supply, baseIndex),
-            backgroundColor: const Color(0xFF00D4AA),
-            foregroundColor: Colors.white,
-            icon: Icons.edit,
-            label: 'Edit',
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ],
-      ),
-      endActionPane: ActionPane(
-        motion: const DrawerMotion(),
-        extentRatio: 0.35,
-        children: [
-          SlidableAction(
-            onPressed: (_) async {
-              final confirmed =
-                  await _showDeleteConfirmation(baseIndex, batchIndex);
-              if (confirmed) {
-                // state already updated in dialog
-              }
-            },
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-            icon: Icons.delete,
-            label: 'Delete',
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ],
-      ),
-      child: Card(
-        margin: EdgeInsets.only(bottom: 10),
-        color: Theme.of(context).colorScheme.surface,
-        elevation: 2,
-        shadowColor: Theme.of(context).shadowColor.withOpacity(0.15),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: Theme.of(context).dividerColor.withOpacity(0.2),
-            width: 1,
-          ),
+    return ClipRect(
+      child: Slidable(
+        key: Key('slidable-$baseIndex-${batchIndex ?? 'base'}'),
+        closeOnScroll: true,
+        startActionPane: ActionPane(
+          motion: const DrawerMotion(),
+          extentRatio: MediaQuery.of(context).size.width < 768
+              ? 0.35
+              : 0.25, // smaller ratio for tablet
+          children: [
+            SlidableAction(
+              onPressed: (_) => _editSupply(supply, baseIndex),
+              backgroundColor: const Color(0xFF00D4AA),
+              foregroundColor: Colors.white,
+              icon: Icons.edit,
+              label: 'Edit',
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Supply Image (responsive)
-              SizedBox(
-                width: MediaQuery.of(context).size.width * 0.13,
-                height: MediaQuery.of(context).size.width * 0.13,
-                child: supply['imageUrl'] != null &&
-                        supply['imageUrl'].isNotEmpty
-                    ? Image.network(
-                        supply['imageUrl'],
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(Icons.image_not_supported,
-                              size: MediaQuery.of(context).size.width * 0.08,
-                              color: Colors.grey);
-                        },
-                      )
-                    : Icon(Icons.image_not_supported,
-                        size: MediaQuery.of(context).size.width * 0.08,
-                        color: Colors.grey),
-              ),
-              SizedBox(width: MediaQuery.of(context).size.width * 0.035),
+        endActionPane: ActionPane(
+          motion: const DrawerMotion(),
+          extentRatio: MediaQuery.of(context).size.width < 768
+              ? 0.35
+              : 0.25, // smaller ratio for tablet
+          children: [
+            SlidableAction(
+              onPressed: (_) async {
+                final confirmed =
+                    await _showDeleteConfirmation(baseIndex, batchIndex);
+                if (confirmed) {
+                  // state already updated in dialog
+                }
+              },
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              icon: Icons.delete,
+              label: 'Delete',
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ],
+        ),
+        child: Card(
+          margin: EdgeInsets.only(bottom: 10),
+          color: Theme.of(context).colorScheme.surface,
+          elevation: 2,
+          shadowColor: Theme.of(context).shadowColor.withOpacity(0.15),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: Theme.of(context).dividerColor.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // Supply Image (responsive)
+                SizedBox(
+                  width: MediaQuery.of(context).size.width < 768
+                      ? MediaQuery.of(context).size.width * 0.13
+                      : 80,
+                  height: MediaQuery.of(context).size.width < 768
+                      ? MediaQuery.of(context).size.width * 0.13
+                      : 80,
+                  child: supply['imageUrl'] != null &&
+                          supply['imageUrl'].isNotEmpty
+                      ? Image.network(
+                          supply['imageUrl'],
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(Icons.image_not_supported,
+                                size: MediaQuery.of(context).size.width < 768
+                                    ? MediaQuery.of(context).size.width * 0.08
+                                    : 32,
+                                color: Colors.grey);
+                          },
+                        )
+                      : Icon(Icons.image_not_supported,
+                          size: MediaQuery.of(context).size.width < 768
+                              ? MediaQuery.of(context).size.width * 0.08
+                              : 32,
+                          color: Colors.grey),
+                ),
+                SizedBox(
+                    width: MediaQuery.of(context).size.width < 768
+                        ? MediaQuery.of(context).size.width * 0.035
+                        : 12),
 
-              // Supply Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      supply['supplyName'] ?? 'Unknown Supply',
-                      style: AppFonts.sfProStyle(
-                        fontSize: MediaQuery.of(context).size.width * 0.04,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                // Supply Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        supply['supplyName'] ?? 'Unknown Supply',
+                        style: AppFonts.sfProStyle(
+                          fontSize: MediaQuery.of(context).size.width < 768
+                              ? MediaQuery.of(context).size.width * 0.04
+                              : 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Brand:',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.color
-                                ?.withOpacity(0.8),
-                          ),
-                        ),
-                        SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            (supply['brandName'] ?? 'N/A').toString(),
+                      SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Brand:',
                             style: AppFonts.sfProStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color:
-                                  Theme.of(context).textTheme.bodyMedium?.color,
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.color
+                                  ?.withOpacity(0.8),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Supplier:',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.color
-                                ?.withOpacity(0.8),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              (supply['brandName'] ?? 'N/A').toString(),
+                              style: AppFonts.sfProStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            (supply['supplierName'] ?? 'N/A').toString(),
+                        ],
+                      ),
+                      SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Supplier:',
                             style: AppFonts.sfProStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color:
-                                  Theme.of(context).textTheme.bodyMedium?.color,
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.color
+                                  ?.withOpacity(0.8),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Color(0xFF00D4AA).withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Color(0xFF00D4AA).withOpacity(0.35),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0xFF00D4AA).withOpacity(0.08),
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              (supply['supplierName'] ?? 'N/A').toString(),
+                              style: AppFonts.sfProStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
                               ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.inventory_2,
-                                  size: 12, color: Color(0xFF00D4AA)),
-                              SizedBox(width: 3),
-                              Text(
-                                '${supply['quantity'] ?? 0} ${supply['unit'] ?? 'Box'}',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF00D4AA),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Container(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.orange.withOpacity(0.35),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.orange.withOpacity(0.08),
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            '₱${((supply['quantity'] ?? 0) * (supply['cost'] ?? 0.0)).toStringAsFixed(2)}',
-                            style: AppFonts.sfProStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.orange,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ),
-                        SizedBox(width: 4),
-                        if ((supply['expiryDate'] ?? '').toString().isNotEmpty)
+                        ],
+                      ),
+                      SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
                           Container(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 6),
                             decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.12),
+                              color: Color(0xFF00D4AA).withOpacity(0.12),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: Colors.blue.withOpacity(0.35),
+                                color: Color(0xFF00D4AA).withOpacity(0.35),
                                 width: 1,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color(0xFF00D4AA).withOpacity(0.08),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.event, size: 12, color: Colors.blue),
+                                Icon(Icons.inventory_2,
+                                    size: 12, color: Color(0xFF00D4AA)),
                                 SizedBox(width: 3),
                                 Text(
-                                  (supply['expiryDate'] as String),
+                                  '${supply['quantity'] ?? 0} ${supply['unit'] ?? 'Box'}',
                                   style: AppFonts.sfProStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w500,
-                                    color: Colors.blue,
+                                    color: Color(0xFF00D4AA),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                      ],
-                    ),
-                  ],
+                          SizedBox(width: 4),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.orange.withOpacity(0.35),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.orange.withOpacity(0.08),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              '₱${((supply['quantity'] ?? 0) * (supply['cost'] ?? 0.0)).toStringAsFixed(2)}',
+                              style: AppFonts.sfProStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          if ((supply['expiryDate'] ?? '')
+                              .toString()
+                              .isNotEmpty)
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.blue.withOpacity(0.35),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.event,
+                                      size: 12, color: Colors.blue),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    (supply['expiryDate'] as String),
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
-              // Empty space for swipe gestures
-              SizedBox(width: 20),
-            ],
+                // Empty space for swipe gestures
+                SizedBox(width: 20),
+              ],
+            ),
           ),
         ),
       ),
@@ -1315,51 +1356,73 @@ class _CreatePOPageState extends State<CreatePOPage> {
       showDialog(
         context: context,
         builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text(
-              _isEditing ? 'Cancel Editing?' : 'Cancel Purchase Order?',
-              style: AppFonts.sfProStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 300),
+            child: AlertDialog(
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              title: Text(
+                _isEditing ? 'Cancel Editing' : 'Cancel Purchase Order',
+                style: AppFonts.sfProStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              content: Text(
+                _isEditing
+                    ? 'You have unsaved changes. Are you sure you want to cancel editing this purchase order?'
+                    : 'You have unsaved changes. Are you sure you want to cancel this purchase order?',
+                style: AppFonts.sfProStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              actions: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(); // Close dialog
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[600],
+                        ),
+                        child: Text(
+                          'Continue Editing',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(); // Close dialog
+                          Navigator.of(context)
+                              .pop(); // Go back to previous page
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        child: Text(
+                          _isEditing ? 'Cancel Edit' : 'Cancel PO',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            content: Text(
-              _isEditing
-                  ? 'You have unsaved changes. Are you sure you want to cancel editing this purchase order?'
-                  : 'You have unsaved changes. Are you sure you want to cancel this purchase order?',
-              style: AppFonts.sfProStyle(fontSize: 16),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop(); // Close dialog
-                },
-                child: Text(
-                  'Continue Editing',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 16,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop(); // Close dialog
-                  Navigator.of(context).pop(); // Go back to previous page
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                ),
-                child: Text(
-                  _isEditing ? 'Cancel Edit' : 'Cancel PO',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
           );
         },
       );
@@ -1375,7 +1438,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text(
-            'Error',
+            'Missing Information',
             style: AppFonts.sfProStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,

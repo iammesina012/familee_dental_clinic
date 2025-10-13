@@ -6,6 +6,7 @@ import 'package:familee_dental/features/stock_deduction/controller/stock_deducti
 import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class StockDeductionPage extends StatefulWidget {
   const StockDeductionPage({super.key});
@@ -790,231 +791,244 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             backgroundColor: const Color(0xFF00D4AA),
             child: const Icon(Icons.add, color: Colors.white),
           ),
-          body: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
-              child: Column(
-                children: [
-                  // Top bar for in-page actions
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      ElevatedButton(
-                        onPressed: _createPreset,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00D4AA),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: Text(
-                          'Presets',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+          body: ResponsiveContainer(
+            maxWidth: 1200,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.all(
+                    MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+                child: Column(
+                  children: [
+                    // Top bar for in-page actions
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        ElevatedButton(
+                          onPressed: _createPreset,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00D4AA),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: Text(
+                            'Presets',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: _deductions.isEmpty ? null : _save,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _deductions.isEmpty
-                              ? Colors.grey[400]
-                              : const Color(0xFF00D4AA),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: Text(
-                          'Deduct',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _deductions.isEmpty ? null : _save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _deductions.isEmpty
+                                ? Colors.grey[400]
+                                : const Color(0xFF00D4AA),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: Text(
+                            'Deduct',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Theme.of(context).colorScheme.surface
-                            : const Color(0xFFE8D5E8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color:
-                              Theme.of(context).dividerColor.withOpacity(0.2),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Theme.of(context).colorScheme.surface
+                              : const Color(0xFFE8D5E8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color:
+                                Theme.of(context).dividerColor.withOpacity(0.2),
+                          ),
                         ),
-                      ),
-                      child: _deductions.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(12),
-                              itemCount: _deductions.length,
-                              itemBuilder: (context, index) {
-                                final item = _deductions[index];
-                                return Slidable(
-                                    key: ValueKey(
-                                        'deduct-${item['docId'] ?? index}'),
-                                    closeOnScroll: true,
-                                    endActionPane: ActionPane(
-                                      motion: const DrawerMotion(),
-                                      extentRatio: 0.35,
-                                      children: [
-                                        SlidableAction(
-                                          onPressed: (_) =>
-                                              _removeDeductionAt(index),
-                                          backgroundColor: Colors.red,
-                                          foregroundColor: Colors.white,
-                                          icon: Icons.delete,
-                                          label: 'Remove',
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Card(
-                                      margin: const EdgeInsets.only(bottom: 12),
-                                      color:
-                                          Theme.of(context).colorScheme.surface,
-                                      elevation: 2,
-                                      shadowColor: Theme.of(context)
-                                          .shadowColor
-                                          .withOpacity(0.15),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          side: BorderSide(
-                                            color: Theme.of(context)
-                                                .dividerColor
-                                                .withOpacity(0.2),
-                                            width: 1,
-                                          )),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14, vertical: 16),
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                              minHeight: 84),
-                                          child: Row(
-                                            children: [
-                                              ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                child: Image.network(
-                                                  item['imageUrl'] ?? '',
-                                                  width: 48,
-                                                  height: 48,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) =>
-                                                      Container(
+                        child: _deductions.isEmpty
+                            ? _buildEmptyState()
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(12),
+                                itemCount: _deductions.length,
+                                itemBuilder: (context, index) {
+                                  final item = _deductions[index];
+                                  return Slidable(
+                                      key: ValueKey(
+                                          'deduct-${item['docId'] ?? index}'),
+                                      closeOnScroll: true,
+                                      endActionPane: ActionPane(
+                                        motion: const DrawerMotion(),
+                                        extentRatio: 0.35,
+                                        children: [
+                                          SlidableAction(
+                                            onPressed: (_) =>
+                                                _removeDeductionAt(index),
+                                            backgroundColor: Colors.red,
+                                            foregroundColor: Colors.white,
+                                            icon: Icons.delete,
+                                            label: 'Remove',
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Card(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 12),
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surface,
+                                        elevation: 2,
+                                        shadowColor: Theme.of(context)
+                                            .shadowColor
+                                            .withOpacity(0.15),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            side: BorderSide(
+                                              color: Theme.of(context)
+                                                  .dividerColor
+                                                  .withOpacity(0.2),
+                                              width: 1,
+                                            )),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 16),
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                                minHeight: 84),
+                                            child: Row(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  child: Image.network(
+                                                    item['imageUrl'] ?? '',
                                                     width: 48,
                                                     height: 48,
-                                                    color: Colors.grey[200],
-                                                    child: const Icon(
-                                                        Icons.inventory,
-                                                        color: Colors.grey),
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (_, __, ___) =>
+                                                            Container(
+                                                      width: 48,
+                                                      height: 48,
+                                                      color: Colors.grey[200],
+                                                      child: const Icon(
+                                                          Icons.inventory,
+                                                          color: Colors.grey),
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                              const SizedBox(width: 14),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
+                                                const SizedBox(width: 14),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        item['name'] ?? '',
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                                color: Theme.of(
+                                                                        context)
+                                                                    .textTheme
+                                                                    .bodyMedium
+                                                                    ?.color),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      _expiryChip('Expiry: ' +
+                                                          _formatExpiry(
+                                                              item['expiry'],
+                                                              item['noExpiry']
+                                                                  as bool?)),
+                                                      const SizedBox(height: 6),
+                                                      _stockChip('Stock: ' +
+                                                          ((_deductions[index][
+                                                                      'stock'] ??
+                                                                  0) as int)
+                                                              .toString()),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Row(
                                                   mainAxisSize:
                                                       MainAxisSize.min,
                                                   children: [
+                                                    IconButton(
+                                                      onPressed: () =>
+                                                          _decrementQty(index),
+                                                      icon: Icon(
+                                                        Icons
+                                                            .remove_circle_outline,
+                                                        color: Theme.of(context)
+                                                            .iconTheme
+                                                            .color,
+                                                      ),
+                                                    ),
                                                     Text(
-                                                      item['name'] ?? '',
+                                                      (_deductions[index]
+                                                                  ['deductQty']
+                                                              as int)
+                                                          .toString(),
                                                       style:
                                                           AppFonts.sfProStyle(
                                                               fontSize: 16,
                                                               fontWeight:
                                                                   FontWeight
-                                                                      .w500,
+                                                                      .bold,
                                                               color: Theme.of(
                                                                       context)
                                                                   .textTheme
                                                                   .bodyMedium
                                                                   ?.color),
-                                                      maxLines: 2,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
                                                     ),
-                                                    const SizedBox(height: 8),
-                                                    _expiryChip('Expiry: ' +
-                                                        _formatExpiry(
-                                                            item['expiry'],
-                                                            item['noExpiry']
-                                                                as bool?)),
-                                                    const SizedBox(height: 6),
-                                                    _stockChip('Stock: ' +
-                                                        ((_deductions[index]
-                                                                    ['stock'] ??
-                                                                0) as int)
-                                                            .toString()),
-                                                  ],
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  IconButton(
-                                                    onPressed: () =>
-                                                        _decrementQty(index),
-                                                    icon: Icon(
-                                                      Icons
-                                                          .remove_circle_outline,
-                                                      color: Theme.of(context)
-                                                          .iconTheme
-                                                          .color,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    (_deductions[index]
-                                                                ['deductQty']
-                                                            as int)
-                                                        .toString(),
-                                                    style: AppFonts.sfProStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.bold,
+                                                    IconButton(
+                                                      onPressed: () =>
+                                                          _incrementQty(index),
+                                                      icon: Icon(
+                                                        Icons
+                                                            .add_circle_outline,
                                                         color: Theme.of(context)
-                                                            .textTheme
-                                                            .bodyMedium
-                                                            ?.color),
-                                                  ),
-                                                  IconButton(
-                                                    onPressed: () =>
-                                                        _incrementQty(index),
-                                                    icon: Icon(
-                                                      Icons.add_circle_outline,
-                                                      color: Theme.of(context)
-                                                          .iconTheme
-                                                          .color,
+                                                            .iconTheme
+                                                            .color,
+                                                      ),
                                                     ),
-                                                  ),
-                                                ],
-                                              )
-                                            ],
+                                                  ],
+                                                )
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ));
-                              },
-                            ),
+                                      ));
+                                },
+                              ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

@@ -9,6 +9,7 @@ import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/activity_log/controller/po_activity_controller.dart';
 import 'package:familee_dental/features/notifications/controller/notifications_controller.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class PODetailsPage extends StatefulWidget {
   final PurchaseOrder purchaseOrder;
@@ -479,345 +480,541 @@ class _PODetailsPageState extends State<PODetailsPage> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Suppliers Header
-              Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    Text(
-                      "Suppliers",
-                      style: AppFonts.sfProStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: theme.brightness == Brightness.dark
-                            ? Colors.white
-                            : theme.textTheme.bodyMedium?.color,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
-                          width: 1,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${_receivedSuppliersHeader}/${_uniqueSuppliersHeader}',
+      body: ResponsiveContainer(
+        maxWidth: 1200,
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(
+                MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Suppliers Header
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Text(
+                        "Suppliers",
                         style: AppFonts.sfProStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.white
+                              : theme.textTheme.bodyMedium?.color,
                         ),
                       ),
-                    ),
-                    const Spacer(),
-                    // Approve/Reject buttons - Only for Admin users
-                    if (!UserRoleProvider().isStaff &&
-                        _controller.canRejectPO(_purchaseOrder))
-                      Container(
-                        width: 85,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: [
-                            Colors.red,
-                            Colors.red.shade700,
-                          ]),
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(0.3),
-                              blurRadius: 6,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _confirmReject,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: _isLoading
-                              ? SizedBox(
-                                  height: 14,
-                                  width: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white),
-                                  ),
-                                )
-                              : Text(
-                                  'Reject',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize:
-                                        MediaQuery.of(context).size.width *
-                                            0.032,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    if (!UserRoleProvider().isStaff &&
-                        _controller.canApprovePO(_purchaseOrder))
                       const SizedBox(width: 8),
-                    if (!UserRoleProvider().isStaff &&
-                        _controller.canApprovePO(_purchaseOrder))
                       Container(
-                        width: 85,
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: [
-                            Color(0xFF00D4AA),
-                            Color(0xFF00B894),
-                          ]),
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0xFF00D4AA).withOpacity(0.3),
-                              blurRadius: 6,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: (_isLoading ||
-                                  !_controller.canApprovePO(_purchaseOrder))
-                              ? null
-                              : _approvePurchaseOrder,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
                           ),
-                          child: _isLoading
-                              ? SizedBox(
-                                  height: 14,
-                                  width: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white),
-                                  ),
-                                )
-                              : Text(
-                                  'Approve',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize:
-                                        MediaQuery.of(context).size.width *
-                                            0.032,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${_receivedSuppliersHeader}/${_uniqueSuppliersHeader}',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                  ],
+                      const Spacer(),
+                      // Approve/Reject buttons - Only for Admin users
+                      if (!UserRoleProvider().isStaff &&
+                          _controller.canRejectPO(_purchaseOrder))
+                        Container(
+                          width: MediaQuery.of(context).size.width < 768
+                              ? 85
+                              : 120,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              Colors.red,
+                              Colors.red.shade700,
+                            ]),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withOpacity(0.3),
+                                blurRadius: 6,
+                                offset: Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _confirmReject,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: _isLoading
+                                ? SizedBox(
+                                    height: 14,
+                                    width: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ),
+                                  )
+                                : Text(
+                                    'Reject',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize:
+                                          MediaQuery.of(context).size.width <
+                                                  768
+                                              ? 12
+                                              : 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      if (!UserRoleProvider().isStaff &&
+                          _controller.canApprovePO(_purchaseOrder))
+                        const SizedBox(width: 8),
+                      if (!UserRoleProvider().isStaff &&
+                          _controller.canApprovePO(_purchaseOrder))
+                        Container(
+                          width: MediaQuery.of(context).size.width < 768
+                              ? 85
+                              : 120,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              Color(0xFF00D4AA),
+                              Color(0xFF00B894),
+                            ]),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0xFF00D4AA).withOpacity(0.3),
+                                blurRadius: 6,
+                                offset: Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: (_isLoading ||
+                                    !_controller.canApprovePO(_purchaseOrder))
+                                ? null
+                                : _approvePurchaseOrder,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: _isLoading
+                                ? SizedBox(
+                                    height: 14,
+                                    width: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ),
+                                  )
+                                : Text(
+                                    'Approve',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize:
+                                          MediaQuery.of(context).size.width <
+                                                  768
+                                              ? 12
+                                              : 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
 
-              // Supplies List Section
-              // Supplies List Section
-              Expanded(
-                child: _purchaseOrder.supplies.isEmpty
-                    ? _buildEmptyState()
-                    : Column(
-                        children: [
-                          // List grouped by Supplier with footer buttons rendered as the last item
-                          Expanded(
-                            child: Builder(
-                              builder: (context) {
-                                // Group supplies by supplier name
-                                final Map<String, List<Map<String, dynamic>>>
-                                    bySupplier = {};
-                                for (final s in _purchaseOrder.supplies) {
-                                  final name = _controller.getSupplierName(s);
-                                  bySupplier.putIfAbsent(name, () => []).add(s);
-                                }
-                                final entries = bySupplier.entries.toList();
+                // Supplies List Section
+                // Supplies List Section
+                Expanded(
+                  child: _purchaseOrder.supplies.isEmpty
+                      ? _buildEmptyState()
+                      : Column(
+                          children: [
+                            // List grouped by Supplier with footer buttons rendered as the last item
+                            Expanded(
+                              child: Builder(
+                                builder: (context) {
+                                  // Group supplies by supplier name
+                                  final Map<String, List<Map<String, dynamic>>>
+                                      bySupplier = {};
+                                  for (final s in _purchaseOrder.supplies) {
+                                    final name = _controller.getSupplierName(s);
+                                    bySupplier
+                                        .putIfAbsent(name, () => [])
+                                        .add(s);
+                                  }
+                                  final entries = bySupplier.entries.toList();
 
-                                // counts handled in app bar header; no per-list counts needed here
-                                return ListView.builder(
-                                  padding: EdgeInsets.zero,
-                                  itemCount: entries.length + 1,
-                                  itemBuilder: (context, index) {
-                                    if (index == entries.length) {
-                                      return const SizedBox.shrink();
-                                    }
+                                  // counts handled in app bar header; no per-list counts needed here
+                                  return ListView.builder(
+                                    padding: EdgeInsets.zero,
+                                    itemCount: entries.length + 1,
+                                    itemBuilder: (context, index) {
+                                      if (index == entries.length) {
+                                        return const SizedBox.shrink();
+                                      }
 
-                                    final entry = entries[index];
-                                    final supplierName = entry.key;
-                                    final items = entry.value;
+                                      final entry = entries[index];
+                                      final supplierName = entry.key;
+                                      final items = entry.value;
 
-                                    final String? supplierDrNo = items
-                                        .map((m) =>
-                                            (m['receiptDrNo'] as String?)
-                                                ?.trim())
-                                        .firstWhere(
-                                            (v) => v != null && v.isNotEmpty,
-                                            orElse: () => null);
-
-                                    final String? supplierRecipient = items
-                                        .map((m) =>
-                                            (m['receiptRecipient'] as String?)
-                                                ?.trim())
-                                        .firstWhere(
-                                            (v) => v != null && v.isNotEmpty,
-                                            orElse: () => null);
-
-                                    final String? supplierImagePath = items
-                                        .map((m) =>
-                                            (m['receiptImagePath'] as String?)
-                                                ?.trim())
-                                        .firstWhere(
-                                            (v) => v != null && v.isNotEmpty,
-                                            orElse: () => null);
-
-                                    final String? supplierReceivedDate = (() {
-                                      dynamic raw = items
+                                      final String? supplierDrNo = items
                                           .map((m) =>
-                                              m['receiptDate'] ??
-                                              m['receivedAt'] ??
-                                              m['received_date'])
-                                          .firstWhere((v) => v != null,
+                                              (m['receiptDrNo'] as String?)
+                                                  ?.trim())
+                                          .firstWhere(
+                                              (v) => v != null && v.isNotEmpty,
                                               orElse: () => null);
-                                      final d = _tryParseDate(raw);
-                                      return d == null ? null : _formatYmd(d);
-                                    })();
 
-                                    // Page index per supplier for indicators
-                                    _supplierPageIndex[supplierName] =
-                                        _supplierPageIndex[supplierName] ?? 0;
-                                    final currentIdx =
-                                        _supplierPageIndex[supplierName]!;
-                                    final bool allReceived = items.every(
-                                        (item) =>
-                                            _controller.isSupplyReceived(item));
-                                    final pageController =
-                                        PageController(initialPage: currentIdx);
+                                      final String? supplierRecipient = items
+                                          .map((m) =>
+                                              (m['receiptRecipient'] as String?)
+                                                  ?.trim())
+                                          .firstWhere(
+                                              (v) => v != null && v.isNotEmpty,
+                                              orElse: () => null);
 
-                                    return Container(
-                                      margin: EdgeInsets.only(bottom: 12),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).brightness ==
-                                                Brightness.dark
-                                            ? const Color(0xFF2A2A2A)
-                                            : Theme.of(context)
-                                                .colorScheme
-                                                .surface,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: theme.dividerColor
-                                              .withOpacity(0.2),
-                                          width: 1,
+                                      final String? supplierImagePath = items
+                                          .map((m) =>
+                                              (m['receiptImagePath'] as String?)
+                                                  ?.trim())
+                                          .firstWhere(
+                                              (v) => v != null && v.isNotEmpty,
+                                              orElse: () => null);
+
+                                      final String? supplierReceivedDate = (() {
+                                        dynamic raw = items
+                                            .map((m) =>
+                                                m['receiptDate'] ??
+                                                m['receivedAt'] ??
+                                                m['received_date'])
+                                            .firstWhere((v) => v != null,
+                                                orElse: () => null);
+                                        final d = _tryParseDate(raw);
+                                        return d == null ? null : _formatYmd(d);
+                                      })();
+
+                                      // Page index per supplier for indicators
+                                      _supplierPageIndex[supplierName] =
+                                          _supplierPageIndex[supplierName] ?? 0;
+                                      final currentIdx =
+                                          _supplierPageIndex[supplierName]!;
+                                      final bool allReceived = items.every(
+                                          (item) => _controller
+                                              .isSupplyReceived(item));
+                                      final pageController = PageController(
+                                          initialPage: currentIdx);
+
+                                      return Container(
+                                        margin: EdgeInsets.only(bottom: 12),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).brightness ==
+                                                  Brightness.dark
+                                              ? const Color(0xFF2A2A2A)
+                                              : Theme.of(context)
+                                                  .colorScheme
+                                                  .surface,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: theme.dividerColor
+                                                .withOpacity(0.2),
+                                            width: 1,
+                                          ),
                                         ),
-                                      ),
-                                      child: Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        (allReceived &&
-                                                                supplierDrNo !=
-                                                                    null)
-                                                            ? '$supplierName (${supplierDrNo})'
-                                                            : supplierName,
-                                                        style:
-                                                            AppFonts.sfProStyle(
-                                                          fontSize: 18,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .bodyMedium
-                                                                  ?.color,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(12),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          (allReceived &&
+                                                                  supplierDrNo !=
+                                                                      null)
+                                                              ? '$supplierName (${supplierDrNo})'
+                                                              : supplierName,
+                                                          style: AppFonts
+                                                              .sfProStyle(
+                                                            fontSize: 18,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.color,
+                                                          ),
                                                         ),
+                                                        const SizedBox(
+                                                            height: 6),
+                                                        Wrap(
+                                                          spacing: 8,
+                                                          runSpacing: 6,
+                                                          crossAxisAlignment:
+                                                              WrapCrossAlignment
+                                                                  .center,
+                                                          children: [
+                                                            Container(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          6),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                gradient:
+                                                                    LinearGradient(
+                                                                  colors:
+                                                                      allReceived
+                                                                          ? [
+                                                                              Colors.green,
+                                                                              Colors.green.shade600
+                                                                            ]
+                                                                          : [
+                                                                              Colors.orange,
+                                                                              Colors.orange.shade600
+                                                                            ],
+                                                                ),
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            20),
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  Icon(
+                                                                    allReceived
+                                                                        ? Icons
+                                                                            .check_circle
+                                                                        : Icons
+                                                                            .schedule,
+                                                                    size: 14,
+                                                                    color: Colors
+                                                                        .white,
+                                                                  ),
+                                                                  const SizedBox(
+                                                                      width: 6),
+                                                                  Text(
+                                                                    allReceived
+                                                                        ? 'Received'
+                                                                        : 'Pending',
+                                                                    style: AppFonts
+                                                                        .sfProStyle(
+                                                                      fontSize:
+                                                                          12,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                      color: Colors
+                                                                          .white,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                            height: 4),
+                                                        if (allReceived &&
+                                                            supplierReceivedDate !=
+                                                                null)
+                                                          Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                                    top: 6),
+                                                            child: Text(
+                                                              'Date Received: ' +
+                                                                  supplierReceivedDate,
+                                                              style: AppFonts
+                                                                  .sfProStyle(
+                                                                fontSize: 13,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 18),
+                                                    child: IconButton(
+                                                      icon: Icon(
+                                                        _expandedSuppliers
+                                                                .contains(
+                                                                    supplierName)
+                                                            ? Icons.expand_less
+                                                            : Icons.expand_more,
+                                                        color: theme
+                                                            .iconTheme.color
+                                                            ?.withOpacity(0.8),
                                                       ),
-                                                      const SizedBox(height: 6),
-                                                      Wrap(
-                                                        spacing: 8,
-                                                        runSpacing: 6,
-                                                        crossAxisAlignment:
-                                                            WrapCrossAlignment
-                                                                .center,
-                                                        children: [
-                                                          Container(
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          if (_expandedSuppliers
+                                                              .contains(
+                                                                  supplierName)) {
+                                                            _expandedSuppliers
+                                                                .remove(
+                                                                    supplierName);
+                                                          } else {
+                                                            _expandedSuppliers
+                                                                .add(
+                                                                    supplierName);
+                                                          }
+                                                        });
+                                                      },
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 12),
+
+                                              // Expand/collapse content
+                                              if (_expandedSuppliers
+                                                  .contains(supplierName)) ...[
+                                                SizedBox(
+                                                  height:
+                                                      _calculateDynamicHeight(
+                                                          items),
+                                                  child: PageView.builder(
+                                                    controller: pageController,
+                                                    onPageChanged: (i) {
+                                                      setState(() {
+                                                        _supplierPageIndex[
+                                                            supplierName] = i;
+                                                      });
+                                                    },
+                                                    itemCount: items.length,
+                                                    itemBuilder: (context, i) {
+                                                      return _buildSupplyDetailsOnly(
+                                                          items[i],
+                                                          supplierName,
+                                                          supplyIndex: i);
+                                                    },
+                                                  ),
+                                                ),
+
+                                                // Mark all as received button on top (right aligned)
+                                                if (!allReceived &&
+                                                    _hasPendingItems())
+                                                  Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment.end,
+                                                    children: [
+                                                      Container(
+                                                        width: 140,
+                                                        margin: const EdgeInsets
+                                                            .only(bottom: 8),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          gradient:
+                                                              const LinearGradient(
+                                                            colors: [
+                                                              Color(0xFF00D4AA),
+                                                              Color(0xFF00B894),
+                                                            ],
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                          boxShadow: [
+                                                            BoxShadow(
+                                                              color: const Color(
+                                                                      0xFF00D4AA)
+                                                                  .withOpacity(
+                                                                      0.3),
+                                                              blurRadius: 4,
+                                                              offset:
+                                                                  const Offset(
+                                                                      0, 2),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        child: ElevatedButton(
+                                                          onPressed: _isLoading
+                                                              ? null
+                                                              : _handleMarkAllReceived,
+                                                          style: ElevatedButton
+                                                              .styleFrom(
+                                                            backgroundColor:
+                                                                Colors
+                                                                    .transparent,
+                                                            shadowColor: Colors
+                                                                .transparent,
                                                             padding:
                                                                 const EdgeInsets
                                                                     .symmetric(
                                                                     horizontal:
-                                                                        12,
+                                                                        8,
                                                                     vertical:
                                                                         6),
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              gradient:
-                                                                  LinearGradient(
-                                                                colors:
-                                                                    allReceived
-                                                                        ? [
-                                                                            Colors.green,
-                                                                            Colors.green.shade600
-                                                                          ]
-                                                                        : [
-                                                                            Colors.orange,
-                                                                            Colors.orange.shade600
-                                                                          ],
-                                                              ),
+                                                            shape:
+                                                                RoundedRectangleBorder(
                                                               borderRadius:
                                                                   BorderRadius
                                                                       .circular(
-                                                                          20),
+                                                                          6),
                                                             ),
-                                                            child: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              children: [
-                                                                Icon(
-                                                                  allReceived
-                                                                      ? Icons
-                                                                          .check_circle
-                                                                      : Icons
-                                                                          .schedule,
-                                                                  size: 14,
-                                                                  color: Colors
-                                                                      .white,
-                                                                ),
-                                                                const SizedBox(
-                                                                    width: 6),
-                                                                Text(
-                                                                  allReceived
-                                                                      ? 'Received'
-                                                                      : 'Pending',
+                                                          ),
+                                                          child: _isLoading
+                                                              ? const SizedBox(
+                                                                  height: 12,
+                                                                  width: 12,
+                                                                  child:
+                                                                      CircularProgressIndicator(
+                                                                    strokeWidth:
+                                                                        2,
+                                                                    valueColor: AlwaysStoppedAnimation<
+                                                                            Color>(
+                                                                        Colors
+                                                                            .white),
+                                                                  ),
+                                                                )
+                                                              : Text(
+                                                                  'Mark all as received',
                                                                   style: AppFonts
                                                                       .sfProStyle(
                                                                     fontSize:
@@ -829,403 +1026,235 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                                         .white,
                                                                   ),
                                                                 ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      if (allReceived &&
-                                                          supplierReceivedDate !=
-                                                              null)
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .only(top: 6),
-                                                          child: Text(
-                                                            'Date Received: ' +
-                                                                supplierReceivedDate,
-                                                            style: AppFonts
-                                                                .sfProStyle(
-                                                              fontSize: 13,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w500,
-                                                            ),
-                                                          ),
                                                         ),
+                                                      ),
                                                     ],
                                                   ),
-                                                ),
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          top: 18),
-                                                  child: IconButton(
-                                                    icon: Icon(
-                                                      _expandedSuppliers
-                                                              .contains(
-                                                                  supplierName)
-                                                          ? Icons.expand_less
-                                                          : Icons.expand_more,
-                                                      color: theme
-                                                          .iconTheme.color
-                                                          ?.withOpacity(0.8),
-                                                    ),
-                                                    onPressed: () {
-                                                      setState(() {
-                                                        if (_expandedSuppliers
-                                                            .contains(
-                                                                supplierName)) {
-                                                          _expandedSuppliers
-                                                              .remove(
-                                                                  supplierName);
-                                                        } else {
-                                                          _expandedSuppliers
-                                                              .add(
-                                                                  supplierName);
-                                                        }
-                                                      });
-                                                    },
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 12),
 
-                                            // Expand/collapse content
-                                            if (_expandedSuppliers
-                                                .contains(supplierName)) ...[
-                                              SizedBox(
-                                                height: _calculateDynamicHeight(
-                                                    items),
-                                                child: PageView.builder(
-                                                  controller: pageController,
-                                                  onPageChanged: (i) {
-                                                    setState(() {
-                                                      _supplierPageIndex[
-                                                          supplierName] = i;
-                                                    });
-                                                  },
-                                                  itemCount: items.length,
-                                                  itemBuilder: (context, i) {
-                                                    return _buildSupplyDetailsOnly(
-                                                        items[i], supplierName,
-                                                        supplyIndex: i);
-                                                  },
-                                                ),
-                                              ),
-
-                                              // Mark all as received button on top (right aligned)
-                                              if (!allReceived &&
-                                                  _hasPendingItems())
+                                                // Dot indicators centered
                                                 Row(
                                                   mainAxisAlignment:
-                                                      MainAxisAlignment.end,
-                                                  children: [
-                                                    Container(
-                                                      width: 140,
-                                                      margin:
-                                                          const EdgeInsets.only(
-                                                              bottom: 8),
+                                                      MainAxisAlignment.center,
+                                                  children: List.generate(
+                                                      items.length, (i) {
+                                                    final active =
+                                                        _supplierPageIndex[
+                                                                supplierName] ==
+                                                            i;
+                                                    return Container(
+                                                      width: active ? 10 : 8,
+                                                      height: active ? 10 : 8,
+                                                      margin: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 3),
                                                       decoration: BoxDecoration(
-                                                        gradient:
-                                                            const LinearGradient(
-                                                          colors: [
-                                                            Color(0xFF00D4AA),
-                                                            Color(0xFF00B894),
-                                                          ],
-                                                        ),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8),
-                                                        boxShadow: [
-                                                          BoxShadow(
-                                                            color: const Color(
-                                                                    0xFF00D4AA)
+                                                        shape: BoxShape.circle,
+                                                        color: active
+                                                            ? theme.colorScheme
+                                                                .primary
+                                                            : theme.dividerColor
                                                                 .withOpacity(
-                                                                    0.3),
-                                                            blurRadius: 4,
-                                                            offset:
-                                                                const Offset(
-                                                                    0, 2),
-                                                          ),
-                                                        ],
+                                                                    0.6),
                                                       ),
-                                                      child: ElevatedButton(
-                                                        onPressed: _isLoading
-                                                            ? null
-                                                            : _handleMarkAllReceived,
-                                                        style: ElevatedButton
-                                                            .styleFrom(
-                                                          backgroundColor:
-                                                              Colors
-                                                                  .transparent,
-                                                          shadowColor: Colors
-                                                              .transparent,
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  horizontal: 8,
-                                                                  vertical: 6),
-                                                          shape:
-                                                              RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        6),
-                                                          ),
-                                                        ),
-                                                        child: _isLoading
-                                                            ? const SizedBox(
-                                                                height: 12,
-                                                                width: 12,
-                                                                child:
-                                                                    CircularProgressIndicator(
-                                                                  strokeWidth:
-                                                                      2,
-                                                                  valueColor: AlwaysStoppedAnimation<
-                                                                          Color>(
-                                                                      Colors
-                                                                          .white),
-                                                                ),
-                                                              )
-                                                            : Text(
-                                                                'Mark all as received',
-                                                                style: AppFonts
-                                                                    .sfProStyle(
-                                                                  fontSize: 12,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  color: Colors
-                                                                      .white,
-                                                                ),
-                                                              ),
-                                                      ),
-                                                    ),
-                                                  ],
+                                                    );
+                                                  }),
                                                 ),
 
-                                              // Dot indicators centered
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: List.generate(
-                                                    items.length, (i) {
-                                                  final active =
-                                                      _supplierPageIndex[
-                                                              supplierName] ==
-                                                          i;
-                                                  return Container(
-                                                    width: active ? 10 : 8,
-                                                    height: active ? 10 : 8,
-                                                    margin: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 3),
-                                                    decoration: BoxDecoration(
-                                                      shape: BoxShape.circle,
-                                                      color: active
-                                                          ? theme.colorScheme
-                                                              .primary
-                                                          : theme.dividerColor
-                                                              .withOpacity(0.6),
-                                                    ),
-                                                  );
-                                                }),
-                                              ),
-
-                                              if (allReceived &&
-                                                  (supplierRecipient != null ||
-                                                      supplierImagePath !=
-                                                          null))
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          top: 8),
-                                                  child: Row(
-                                                    children: [
-                                                      if (allReceived &&
-                                                          supplierRecipient !=
-                                                              null)
-                                                        Text(
-                                                          'Recipient: $supplierRecipient',
-                                                          style: AppFonts
-                                                              .sfProStyle(
-                                                            fontSize: 12,
-                                                            fontWeight:
-                                                                FontWeight.w500,
-                                                          ),
-                                                        ),
-                                                      const Spacer(),
-                                                      if (allReceived &&
-                                                          supplierImagePath !=
-                                                              null)
-                                                        TextButton.icon(
-                                                          style: TextButton
-                                                              .styleFrom(
-                                                            padding:
-                                                                EdgeInsets.zero,
-                                                            minimumSize:
-                                                                const Size(
-                                                                    0, 0),
-                                                            tapTargetSize:
-                                                                MaterialTapTargetSize
-                                                                    .shrinkWrap,
-                                                          ),
-                                                          onPressed: () =>
-                                                              _showAttachmentImage(
-                                                                  supplierImagePath),
-                                                          icon: const Icon(
-                                                              Icons.image,
-                                                              size: 16),
-                                                          label: Text(
-                                                            'See attachment',
+                                                if (allReceived &&
+                                                    (supplierRecipient !=
+                                                            null ||
+                                                        supplierImagePath !=
+                                                            null))
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 8),
+                                                    child: Row(
+                                                      children: [
+                                                        if (allReceived &&
+                                                            supplierRecipient !=
+                                                                null)
+                                                          Text(
+                                                            'Recipient: $supplierRecipient',
                                                             style: AppFonts
                                                                 .sfProStyle(
                                                               fontSize: 12,
                                                               fontWeight:
                                                                   FontWeight
-                                                                      .w600,
+                                                                      .w500,
                                                             ),
                                                           ),
+                                                        const Spacer(),
+                                                        if (allReceived &&
+                                                            supplierImagePath !=
+                                                                null)
+                                                          TextButton.icon(
+                                                            style: TextButton
+                                                                .styleFrom(
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                              minimumSize:
+                                                                  const Size(
+                                                                      0, 0),
+                                                              tapTargetSize:
+                                                                  MaterialTapTargetSize
+                                                                      .shrinkWrap,
+                                                            ),
+                                                            onPressed: () =>
+                                                                _showAttachmentImage(
+                                                                    supplierImagePath),
+                                                            icon: const Icon(
+                                                                Icons.image,
+                                                                size: 16),
+                                                            label: Text(
+                                                              'See attachment',
+                                                              style: AppFonts
+                                                                  .sfProStyle(
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+
+                                                const SizedBox(height: 14),
+
+                                                Container(
+                                                  margin: const EdgeInsets.only(
+                                                      top: 0),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10),
+                                                    border: Border.all(
+                                                      color: Colors.white
+                                                          .withOpacity(0.3),
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      Text(
+                                                        'Total Cost:',
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Colors.white,
                                                         ),
+                                                      ),
+                                                      Text(
+                                                        '₱' +
+                                                            items
+                                                                .fold<double>(
+                                                                    0.0,
+                                                                    (sum, it) =>
+                                                                        sum +
+                                                                        _controller.calculateSupplySubtotal(
+                                                                            it))
+                                                                .toStringAsFixed(
+                                                                    2),
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
                                                     ],
                                                   ),
                                                 ),
-
-                                              const SizedBox(height: 14),
-
-                                              Container(
-                                                margin: const EdgeInsets.only(
-                                                    top: 0),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                        vertical: 8),
-                                                decoration: BoxDecoration(
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  border: Border.all(
-                                                    color: Colors.white
-                                                        .withOpacity(0.3),
-                                                    width: 1,
-                                                  ),
-                                                ),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  children: [
-                                                    Text(
-                                                      'Total Cost:',
-                                                      style:
-                                                          AppFonts.sfProStyle(
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: Colors.white,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      '₱' +
-                                                          items
-                                                              .fold<double>(
-                                                                  0.0,
-                                                                  (sum, it) =>
-                                                                      sum +
-                                                                      _controller
-                                                                          .calculateSupplySubtotal(
-                                                                              it))
-                                                              .toStringAsFixed(
-                                                                  2),
-                                                      style:
-                                                          AppFonts.sfProStyle(
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Colors.white,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
+                                              ],
                                             ],
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-              ),
-
-              // Overall Total Cost Section at bottom
-              Container(
-                margin: EdgeInsets.only(top: 12),
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: theme.brightness == Brightness.dark
-                      ? LinearGradient(
-                          colors: [
-                            Color(0xFF00D4AA).withOpacity(0.25),
-                            Color(0xFF00D4AA).withOpacity(0.15),
-                          ],
-                        )
-                      : LinearGradient(
-                          colors: [
-                            Color(0xFF00D4AA).withOpacity(0.10),
-                            Color(0xFF00D4AA).withOpacity(0.05),
                           ],
                         ),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: theme.brightness == Brightness.dark
-                        ? Color(0xFF00D4AA).withOpacity(0.45)
-                        : Color(0xFF00D4AA).withOpacity(0.2),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
+                ),
+
+                // Overall Total Cost Section at bottom
+                Container(
+                  margin: EdgeInsets.only(top: 12),
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: theme.brightness == Brightness.dark
+                        ? LinearGradient(
+                            colors: [
+                              Color(0xFF00D4AA).withOpacity(0.25),
+                              Color(0xFF00D4AA).withOpacity(0.15),
+                            ],
+                          )
+                        : LinearGradient(
+                            colors: [
+                              Color(0xFF00D4AA).withOpacity(0.10),
+                              Color(0xFF00D4AA).withOpacity(0.05),
+                            ],
+                          ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
                       color: theme.brightness == Brightness.dark
-                          ? Color(0xFF00D4AA).withOpacity(0.25)
-                          : Color(0xFF00D4AA).withOpacity(0.1),
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
+                          ? Color(0xFF00D4AA).withOpacity(0.45)
+                          : Color(0xFF00D4AA).withOpacity(0.2),
+                      width: 1,
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Overall Total Cost:',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    boxShadow: [
+                      BoxShadow(
                         color: theme.brightness == Brightness.dark
-                            ? Colors.white
-                            : const Color(0xFF00D4AA),
+                            ? Color(0xFF00D4AA).withOpacity(0.25)
+                            : Color(0xFF00D4AA).withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
                       ),
-                    ),
-                    Text(
-                      '₱${_controller.calculateTotalCost(_purchaseOrder).toStringAsFixed(2)}',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: theme.brightness == Brightness.dark
-                            ? Colors.white
-                            : const Color(0xFF00D4AA),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Overall Total Cost:',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.white
+                              : const Color(0xFF00D4AA),
+                        ),
                       ),
-                    ),
-                  ],
+                      Text(
+                        '₱${_controller.calculateTotalCost(_purchaseOrder).toStringAsFixed(2)}',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.white
+                              : const Color(0xFF00D4AA),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

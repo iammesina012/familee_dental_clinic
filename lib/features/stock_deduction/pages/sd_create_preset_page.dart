@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_create_preset_controller.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class CreatePresetPage extends StatefulWidget {
   const CreatePresetPage({super.key});
@@ -348,190 +349,200 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
           backgroundColor: const Color(0xFF00D4AA),
           child: const Icon(Icons.add, color: Colors.white),
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
-            child: Column(
-              children: [
-                // Preset name input and Save button row
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
+        body: ResponsiveContainer(
+          maxWidth: 1100,
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.all(
+                  MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+              child: Column(
+                children: [
+                  // Preset name input and Save button row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Theme.of(context)
+                                    .shadowColor
+                                    .withOpacity(0.08),
+                                spreadRadius: 1,
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                            border: Border.all(
                               color: Theme.of(context)
-                                  .shadowColor
-                                  .withOpacity(0.08),
-                              spreadRadius: 1,
-                              blurRadius: 3,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                          border: Border.all(
-                            color:
-                                Theme.of(context).dividerColor.withOpacity(0.2),
-                          ),
-                        ),
-                        child: TextField(
-                          controller: _presetNameController,
-                          decoration: InputDecoration(
-                            hintText: 'Enter preset name...',
-                            hintStyle: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.color
-                                  ?.withOpacity(0.6),
-                            ),
-                            prefixIcon: Icon(Icons.bookmark_outline,
-                                color: Theme.of(context).iconTheme.color),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
+                                  .dividerColor
+                                  .withOpacity(0.2),
                             ),
                           ),
-                          style: AppFonts.sfProStyle(fontSize: 16),
+                          child: TextField(
+                            controller: _presetNameController,
+                            decoration: InputDecoration(
+                              hintText: 'Enter preset name...',
+                              hintStyle: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.6),
+                              ),
+                              prefixIcon: Icon(Icons.bookmark_outline,
+                                  color: Theme.of(context).iconTheme.color),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              filled: true,
+                              fillColor: Theme.of(context).colorScheme.surface,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
+                            style: AppFonts.sfProStyle(fontSize: 16),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: (_presetNameController.text.trim().isEmpty ||
-                              _presetSupplies.isEmpty)
-                          ? null
-                          : _savePreset,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            (_presetNameController.text.trim().isEmpty ||
-                                    _presetSupplies.isEmpty)
-                                ? Colors.grey[400]
-                                : const Color(0xFF00D4AA),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(
-                        'Save Preset',
-                        style: AppFonts.sfProStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: (_presetNameController.text.trim().isEmpty ||
+                                _presetSupplies.isEmpty)
+                            ? null
+                            : _savePreset,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              (_presetNameController.text.trim().isEmpty ||
+                                      _presetSupplies.isEmpty)
+                                  ? Colors.grey[400]
+                                  : const Color(0xFF00D4AA),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(
+                          'Save Preset',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Theme.of(context).colorScheme.surface
-                          : const Color(0xFFE8D5E8),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(context).dividerColor.withOpacity(0.2),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.surface
+                            : const Color(0xFFE8D5E8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color:
+                              Theme.of(context).dividerColor.withOpacity(0.2),
+                        ),
                       ),
-                    ),
-                    child: _presetSupplies.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(12),
-                            itemCount: _presetSupplies.length,
-                            itemBuilder: (context, index) {
-                              final item = _presetSupplies[index];
-                              return Slidable(
-                                key: ValueKey(
-                                    'preset-${item['docId'] ?? index}'),
-                                closeOnScroll: true,
-                                endActionPane: ActionPane(
-                                  motion: const DrawerMotion(),
-                                  extentRatio: 0.28,
-                                  children: [
-                                    SlidableAction(
-                                      onPressed: (_) => _removeSupplyAt(index),
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                      icon: Icons.delete,
-                                      label: 'Remove',
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ],
-                                ),
-                                child: Card(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  color: Theme.of(context).colorScheme.surface,
-                                  elevation: 2,
-                                  shadowColor: Theme.of(context)
-                                      .shadowColor
-                                      .withOpacity(0.15),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      side: BorderSide(
-                                        color: Theme.of(context)
-                                            .dividerColor
-                                            .withOpacity(0.2),
-                                      )),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 12),
-                                    child: Row(
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          child: Image.network(
-                                            item['imageUrl'] ?? '',
-                                            width: 40,
-                                            height: 40,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                Container(
+                      child: _presetSupplies.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(12),
+                              itemCount: _presetSupplies.length,
+                              itemBuilder: (context, index) {
+                                final item = _presetSupplies[index];
+                                return Slidable(
+                                  key: ValueKey(
+                                      'preset-${item['docId'] ?? index}'),
+                                  closeOnScroll: true,
+                                  endActionPane: ActionPane(
+                                    motion: const DrawerMotion(),
+                                    extentRatio: 0.28,
+                                    children: [
+                                      SlidableAction(
+                                        onPressed: (_) =>
+                                            _removeSupplyAt(index),
+                                        backgroundColor: Colors.red,
+                                        foregroundColor: Colors.white,
+                                        icon: Icons.delete,
+                                        label: 'Remove',
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Card(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    color:
+                                        Theme.of(context).colorScheme.surface,
+                                    elevation: 2,
+                                    shadowColor: Theme.of(context)
+                                        .shadowColor
+                                        .withOpacity(0.15),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        side: BorderSide(
+                                          color: Theme.of(context)
+                                              .dividerColor
+                                              .withOpacity(0.2),
+                                        )),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 12),
+                                      child: Row(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            child: Image.network(
+                                              item['imageUrl'] ?? '',
                                               width: 40,
                                               height: 40,
-                                              color: Colors.grey[200],
-                                              child: const Icon(Icons.inventory,
-                                                  color: Colors.grey, size: 20),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Container(
+                                                width: 40,
+                                                height: 40,
+                                                color: Colors.grey[200],
+                                                child: const Icon(
+                                                    Icons.inventory,
+                                                    color: Colors.grey,
+                                                    size: 20),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            item['name'] ?? '',
-                                            style: AppFonts.sfProStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w500,
-                                                color: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium
-                                                    ?.color),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              item['name'] ?? '',
+                                              style: AppFonts.sfProStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
+                                );
+                              },
+                            ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

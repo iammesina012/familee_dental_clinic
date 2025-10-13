@@ -5,6 +5,7 @@ import 'package:familee_dental/features/settings/pages/edit_profile_page.dart';
 import 'package:familee_dental/features/settings/controller/settings_controller.dart';
 import 'package:familee_dental/features/backup_restore/pages/backup_restore_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -76,66 +77,44 @@ class _SettingsPageState extends State<SettingsPage> {
           final isStaff = userRoleProvider.isStaff;
           final isOwner = userRoleProvider.isOwner;
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // General Section
-                _buildSectionHeader("General"),
-                _buildSettingItem(
-                  icon: Icons.palette_outlined,
-                  title: "Appearance",
-                  subtitle: "Dark Mode",
-                  trailing: Switch(
-                    value: _darkMode,
-                    onChanged: (value) {
-                      setState(() {
-                        _darkMode = value;
-                      });
-                      _settingsController.setDarkMode(value);
-                      AppTheme.themeMode.value =
-                          value ? ThemeMode.dark : ThemeMode.light;
-                    },
-                    activeColor: scheme.primary,
+          return ResponsiveContainer(
+            maxWidth: 1100,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(
+                  MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // General Section
+                  _buildSectionHeader("General"),
+                  _buildSettingItem(
+                    icon: Icons.palette_outlined,
+                    title: "Appearance",
+                    subtitle: "Dark Mode",
+                    trailing: Switch(
+                      value: _darkMode,
+                      onChanged: (value) {
+                        setState(() {
+                          _darkMode = value;
+                        });
+                        _settingsController.setDarkMode(value);
+                        AppTheme.themeMode.value =
+                            value ? ThemeMode.dark : ThemeMode.light;
+                      },
+                      activeColor: scheme.primary,
+                    ),
                   ),
-                ),
-                _buildNotificationCard(),
+                  _buildNotificationCard(),
 
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                // Personal Account Section - Available for all users
-                _buildSectionHeader("Personal Account"),
-
-                _buildSettingItem(
-                  icon: Icons.person_3_outlined,
-                  title: "Edit Profile",
-                  subtitle: "Update your personal details",
-                  trailing: const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: null,
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const EditProfilePage(user: null),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 24),
-
-                // User Management Section - Only for Owner and Admin users
-                if (!isStaff) ...[
-                  _buildSectionHeader("User Management"),
+                  // Personal Account Section - Available for all users
+                  _buildSectionHeader("Personal Account"),
 
                   _buildSettingItem(
-                    icon: Icons.people_outline,
-                    title: "Employee List",
-                    subtitle: "Manage employees and roles",
+                    icon: Icons.person_3_outlined,
+                    title: "Edit Profile",
+                    subtitle: "Update your personal details",
                     trailing: const Icon(
                       Icons.arrow_forward_ios,
                       size: 16,
@@ -145,22 +124,22 @@ class _SettingsPageState extends State<SettingsPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const EmployeeListPage()),
+                          builder: (_) => const EditProfilePage(user: null),
+                        ),
                       );
                     },
                   ),
 
-                  // Change Password (sub-item)
-
                   const SizedBox(height: 24),
 
-                  // System Section - Only for Owner users
-                  if (isOwner) ...[
-                    _buildSectionHeader("System"),
+                  // User Management Section - Only for Owner and Admin users
+                  if (!isStaff) ...[
+                    _buildSectionHeader("User Management"),
+
                     _buildSettingItem(
-                      icon: Icons.backup_outlined,
-                      title: "Backup & Restore",
-                      subtitle: "Manage data backup and restore",
+                      icon: Icons.people_outline,
+                      title: "Employee List",
+                      subtitle: "Manage employees and roles",
                       trailing: const Icon(
                         Icons.arrow_forward_ios,
                         size: 16,
@@ -170,32 +149,58 @@ class _SettingsPageState extends State<SettingsPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) => const BackupRestorePage()),
+                              builder: (_) => const EmployeeListPage()),
                         );
                       },
                     ),
+
+                    // Change Password (sub-item)
+
+                    const SizedBox(height: 24),
+
+                    // System Section - Only for Owner users
+                    if (isOwner) ...[
+                      _buildSectionHeader("System"),
+                      _buildSettingItem(
+                        icon: Icons.backup_outlined,
+                        title: "Backup & Restore",
+                        subtitle: "Manage data backup and restore",
+                        trailing: const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: null,
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const BackupRestorePage()),
+                          );
+                        },
+                      ),
+                    ],
                   ],
-                ],
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-                // Standalone Settings
-                Divider(height: 1, thickness: 1, color: theme.dividerColor),
-                const SizedBox(height: 20),
-                _buildSettingItem(
-                  icon: Icons.help_outline,
-                  title: "App Tutorial",
-                  subtitle: "Learn how to use the app",
-                  trailing: const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: null,
+                  // Standalone Settings
+                  Divider(height: 1, thickness: 1, color: theme.dividerColor),
+                  const SizedBox(height: 20),
+                  _buildSettingItem(
+                    icon: Icons.help_outline,
+                    title: "App Tutorial",
+                    subtitle: "Learn how to use the app",
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: null,
+                    ),
+                    onTap: () {
+                      // TODO: Navigate to app tutorial
+                    },
                   ),
-                  onTap: () {
-                    // TODO: Navigate to app tutorial
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },

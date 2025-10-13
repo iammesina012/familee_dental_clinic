@@ -5,6 +5,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -16,6 +17,7 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   final NotificationsController _controller = NotificationsController();
   int _visibleCount = 10; // show 10 initially, then 20 max
+  bool _isMarkingAllAsRead = false;
 
   @override
   void initState() {
@@ -49,138 +51,217 @@ class _NotificationsPageState extends State<NotificationsPage> {
         actions: const [],
       ),
       // No drawer on this page; show back button instead
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: scheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-              boxShadow: [],
-            ),
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                Expanded(
-                  child: StreamBuilder<List<AppNotification>>(
-                    stream: _controller.getNotificationsStreamLimited(max: 20),
-                    builder: (context, snapshot) {
-                      final all = snapshot.data ?? const <AppNotification>[];
-                      final items = all.take(_visibleCount).toList();
-                      final unreadCount = all.where((n) => !(n.isRead)).length;
-                      if (snapshot.connectionState == ConnectionState.waiting &&
-                          all.isEmpty) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (all.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 120,
-                                height: 120,
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.surface
-                                      .withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Icon(
-                                  Icons.notifications_none,
-                                  size: 60,
-                                  color:
-                                      theme.iconTheme.color?.withOpacity(0.7),
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                'No Notifications Yet',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.textTheme.bodyMedium?.color,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'You\'re all caught up',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: theme.textTheme.bodyMedium?.color
-                                      ?.withOpacity(0.7),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      final bool showLoadMore =
-                          all.length > _visibleCount && _visibleCount == 10;
-                      final int listCount =
-                          items.length + (showLoadMore ? 1 : 0);
-
-                      return Column(
-                        children: [
-                          // Unread chip at top-right of the purple panel
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                            child: Row(
+      body: ResponsiveContainer(
+        maxWidth: 1000,
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(
+                MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                boxShadow: [],
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: StreamBuilder<List<AppNotification>>(
+                      stream:
+                          _controller.getNotificationsStreamLimited(max: 20),
+                      builder: (context, snapshot) {
+                        final all = snapshot.data ?? const <AppNotification>[];
+                        final items = all.take(_visibleCount).toList();
+                        final unreadCount =
+                            all.where((n) => !(n.isRead)).length;
+                        if (snapshot.connectionState ==
+                                ConnectionState.waiting &&
+                            all.isEmpty) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (all.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Spacer(),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
+                                  width: 120,
+                                  height: 120,
                                   decoration: BoxDecoration(
-                                    color: scheme.surface,
-                                    borderRadius: BorderRadius.circular(24),
-                                    border: Border.all(
-                                      color:
-                                          theme.dividerColor.withOpacity(0.2),
-                                      width: 1,
-                                    ),
+                                    color: theme.colorScheme.surface
+                                        .withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
-                                  child: Text(
-                                    '$unreadCount unread',
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.textTheme.bodyMedium?.color,
-                                    ),
+                                  child: Icon(
+                                    Icons.notifications_none,
+                                    size: 60,
+                                    color:
+                                        theme.iconTheme.color?.withOpacity(0.7),
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  'No Notifications Yet',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'You\'re all caught up',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.textTheme.bodyMedium?.color
+                                        ?.withOpacity(0.7),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                          Expanded(
-                            child: ListView.separated(
-                              padding: const EdgeInsets.all(12),
-                              itemCount: listCount,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                if (showLoadMore && index == items.length) {
-                                  return OutlinedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _visibleCount = 20; // reveal up to 20
-                                      });
-                                    },
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(
-                                          color: theme.dividerColor
-                                              .withOpacity(0.2)),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
+                          );
+                        }
+
+                        final bool showLoadMore =
+                            all.length > _visibleCount && _visibleCount == 10;
+                        final int listCount =
+                            items.length + (showLoadMore ? 1 : 0);
+
+                        return Column(
+                          children: [
+                            // Unread chip and Mark All as Read button at top-right of the purple panel
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                              child: Row(
+                                children: [
+                                  const Spacer(),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: unreadCount > 0
+                                          ? scheme.primary.withOpacity(0.1)
+                                          : theme.dividerColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: unreadCount > 0
+                                            ? scheme.primary.withOpacity(0.3)
+                                            : theme.dividerColor
+                                                .withOpacity(0.3),
+                                        width: 1,
                                       ),
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                      backgroundColor: scheme.surface,
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: (unreadCount > 0 &&
+                                                !_isMarkingAllAsRead)
+                                            ? () async {
+                                                setState(() {
+                                                  _isMarkingAllAsRead = true;
+                                                });
+                                                try {
+                                                  await _controller
+                                                      .markAllAsRead();
+                                                  // Add a small delay to ensure the database update is processed
+                                                  await Future.delayed(
+                                                      const Duration(
+                                                          milliseconds: 500));
+                                                } catch (e) {
+                                                  print(
+                                                      'Error marking all as read: $e');
+                                                  // Show error message to user
+                                                  if (mounted) {
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                            'Failed to mark all as read: $e'),
+                                                        backgroundColor:
+                                                            Colors.red,
+                                                      ),
+                                                    );
+                                                  }
+                                                } finally {
+                                                  if (mounted) {
+                                                    setState(() {
+                                                      _isMarkingAllAsRead =
+                                                          false;
+                                                    });
+                                                  }
+                                                }
+                                              }
+                                            : null,
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 6),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (_isMarkingAllAsRead)
+                                                SizedBox(
+                                                  width: 14,
+                                                  height: 14,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                            Color>(
+                                                      scheme.primary,
+                                                    ),
+                                                  ),
+                                                )
+                                              else
+                                                Icon(
+                                                  Icons.done_all,
+                                                  size: 14,
+                                                  color: unreadCount > 0
+                                                      ? scheme.primary
+                                                      : theme.textTheme
+                                                          .bodyMedium?.color
+                                                          ?.withOpacity(0.4),
+                                                ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                _isMarkingAllAsRead
+                                                    ? 'Marking...'
+                                                    : 'Mark all as read',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: unreadCount > 0
+                                                      ? scheme.primary
+                                                      : theme.textTheme
+                                                          .bodyMedium?.color
+                                                          ?.withOpacity(0.4),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: scheme.surface,
+                                      borderRadius: BorderRadius.circular(24),
+                                      border: Border.all(
+                                        color:
+                                            theme.dividerColor.withOpacity(0.2),
+                                        width: 1,
+                                      ),
                                     ),
                                     child: Text(
-                                      'See previous notifications',
+                                      '$unreadCount unread',
                                       style: AppFonts.sfProStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
@@ -188,23 +269,63 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                             theme.textTheme.bodyMedium?.color,
                                       ),
                                     ),
-                                  );
-                                }
-
-                                final n = items[index];
-                                return _NotificationTile(
-                                  notification: n,
-                                  controller: _controller,
-                                );
-                              },
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                            Expanded(
+                              child: ListView.separated(
+                                padding: const EdgeInsets.all(12),
+                                itemCount: listCount,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 8),
+                                itemBuilder: (context, index) {
+                                  if (showLoadMore && index == items.length) {
+                                    return OutlinedButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _visibleCount = 20; // reveal up to 20
+                                        });
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        side: BorderSide(
+                                            color: theme.dividerColor
+                                                .withOpacity(0.2)),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        backgroundColor: scheme.surface,
+                                      ),
+                                      child: Text(
+                                        'See previous notifications',
+                                        style: AppFonts.sfProStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color:
+                                              theme.textTheme.bodyMedium?.color,
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  final n = items[index];
+                                  return _NotificationTile(
+                                    notification: n,
+                                    controller: _controller,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

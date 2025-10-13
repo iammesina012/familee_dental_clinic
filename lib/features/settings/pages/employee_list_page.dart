@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/settings/controller/employee_list_controller.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'edit_user_page.dart';
@@ -97,89 +98,93 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
         elevation: theme.appBarTheme.elevation,
         shadowColor: theme.appBarTheme.shadowColor,
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Only show Add Employee button if user can manage users
-              if (userRoleProvider.canManageUsers()) ...[
-                Row(
-                  children: [
-                    const Spacer(),
-                    ElevatedButton.icon(
-                      onPressed: () => _addUser(),
-                      icon: const Icon(Icons.person_add,
-                          color: Colors.white, size: 18),
-                      label: const Text(
-                        'Add Employee',
-                        style: TextStyle(
-                          fontFamily: 'SF Pro',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: Colors.white,
+      body: ResponsiveContainer(
+        maxWidth: 1100,
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(
+                MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Only show Add Employee button if user can manage users
+                if (userRoleProvider.canManageUsers()) ...[
+                  Row(
+                    children: [
+                      const Spacer(),
+                      ElevatedButton.icon(
+                        onPressed: () => _addUser(),
+                        icon: const Icon(Icons.person_add,
+                            color: Colors.white, size: 18),
+                        label: const Text(
+                          'Add Employee',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00D4AA),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          elevation: 1,
                         ),
-                        elevation: 1,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 16),
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.brightness == Brightness.dark
-                        ? theme.colorScheme.surface
-                        : const Color(0xFFE8D5E8),
-                    borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (theme.brightness == Brightness.dark
-                                ? Colors.black
-                                : Colors.black)
-                            .withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _users.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No employees found',
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro',
-                                  fontSize: 16,
-                                  color: theme.textTheme.bodyLarge?.color,
+                ],
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.brightness == Brightness.dark
+                          ? theme.colorScheme.surface
+                          : const Color(0xFFE8D5E8),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.2)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (theme.brightness == Brightness.dark
+                                  ? Colors.black
+                                  : Colors.black)
+                              .withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _users.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No employees found',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro',
+                                    fontSize: 16,
+                                    color: theme.textTheme.bodyLarge?.color,
+                                  ),
                                 ),
+                              )
+                            : ListView.builder(
+                                itemCount: _users.length,
+                                itemBuilder: (context, index) {
+                                  final user = _users[index];
+                                  return _buildUserCard(user, theme);
+                                },
                               ),
-                            )
-                          : ListView.builder(
-                              itemCount: _users.length,
-                              itemBuilder: (context, index) {
-                                final user = _users[index];
-                                return _buildUserCard(user, theme);
-                              },
-                            ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

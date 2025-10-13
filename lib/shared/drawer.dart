@@ -3,9 +3,10 @@ import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class MyDrawer extends StatelessWidget {
-  const MyDrawer({super.key, this.beforeNavigate});
+  const MyDrawer({super.key, this.beforeNavigate, this.isPersistent = false});
 
   final Future<bool> Function()? beforeNavigate;
+  final bool isPersistent;
 
   @override
   Widget build(BuildContext context) {
@@ -13,155 +14,189 @@ class MyDrawer extends StatelessWidget {
     final theme = Theme.of(context);
     final userRoleProvider = UserRoleProvider();
 
-    return Drawer(
-      child: ListenableBuilder(
-        listenable: userRoleProvider,
-        builder: (context, child) {
-          final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
+    Widget drawerContent = ListenableBuilder(
+      listenable: userRoleProvider,
+      builder: (context, child) {
+        final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
 
-          return Column(
-            children: [
-              DrawerHeader(
-                decoration:
-                    BoxDecoration(color: theme.appBarTheme.backgroundColor),
-                child: Center(
-                  child: Image.asset(
-                    'assets/images/logo/tita_doc.png',
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
-                  ),
+        return Column(
+          children: [
+            DrawerHeader(
+              decoration:
+                  BoxDecoration(color: theme.appBarTheme.backgroundColor),
+              child: Center(
+                child: Image.asset(
+                  'assets/images/logo/tita_doc.png',
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.cover,
                 ),
               ),
+            ),
+            _buildDrawerItem(
+              icon: Icons.dashboard,
+              text: 'Dashboard',
+              fontFamily: 'SF Pro',
+              selected: currentRoute == '/dashboard',
+              context: context,
+              onTap: () async {
+                if (beforeNavigate != null) {
+                  final ok = await beforeNavigate!();
+                  if (!ok) return;
+                }
+                // Only pop if not persistent (i.e., if it's a modal drawer)
+                if (!isPersistent) {
+                  Navigator.pop(context);
+                }
+                if (currentRoute != '/dashboard') {
+                  Navigator.pushReplacementNamed(context, '/dashboard');
+                }
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.inventory,
+              text: 'Inventory',
+              fontFamily: 'SF Pro',
+              selected: currentRoute == '/inventory',
+              context: context,
+              onTap: () async {
+                if (beforeNavigate != null) {
+                  final ok = await beforeNavigate!();
+                  if (!ok) return;
+                }
+                // Only pop if not persistent (i.e., if it's a modal drawer)
+                if (!isPersistent) {
+                  Navigator.pop(context);
+                }
+                if (currentRoute != '/inventory') {
+                  Navigator.pushReplacementNamed(context, '/inventory');
+                }
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.shopping_cart,
+              text: 'Purchase Order',
+              fontFamily: 'SF Pro',
+              selected: currentRoute == '/purchase-order',
+              context: context,
+              onTap: () async {
+                if (beforeNavigate != null) {
+                  final ok = await beforeNavigate!();
+                  if (!ok) return;
+                }
+                // Only pop if not persistent (i.e., if it's a modal drawer)
+                if (!isPersistent) {
+                  Navigator.pop(context);
+                }
+                if (currentRoute != '/purchase-order') {
+                  Navigator.pushReplacementNamed(context, '/purchase-order');
+                }
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.playlist_remove,
+              text: 'Stock Deduction',
+              fontFamily: 'SF Pro',
+              selected: currentRoute == '/stock-deduction',
+              context: context,
+              onTap: () async {
+                if (beforeNavigate != null) {
+                  final ok = await beforeNavigate!();
+                  if (!ok) return;
+                }
+                // Only pop if not persistent (i.e., if it's a modal drawer)
+                if (!isPersistent) {
+                  Navigator.pop(context);
+                }
+                if (currentRoute != '/stock-deduction') {
+                  Navigator.pushReplacementNamed(context, '/stock-deduction');
+                }
+              },
+            ),
+            // Activity Log - Only show for Admin users
+            if (canAccessActivityLog)
               _buildDrawerItem(
-                icon: Icons.dashboard,
-                text: 'Dashboard',
+                icon: Icons.history,
+                text: 'Activity Log',
                 fontFamily: 'SF Pro',
-                selected: currentRoute == '/dashboard',
+                selected: currentRoute == '/activity-log',
                 context: context,
                 onTap: () async {
                   if (beforeNavigate != null) {
                     final ok = await beforeNavigate!();
                     if (!ok) return;
                   }
-                  Navigator.pop(context);
-                  if (currentRoute != '/dashboard') {
-                    Navigator.pushReplacementNamed(context, '/dashboard');
-                  }
-                },
-              ),
-              _buildDrawerItem(
-                icon: Icons.inventory,
-                text: 'Inventory',
-                fontFamily: 'SF Pro',
-                selected: currentRoute == '/inventory',
-                context: context,
-                onTap: () async {
-                  if (beforeNavigate != null) {
-                    final ok = await beforeNavigate!();
-                    if (!ok) return;
-                  }
-                  Navigator.pop(context);
-                  if (currentRoute != '/inventory') {
-                    Navigator.pushReplacementNamed(context, '/inventory');
-                  }
-                },
-              ),
-              _buildDrawerItem(
-                icon: Icons.shopping_cart,
-                text: 'Purchase Order',
-                fontFamily: 'SF Pro',
-                selected: currentRoute == '/purchase-order',
-                context: context,
-                onTap: () async {
-                  if (beforeNavigate != null) {
-                    final ok = await beforeNavigate!();
-                    if (!ok) return;
-                  }
-                  Navigator.pop(context);
-                  if (currentRoute != '/purchase-order') {
-                    Navigator.pushReplacementNamed(context, '/purchase-order');
-                  }
-                },
-              ),
-              _buildDrawerItem(
-                icon: Icons.playlist_remove,
-                text: 'Stock Deduction',
-                fontFamily: 'SF Pro',
-                selected: currentRoute == '/stock-deduction',
-                context: context,
-                onTap: () async {
-                  if (beforeNavigate != null) {
-                    final ok = await beforeNavigate!();
-                    if (!ok) return;
-                  }
-                  Navigator.pop(context);
-                  if (currentRoute != '/stock-deduction') {
-                    Navigator.pushReplacementNamed(context, '/stock-deduction');
-                  }
-                },
-              ),
-              // Activity Log - Only show for Admin users
-              if (canAccessActivityLog)
-                _buildDrawerItem(
-                  icon: Icons.history,
-                  text: 'Activity Log',
-                  fontFamily: 'SF Pro',
-                  selected: currentRoute == '/activity-log',
-                  context: context,
-                  onTap: () async {
-                    if (beforeNavigate != null) {
-                      final ok = await beforeNavigate!();
-                      if (!ok) return;
-                    }
+                  // Only pop if not persistent (i.e., if it's a modal drawer)
+                  if (!isPersistent) {
                     Navigator.pop(context);
-                    if (currentRoute != '/activity-log') {
-                      Navigator.pushReplacementNamed(context, '/activity-log');
-                    }
-                  },
-                ),
-              Spacer(),
-              // Settings - Available for both Admin and Staff users
-              _buildDrawerItem(
-                icon: Icons.settings,
-                text: 'Settings',
-                fontFamily: 'SF Pro',
-                selected: currentRoute == '/settings',
-                context: context,
-                onTap: () async {
-                  if (beforeNavigate != null) {
-                    final ok = await beforeNavigate!();
-                    if (!ok) return;
                   }
+                  if (currentRoute != '/activity-log') {
+                    Navigator.pushReplacementNamed(context, '/activity-log');
+                  }
+                },
+              ),
+            Spacer(),
+            // Settings - Available for both Admin and Staff users
+            _buildDrawerItem(
+              icon: Icons.settings,
+              text: 'Settings',
+              fontFamily: 'SF Pro',
+              selected: currentRoute == '/settings',
+              context: context,
+              onTap: () async {
+                if (beforeNavigate != null) {
+                  final ok = await beforeNavigate!();
+                  if (!ok) return;
+                }
+                // Only pop if not persistent (i.e., if it's a modal drawer)
+                if (!isPersistent) {
                   Navigator.pop(context);
-                  if (currentRoute != '/settings') {
-                    // Use push so user can return to the previous page
-                    Navigator.pushNamed(context, '/settings');
-                  }
-                },
-              ),
-              _buildDrawerItem(
-                icon: Icons.logout,
-                text: 'Logout',
-                fontFamily: 'SF Pro',
-                selected: false,
-                context: context,
-                onTap: () async {
-                  final shouldLogout = await _showLogoutDialog(context);
-                  if (shouldLogout == true) {
-                    final authService = AuthService();
-                    await authService.logout();
-                    // ignore: use_build_context_synchronously
-                    Navigator.pushReplacementNamed(context, '/login');
-                  }
-                },
-              ),
-              SizedBox(height: 24),
-            ],
-          );
-        },
-      ),
+                }
+                if (currentRoute != '/settings') {
+                  // Use push so user can return to the previous page
+                  Navigator.pushNamed(context, '/settings');
+                }
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.logout,
+              text: 'Logout',
+              fontFamily: 'SF Pro',
+              selected: false,
+              context: context,
+              onTap: () async {
+                final shouldLogout = await _showLogoutDialog(context);
+                if (shouldLogout == true) {
+                  final authService = AuthService();
+                  await authService.logout();
+                  // ignore: use_build_context_synchronously
+                  Navigator.pushReplacementNamed(context, '/login');
+                }
+              },
+            ),
+            SizedBox(height: 24),
+          ],
+        );
+      },
     );
+
+    // Determine the appropriate drawer background color based on the theme's brightness
+    final drawerBackgroundColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : theme.scaffoldBackgroundColor;
+
+    // Return either a Drawer (for modal) or the content directly (for persistent)
+    if (isPersistent) {
+      return Container(
+        color: drawerBackgroundColor,
+        child: drawerContent,
+      );
+    } else {
+      return Drawer(
+        backgroundColor: drawerBackgroundColor,
+        child: drawerContent,
+      );
+    }
   }
 
   Widget _buildDrawerItem({

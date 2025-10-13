@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/settings/controller/edit_profile_controller.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/features/settings/controller/edit_user_controller.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -143,136 +144,143 @@ class _EditProfilePageState extends State<EditProfilePage> {
         elevation: theme.appBarTheme.elevation,
         shadowColor: theme.appBarTheme.shadowColor,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Name Field
-              _buildTextField(
-                label: 'Name',
-                controller: _nameController,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Name is required';
-                  }
-                  return null;
-                },
-                theme: theme,
-              ),
-              const SizedBox(height: 16),
-
-              // Username Field
-              _buildTextField(
-                label: 'Username',
-                controller: _usernameController,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Username is required';
-                  }
-                  if (_usernameError != null) {
-                    return _usernameError;
-                  }
-                  return null;
-                },
-                onChanged: (value) {
-                  if (_usernameError != null) {
-                    setState(() => _usernameError = null);
-                    _formKey.currentState?.validate();
-                  }
-                },
-                theme: theme,
-              ),
-              const SizedBox(height: 16),
-
-              // Email Field
-              _buildTextField(
-                label: 'Email',
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Email is required';
-                  }
-                  if (!_editUserController.isEmailValid(value)) {
-                    return 'Please enter a valid email address';
-                  }
-                  if (_emailError != null) {
-                    return _emailError;
-                  }
-                  return null;
-                },
-                onChanged: (value) {
-                  if (_emailError != null) {
-                    setState(() => _emailError = null);
-                    _formKey.currentState?.validate();
-                  }
-                },
-                theme: theme,
-              ),
-              const SizedBox(height: 20),
-
-              // Change Password Button
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => _showChangePasswordDialog(),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.blue,
-                    side: const BorderSide(color: Colors.blue),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+      body: SafeArea(
+        top: false,
+        child: ResponsiveContainer(
+          maxWidth: 1000,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SingleChildScrollView(
+              padding: MediaQuery.of(context).size.width < 768
+                  ? const EdgeInsets.all(8.0)
+                  : const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTextField(
+                      label: 'Name',
+                      controller: _nameController,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Name is required';
+                        }
+                        return null;
+                      },
+                      theme: theme,
                     ),
-                  ),
-                  child: const Text(
-                    'Change Password',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-              // Save Changes Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _handleSave,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00D4AA),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    _buildTextField(
+                      label: 'Username',
+                      controller: _usernameController,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Username is required';
+                        }
+                        if (_usernameError != null) {
+                          return _usernameError;
+                        }
+                        return null;
+                      },
+                      onChanged: (value) {
+                        if (_usernameError != null) {
+                          setState(() => _usernameError = null);
+                          _formKey.currentState?.validate();
+                        }
+                      },
+                      theme: theme,
                     ),
-                    elevation: 1,
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                    const SizedBox(height: 16),
+
+                    _buildTextField(
+                      label: 'Email',
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Email is required';
+                        }
+                        if (!_editUserController.isEmailValid(value)) {
+                          return 'Please enter a valid email address';
+                        }
+                        if (_emailError != null) {
+                          return _emailError;
+                        }
+                        return null;
+                      },
+                      onChanged: (value) {
+                        if (_emailError != null) {
+                          setState(() => _emailError = null);
+                          _formKey.currentState?.validate();
+                        }
+                      },
+                      theme: theme,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Change Password Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _showChangePasswordDialog,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blue,
+                          side: const BorderSide(color: Colors.blue),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        )
-                      : const Text(
-                          'Save Changes',
+                        ),
+                        child: const Text(
+                          'Change Password',
                           style: TextStyle(
                             fontFamily: 'SF Pro',
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
-                            color: Colors.white,
                           ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Save Changes Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _handleSave,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Save Changes',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro',
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
