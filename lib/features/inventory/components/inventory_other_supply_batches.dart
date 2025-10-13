@@ -72,8 +72,8 @@ class SupabaseOtherSupplyBatches extends StatelessWidget {
           final currentCat = item.category.trim().toLowerCase();
           if (batchCat != currentCat) return false;
 
-          // Exclude the item we are viewing and zero-stock batches
-          if (batch.id == item.id || batch.stock == 0) return false;
+          // Exclude the item we are viewing
+          if (batch.id == item.id) return false;
 
           // Filter out expired batches ONLY for non-archived view and ONLY for items WITH expiry dates.
           // When viewing an archived item, include expired batches so they are visible.
@@ -102,6 +102,14 @@ class SupabaseOtherSupplyBatches extends StatelessWidget {
 
           return true;
         }).toList();
+
+        // Filter out zero-stock batches only if there are other batches with stock
+        // Include the main item's stock in the calculation
+        final hasStockBatches =
+            item.stock > 0 || batches.any((batch) => batch.stock > 0);
+        if (hasStockBatches) {
+          batches.removeWhere((batch) => batch.stock == 0);
+        }
 
         // Sort by expiry date (earliest first, no expiry last). Normalize formats.
         DateTime? parseExpiry(String? value) {

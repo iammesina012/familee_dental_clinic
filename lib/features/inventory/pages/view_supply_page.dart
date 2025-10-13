@@ -94,26 +94,70 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
               final rows = batchSnap.data!;
               DateTime? earliest;
               Map<String, dynamic>? earliestRow;
+              Map<String, dynamic>? stockRow; // Row with stock > 0
               final now = DateTime.now();
               final today = DateTime(now.year, now.month, now.day);
+
+              // First pass: look for earliest expiry with stock > 0
               for (final row in rows) {
-                final expStr = row['expiry']?.toString();
-                if (expStr == null || expStr.isEmpty) continue;
-                final dt = DateTime.tryParse(expStr.replaceAll('/', '-'));
-                if (dt == null) continue;
-                final dateOnly = DateTime(dt.year, dt.month, dt.day);
-                // Skip expired batches in Inventory view
-                if (dateOnly.isBefore(today) ||
-                    dateOnly.isAtSameMomentAs(today)) {
-                  continue;
-                }
-                if (earliest == null || dateOnly.isBefore(earliest)) {
-                  earliest = dateOnly;
-                  earliestRow = row;
+                final stock = (row['stock'] ?? 0) as int;
+                if (stock > 0) {
+                  final expStr = row['expiry']?.toString();
+                  if (expStr == null || expStr.isEmpty) {
+                    stockRow = row;
+                    break; // Prefer no expiry items with stock
+                  }
+                  final dt = DateTime.tryParse(expStr.replaceAll('/', '-'));
+                  if (dt == null) continue;
+                  final dateOnly = DateTime(dt.year, dt.month, dt.day);
+                  // Skip expired batches
+                  if (dateOnly.isBefore(today) ||
+                      dateOnly.isAtSameMomentAs(today)) {
+                    continue;
+                  }
+                  // Keep track of earliest expiry with stock
+                  if (stockRow == null) {
+                    stockRow = row;
+                  } else {
+                    final existingExpStr = stockRow['expiry']?.toString();
+                    if (existingExpStr == null || existingExpStr.isEmpty) {
+                      // Current row has expiry, existing doesn't, keep current
+                      stockRow = row;
+                    } else {
+                      final existingDate = DateTime.tryParse(
+                          existingExpStr.replaceAll('/', '-'));
+                      if (existingDate != null &&
+                          dateOnly.isBefore(existingDate)) {
+                        stockRow = row;
+                      }
+                    }
+                  }
                 }
               }
-              if (earliestRow != null && earliestRow['id'] != updatedItem.id) {
-                // Replace page with earliest batch view
+
+              // Second pass: if no stock found, look for earliest expiry (existing logic)
+              if (stockRow == null) {
+                for (final row in rows) {
+                  final expStr = row['expiry']?.toString();
+                  if (expStr == null || expStr.isEmpty) continue;
+                  final dt = DateTime.tryParse(expStr.replaceAll('/', '-'));
+                  if (dt == null) continue;
+                  final dateOnly = DateTime(dt.year, dt.month, dt.day);
+                  // Skip expired batches in Inventory view
+                  if (dateOnly.isBefore(today) ||
+                      dateOnly.isAtSameMomentAs(today)) {
+                    continue;
+                  }
+                  if (earliest == null || dateOnly.isBefore(earliest)) {
+                    earliest = dateOnly;
+                    earliestRow = row;
+                  }
+                }
+              }
+              final preferredRow = stockRow ?? earliestRow;
+              if (preferredRow != null &&
+                  preferredRow['id'] != updatedItem.id) {
+                // Replace page with preferred batch view (stock first, then earliest expiry)
                 // Schedule navigation after current frame to avoid ancestor lookup on deactivated context
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (context.mounted && Navigator.of(context).canPop()) {
@@ -121,18 +165,18 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                       MaterialPageRoute(
                         builder: (_) => InventoryViewSupplyPage(
                           item: InventoryItem(
-                            id: earliestRow!['id'] as String,
-                            name: earliestRow['name'] ?? '',
-                            imageUrl: earliestRow['image_url'] ?? '',
-                            category: earliestRow['category'] ?? '',
-                            cost: (earliestRow['cost'] ?? 0).toDouble(),
-                            stock: (earliestRow['stock'] ?? 0).toInt(),
-                            unit: earliestRow['unit'] ?? '',
-                            supplier: earliestRow['supplier'] ?? '',
-                            brand: earliestRow['brand'] ?? '',
-                            expiry: earliestRow['expiry'],
-                            noExpiry: earliestRow['no_expiry'] ?? false,
-                            archived: earliestRow['archived'] ?? false,
+                            id: preferredRow['id'] as String,
+                            name: preferredRow['name'] ?? '',
+                            imageUrl: preferredRow['image_url'] ?? '',
+                            category: preferredRow['category'] ?? '',
+                            cost: (preferredRow['cost'] ?? 0).toDouble(),
+                            stock: (preferredRow['stock'] ?? 0).toInt(),
+                            unit: preferredRow['unit'] ?? '',
+                            supplier: preferredRow['supplier'] ?? '',
+                            brand: preferredRow['brand'] ?? '',
+                            expiry: preferredRow['expiry'],
+                            noExpiry: preferredRow['no_expiry'] ?? false,
+                            archived: preferredRow['archived'] ?? false,
                           ),
                           skipAutoRedirect: true,
                         ),
@@ -753,108 +797,114 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
       ),
       elevation: 8,
       backgroundColor: theme.colorScheme.surface,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: theme.colorScheme.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width < 768 ? 300 : 400,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Icon and Title
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: confirmColor.withOpacity(0.1),
-                shape: BoxShape.circle,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: theme.colorScheme.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              child: Icon(
-                icon,
-                color: confirmColor,
-                size: 32,
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon and Title
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: confirmColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: confirmColor,
+                  size: 32,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // Title
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: theme.textTheme.titleLarge?.color,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
+              // Title
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: theme.textTheme.titleLarge?.color,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
 
-            // Content
-            Text(
-              content,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-                    height: 1.4,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
+              // Content
+              Text(
+                content,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                      height: 1.4,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
 
-            // Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(
-                            color: theme.dividerColor.withOpacity(0.4)),
+              // Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(
+                              color: theme.dividerColor.withOpacity(0.4)),
+                        ),
+                        foregroundColor: theme.textTheme.bodyMedium?.color,
                       ),
-                      foregroundColor: theme.textTheme.bodyMedium?.color,
-                    ),
-                    child: Text(
-                      'Cancel',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.7),
-                          ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: confirmColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                      child: Text(
+                        'Cancel',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.7),
+                            ),
                       ),
-                      elevation: 2,
-                    ),
-                    child: Text(
-                      confirmText,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                          ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: confirmColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: Text(
+                        confirmText,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

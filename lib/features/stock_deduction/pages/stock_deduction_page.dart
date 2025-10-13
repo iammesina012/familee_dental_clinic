@@ -425,6 +425,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
       }
 
       // Get current inventory data to update stock and expiry information
+      // Use inventory controller instead of catalog controller for proper FIFO logic
       List<GroupedInventoryItem> currentInventory = [];
       try {
         currentInventory = await _inventoryController
@@ -469,17 +470,55 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                 });
               } else {
                 // Use current inventory data instead of stored preset values
-                _deductions.add({
-                  'docId': currentItem.mainItem.id,
-                  'name': currentItem.mainItem.name,
-                  'brand': currentItem.mainItem.brand,
-                  'imageUrl': currentItem.mainItem.imageUrl,
-                  'expiry': currentItem.mainItem.expiry,
-                  'noExpiry': currentItem.mainItem.noExpiry,
-                  'stock': currentItem
-                      .mainItem.stock, // Use current stock from inventory
-                  'deductQty': currentItem.mainItem.stock > 0 ? 1 : 0,
+                // For stock deduction, we need to include all batches (earliest expiry first)
+                final allBatches = [
+                  currentItem.mainItem,
+                  ...currentItem.variants
+                ];
+                final validBatches =
+                    allBatches.where((batch) => batch.stock > 0).toList();
+
+                // Sort by expiry (earliest first, no expiry last)
+                validBatches.sort((a, b) {
+                  if (a.noExpiry && b.noExpiry) return 0;
+                  if (a.noExpiry) return 1;
+                  if (b.noExpiry) return -1;
+
+                  final aExpiry = a.expiry != null
+                      ? DateTime.tryParse(a.expiry!.replaceAll('/', '-'))
+                      : null;
+                  final bExpiry = b.expiry != null
+                      ? DateTime.tryParse(b.expiry!.replaceAll('/', '-'))
+                      : null;
+
+                  if (aExpiry == null && bExpiry == null) return 0;
+                  if (aExpiry == null) return 1;
+                  if (bExpiry == null) return -1;
+                  return aExpiry.compareTo(bExpiry);
                 });
+
+                // Add the earliest expiry batch with stock as the main deduction item
+                if (validBatches.isNotEmpty) {
+                  final primaryBatch = validBatches.first;
+
+                  _deductions.add({
+                    'docId': primaryBatch.id,
+                    'name': primaryBatch.name,
+                    'brand': primaryBatch.brand,
+                    'imageUrl': primaryBatch.imageUrl,
+                    'expiry': primaryBatch.expiry,
+                    'noExpiry': primaryBatch.noExpiry,
+                    'stock': primaryBatch.stock,
+                    'deductQty': primaryBatch.stock > 0 ? 1 : 0,
+                    'allBatches': validBatches
+                        .map((batch) => {
+                              'docId': batch.id,
+                              'stock': batch.stock,
+                              'expiry': batch.expiry,
+                            })
+                        .toList(),
+                  });
+                }
               }
             } else {
               // Not in current inventory (likely expired/removed)

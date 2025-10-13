@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class EditSupplyPOPage extends StatefulWidget {
   final Map<String, dynamic> supply;
@@ -126,496 +127,505 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Supply Image Section
-              Center(
-                child: SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: widget.supply['imageUrl'] != null &&
-                          widget.supply['imageUrl'].isNotEmpty
-                      ? Image.network(
-                          widget.supply['imageUrl'],
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(Icons.image_not_supported,
-                                size: 60, color: Colors.grey);
-                          },
-                        )
-                      : Icon(Icons.image_not_supported,
-                          size: 60, color: Colors.grey),
-                ),
-              ),
-              SizedBox(height: 10),
-
-              // Supply Name (simple text display)
-              Center(
-                child: Text(
-                  widget.supply['supplyName'] ?? 'Unknown Supply',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: theme.textTheme.bodyMedium?.color,
-                  ),
-                ),
-              ),
-              SizedBox(height: 26),
-
-              // Brand Name and Supplier Name (horizontal layout)
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildFieldSection(
-                      title: "Brand Name",
-                      child: TextField(
-                        controller: brandController,
-                        enabled: true,
-                        readOnly: false,
-                        enableInteractiveSelection: true,
-                        style: AppFonts.sfProStyle(
-                          fontSize: 16,
-                          color: theme.textTheme.bodyMedium?.color,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Enter brand name',
-                          hintStyle: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.4),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide:
-                                BorderSide(color: Color(0xFF00D4AA), width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 16,
-                          ),
-                          filled: true,
-                          fillColor: scheme.surface,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: _buildFieldSection(
-                      title: "Supplier Name",
-                      child: TextField(
-                        controller: supplierController,
-                        style: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            color: theme.textTheme.bodyMedium?.color),
-                        decoration: InputDecoration(
-                          hintText: 'Enter supplier name',
-                          hintStyle: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.4),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide:
-                                BorderSide(color: Color(0xFF00D4AA), width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 16,
-                          ),
-                          filled: true,
-                          fillColor: scheme.surface,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 16),
-
-              // Cost and Inventory Units (horizontal layout)
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildFieldSection(
-                      title: "Cost",
-                      child: TextField(
-                        controller: costController,
-                        keyboardType:
-                            TextInputType.numberWithOptions(decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d{0,2}')),
-                        ],
-                        style: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            color: theme.textTheme.bodyMedium?.color),
-                        decoration: InputDecoration(
-                          hintText: 'Enter cost (₱)',
-                          hintStyle: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.4),
-                          ),
-                          prefixText: '₱ ',
-                          prefixStyle: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.7),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide:
-                                BorderSide(color: Color(0xFF00D4AA), width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 16,
-                          ),
-                          filled: true,
-                          fillColor: scheme.surface,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: _buildFieldSection(
-                      title: "Unit",
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: scheme.surface,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedUnit,
-                            isExpanded: true,
-                            style: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              color: theme.textTheme.bodyMedium?.color,
-                            ),
-                            items: _availableUnits.map((String unit) {
-                              return DropdownMenuItem<String>(
-                                value: unit,
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 16),
-                                  child: Text(
-                                    unit,
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 16,
-                                      color: theme.textTheme.bodyMedium?.color,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (String? newValue) {
-                              if (newValue != null) {
-                                setState(() {
-                                  _selectedUnit = newValue;
-                                });
-                              }
+      body: ResponsiveContainer(
+        maxWidth: 1000,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(
+                MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Supply Image Section
+                Center(
+                  child: SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: widget.supply['imageUrl'] != null &&
+                            widget.supply['imageUrl'].isNotEmpty
+                        ? Image.network(
+                            widget.supply['imageUrl'],
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(Icons.image_not_supported,
+                                  size: 60, color: Colors.grey);
                             },
+                          )
+                        : Icon(Icons.image_not_supported,
+                            size: 60, color: Colors.grey),
+                  ),
+                ),
+                SizedBox(height: 10),
+
+                // Supply Name (simple text display)
+                Center(
+                  child: Text(
+                    widget.supply['supplyName'] ?? 'Unknown Supply',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 26),
+
+                // Brand Name and Supplier Name (horizontal layout)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildFieldSection(
+                        title: "Brand Name",
+                        child: TextField(
+                          controller: brandController,
+                          enabled: true,
+                          readOnly: false,
+                          enableInteractiveSelection: true,
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Enter brand name',
+                            hintStyle: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.4),
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                  color: Color(0xFF00D4AA), width: 2),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 16,
+                            ),
+                            filled: true,
+                            fillColor: scheme.surface,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 16),
-
-              // Quantity + Expiry batches
-              _buildFieldSection(
-                title: "Quantity & Expiry",
-                child: Column(
-                  children: [
-                    for (int i = 0; i < _batchQtyControllers.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          children: [
-                            // Qty stepper
-                            Container(
-                              width: 150,
-                              decoration: BoxDecoration(
-                                color: scheme.surface,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 40,
-                                    child: IconButton(
-                                      onPressed: () {
-                                        final currentQty = int.tryParse(
-                                                _batchQtyControllers[i].text) ??
-                                            1;
-                                        if (currentQty > 1) {
-                                          setState(() {
-                                            _batchQtyControllers[i].text =
-                                                (currentQty - 1).toString();
-                                          });
-                                        }
-                                      },
-                                      icon: Icon(Icons.remove,
-                                          color: theme.iconTheme.color
-                                              ?.withOpacity(0.7),
-                                          size: 18),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _batchQtyControllers[i],
-                                      keyboardType: TextInputType.number,
-                                      textAlign: TextAlign.center,
-                                      style: AppFonts.sfProStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: theme
-                                              .textTheme.bodyMedium?.color),
-                                      decoration: const InputDecoration(
-                                        border: InputBorder.none,
-                                        contentPadding:
-                                            EdgeInsets.symmetric(vertical: 12),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: 40,
-                                    child: IconButton(
-                                      onPressed: () {
-                                        final currentQty = int.tryParse(
-                                                _batchQtyControllers[i].text) ??
-                                            1;
-                                        setState(() {
-                                          _batchQtyControllers[i].text =
-                                              (currentQty + 1).toString();
-                                        });
-                                      },
-                                      icon: const Icon(Icons.add,
-                                          color: Color(0xFF00D4AA), size: 18),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: _buildFieldSection(
+                        title: "Supplier Name",
+                        child: TextField(
+                          controller: supplierController,
+                          style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: theme.textTheme.bodyMedium?.color),
+                          decoration: InputDecoration(
+                            hintText: 'Enter supplier name',
+                            hintStyle: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.4),
                             ),
-                            const SizedBox(width: 8),
-                            // Expiry date picker
-                            Expanded(
-                              child: InkWell(
-                                onTap: () async {
-                                  final result = await _showCustomDatePicker(
-                                    context: context,
-                                    initialDate: _batchExpiries[i],
-                                  );
-                                  if (result is DateTime) {
-                                    setState(() {
-                                      _batchExpiries[i] = result;
-                                      _batchNoExpirySelected[i] = false;
-                                    });
-                                  } else if (result == 'NO_EXPIRY') {
-                                    // User explicitly selected "No Expiry Date"
-                                    setState(() {
-                                      _batchExpiries[i] = null;
-                                      _batchNoExpirySelected[i] = true;
-                                    });
-                                  } else {
-                                    // Cancel or tap outside → do nothing
-                                  }
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: scheme.surface,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.event,
-                                          color: Color(0xFF00D4AA), size: 18),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        _batchExpiries[i] != null
-                                            ? '${_batchExpiries[i]!.year}/${_batchExpiries[i]!.month.toString().padLeft(2, '0')}/${_batchExpiries[i]!.day.toString().padLeft(2, '0')}'
-                                            : _batchNoExpirySelected[i]
-                                                ? 'No Expiry Date'
-                                                : 'Set expiry date',
-                                        style: AppFonts.sfProStyle(
-                                            fontSize: 16,
-                                            color: _batchExpiries[i] != null
-                                                ? theme
-                                                    .textTheme.bodyMedium?.color
-                                                : _batchNoExpirySelected[i]
-                                                    ? theme.textTheme.bodyMedium
-                                                        ?.color
-                                                        ?.withOpacity(0.8)
-                                                    : theme.textTheme.bodyMedium
-                                                        ?.color
-                                                        ?.withOpacity(0.6)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
                             ),
-                            // Remove batch button
-                            if (_batchQtyControllers.length > 1)
-                              IconButton(
-                                constraints: const BoxConstraints(
-                                    minWidth: 36, minHeight: 36),
-                                padding: EdgeInsets.zero,
-                                tooltip: 'Remove',
-                                iconSize: 22,
-                                icon: const Icon(Icons.delete_outline,
-                                    color: Colors.red),
-                                onPressed: () async {
-                                  final confirmed = await showDialog<bool>(
-                                        context: context,
-                                        builder: (context) => AlertDialog(
-                                          title: Text('Remove expiry batch?',
-                                              style: AppFonts.sfProStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold)),
-                                          content: Text(
-                                            'This will remove this quantity and expiry date row.',
-                                            style: AppFonts.sfProStyle(
-                                                fontSize: 14),
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.of(context)
-                                                      .pop(false),
-                                              child: Text('Cancel',
-                                                  style: AppFonts.sfProStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w600)),
-                                            ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.of(context)
-                                                      .pop(true),
-                                              child: Text('Remove',
-                                                  style: AppFonts.sfProStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: Colors.red)),
-                                            ),
-                                          ],
-                                        ),
-                                      ) ??
-                                      false;
-                                  if (!confirmed) return;
-                                  setState(() {
-                                    _batchQtyControllers[i].dispose();
-                                    _batchQtyControllers.removeAt(i);
-                                    _batchExpiries.removeAt(i);
-                                    _batchNoExpirySelected.removeAt(i);
-                                  });
-                                },
-                              ),
-                          ],
-                        ),
-                      ),
-                    // Add another expiry row button
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          _batchQtyControllers
-                              .add(TextEditingController(text: '1'));
-                          _batchExpiries.add(null);
-                          _batchNoExpirySelected.add(false);
-                        });
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: const Color(0xFF00D4AA).withOpacity(0.6),
-                              width: 1),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.add, color: Color(0xFF00D4AA)),
-                            const SizedBox(width: 8),
-                            Text('Add another expiry date',
-                                style: AppFonts.sfProStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF00D4AA))),
-                          ],
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                  color: Color(0xFF00D4AA), width: 2),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 16,
+                            ),
+                            filled: true,
+                            fillColor: scheme.surface,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              SizedBox(height: 24),
+                SizedBox(height: 16),
 
-              // Save Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    _saveSupply();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF00D4AA),
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                // Cost and Inventory Units (horizontal layout)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildFieldSection(
+                        title: "Cost",
+                        child: TextField(
+                          controller: costController,
+                          keyboardType:
+                              TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}')),
+                          ],
+                          style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: theme.textTheme.bodyMedium?.color),
+                          decoration: InputDecoration(
+                            hintText: 'Enter cost (₱)',
+                            hintStyle: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.4),
+                            ),
+                            prefixText: '₱ ',
+                            prefixStyle: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.7),
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                  color: Color(0xFF00D4AA), width: 2),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 16,
+                            ),
+                            filled: true,
+                            fillColor: scheme.surface,
+                          ),
+                        ),
+                      ),
                     ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: _buildFieldSection(
+                        title: "Unit",
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedUnit,
+                              isExpanded: true,
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                              items: _availableUnits.map((String unit) {
+                                return DropdownMenuItem<String>(
+                                  value: unit,
+                                  child: Padding(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 16),
+                                    child: Text(
+                                      unit,
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 16,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _selectedUnit = newValue;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+
+                // Quantity + Expiry batches
+                _buildFieldSection(
+                  title: "Quantity & Expiry",
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < _batchQtyControllers.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            children: [
+                              // Qty stepper
+                              Container(
+                                width: 150,
+                                decoration: BoxDecoration(
+                                  color: scheme.surface,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 40,
+                                      child: IconButton(
+                                        onPressed: () {
+                                          final currentQty = int.tryParse(
+                                                  _batchQtyControllers[i]
+                                                      .text) ??
+                                              1;
+                                          if (currentQty > 1) {
+                                            setState(() {
+                                              _batchQtyControllers[i].text =
+                                                  (currentQty - 1).toString();
+                                            });
+                                          }
+                                        },
+                                        icon: Icon(Icons.remove,
+                                            color: theme.iconTheme.color
+                                                ?.withOpacity(0.7),
+                                            size: 18),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _batchQtyControllers[i],
+                                        keyboardType: TextInputType.number,
+                                        textAlign: TextAlign.center,
+                                        style: AppFonts.sfProStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: theme
+                                                .textTheme.bodyMedium?.color),
+                                        decoration: const InputDecoration(
+                                          border: InputBorder.none,
+                                          contentPadding: EdgeInsets.symmetric(
+                                              vertical: 12),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 40,
+                                      child: IconButton(
+                                        onPressed: () {
+                                          final currentQty = int.tryParse(
+                                                  _batchQtyControllers[i]
+                                                      .text) ??
+                                              1;
+                                          setState(() {
+                                            _batchQtyControllers[i].text =
+                                                (currentQty + 1).toString();
+                                          });
+                                        },
+                                        icon: const Icon(Icons.add,
+                                            color: Color(0xFF00D4AA), size: 18),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Expiry date picker
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () async {
+                                    final result = await _showCustomDatePicker(
+                                      context: context,
+                                      initialDate: _batchExpiries[i],
+                                    );
+                                    if (result is DateTime) {
+                                      setState(() {
+                                        _batchExpiries[i] = result;
+                                        _batchNoExpirySelected[i] = false;
+                                      });
+                                    } else if (result == 'NO_EXPIRY') {
+                                      // User explicitly selected "No Expiry Date"
+                                      setState(() {
+                                        _batchExpiries[i] = null;
+                                        _batchNoExpirySelected[i] = true;
+                                      });
+                                    } else {
+                                      // Cancel or tap outside → do nothing
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: scheme.surface,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.event,
+                                            color: Color(0xFF00D4AA), size: 18),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _batchExpiries[i] != null
+                                              ? '${_batchExpiries[i]!.year}/${_batchExpiries[i]!.month.toString().padLeft(2, '0')}/${_batchExpiries[i]!.day.toString().padLeft(2, '0')}'
+                                              : _batchNoExpirySelected[i]
+                                                  ? 'No Expiry Date'
+                                                  : 'Set expiry date',
+                                          style: AppFonts.sfProStyle(
+                                              fontSize: 16,
+                                              color: _batchExpiries[i] != null
+                                                  ? theme.textTheme.bodyMedium
+                                                      ?.color
+                                                  : _batchNoExpirySelected[i]
+                                                      ? theme.textTheme
+                                                          .bodyMedium?.color
+                                                          ?.withOpacity(0.8)
+                                                      : theme.textTheme
+                                                          .bodyMedium?.color
+                                                          ?.withOpacity(0.6)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Remove batch button
+                              if (_batchQtyControllers.length > 1)
+                                IconButton(
+                                  constraints: const BoxConstraints(
+                                      minWidth: 36, minHeight: 36),
+                                  padding: EdgeInsets.zero,
+                                  tooltip: 'Remove',
+                                  iconSize: 22,
+                                  icon: const Icon(Icons.delete_outline,
+                                      color: Colors.red),
+                                  onPressed: () async {
+                                    final confirmed = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: Text('Remove expiry batch?',
+                                                style: AppFonts.sfProStyle(
+                                                    fontSize: 18,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                            content: Text(
+                                              'This will remove this quantity and expiry date row.',
+                                              style: AppFonts.sfProStyle(
+                                                  fontSize: 14),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context)
+                                                        .pop(false),
+                                                child: Text('Cancel',
+                                                    style: AppFonts.sfProStyle(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600)),
+                                              ),
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context)
+                                                        .pop(true),
+                                                child: Text('Remove',
+                                                    style: AppFonts.sfProStyle(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: Colors.red)),
+                                              ),
+                                            ],
+                                          ),
+                                        ) ??
+                                        false;
+                                    if (!confirmed) return;
+                                    setState(() {
+                                      _batchQtyControllers[i].dispose();
+                                      _batchQtyControllers.removeAt(i);
+                                      _batchExpiries.removeAt(i);
+                                      _batchNoExpirySelected.removeAt(i);
+                                    });
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                      // Add another expiry row button
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _batchQtyControllers
+                                .add(TextEditingController(text: '1'));
+                            _batchExpiries.add(null);
+                            _batchNoExpirySelected.add(false);
+                          });
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: const Color(0xFF00D4AA).withOpacity(0.6),
+                                width: 1),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.add, color: Color(0xFF00D4AA)),
+                              const SizedBox(width: 8),
+                              Text('Add another expiry date',
+                                  style: AppFonts.sfProStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF00D4AA))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    'Save Supply',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                ),
+                SizedBox(height: 24),
+
+                // Save Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      _saveSupply();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF00D4AA),
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      'Save Supply',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

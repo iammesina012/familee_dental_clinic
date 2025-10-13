@@ -307,8 +307,43 @@ class _StockDeductionAddSupplyPageState
                             ),
                             itemCount: filtered.length,
                             itemBuilder: (context, index) {
-                              final InventoryItem item = filtered[index]
-                                  .mainItem; // earliest-expiry with stock preference
+                              final groupedItem = filtered[index];
+
+                              // Find the earliest expiry item with stock for display
+                              final allBatches = [
+                                groupedItem.mainItem,
+                                ...groupedItem.variants
+                              ];
+                              final validBatches = allBatches
+                                  .where((batch) => batch.stock > 0)
+                                  .toList();
+
+                              // Sort by expiry (earliest first, no expiry last)
+                              validBatches.sort((a, b) {
+                                if (a.noExpiry && b.noExpiry) return 0;
+                                if (a.noExpiry) return 1;
+                                if (b.noExpiry) return -1;
+
+                                final aExpiry = a.expiry != null
+                                    ? DateTime.tryParse(
+                                        a.expiry!.replaceAll('/', '-'))
+                                    : null;
+                                final bExpiry = b.expiry != null
+                                    ? DateTime.tryParse(
+                                        b.expiry!.replaceAll('/', '-'))
+                                    : null;
+
+                                if (aExpiry == null && bExpiry == null)
+                                  return 0;
+                                if (aExpiry == null) return 1;
+                                if (bExpiry == null) return -1;
+                                return aExpiry.compareTo(bExpiry);
+                              });
+
+                              // Use earliest expiry item for display, fallback to mainItem if no valid batches
+                              final InventoryItem item = validBatches.isNotEmpty
+                                  ? validBatches.first
+                                  : groupedItem.mainItem;
                               final bool selected =
                                   _selectedIds.contains(item.id);
                               return GestureDetector(

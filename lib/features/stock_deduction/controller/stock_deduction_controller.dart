@@ -21,55 +21,100 @@ class StockDeductionController {
         continue;
       }
 
-      try {
-        // Get current stock from Supabase for this specific batch only
-        final response = await _supabase
-            .from('supplies')
-            .select('*')
-            .eq('id', docId)
-            .single();
+      // Check if this item has multiple batches for FIFO deduction
+      final List<dynamic>? allBatches = item['allBatches'] as List<dynamic>?;
 
-        final data = response;
-        final int currentStock = (data['stock'] ?? 0) as int;
+      if (allBatches != null && allBatches.isNotEmpty) {
+        // FIFO deduction across multiple batches
+        int remainingQty = requestedQty;
+        final String itemName = item['name'] ?? 'Unknown Item';
 
-        // Debug logging
-        print(
-            'Stock Deduction Debug - Item: ${data['name']}, Current Stock: $currentStock, Requested: $requestedQty');
+        for (final batch in allBatches) {
+          if (remainingQty <= 0) break;
 
-        if (currentStock <= 0) {
-          results[docId] = 0;
-          continue;
+          final String batchDocId = batch['docId'] as String;
+          final int batchStock = (batch['stock'] ?? 0) as int;
+
+          if (batchStock <= 0) continue;
+
+          final int deductFromBatch =
+              remainingQty > batchStock ? batchStock : remainingQty;
+          final int newBatchStock = batchStock - deductFromBatch;
+
+          // Update this batch
+          await _supabase
+              .from('supplies')
+              .update({'stock': newBatchStock}).eq('id', batchDocId);
+
+          results[batchDocId] = deductFromBatch;
+          remainingQty -= deductFromBatch;
+
+          // Store notification and log data for this batch
+          results['_notificationData_$batchDocId'] = {
+            'itemName': itemName,
+            'newStock': newBatchStock,
+            'previousStock': batchStock,
+          };
+
+          results['_logData_$batchDocId'] = {
+            'itemName': itemName,
+            'brand': item['brand'] ?? 'Unknown Brand',
+            'quantity': deductFromBatch,
+            'supplier': 'Multiple Batches',
+          };
         }
+      } else {
+        // Single batch deduction (original logic)
+        try {
+          // Get current stock from Supabase for this specific batch only
+          final response = await _supabase
+              .from('supplies')
+              .select('*')
+              .eq('id', docId)
+              .single();
 
-        final int deductQty =
-            requestedQty > currentStock ? currentStock : requestedQty;
-        final int newStock = currentStock - deductQty;
+          final data = response;
+          final int currentStock = (data['stock'] ?? 0) as int;
 
-        // Update stock in Supabase for this specific batch only
-        await _supabase
-            .from('supplies')
-            .update({'stock': newStock}).eq('id', docId);
+          // Debug logging
+          print(
+              'Stock Deduction Debug - Item: ${data['name']}, Current Stock: $currentStock, Requested: $requestedQty');
 
-        results[docId] = deductQty;
+          if (currentStock <= 0) {
+            results[docId] = 0;
+            continue;
+          }
 
-        // Store notification data for after transaction
-        results['_notificationData_$docId'] = {
-          'itemName': data['name'] ?? 'Unknown Item',
-          'newStock': newStock,
-          'previousStock': currentStock,
-        };
+          final int deductQty =
+              requestedQty > currentStock ? currentStock : requestedQty;
+          final int newStock = currentStock - deductQty;
 
-        // Log the stock deduction activity
-        // Note: We'll log this after the transaction completes successfully
-        results['_logData_$docId'] = {
-          'itemName': data['name'] ?? 'Unknown Item',
-          'brand': data['brand'] ?? 'Unknown Brand',
-          'quantity': deductQty,
-          'supplier': data['supplier'] ?? 'Unknown Supplier',
-        };
-      } catch (e) {
-        // If item doesn't exist or other error, set result to 0
-        results[docId] = 0;
+          // Update stock in Supabase for this specific batch only
+          await _supabase
+              .from('supplies')
+              .update({'stock': newStock}).eq('id', docId);
+
+          results[docId] = deductQty;
+
+          // Store notification data for after transaction
+          results['_notificationData_$docId'] = {
+            'itemName': data['name'] ?? 'Unknown Item',
+            'newStock': newStock,
+            'previousStock': currentStock,
+          };
+
+          // Log the stock deduction activity
+          // Note: We'll log this after the transaction completes successfully
+          results['_logData_$docId'] = {
+            'itemName': data['name'] ?? 'Unknown Item',
+            'brand': data['brand'] ?? 'Unknown Brand',
+            'quantity': deductQty,
+            'supplier': data['supplier'] ?? 'Unknown Supplier',
+          };
+        } catch (e) {
+          // If item doesn't exist or other error, set result to 0
+          results[docId] = 0;
+        }
       }
     }
 
