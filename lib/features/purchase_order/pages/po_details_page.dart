@@ -2125,7 +2125,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                 const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width - 24),
+                  maxWidth: MediaQuery.of(context).size.width < 768
+                      ? MediaQuery.of(context).size.width - 24
+                      : 500),
               child: Material(
                 color: Theme.of(context).dialogBackgroundColor,
                 borderRadius: BorderRadius.circular(24),

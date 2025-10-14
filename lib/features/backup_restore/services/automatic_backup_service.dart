@@ -1,21 +1,48 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'backup_restore_service.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 
 /// Service for automatic daily backup creation
-/// Uses a simpler approach that checks for backup needs when app is used
+/// Now uses Supabase database to store preferences (works with Edge Functions)
 class AutomaticBackupService {
-  static const String _autoBackupKey = 'auto_backup_enabled';
-  static const String _lastBackupDateKey = 'last_backup_date';
+  static final _supabase = Supabase.instance.client;
 
   /// Initialize the automatic backup service
   static Future<void> initialize() async {
+    // Ensure user preferences record exists
+    await _ensureUserPreferencesExist();
     // Check if backup is needed when app starts
     await checkAndCreateBackupIfNeeded();
+  }
+
+  /// Ensure user has a record in user_backup_preferences table
+  static Future<void> _ensureUserPreferencesExist() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      // Check if record exists
+      final response = await _supabase
+          .from('user_backup_preferences')
+          .select()
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      // Create record if it doesn't exist
+      if (response == null) {
+        await _supabase.from('user_backup_preferences').insert({
+          'user_id': user.id,
+          'user_email': user.email ?? '',
+          'auto_backup_enabled': false,
+        });
+        debugPrint('Created user backup preferences record');
+      }
+    } catch (e) {
+      debugPrint('Error ensuring user preferences: $e');
+    }
   }
 
   /// Enable automatic daily backups
@@ -27,11 +54,19 @@ class AutomaticBackupService {
         throw Exception('Only Owner can enable automatic backups');
       }
 
-      // Save preference
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_autoBackupKey, true);
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        throw Exception('No authenticated user');
+      }
 
-      debugPrint('Automatic daily backup enabled');
+      // Save preference to Supabase
+      await _supabase.from('user_backup_preferences').upsert({
+        'user_id': user.id,
+        'user_email': user.email ?? '',
+        'auto_backup_enabled': true,
+      });
+
+      debugPrint('Automatic daily backup enabled in Supabase');
     } catch (e) {
       debugPrint('Error enabling auto backup: $e');
       rethrow;
@@ -41,10 +76,20 @@ class AutomaticBackupService {
   /// Disable automatic daily backups
   static Future<void> disableAutoBackup() async {
     try {
-      // Save preference
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_autoBackupKey, false);
-      debugPrint('Auto backup preference set to false');
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        debugPrint('No authenticated user for disabling auto backup');
+        return;
+      }
+
+      // Save preference to Supabase
+      await _supabase.from('user_backup_preferences').upsert({
+        'user_id': user.id,
+        'user_email': user.email ?? '',
+        'auto_backup_enabled': false,
+      });
+
+      debugPrint('Auto backup preference set to false in Supabase');
     } catch (e) {
       debugPrint('Error in disableAutoBackup: $e');
       // Don't rethrow - just log the error and continue
@@ -53,18 +98,44 @@ class AutomaticBackupService {
 
   /// Check if automatic backup is enabled
   static Future<bool> isAutoBackupEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_autoBackupKey) ?? false;
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return false;
+
+      final response = await _supabase
+          .from('user_backup_preferences')
+          .select('auto_backup_enabled')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      return response?['auto_backup_enabled'] as bool? ?? false;
+    } catch (e) {
+      debugPrint('Error checking auto backup status: $e');
+      return false;
+    }
   }
 
   /// Get the last backup date
   static Future<DateTime?> getLastBackupDate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final dateString = prefs.getString(_lastBackupDateKey);
-    if (dateString != null) {
-      return DateTime.tryParse(dateString);
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+
+      final response = await _supabase
+          .from('user_backup_preferences')
+          .select('last_backup_date')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      final dateString = response?['last_backup_date'] as String?;
+      if (dateString != null) {
+        return DateTime.tryParse(dateString);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting last backup date: $e');
+      return null;
     }
-    return null;
   }
 
   /// Check and create backup if needed (called when app starts or backup page is opened)
@@ -115,16 +186,24 @@ class AutomaticBackupService {
   /// Create the actual backup
   static Future<void> _createAutomaticBackup() async {
     try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        debugPrint('No authenticated user for automatic backup');
+        return;
+      }
+
       final backupService = BackupRestoreService();
       final settingsActivityController = SettingsActivityController();
 
       // Create backup
       await backupService.createBackup(force: true);
 
-      // Update last backup date
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-          _lastBackupDateKey, DateTime.now().toIso8601String());
+      // Update last backup date in Supabase
+      await _supabase.from('user_backup_preferences').upsert({
+        'user_id': user.id,
+        'user_email': user.email ?? '',
+        'last_backup_date': DateTime.now().toUtc().toIso8601String(),
+      });
 
       // Log activity
       await settingsActivityController.logBackupCreated(

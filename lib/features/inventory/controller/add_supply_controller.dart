@@ -58,58 +58,69 @@ class AddSupplyController {
         RegExp(r'[a-zA-Z]').hasMatch(text.trim());
   }
 
-  String? validateFields() {
+  Map<String, String?> validateFields() {
+    Map<String, String?> errors = {};
+
     // Required fields validation
     if (nameController.text.trim().isEmpty) {
-      return 'Please enter the item name.';
-    }
-
-    // Validate item name is alphanumeric and not just numbers
-    if (!_isValidAlphanumeric(nameController.text.trim())) {
-      return 'Item name must contain letters and cannot be only numbers.';
+      errors['name'] = 'Please enter the item name.';
+    } else if (!_isValidAlphanumeric(nameController.text.trim())) {
+      errors['name'] =
+          'Item name must contain letters and cannot be only numbers.';
     }
 
     if (selectedCategory == null || selectedCategory!.isEmpty) {
-      return 'Please choose a category.';
+      errors['category'] = 'Please choose a category.';
     }
+
     if (selectedUnit == null || selectedUnit!.isEmpty) {
-      return 'Please choose a unit.';
+      errors['unit'] = 'Please choose a unit.';
     }
+
     if (costController.text.trim().isEmpty) {
-      return 'Please enter the cost.';
+      errors['cost'] = 'Please enter the cost.';
+    } else if (double.tryParse(costController.text.trim()) == null) {
+      errors['cost'] = 'Cost must be a valid number.';
     }
-    if (double.tryParse(costController.text.trim()) == null) {
-      return 'Cost must be a valid number.';
-    }
+
     if (stockController.text.trim().isEmpty) {
-      return 'Please enter the stock quantity.';
-    }
-    if (int.tryParse(stockController.text.trim()) == null) {
-      return 'Stock must be a valid number.';
+      errors['stock'] = 'Please enter the stock quantity.';
+    } else if (int.tryParse(stockController.text.trim()) == null) {
+      errors['stock'] = 'Stock must be a valid number.';
     }
 
     // Validate supplier name (now required)
     if (supplierController.text.trim().isEmpty) {
-      return 'Please enter the supplier name.';
-    }
-    if (!_isValidAlphanumeric(supplierController.text.trim())) {
-      return 'Supplier name must contain letters and cannot be only numbers.';
+      errors['supplier'] = 'Please enter the supplier name.';
+    } else if (!_isValidAlphanumeric(supplierController.text.trim())) {
+      errors['supplier'] =
+          'Supplier name must contain letters and cannot be only numbers.';
     }
 
     // Validate brand name (now required)
     if (brandController.text.trim().isEmpty) {
-      return 'Please enter the brand name.';
-    }
-    if (!_isValidAlphanumeric(brandController.text.trim())) {
-      return 'Brand name must contain letters and cannot be only numbers.';
+      errors['brand'] = 'Please enter the brand name.';
+    } else if (!_isValidAlphanumeric(brandController.text.trim())) {
+      errors['brand'] =
+          'Brand name must contain letters and cannot be only numbers.';
     }
 
     // Expiry date validation
     if (!noExpiry &&
         (expiryController.text.trim().isEmpty || expiryDate == null)) {
-      return 'Please enter the expiry date or check "No expiry date" if there\'s none.';
+      errors['expiry'] =
+          'Please enter the expiry date or check "No expiry date" if there\'s none.';
     }
 
+    return errors;
+  }
+
+  String? validateFieldsForBackend() {
+    final errors = validateFields();
+    if (errors.isNotEmpty) {
+      return errors
+          .values.first; // Return first error for backend compatibility
+    }
     return null;
   }
 
@@ -137,7 +148,7 @@ class AddSupplyController {
   }
 
   Future<String?> addSupply() async {
-    final error = validateFields();
+    final error = validateFieldsForBackend();
     if (error != null) return error;
     final supplyData = buildSupplyData();
     try {

@@ -29,6 +29,15 @@ class _EditUserPageState extends State<EditUserPage> {
   String _selectedRole = 'Admin';
   bool _isLoading = false;
   bool _isSaving = false;
+  Map<String, String?> validationErrors = {};
+  bool _hasUnsavedChanges = false;
+
+  // Store original values to compare against
+  String _originalName = '';
+  String _originalUsername = '';
+  String _originalEmail = '';
+  String _originalRole = 'Admin';
+  String _originalStatus = 'Active';
 
   @override
   void initState() {
@@ -87,174 +96,269 @@ class _EditUserPageState extends State<EditUserPage> {
     super.dispose();
   }
 
+  Widget _buildValidationError(String? error) {
+    if (error == null) return SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4.0, left: 12.0),
+      child: Text(
+        error,
+        style: TextStyle(
+          color: Colors.red,
+          fontSize: 12,
+          fontFamily: 'SF Pro',
+        ),
+      ),
+    );
+  }
+
+  void _markAsChanged() {
+    final currentName = _nameController.text.trim();
+    final currentUsername = _usernameController.text.trim();
+    final currentEmail = _emailController.text.trim();
+    final currentRole = _selectedRole;
+    final currentStatus = _selectedStatus;
+
+    final hasChanges = currentName != _originalName ||
+        currentUsername != _originalUsername ||
+        currentEmail != _originalEmail ||
+        currentRole != _originalRole ||
+        currentStatus != _originalStatus;
+
+    if (_hasUnsavedChanges != hasChanges) {
+      setState(() {
+        _hasUnsavedChanges = hasChanges;
+      });
+    }
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_hasUnsavedChanges) return true;
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              'Unsaved Changes',
+              style: TextStyle(
+                fontFamily: 'SF Pro',
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Text(
+              'You have unsaved changes. Are you sure you want to leave?',
+              style: TextStyle(
+                fontFamily: 'SF Pro',
+                fontSize: 16,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(
+                  'Stay',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(
+                  'Leave',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color, size: 28),
-          onPressed: () => Navigator.maybePop(context),
-        ),
-        title: const Text(
-          'Edit Employee',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'SF Pro',
-            color: null,
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          leading: IconButton(
+            icon:
+                Icon(Icons.arrow_back, color: theme.iconTheme.color, size: 28),
+            onPressed: () => Navigator.maybePop(context),
           ),
+          title: const Text(
+            'Edit Employee',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'SF Pro',
+              color: null,
+            ),
+          ),
+          centerTitle: true,
+          backgroundColor: theme.appBarTheme.backgroundColor,
+          toolbarHeight: 70,
+          iconTheme: theme.appBarTheme.iconTheme,
+          elevation: theme.appBarTheme.elevation,
+          shadowColor: theme.appBarTheme.shadowColor,
         ),
-        centerTitle: true,
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        toolbarHeight: 70,
-        iconTheme: theme.appBarTheme.iconTheme,
-        elevation: theme.appBarTheme.elevation,
-        shadowColor: theme.appBarTheme.shadowColor,
-      ),
-      body: ResponsiveContainer(
-        maxWidth: 900,
-        child: SafeArea(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                  padding: EdgeInsets.all(
-                      MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Name Field
-                        _buildTextField(
-                          controller: _nameController,
-                          label: 'Name',
-                          hint: 'Enter name',
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Name is required';
-                            }
-                            return null;
-                          },
-                          theme: theme,
-                        ),
-                        const SizedBox(height: 12),
+        body: ResponsiveContainer(
+          maxWidth: 900,
+          child: SafeArea(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: EdgeInsets.all(
+                        MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Name Field
+                          _buildTextField(
+                            controller: _nameController,
+                            label: 'Name',
+                            hint: 'Enter name',
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Name is required';
+                              }
+                              return null;
+                            },
+                            theme: theme,
+                            fieldKey: 'name',
+                          ),
+                          const SizedBox(height: 12),
 
-                        // Username Field
-                        _buildTextField(
-                          controller: _usernameController,
-                          label: 'Username',
-                          hint: 'Enter username',
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Username is required';
-                            }
-                            return null;
-                          },
-                          theme: theme,
-                        ),
-                        const SizedBox(height: 12),
+                          // Username Field
+                          _buildTextField(
+                            controller: _usernameController,
+                            label: 'Username',
+                            hint: 'Enter username',
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Username is required';
+                              }
+                              return null;
+                            },
+                            theme: theme,
+                            fieldKey: 'username',
+                          ),
+                          const SizedBox(height: 12),
 
-                        // Email Field (Enabled)
-                        _buildTextField(
-                          controller: _emailController,
-                          label: 'Email',
-                          hint: 'Enter email address',
-                          keyboardType: TextInputType.emailAddress,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Email is required';
-                            }
-                            if (!_controller.isEmailValid(value)) {
-                              return 'Please enter a valid email';
-                            }
-                            return null;
-                          },
-                          theme: theme,
-                        ),
-                        const SizedBox(height: 12),
+                          // Email Field (Enabled)
+                          _buildTextField(
+                            controller: _emailController,
+                            label: 'Email',
+                            hint: 'Enter email address',
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Email is required';
+                              }
+                              if (!_controller.isEmailValid(value)) {
+                                return 'Please enter a valid email';
+                              }
+                              return null;
+                            },
+                            theme: theme,
+                            fieldKey: 'email',
+                          ),
+                          const SizedBox(height: 12),
 
-                        // Role and Status Row
-                        Row(
-                          children: [
-                            // Role Dropdown
-                            Expanded(
-                              child: _buildRoleDropdown(theme),
-                            ),
-                            const SizedBox(width: 12),
-                            // Status Dropdown
-                            Expanded(
-                              child: _buildStatusDropdown(theme),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Reset Password Button
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () => _showResetPasswordDialog(),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          // Role and Status Row
+                          Row(
+                            children: [
+                              // Role Dropdown
+                              Expanded(
+                                child: _buildRoleDropdown(theme),
                               ),
-                              elevation: 1,
-                            ),
-                            child: const Text(
-                              'Reset Password',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color: Colors.white,
+                              const SizedBox(width: 12),
+                              // Status Dropdown
+                              Expanded(
+                                child: _buildStatusDropdown(theme),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Reset Password Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () => _showResetPasswordDialog(),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 1,
+                              ),
+                              child: const Text(
+                                'Reset Password',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro',
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                        // Save Button
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isSaving ? null : _saveUser,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          // Save Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _isSaving ? null : _saveUser,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF00D4AA),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 1,
                               ),
-                              elevation: 1,
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Save Changes',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
-                            child: _isSaving
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Save Changes',
-                                    style: TextStyle(
-                                      fontFamily: 'SF Pro',
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
-                                      color: Colors.white,
-                                    ),
-                                  ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
+          ),
         ),
       ),
     );
@@ -267,6 +371,7 @@ class _EditUserPageState extends State<EditUserPage> {
     TextInputType? keyboardType,
     String? Function(String?)? validator,
     required ThemeData theme,
+    String? fieldKey,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,6 +389,14 @@ class _EditUserPageState extends State<EditUserPage> {
           controller: controller,
           keyboardType: keyboardType,
           validator: validator,
+          onChanged: (value) {
+            _markAsChanged();
+            if (fieldKey != null && validationErrors[fieldKey] != null) {
+              setState(() {
+                validationErrors[fieldKey] = null;
+              });
+            }
+          },
           style: const TextStyle(
             fontFamily: 'SF Pro',
             fontSize: 16,
@@ -320,6 +433,7 @@ class _EditUserPageState extends State<EditUserPage> {
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
         ),
+        if (fieldKey != null) _buildValidationError(validationErrors[fieldKey]),
       ],
     );
   }
@@ -377,6 +491,7 @@ class _EditUserPageState extends State<EditUserPage> {
               }).toList(),
               onChanged: (String? newValue) {
                 if (newValue != null) {
+                  _markAsChanged();
                   setState(() {
                     _selectedStatus = newValue;
                   });
@@ -482,6 +597,7 @@ class _EditUserPageState extends State<EditUserPage> {
               }).toList(),
               onChanged: (String? newValue) {
                 if (newValue != null) {
+                  _markAsChanged();
                   setState(() {
                     _selectedRole = newValue;
                   });
@@ -538,6 +654,7 @@ class _EditUserPageState extends State<EditUserPage> {
       final successMsg =
           (result['message'] as String?) ?? 'User updated successfully';
       if (mounted) {
+        _hasUnsavedChanges = false; // Reset flag on successful save
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(successMsg),
