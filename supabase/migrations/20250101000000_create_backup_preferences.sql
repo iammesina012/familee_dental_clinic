@@ -1,6 +1,6 @@
 -- Create table to track user backup preferences
 CREATE TABLE IF NOT EXISTS user_backup_preferences (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   user_email TEXT NOT NULL,
   auto_backup_enabled BOOLEAN NOT NULL DEFAULT false,

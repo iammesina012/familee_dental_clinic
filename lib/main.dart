@@ -30,25 +30,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables (for service role key)
-  try {
-    await dotenv.load(fileName: ".env");
-    final serviceRoleKey = dotenv.env['SUPABASE_SERVICE_ROLE_KEY'];
-    if (serviceRoleKey != null && serviceRoleKey.isNotEmpty) {
-      debugPrint("Service role key loaded successfully!");
-    } else {
-      debugPrint("Service role key not found in .env");
-    }
-  } catch (e) {
-    debugPrint("Could not load .env file: $e");
-    // Continue without .env - service role key will be handled elsewhere
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+
+  // Get Supabase credentials from environment variables
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+  final serviceRoleKey = dotenv.env['SUPABASE_SERVICE_ROLE_KEY'];
+
+  if (supabaseUrl == null || supabaseAnonKey == null) {
+    throw Exception('Missing Supabase credentials in .env file');
+  }
+
+  if (serviceRoleKey != null && serviceRoleKey.isNotEmpty) {
+    debugPrint("Service role key loaded successfully!");
+  } else {
+    debugPrint("Service role key not found in .env");
   }
 
   try {
     await Supabase.initialize(
-      url: "https://mjczybgsgjnrmddcomoc.supabase.co",
-      anonKey:
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qY3p5YmdzZ2pucm1kZGNvbW9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NzQzNzAsImV4cCI6MjA2ODI1MDM3MH0.zMfnCIRGY27IfJEf8XSDr1ZKaviwlw5rbeU6GPdiQsM", // one line only
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
     );
     debugPrint("Supabase initialized successfully!");
   } catch (e) {

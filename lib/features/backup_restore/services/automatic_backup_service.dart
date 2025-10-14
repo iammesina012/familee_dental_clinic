@@ -64,7 +64,7 @@ class AutomaticBackupService {
         'user_id': user.id,
         'user_email': user.email ?? '',
         'auto_backup_enabled': true,
-      });
+      }, onConflict: 'user_id');
 
       debugPrint('Automatic daily backup enabled in Supabase');
     } catch (e) {
@@ -87,7 +87,7 @@ class AutomaticBackupService {
         'user_id': user.id,
         'user_email': user.email ?? '',
         'auto_backup_enabled': false,
-      });
+      }, onConflict: 'user_id');
 
       debugPrint('Auto backup preference set to false in Supabase');
     } catch (e) {
@@ -203,7 +203,7 @@ class AutomaticBackupService {
         'user_id': user.id,
         'user_email': user.email ?? '',
         'last_backup_date': DateTime.now().toUtc().toIso8601String(),
-      });
+      }, onConflict: 'user_id');
 
       // Log activity
       await settingsActivityController.logBackupCreated(

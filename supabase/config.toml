@@ -9,7 +9,7 @@ max_rows = 1000
 
 [db]
 port = 54322
-major_version = 15
+major_version = 17
 
 [studio]
 enabled = true
@@ -30,12 +30,3 @@ enabled = true
 site_url = "http://localhost:3000"
 additional_redirect_urls = []
 jwt_expiry = 3600
-
-[edge_functions]
-enabled = true
-
-# Daily backup function
-[[edge_functions.functions]]
-name = "daily-backup"
-verify_jwt = false
-
