@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/shared/themes/font.dart';
-import 'package:familee_dental/features/auth/services/email_service.dart';
 
 class ForgotPasswordController {
   final email = TextEditingController();
@@ -33,61 +32,6 @@ class ForgotPasswordController {
   /// Validate email format
   bool _isValidEmail(String email) {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
-  }
-
-  /// Send custom password reset OTP using admin API
-  Future<void> _sendCustomPasswordResetOTP(String email) async {
-    try {
-      print('📧 Generating custom OTP for: $email');
-
-      // Generate a 6-digit OTP
-      final otp = _generateOTP();
-
-      // Store the OTP temporarily (in a real app, you'd store this in database with expiration)
-      // For now, we'll use a simple approach
-      print('📧 Generated OTP: $otp');
-
-      // Use Supabase's admin API to send email with custom template
-      // This requires service role key which should be in your .env file
-      await _sendEmailWithCustomTemplate(email, otp);
-
-      // Also store the OTP for verification (in production, use database)
-      _storeOTPForVerification(email, otp);
-    } catch (e) {
-      print('❌ Custom OTP generation failed: $e');
-      rethrow;
-    }
-  }
-
-  /// Generate a 6-digit OTP
-  String _generateOTP() {
-    final random = DateTime.now().millisecondsSinceEpoch;
-    return (random % 1000000).toString().padLeft(6, '0');
-  }
-
-  /// Store OTP for verification (temporary storage)
-  void _storeOTPForVerification(String email, String otp) {
-    // In a real app, store this in database with expiration time
-    // For now, we'll use a simple in-memory storage
-    print('📧 OTP stored for verification: $email -> $otp');
-  }
-
-  /// Send email with custom template using existing EmailService
-  Future<void> _sendEmailWithCustomTemplate(String email, String otp) async {
-    print('📧 Sending custom email template with OTP: $otp');
-
-    // Import and use the existing EmailService
-    final emailSent = await EmailService.sendPasswordResetEmail(
-      email: email,
-      verificationCode: otp,
-      expirationMinutes: '5',
-    );
-
-    if (!emailSent) {
-      throw Exception('Failed to send password reset email');
-    }
-
-    print('✅ Custom email sent successfully with OTP: $otp');
   }
 
   /// Check if email exists in the user_roles table

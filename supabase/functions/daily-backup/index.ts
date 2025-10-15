@@ -1,7 +1,9 @@
 // Supabase Edge Function for Automatic Daily Backups
 // This function runs daily at 11:59 PM to create backups for users who have enabled auto-backup
 
+// @ts-ignore - Deno runtime
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// @ts-ignore - Deno runtime  
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 const corsHeaders = {
@@ -30,7 +32,9 @@ serve(async (req) => {
 
   try {
     // Initialize Supabase client with service role for admin access
+    // @ts-ignore - Deno runtime
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    // @ts-ignore - Deno runtime
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -63,8 +67,8 @@ serve(async (req) => {
 
     console.log(`Found ${users.length} users with auto-backup enabled`)
 
-    const results = []
-    const errors = []
+    const results: any[] = []
+    const errors: any[] = []
 
     // Process each user
     for (const user of users) {

@@ -669,17 +669,19 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
   }
 
   String _formatDate(DateTime date) {
+    // Convert UTC time to local time
+    final localDate = date.toLocal();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
-    final dateOnly = DateTime(date.year, date.month, date.day);
+    final dateOnly = DateTime(localDate.year, localDate.month, localDate.day);
 
     if (dateOnly == today) {
-      return 'Today at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      return 'Today at ${localDate.hour.toString().padLeft(2, '0')}:${localDate.minute.toString().padLeft(2, '0')}';
     } else if (dateOnly == yesterday) {
-      return 'Yesterday at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      return 'Yesterday at ${localDate.hour.toString().padLeft(2, '0')}:${localDate.minute.toString().padLeft(2, '0')}';
     } else {
-      return '${date.month}/${date.day}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      return '${localDate.month}/${localDate.day}/${localDate.year} at ${localDate.hour.toString().padLeft(2, '0')}:${localDate.minute.toString().padLeft(2, '0')}';
     }
   }
 }
