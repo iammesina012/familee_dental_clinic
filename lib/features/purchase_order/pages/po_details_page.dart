@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
 import 'package:familee_dental/features/purchase_order/controller/po_details_controller.dart';
 import 'package:familee_dental/features/purchase_order/controller/po_supabase_controller.dart';
@@ -24,9 +26,13 @@ class PODetailsPage extends StatefulWidget {
 class _ReceiptDetails {
   final String drNumber;
   final String recipient;
+  final String remarks;
   final XFile? image;
   _ReceiptDetails(
-      {required this.drNumber, required this.recipient, required this.image});
+      {required this.drNumber,
+      required this.recipient,
+      required this.remarks,
+      required this.image});
 }
 
 class _PODetailsPageState extends State<PODetailsPage> {
@@ -37,6 +43,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
   bool _isLoading = false;
   final Map<String, int> _supplierPageIndex = {};
   final Set<String> _expandedSuppliers = {};
+  final Map<String, TextEditingController> _remarksControllers = {};
 
   // Checklist state for tracking which items are checked
   final Map<String, Set<String>> _checkedItems =
@@ -67,14 +74,26 @@ class _PODetailsPageState extends State<PODetailsPage> {
         final item = pendingItems[itemIndex];
         final batches = item['expiryBatches'] as List<dynamic>?;
         if (batches != null && batches.isNotEmpty) {
-          for (final batch in batches) {
-            final String? date = _formatExpiry(batch['expiryDate']);
-            final int qty = int.tryParse('${batch['quantity'] ?? 0}') ?? 0;
-            if (date != null) {
-              final batchKey =
-                  '${supplierName}_${item['name']}_${date}_${qty}_${itemIndex}';
-              allPossibleKeys.add(batchKey);
+          // Check if there are any batches with actual expiry dates
+          final hasExpiryDates =
+              batches.any((b) => _formatExpiry(b['expiryDate']) != null);
+
+          if (hasExpiryDates) {
+            // Handle batches with expiry dates
+            for (final batch in batches) {
+              final String? date = _formatExpiry(batch['expiryDate']);
+              final int qty = int.tryParse('${batch['quantity'] ?? 0}') ?? 0;
+              if (date != null) {
+                final batchKey =
+                    '${supplierName}_${item['name']}_${date}_${qty}_${itemIndex}';
+                allPossibleKeys.add(batchKey);
+              }
             }
+          } else {
+            // Handle batches with no expiry dates (No expiry supplies with batches)
+            final noExpiryKey =
+                '${supplierName}_${item['name']}_no_expiry_${itemIndex}';
+            allPossibleKeys.add(noExpiryKey);
           }
         } else {
           final single = _formatExpiry(item['expiryDate']);
@@ -179,6 +198,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                 'status': 'Received',
                 'receiptDrNo': receiptDetails.drNumber,
                 'receiptRecipient': receiptDetails.recipient,
+                'receiptRemarks': receiptDetails.remarks,
                 'receiptImagePath':
                     receiptImageUrl, // Now stores cloud URL instead of local path
                 'receiptDate': nowIso,
@@ -300,8 +320,162 @@ class _PODetailsPageState extends State<PODetailsPage> {
           setState(() {
             _checkedItems[supplierName]?.clear();
           });
+          // Save the updated state
+          await _saveChecklistState();
         }
       }
+    }
+
+    // Save the updated state to SharedPreferences
+    await _saveChecklistState();
+  }
+
+  // Save checklist state to SharedPreferences
+  Future<void> _saveChecklistState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String poId = _purchaseOrder.id;
+      final String key = 'po_checklist_$poId';
+
+      // Convert the map to a JSON string
+      final Map<String, List<String>> serializableMap = {};
+      _checkedItems.forEach((supplier, items) {
+        serializableMap[supplier] = items.toList();
+      });
+
+      final String jsonString = jsonEncode(serializableMap);
+      await prefs.setString(key, jsonString);
+    } catch (e) {
+      print('Error saving checklist state: $e');
+    }
+  }
+
+  // Check if remarks can be edited based on user role and PO status
+  bool _canEditRemarks() {
+    // Only allow editing in Closed status
+    if (_purchaseOrder.status != 'Closed') return false;
+
+    // Owner and Admin can edit remarks in closed section
+    // Staff cannot edit remarks in closed section (they can only add during receipt)
+    return !UserRoleProvider().isStaff;
+  }
+
+  // Get or create a controller for a specific supply
+  TextEditingController _getRemarksController(
+      String supplierName, int supplyIndex, String initialText) {
+    final key = '${supplierName}_${supplyIndex}';
+    if (!_remarksControllers.containsKey(key)) {
+      _remarksControllers[key] = TextEditingController(text: initialText);
+    }
+    return _remarksControllers[key]!;
+  }
+
+  // Save remarks when user finishes editing
+  void _saveRemarks(
+      String supplierName, int supplyIndex, String newRemarks) async {
+    try {
+      // Find the global index of the supply in the entire supplies array
+      final suppliers =
+          _controller.groupSuppliesBySupplier(_purchaseOrder.supplies);
+      final supplierSupplies = suppliers[supplierName] ?? [];
+
+      if (supplyIndex >= supplierSupplies.length) {
+        print(
+            'Supply index $supplyIndex out of range for supplier $supplierName');
+        return;
+      }
+
+      final targetSupply = supplierSupplies[supplyIndex];
+
+      // Find the global index of this supply in the entire supplies array
+      int globalIndex = -1;
+      for (int i = 0; i < _purchaseOrder.supplies.length; i++) {
+        if (_purchaseOrder.supplies[i] == targetSupply) {
+          globalIndex = i;
+          break;
+        }
+      }
+
+      if (globalIndex == -1) {
+        print(
+            'Could not find global index for supply in supplier $supplierName at index $supplyIndex');
+        return;
+      }
+
+      // Update the supply's remarks in the purchase order
+      final updatedSupplies =
+          List<Map<String, dynamic>>.from(_purchaseOrder.supplies);
+      updatedSupplies[globalIndex]['receiptRemarks'] = newRemarks.trim();
+
+      // Create updated PO
+      final updatedPO = PurchaseOrder(
+        id: _purchaseOrder.id,
+        code: _purchaseOrder.code,
+        name: _purchaseOrder.name,
+        createdAt: _purchaseOrder.createdAt,
+        status: _purchaseOrder.status,
+        supplies: updatedSupplies,
+        receivedCount: _purchaseOrder.receivedCount,
+      );
+
+      // Save to Supabase
+      await _poSupabase.updatePOInSupabase(updatedPO);
+
+      // Update local state
+      setState(() {
+        _purchaseOrder = updatedPO;
+      });
+    } catch (e) {
+      print('Error saving remarks: $e');
+      // Show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error saving remarks: ${e.toString()}',
+              style: AppFonts.sfProStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  // Clear checklist state from SharedPreferences
+  Future<void> _clearChecklistState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String poId = _purchaseOrder.id;
+      final key = 'po_checklist_$poId';
+      await prefs.remove(key);
+    } catch (e) {
+      print('Error clearing checklist state: $e');
+    }
+  }
+
+  // Load checklist state from SharedPreferences
+  Future<void> _loadChecklistState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String poId = _purchaseOrder.id;
+      final String key = 'po_checklist_$poId';
+
+      final String? jsonString = prefs.getString(key);
+      if (jsonString != null) {
+        final Map<String, dynamic> serializableMap = jsonDecode(jsonString);
+        _checkedItems.clear();
+
+        serializableMap.forEach((supplier, items) {
+          _checkedItems[supplier] = Set<String>.from(items);
+        });
+      }
+    } catch (e) {
+      print('Error loading checklist state: $e');
     }
   }
 
@@ -385,6 +559,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
     super.initState();
     try {
       _purchaseOrder = widget.purchaseOrder;
+
+      // Load saved checklist state
+      _loadChecklistState();
 
       // Show floating alert for closed POs
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1392,8 +1569,273 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               (b) => _formatExpiry(b['expiryDate']) != null);
 
                           if (!hasExpiryDates) {
-                            // No expiry dates, return minimal spacing
-                            return <Widget>[const SizedBox(height: 4)];
+                            // No expiry dates - show no expiry checkbox for batches
+                            final noKey = '__no_expiry_';
+                            final supplyStatus =
+                                supply['status']?.toString().toLowerCase();
+                            final isReceivedBatch =
+                                supplyStatus == 'received' ||
+                                    _controller.isSupplyReceived(supply);
+                            final isChecked =
+                                _isItemChecked(supplierName, noKey) ||
+                                    isReceivedBatch;
+
+                            // Calculate total quantity from all batches
+                            int totalQty = 0;
+                            for (final batch in batches) {
+                              totalQty +=
+                                  int.tryParse('${batch['quantity'] ?? 0}') ??
+                                      0;
+                            }
+                            // If no quantity in batches, use supply quantity
+                            if (totalQty == 0) {
+                              totalQty =
+                                  int.tryParse('${supply['quantity'] ?? 0}') ??
+                                      0;
+                            }
+
+                            return <Widget>[
+                              const SizedBox(height: 12),
+                              Text(
+                                'Expiry Dates',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.color
+                                      ?.withOpacity(0.8),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              GestureDetector(
+                                onTap: () =>
+                                    _toggleItemCheck(supplierName, noKey),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isReceivedBatch
+                                        ? const Color(0xFF00D4AA)
+                                        : (isChecked
+                                            ? const Color(0xFF00D4AA)
+                                            : Colors.transparent),
+                                    border: Border.all(
+                                      color: isReceivedBatch
+                                          ? const Color(0xFF00D4AA)
+                                          : (isChecked
+                                              ? const Color(0xFF00D4AA)
+                                              : Colors.white.withOpacity(0.3)),
+                                      width: 1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 16,
+                                        height: 16,
+                                        decoration: BoxDecoration(
+                                          color: _controller
+                                                  .isSupplyReceived(supply)
+                                              ? Colors.white
+                                              : (isChecked
+                                                  ? Colors.white
+                                                  : Colors.transparent),
+                                          border: Border.all(
+                                            color: _controller
+                                                    .isSupplyReceived(supply)
+                                                ? const Color(0xFF00D4AA)
+                                                : (isChecked
+                                                    ? Colors.white
+                                                    : Colors.white
+                                                        .withOpacity(0.6)),
+                                            width: 1.5,
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(3),
+                                        ),
+                                        child: (isChecked ||
+                                                _controller
+                                                    .isSupplyReceived(supply))
+                                            ? Icon(
+                                                Icons.check,
+                                                size: 10,
+                                                color: _controller
+                                                        .isSupplyReceived(
+                                                            supply)
+                                                    ? const Color(0xFF00D4AA)
+                                                    : const Color(0xFF00D4AA),
+                                              )
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'No expiry  •  Qty: ${supply['quantity'] ?? 0}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          softWrap: false,
+                                          style: AppFonts.sfProStyle(
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: _controller
+                                                    .isSupplyReceived(supply)
+                                                ? Colors.white
+                                                : (isChecked
+                                                    ? Colors.white
+                                                    : Theme.of(context)
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Add remarks display if available and supply is received
+                              ...(() {
+                                final remarks =
+                                    supply['receiptRemarks']?.toString().trim();
+                                final supplyStatus =
+                                    supply['status']?.toString().toLowerCase();
+                                final isReceived = supplyStatus == 'received' ||
+                                    _controller.isSupplyReceived(supply);
+                                if (remarks != null &&
+                                    remarks.isNotEmpty &&
+                                    isReceived) {
+                                  final canEdit = _canEditRemarks();
+                                  return <Widget>[
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Remarks',
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.color
+                                            ?.withOpacity(0.8),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    canEdit
+                                        ? TextField(
+                                            controller: _getRemarksController(
+                                                supplierName,
+                                                supplyIndex ?? 0,
+                                                remarks),
+                                            maxLines: null,
+                                            style: AppFonts.sfProStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color,
+                                            ),
+                                            decoration: InputDecoration(
+                                              filled: true,
+                                              fillColor: Theme.of(context)
+                                                  .colorScheme
+                                                  .surface
+                                                  .withOpacity(0.1),
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                borderSide: BorderSide(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .outline
+                                                      .withOpacity(0.3),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              enabledBorder: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                borderSide: BorderSide(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .outline
+                                                      .withOpacity(0.3),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                borderSide: BorderSide(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary,
+                                                  width: 2,
+                                                ),
+                                              ),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8),
+                                            ),
+                                            onSubmitted: (value) {
+                                              // Save when user presses done/enter on keyboard
+                                              _saveRemarks(supplierName,
+                                                  supplyIndex ?? 0, value);
+                                            },
+                                            onTapOutside: (event) {
+                                              // Save when user taps outside the field
+                                              final controller =
+                                                  _getRemarksController(
+                                                      supplierName,
+                                                      supplyIndex ?? 0,
+                                                      remarks);
+                                              _saveRemarks(
+                                                  supplierName,
+                                                  supplyIndex ?? 0,
+                                                  controller.text);
+                                            },
+                                          )
+                                        : Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .surface
+                                                  .withOpacity(0.1),
+                                              border: Border.all(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .outline
+                                                    .withOpacity(0.3),
+                                                width: 1,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              remarks,
+                                              style: AppFonts.sfProStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                                color: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.color,
+                                              ),
+                                            ),
+                                          ),
+                                  ];
+                                }
+                                return <Widget>[];
+                              })(),
+                            ];
                           }
 
                           return <Widget>[
@@ -1535,6 +1977,144 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 ),
                               );
                             }).toList(),
+                            // Add remarks display if available and supply is received
+                            ...(() {
+                              final remarks =
+                                  supply['receiptRemarks']?.toString().trim();
+                              final supplyStatus =
+                                  supply['status']?.toString().toLowerCase();
+                              final isReceived = supplyStatus == 'received' ||
+                                  _controller.isSupplyReceived(supply);
+                              if (remarks != null &&
+                                  remarks.isNotEmpty &&
+                                  isReceived) {
+                                final canEdit = _canEditRemarks();
+                                return <Widget>[
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Remarks',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.color
+                                          ?.withOpacity(0.8),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  canEdit
+                                      ? TextField(
+                                          controller: _getRemarksController(
+                                              supplierName,
+                                              supplyIndex ?? 0,
+                                              remarks),
+                                          maxLines: null,
+                                          style: AppFonts.sfProStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.color,
+                                          ),
+                                          decoration: InputDecoration(
+                                            filled: true,
+                                            fillColor: Theme.of(context)
+                                                .colorScheme
+                                                .surface
+                                                .withOpacity(0.1),
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              borderSide: BorderSide(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .outline
+                                                    .withOpacity(0.3),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              borderSide: BorderSide(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .outline
+                                                    .withOpacity(0.3),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              borderSide: BorderSide(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 8),
+                                          ),
+                                          onSubmitted: (value) {
+                                            // Save when user presses done/enter on keyboard
+                                            _saveRemarks(supplierName,
+                                                supplyIndex ?? 0, value);
+                                          },
+                                          onTapOutside: (event) {
+                                            // Save when user taps outside the field
+                                            final controller =
+                                                _getRemarksController(
+                                                    supplierName,
+                                                    supplyIndex ?? 0,
+                                                    remarks);
+                                            _saveRemarks(
+                                                supplierName,
+                                                supplyIndex ?? 0,
+                                                controller.text);
+                                          },
+                                        )
+                                      : Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surface
+                                                .withOpacity(0.1),
+                                            border: Border.all(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .outline
+                                                  .withOpacity(0.3),
+                                              width: 1,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            remarks,
+                                            style: AppFonts.sfProStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color,
+                                            ),
+                                          ),
+                                        ),
+                                ];
+                              }
+                              return <Widget>[];
+                            })(),
                           ];
                         }
 
@@ -1745,7 +2325,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'No expiry date',
+                                      'No expiry  •  Qty: ${supply['quantity'] ?? 0}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       softWrap: false,
@@ -1769,6 +2349,143 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               ),
                             ),
                           ),
+                          // Add remarks display if available and supply is received
+                          ...(() {
+                            final remarks =
+                                supply['receiptRemarks']?.toString().trim();
+                            final supplyStatus =
+                                supply['status']?.toString().toLowerCase();
+                            final isReceived = supplyStatus == 'received' ||
+                                _controller.isSupplyReceived(supply);
+                            if (remarks != null &&
+                                remarks.isNotEmpty &&
+                                isReceived) {
+                              final canEdit = _canEditRemarks();
+                              return <Widget>[
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Remarks',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color
+                                        ?.withOpacity(0.8),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                canEdit
+                                    ? TextField(
+                                        controller: _getRemarksController(
+                                            supplierName,
+                                            supplyIndex ?? 0,
+                                            remarks),
+                                        maxLines: null,
+                                        style: AppFonts.sfProStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.color,
+                                        ),
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: Theme.of(context)
+                                              .colorScheme
+                                              .surface
+                                              .withOpacity(0.1),
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            borderSide: BorderSide(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .outline
+                                                  .withOpacity(0.3),
+                                              width: 1,
+                                            ),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            borderSide: BorderSide(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .outline
+                                                  .withOpacity(0.3),
+                                              width: 1,
+                                            ),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            borderSide: BorderSide(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                              width: 2,
+                                            ),
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 12, vertical: 8),
+                                        ),
+                                        onSubmitted: (value) {
+                                          // Save when user presses done/enter on keyboard
+                                          _saveRemarks(supplierName,
+                                              supplyIndex ?? 0, value);
+                                        },
+                                        onTapOutside: (event) {
+                                          // Save when user taps outside the field
+                                          final controller =
+                                              _getRemarksController(
+                                                  supplierName,
+                                                  supplyIndex ?? 0,
+                                                  remarks);
+                                          _saveRemarks(
+                                              supplierName,
+                                              supplyIndex ?? 0,
+                                              controller.text);
+                                        },
+                                      )
+                                    : Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surface
+                                              .withOpacity(0.1),
+                                          border: Border.all(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .outline
+                                                .withOpacity(0.3),
+                                            width: 1,
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          remarks,
+                                          style: AppFonts.sfProStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.color,
+                                          ),
+                                        ),
+                                      ),
+                              ];
+                            }
+                            return <Widget>[];
+                          })(),
                         ];
                       })(),
                     ],
@@ -1807,40 +2524,52 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
   // Calculate dynamic height based on expiry dates content
   double _calculateDynamicHeight(List<Map<String, dynamic>> items) {
-    double baseHeight =
-        120; // Base height for supply details without expiry dates
-    double expiryHeight = 0;
+    double baseHeight = 120;
+    double maxExtraHeight = 0;
 
-    // Find the item with the most expiry dates to determine max height needed
     for (final item in items) {
       final batches = item['expiryBatches'] as List<dynamic>?;
-      int expiryCount = 0;
+      int checkboxCount = 0;
+      bool isNoExpiry = false;
 
       if (batches != null && batches.isNotEmpty) {
-        // Count batches with actual expiry dates
-        expiryCount =
+        checkboxCount =
             batches.where((b) => _formatExpiry(b['expiryDate']) != null).length;
-      } else {
-        // Check single expiry date
-        if (_formatExpiry(item['expiryDate']) != null) {
-          expiryCount = 1;
+        // If batches exist but no expiry dates, it's a no expiry supply
+        if (checkboxCount == 0) {
+          checkboxCount = 1;
+          isNoExpiry = true;
         }
+      } else if (_formatExpiry(item['expiryDate']) != null) {
+        checkboxCount = 1;
+      } else {
+        // For items with no expiry, still count 1 checkbox
+        checkboxCount = 1;
+        isNoExpiry = true;
       }
 
-      // Calculate height needed for this item's expiry dates
-      double itemExpiryHeight = 0;
-      if (expiryCount > 0) {
-        itemExpiryHeight =
-            20 + (expiryCount * 40); // 20px for label + 40px per expiry date
+      double heightForItem;
+      if (isNoExpiry) {
+        // For no expiry supplies, use more height for the single checkbox
+        heightForItem = 20 + (checkboxCount * 40);
+      } else {
+        // For supplies with expiry dates, use less height per checkbox
+        heightForItem = 20 + (checkboxCount * 40);
       }
 
-      // Keep track of the maximum expiry height needed
-      if (itemExpiryHeight > expiryHeight) {
-        expiryHeight = itemExpiryHeight;
+      // Add height for remarks if present
+      final remarks = item['receiptRemarks']?.toString().trim();
+      if (remarks != null && remarks.isNotEmpty) {
+        // Add height for remarks section: label (16px) + spacing (4px) + container (40px) + spacing (12px)
+        heightForItem += 72;
+      }
+
+      if (heightForItem > maxExtraHeight) {
+        maxExtraHeight = heightForItem;
       }
     }
 
-    return baseHeight + expiryHeight;
+    return baseHeight + maxExtraHeight;
   }
 
   // Normalize expiry representation to YYYY/MM/DD; returns null if absent
@@ -1935,6 +2664,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
       setState(() {
         _purchaseOrder = updated;
         _isLoading = false;
+        // Clear all checked items and remarks when PO is rejected
+        _checkedItems.clear();
+        // Clear any cached checklist state
+        _clearChecklistState();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2039,6 +2772,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
           'status': 'Received',
           'receiptDrNo': receiptDetails.drNumber,
           'receiptRecipient': receiptDetails.recipient,
+          'receiptRemarks': receiptDetails.remarks,
           'receiptImagePath':
               receiptImageUrl, // Now stores cloud URL instead of local path
           'receiptDate': nowIso,
@@ -2107,6 +2841,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
       String supplierName) async {
     final TextEditingController drController = TextEditingController();
     final TextEditingController recipientController = TextEditingController();
+    final TextEditingController remarksController = TextEditingController();
     String? drError;
     String? recipientError;
     String? imageError;
@@ -2253,6 +2988,21 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 // This is called when a suggestion is selected
                                 // The text field will be automatically updated
                               },
+                            ),
+                            const SizedBox(height: 12),
+                            Text('Remarks',
+                                style: AppFonts.sfProStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: remarksController,
+                              maxLines: 3,
+                              decoration: InputDecoration(
+                                hintText: 'Enter any remarks or notes...',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                alignLabelWithHint: true,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             Text('Attach Receipt',
@@ -2533,6 +3283,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               Navigator.of(context).pop(_ReceiptDetails(
                                 drNumber: dr,
                                 recipient: rec,
+                                remarks: remarksController.text.trim(),
                                 image: pickedImage,
                               ));
                             },
@@ -2770,6 +3521,15 @@ class _PODetailsPageState extends State<PODetailsPage> {
     );
 
     Overlay.of(context).insert(overlayEntry);
+  }
+
+  @override
+  void dispose() {
+    // Dispose all remarks controllers
+    for (final controller in _remarksControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 }
 

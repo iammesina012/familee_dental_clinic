@@ -30,7 +30,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
+  // Load environment 1
   await dotenv.load(fileName: ".env");
 
   // Get Supabase credentials from environment variables
