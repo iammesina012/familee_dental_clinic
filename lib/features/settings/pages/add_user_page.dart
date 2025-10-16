@@ -213,7 +213,7 @@ class _AddUserPageState extends State<AddUserPage> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Default password: familee2021',
+                              'Default password: famiLee2021',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
                                 fontSize: 14,
@@ -601,7 +601,7 @@ class _AddUserPageState extends State<AddUserPage> {
       name: _nameController.text.trim(),
       username: _usernameController.text.trim(),
       email: _emailController.text.trim(),
-      password: 'familee2021', // Default password for all new users
+      password: 'famiLee2021', // Default password for all new users
       role: _selectedRole,
       isActive: true, // Always create new users as active
     );

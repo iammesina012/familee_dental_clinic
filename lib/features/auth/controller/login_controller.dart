@@ -124,6 +124,18 @@ class LoginController {
         hasEmailError = true;
         hasPasswordError = true;
         message = "Incorrect email/username or password.";
+      } else if (e.message.contains('email not confirmed') ||
+          e.message.contains('Email not confirmed') ||
+          e.message.contains('confirm your email') ||
+          e.message.contains('email confirmation') ||
+          e.message.contains('signup_disabled') ||
+          e.message.contains('email_not_confirmed') ||
+          e.message.contains('confirmation')) {
+        hasEmailError = true;
+        hasPasswordError = true;
+        title = "Email Not Confirmed";
+        message =
+            "Please check your email and click the confirmation link before signing in.";
       } else {
         hasEmailError = true;
         hasPasswordError = true;

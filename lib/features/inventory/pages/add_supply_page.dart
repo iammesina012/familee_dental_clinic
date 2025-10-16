@@ -17,6 +17,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
   final CategoriesController categoriesController = CategoriesController();
   Map<String, String?> validationErrors = {};
   bool _hasUnsavedChanges = false;
+  bool _isSaving = false; // Add loading state for save button
 
   // Store original values to compare against
   String _originalName = '';
@@ -29,6 +30,22 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
   String _originalExpiry = '';
   bool _originalNoExpiry = false;
   List<String>? _cachedCategories;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize original values to match controller's default state
+    _originalName = controller.nameController.text.trim();
+    _originalCategory = controller.selectedCategory ?? '';
+    _originalStock = controller.stock;
+    _originalUnit = controller.selectedUnit ?? '';
+    _originalCost =
+        double.tryParse(controller.costController.text.trim()) ?? 0.0;
+    _originalSupplier = controller.supplierController.text.trim();
+    _originalBrand = controller.brandController.text.trim();
+    _originalExpiry = controller.expiryController.text.trim();
+    _originalNoExpiry = controller.noExpiry;
+  }
 
   @override
   void dispose() {
@@ -140,7 +157,11 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
         appBar: AppBar(
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () async {
+              if (await _onWillPop()) {
+                Navigator.of(context).pop();
+              }
+            },
           ),
           title: Text(
             "Add Supply",
@@ -679,11 +700,15 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                               borderRadius: BorderRadius.circular(10)),
                         ),
                         child: Text('Cancel'),
-                        onPressed: () async {
-                          if (await _onWillPop()) {
-                            Navigator.of(context).pop();
-                          }
-                        },
+                        onPressed: _isSaving
+                            ? null
+                            : () async {
+                                if (_isSaving)
+                                  return; // Prevent canceling while saving
+                                if (await _onWillPop()) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
                       ),
                       const SizedBox(width: 12),
                       ElevatedButton(
@@ -695,28 +720,57 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: Text('Save'),
-                        onPressed: () async {
-                          final errors = controller.validateFields();
-                          if (errors.isNotEmpty) {
-                            setState(() {
-                              validationErrors = errors;
-                            });
-                            return;
-                          }
-                          final result = await controller.addSupply();
-                          if (result == null) {
-                            if (!mounted) return;
-                            _hasUnsavedChanges =
-                                false; // Reset flag on successful save
-                            Navigator.of(context).pop(true);
-                          } else {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(result)),
-                            );
-                          }
-                        },
+                        child: _isSaving
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            : Text('Save'),
+                        onPressed: _isSaving
+                            ? null
+                            : () async {
+                                if (_isSaving)
+                                  return; // Prevent multiple submissions
+
+                                setState(() {
+                                  _isSaving = true;
+                                });
+
+                                try {
+                                  final errors = controller.validateFields();
+                                  if (errors.isNotEmpty) {
+                                    setState(() {
+                                      validationErrors = errors;
+                                      _isSaving = false;
+                                    });
+                                    return;
+                                  }
+
+                                  final result = await controller.addSupply();
+                                  if (result == null) {
+                                    if (!mounted) return;
+                                    _hasUnsavedChanges =
+                                        false; // Reset flag on successful save
+                                    Navigator.of(context).pop(true);
+                                  } else {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(result)),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _isSaving = false;
+                                    });
+                                  }
+                                }
+                              },
                       ),
                     ],
                   ),

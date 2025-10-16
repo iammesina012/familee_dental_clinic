@@ -277,28 +277,60 @@ class NotificationsController {
   // Helper method to check if stock level triggers a notification
   Future<void> checkStockLevelNotification(
       String supplyName, int newStock, int previousStock) async {
-    // Check for out of stock (from any stock to 0)
-    if (newStock == 0 && previousStock > 0) {
-      await createOutOfStockNotification(supplyName);
-      return;
-    }
+    try {
+      // Calculate total stock across all batches of this supply
+      final totalStockData = await _supabase
+          .from('supplies')
+          .select('stock')
+          .eq('name', supplyName)
+          .eq('archived', false);
 
-    // Check for restocked (from 0 to any positive stock)
-    if (newStock > 0 && previousStock == 0) {
-      await createInStockNotification(supplyName, newStock);
-      return;
-    }
+      final totalCurrentStock = totalStockData
+          .map((row) => (row['stock'] ?? 0) as int)
+          .fold(0, (sum, stock) => sum + stock);
 
-    // Check for low stock (from >2 to 1-2)
-    if (newStock <= 2 && newStock > 0 && previousStock > 2) {
-      await createLowStockNotification(supplyName, newStock);
-      return;
-    }
+      // Calculate previous total stock (before this batch was updated)
+      final totalPreviousStock = totalCurrentStock - newStock + previousStock;
 
-    // Check for back to normal stock (from 1-2 to 3+)
-    if (newStock >= 3 && previousStock <= 2 && previousStock > 0) {
-      await createInStockNotification(supplyName, newStock);
-      return;
+      // Check for out of stock (from any total stock to 0)
+      if (totalCurrentStock == 0 && totalPreviousStock > 0) {
+        await createOutOfStockNotification(supplyName);
+        return;
+      }
+
+      // Check for restocked (from 0 to any positive total stock)
+      if (totalCurrentStock > 0 && totalPreviousStock == 0) {
+        await createInStockNotification(supplyName, totalCurrentStock);
+        return;
+      }
+
+      // Check for low stock (from >2 to 1-2 total stock)
+      if (totalCurrentStock <= 2 &&
+          totalCurrentStock > 0 &&
+          totalPreviousStock > 2) {
+        await createLowStockNotification(supplyName, totalCurrentStock);
+        return;
+      }
+
+      // Check for back to normal stock (from 1-2 to 3+ total stock)
+      if (totalCurrentStock >= 3 &&
+          totalPreviousStock <= 2 &&
+          totalPreviousStock > 0) {
+        await createInStockNotification(supplyName, totalCurrentStock);
+        return;
+      }
+    } catch (e) {
+      print('Error checking stock level notification: $e');
+      // Fallback to original logic if database query fails
+      if (newStock == 0 && previousStock > 0) {
+        await createOutOfStockNotification(supplyName);
+      } else if (newStock > 0 && previousStock == 0) {
+        await createInStockNotification(supplyName, newStock);
+      } else if (newStock <= 2 && newStock > 0 && previousStock > 2) {
+        await createLowStockNotification(supplyName, newStock);
+      } else if (newStock >= 3 && previousStock <= 2 && previousStock > 0) {
+        await createInStockNotification(supplyName, newStock);
+      }
     }
   }
 

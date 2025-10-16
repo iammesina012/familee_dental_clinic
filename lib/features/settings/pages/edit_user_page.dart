@@ -815,7 +815,7 @@ class _EditUserPageState extends State<EditUserPage> {
     try {
       final result = await _controller.resetPassword(
         uid: widget.user['uid'],
-        newPassword: 'familee2021',
+        newPassword: 'famiLee2021',
       );
 
       setState(() => _isSaving = false);

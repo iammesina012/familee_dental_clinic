@@ -36,6 +36,17 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
   void initState() {
     super.initState();
     controller.initFromItem(widget.item);
+    // Initialize original values after controller is populated
+    _originalName = controller.nameController.text.trim();
+    _originalCategory = controller.selectedCategory ?? '';
+    _originalStock = controller.stock;
+    _originalUnit = controller.selectedUnit ?? '';
+    _originalCost =
+        double.tryParse(controller.costController.text.trim()) ?? 0.0;
+    _originalSupplier = controller.supplierController.text.trim();
+    _originalBrand = controller.brandController.text.trim();
+    _originalExpiry = controller.expiryController.text.trim();
+    _originalNoExpiry = controller.noExpiry;
   }
 
   @override
@@ -148,7 +159,11 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
         appBar: AppBar(
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () async {
+              if (await _onWillPop()) {
+                Navigator.of(context).pop();
+              }
+            },
           ),
           title: Text(
             "Edit Supply",
