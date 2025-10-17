@@ -5,6 +5,7 @@ import 'package:familee_dental/features/inventory/controller/inventory_controlle
 import 'package:familee_dental/features/inventory/controller/catalog_controller.dart';
 import 'package:familee_dental/features/purchase_order/pages/po_edit_supply_page.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:shimmer/shimmer.dart';
 
 class AddSupplyPage extends StatefulWidget {
   const AddSupplyPage({super.key});
@@ -18,6 +19,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
   String searchText = '';
   final InventoryController inventoryController = InventoryController();
   final CatalogController catalogController = CatalogController();
+  bool _isFirstLoad = true;
 
   List<InventoryItem> get filteredItems {
     // This will be populated from the stream
@@ -28,6 +30,66 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
   void dispose() {
     searchController.dispose();
     super.dispose();
+  }
+
+  Widget _buildSkeletonLoader(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    return Column(
+      children: [
+        // Search bar skeleton
+        Shimmer.fromColors(
+          baseColor: baseColor,
+          highlightColor: highlightColor,
+          child: Container(
+            height: 56,
+            margin: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Supply grid skeleton
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth > 800
+                  ? 4
+                  : constraints.maxWidth > 600
+                      ? 3
+                      : 2;
+
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.9,
+                ),
+                itemCount: 12,
+                itemBuilder: (context, index) {
+                  return Shimmer.fromColors(
+                    baseColor: baseColor,
+                    highlightColor: highlightColor,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -124,22 +186,48 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                     stream:
                         catalogController.getAllProductsStream(archived: false),
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF00D4AA),
-                          ),
-                        );
+                      // Show skeleton loader only on first load
+                      if (_isFirstLoad && !snapshot.hasData) {
+                        return _buildSkeletonLoader(context);
                       }
 
-                      if (snapshot.hasError) {
+                      // Mark first load as complete once we have data
+                      if (snapshot.hasData && _isFirstLoad) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            setState(() {
+                              _isFirstLoad = false;
+                            });
+                          }
+                        });
+                      }
+
+                      // Handle error gracefully
+                      if (snapshot.hasError && !snapshot.hasData) {
                         return Center(
-                          child: Text(
-                            'Error loading inventory',
-                            style: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              color: Colors.red,
-                            ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.cloud_off_outlined,
+                                  size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text(
+                                'Connection Issue',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.textTheme.bodyMedium?.color,
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Please try again',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       }

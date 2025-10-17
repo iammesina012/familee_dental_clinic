@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:shimmer/shimmer.dart';
 
 class EditCategoriesPage extends StatefulWidget {
   const EditCategoriesPage({super.key});
@@ -13,16 +14,6 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
   final CategoriesController categoriesController = CategoriesController();
   final Map<String, TextEditingController> editControllers = {};
   final Map<String, bool> isEditing = {};
-
-  // ─── Real-time State ─────────────────────────────────────────────────────
-  Key _streamKey = UniqueKey();
-
-  // Method to refresh the stream
-  void _refreshStream() {
-    setState(() {
-      _streamKey = UniqueKey();
-    });
-  }
 
   @override
   void dispose() {
@@ -66,9 +57,8 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
 
     try {
       await categoriesController.updateCategory(oldName, newName);
-      // Refresh the stream to show updated categories
-      _refreshStream();
       if (!mounted) return;
+      // Force rebuild to show updated categories (stream updates automatically)
       setState(() {
         isEditing[oldName] = false;
         editControllers[oldName]?.dispose();
@@ -106,9 +96,9 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     if (confirmed == true) {
       try {
         await categoriesController.deleteCategory(categoryName);
-        // Refresh the stream to show updated categories
-        _refreshStream();
         if (!mounted) return;
+        // Force rebuild to show updated categories (stream updates automatically)
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -159,33 +149,44 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _refreshStream();
-          // Wait a bit for the stream to update
-          await Future.delayed(Duration(milliseconds: 500));
+          // Force rebuild and wait for stream to emit
+          setState(() {});
+          // Wait for the stream to emit at least one event
+          // This ensures the RefreshIndicator shows its animation
+          await categoriesController.getCategoriesStream().first;
         },
         child: StreamBuilder<List<String>>(
-          key: _streamKey,
           stream: categoriesController.getCategoriesStream(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Color(0xFF4E38D4)),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Loading categories...',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 16,
-                        color: Colors.grey[600],
+            // Show skeleton loader only on first load
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+              final highlightColor =
+                  isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+              return ResponsiveContainer(
+                maxWidth: 1000,
+                child: Padding(
+                  padding: EdgeInsets.all(
+                      MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+                  child: ListView.separated(
+                    physics: NeverScrollableScrollPhysics(),
+                    itemCount: 5,
+                    separatorBuilder: (_, __) => SizedBox(height: 12),
+                    itemBuilder: (_, __) => Shimmer.fromColors(
+                      baseColor: baseColor,
+                      highlightColor: highlightColor,
+                      child: Container(
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
               );
             }

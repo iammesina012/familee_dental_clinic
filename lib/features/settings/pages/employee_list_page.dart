@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'edit_user_page.dart';
 import 'add_user_page.dart';
+import 'package:shimmer/shimmer.dart';
 
 class EmployeeListPage extends StatefulWidget {
   const EmployeeListPage({super.key});
@@ -16,7 +17,7 @@ class EmployeeListPage extends StatefulWidget {
 class _EmployeeListPageState extends State<EmployeeListPage> {
   final EmployeeListController _controller = EmployeeListController();
   List<Map<String, dynamic>> _users = [];
-  bool _isLoading = true;
+  bool _isFirstLoad = true;
 
   @override
   void initState() {
@@ -25,8 +26,6 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
   }
 
   Future<void> _loadUsers() async {
-    setState(() => _isLoading = true);
-
     final result = await _controller.loadUsers();
 
     if (mounted) {
@@ -56,7 +55,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
       }).toList();
 
       setState(() {
-        _isLoading = false;
+        _isFirstLoad = false;
         _users = filteredUsers;
       });
     }
@@ -66,6 +65,31 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
         SnackBar(content: Text('Error loading users: ${result['error']}')),
       );
     }
+  }
+
+  Widget _buildSkeletonLoader(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: baseColor,
+          highlightColor: highlightColor,
+          child: Container(
+            height: 90,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -161,25 +185,40 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                         ),
                       ],
                     ),
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
+                    child: _isFirstLoad
+                        ? _buildSkeletonLoader(context)
                         : _users.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'No employees found',
-                                  style: TextStyle(
-                                    fontFamily: 'SF Pro',
-                                    fontSize: 16,
-                                    color: theme.textTheme.bodyLarge?.color,
+                            ? RefreshIndicator(
+                                onRefresh: _loadUsers,
+                                child: SingleChildScrollView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  child: SizedBox(
+                                    height: MediaQuery.of(context).size.height *
+                                        0.5,
+                                    child: Center(
+                                      child: Text(
+                                        'No employees found',
+                                        style: TextStyle(
+                                          fontFamily: 'SF Pro',
+                                          fontSize: 16,
+                                          color:
+                                              theme.textTheme.bodyLarge?.color,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               )
-                            : ListView.builder(
-                                itemCount: _users.length,
-                                itemBuilder: (context, index) {
-                                  final user = _users[index];
-                                  return _buildUserCard(user, theme);
-                                },
+                            : RefreshIndicator(
+                                onRefresh: _loadUsers,
+                                child: ListView.builder(
+                                  itemCount: _users.length,
+                                  itemBuilder: (context, index) {
+                                    final user = _users[index];
+                                    return _buildUserCard(user, theme);
+                                  },
+                                ),
                               ),
                   ),
                 ),

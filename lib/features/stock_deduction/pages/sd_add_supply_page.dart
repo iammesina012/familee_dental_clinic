@@ -3,6 +3,7 @@ import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_add_supply_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:shimmer/shimmer.dart';
 
 class StockDeductionAddSupplyPage extends StatefulWidget {
   const StockDeductionAddSupplyPage({super.key});
@@ -20,6 +21,7 @@ class _StockDeductionAddSupplyPageState
   bool _multiSelectMode = false;
   final Set<String> _selectedIds = {};
   final Map<String, InventoryItem> _selectedItems = {};
+  bool _isFirstLoad = true;
 
   Widget _expiryChip(String text) {
     return Container(
@@ -161,6 +163,66 @@ class _StockDeductionAddSupplyPageState
     super.dispose();
   }
 
+  Widget _buildSkeletonLoader(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    return Column(
+      children: [
+        // Search bar skeleton
+        Shimmer.fromColors(
+          baseColor: baseColor,
+          highlightColor: highlightColor,
+          child: Container(
+            height: 56,
+            margin: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Supply grid skeleton
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth > 800
+                  ? 4
+                  : constraints.maxWidth > 600
+                      ? 3
+                      : 2;
+
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.75,
+                ),
+                itemCount: 12,
+                itemBuilder: (context, index) {
+                  return Shimmer.fromColors(
+                    baseColor: baseColor,
+                    highlightColor: highlightColor,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Read existing selections to prevent duplicates
@@ -244,12 +306,22 @@ class _StockDeductionAddSupplyPageState
                     stream:
                         _controller.getGroupedSuppliesStream(archived: false),
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF00D4AA)),
-                        );
+                      // Show skeleton loader only on first load
+                      if (_isFirstLoad && !snapshot.hasData) {
+                        return _buildSkeletonLoader(context);
                       }
+
+                      // Mark first load as complete once we have data
+                      if (snapshot.hasData && _isFirstLoad) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            setState(() {
+                              _isFirstLoad = false;
+                            });
+                          }
+                        });
+                      }
+
                       if (snapshot.hasError) {
                         return Center(
                           child: Text(

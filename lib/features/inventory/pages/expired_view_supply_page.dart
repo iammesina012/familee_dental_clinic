@@ -35,31 +35,13 @@ class _ExpiredViewSupplyPageState extends State<ExpiredViewSupplyPage> {
       key: _streamKey,
       stream: controller.supplyStream(widget.item.id),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            appBar: AppBar(
-              title: Text("Expired Supply",
-                  style: AppFonts.sfProStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
-              backgroundColor: Colors.white,
-              iconTheme: const IconThemeData(size: 30, color: Colors.black),
-            ),
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (!snapshot.hasData || snapshot.data == null) {
-          return Scaffold(
-            appBar: AppBar(
-              title: Text("Expired Supply",
-                  style: AppFonts.sfProStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
-              backgroundColor: Colors.white,
-              iconTheme: const IconThemeData(size: 30, color: Colors.black),
-            ),
-            body: Center(child: Text("Item not found.")),
-          );
-        }
-        final updatedItem = snapshot.data!;
+        // Always use stream data if available, otherwise use the initial item from widget
+        // This ensures we always have data to display and never show loading indicator
+        final updatedItem = snapshot.hasData && snapshot.data != null
+            ? snapshot.data!
+            : widget.item;
+
+        // No loading indicator needed since we always have widget.item as fallback
 
         // For expired supplies, we don't need auto-redirect logic
         final status = "Expired"; // Force expired status
@@ -101,9 +83,11 @@ class _ExpiredViewSupplyPageState extends State<ExpiredViewSupplyPage> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
+            // Refresh the stream to reload data from Supabase
             _refreshStream();
-            // Wait a bit for the stream to update
-            await Future.delayed(Duration(milliseconds: 500));
+            // Wait for the stream to emit at least one event
+            // This ensures the RefreshIndicator shows its animation
+            await controller.supplyStream(widget.item.id).first;
           },
           child: ResponsiveContainer(
             maxWidth: 1000,

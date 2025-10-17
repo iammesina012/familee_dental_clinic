@@ -17,6 +17,8 @@ import 'package:familee_dental/features/inventory/controller/expired_supply_cont
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
+import 'package:shimmer/shimmer.dart';
 
 class Inventory extends StatefulWidget {
   const Inventory({super.key});
@@ -247,28 +249,20 @@ class _InventoryState extends State<Inventory> {
         elevation: theme.appBarTheme.elevation,
         shadowColor: theme.appBarTheme.shadowColor,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 5.0),
-            child: IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: Colors.red, size: 30),
-              tooltip: 'Notifications',
-              onPressed: () {
-                Navigator.pushNamed(context, '/notifications');
-              },
-            ),
-          ),
+          const NotificationBadgeButton(),
         ],
       ),
       drawer: const MyDrawer(),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
+            // Refresh the streams to reload data from Supabase
             _refreshAllStreams();
             // Convert expired supplies to placeholders
             _convertExpiredToPlaceholders();
-            // Wait a bit for the streams to update
-            await Future.delayed(Duration(milliseconds: 500));
+            // Wait for the inventory stream to emit at least one event
+            // This ensures the RefreshIndicator shows its animation
+            await controller.getGroupedSuppliesStream(archived: false).first;
           },
           child: ResponsiveContainer(
             maxWidth: 1200,
@@ -369,20 +363,72 @@ class _InventoryState extends State<Inventory> {
                         'All Supplies',
                         ...currentCategories
                       ];
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return SizedBox(height: 50);
-                      }
 
-                      if (snapshot.hasError) {
+                      // Show skeleton loader for categories
+                      if (snapshot.connectionState == ConnectionState.waiting &&
+                          currentCategories.isEmpty) {
+                        final isDark =
+                            Theme.of(context).brightness == Brightness.dark;
+                        final baseColor =
+                            isDark ? Colors.grey[800]! : Colors.grey[300]!;
+                        final highlightColor =
+                            isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
                         return SizedBox(
                           height: 50,
-                          child: Center(
-                            child: Text(
-                              'Error loading categories',
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontSize: 14,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: 5,
+                            separatorBuilder: (_, __) => SizedBox(width: 8),
+                            itemBuilder: (_, __) => Shimmer.fromColors(
+                              baseColor: baseColor,
+                              highlightColor: highlightColor,
+                              child: Container(
+                                width: 120,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
                               ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // Show last known data even if there's an error
+                      if (snapshot.hasError && currentCategories.isEmpty) {
+                        return SizedBox(
+                          height: 50,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                ChoiceChip(
+                                  label: Text('All Supplies'),
+                                  selected: selectedCategory == 0,
+                                  showCheckmark: false,
+                                  selectedColor: const Color(0xFF4E38D4),
+                                  backgroundColor: scheme.surface,
+                                  labelStyle: TextStyle(
+                                    color: selectedCategory == 0
+                                        ? Colors.white
+                                        : theme.textTheme.bodyMedium?.color,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  shape: StadiumBorder(
+                                    side: BorderSide(
+                                      color: selectedCategory == 0
+                                          ? const Color(0xFF4E38D4)
+                                          : theme.dividerColor,
+                                    ),
+                                  ),
+                                  onSelected: (_) {
+                                    setState(() {
+                                      selectedCategory = 0;
+                                    });
+                                  },
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -474,40 +520,92 @@ class _InventoryState extends State<Inventory> {
                           stream: controller.getGroupedSuppliesStream(
                               archived: false),
                           builder: (context, snapshot) {
+                            final hasData =
+                                snapshot.hasData && snapshot.data!.isNotEmpty;
+
+                            // Show skeleton loader only on first load
                             if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return Center(
-                                child: SizedBox(),
+                                    ConnectionState.waiting &&
+                                !hasData) {
+                              final isDark = Theme.of(context).brightness ==
+                                  Brightness.dark;
+                              final baseColor = isDark
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[300]!;
+                              final highlightColor = isDark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[100]!;
+
+                              return LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return GridView.builder(
+                                    physics: NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: constraints.maxWidth > 800
+                                          ? 4
+                                          : constraints.maxWidth > 600
+                                              ? 3
+                                              : 2,
+                                      mainAxisSpacing: 8,
+                                      crossAxisSpacing: 8,
+                                      childAspectRatio:
+                                          constraints.maxWidth < 400
+                                              ? 0.7
+                                              : 0.85,
+                                    ),
+                                    itemCount: 8,
+                                    itemBuilder: (context, index) {
+                                      return Shimmer.fromColors(
+                                        baseColor: baseColor,
+                                        highlightColor: highlightColor,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
                               );
                             }
 
+                            // Show subtle error banner but keep showing data if available
                             if (snapshot.hasError) {
-                              return Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.error_outline,
-                                        size: 64, color: Colors.red),
-                                    SizedBox(height: 16),
-                                    Text(
-                                      'Error loading inventory',
-                                      style: TextStyle(
-                                        color: Colors.red,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
+                              // If we have data, show it with error banner
+                              // If no data, show empty state with retry option
+                              if (!hasData) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.cloud_off_outlined,
+                                          size: 64, color: Colors.grey),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        'Connection Issue',
+                                        style: TextStyle(
+                                          color:
+                                              theme.textTheme.bodyMedium?.color,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(height: 8),
-                                    Text(
-                                      'Please try again later',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 14,
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Pull down to refresh',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              );
+                                    ],
+                                  ),
+                                );
+                              }
                             }
 
                             if (!snapshot.hasData || snapshot.data!.isEmpty) {

@@ -4,6 +4,7 @@ import 'package:familee_dental/features/inventory/components/inventory_item_card
 import 'package:familee_dental/features/inventory/controller/archive_supply_controller.dart';
 import 'package:familee_dental/features/inventory/pages/view_supply_page.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:shimmer/shimmer.dart';
 
 class ArchiveSupplyPage extends StatefulWidget {
   const ArchiveSupplyPage({super.key});
@@ -18,16 +19,6 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
   // ─── Search State ────────────────────────────────────────────────────────
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
-
-  // ─── Real-time State ─────────────────────────────────────────────────────
-  Key _streamKey = UniqueKey();
-
-  // Method to refresh the stream
-  void _refreshStream() {
-    setState(() {
-      _streamKey = UniqueKey();
-    });
-  }
 
   @override
   void dispose() {
@@ -154,18 +145,58 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: () async {
-                      _refreshStream();
-                      // Wait a bit for the stream to update
-                      await Future.delayed(Duration(milliseconds: 500));
+                      // Force rebuild and wait for stream
+                      setState(() {});
+                      // Wait for the stream to emit at least one event
+                      // This ensures the RefreshIndicator shows its animation
+                      await controller.getArchivedSupplies().first;
                     },
                     child: StreamBuilder<List<InventoryItem>>(
-                      key: _streamKey,
                       stream: controller.getArchivedSupplies(),
                       builder: (context, snapshot) {
+                        // Only show loading on first load, not on refresh
                         if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                                ConnectionState.waiting &&
+                            !snapshot.hasData) {
+                          final isDark =
+                              Theme.of(context).brightness == Brightness.dark;
+                          final baseColor =
+                              isDark ? Colors.grey[800]! : Colors.grey[300]!;
+                          final highlightColor =
+                              isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              return GridView.builder(
+                                physics: NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: constraints.maxWidth > 800
+                                      ? 4
+                                      : constraints.maxWidth > 600
+                                          ? 3
+                                          : 2,
+                                  mainAxisSpacing: 8,
+                                  crossAxisSpacing: 8,
+                                  childAspectRatio:
+                                      constraints.maxWidth < 400 ? 0.7 : 0.85,
+                                ),
+                                itemCount: 8,
+                                itemBuilder: (context, index) {
+                                  return Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          );
                         }
 
                         if (snapshot.hasError) {
@@ -276,11 +307,10 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                                               ),
                                             ),
                                           );
-                                          // Refresh the stream when returning from view page
-                                          // This ensures real-time updates after unarchiving
+                                          // Force rebuild when returning from view page (stream updates automatically)
                                           if (result == true ||
                                               result == 'unarchived') {
-                                            _refreshStream();
+                                            setState(() {});
                                           }
                                         },
                                         borderRadius: BorderRadius.circular(12),

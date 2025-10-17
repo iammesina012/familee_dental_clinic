@@ -18,11 +18,15 @@ class ActivityLogController extends ChangeNotifier {
   // Current user's role (cached)
   String _currentUserRole = 'staff';
 
+  // Loading state
+  bool _isLoading = true;
+
   // Getters
   DateTime get selectedDate => _selectedDate;
   String get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
   List<Map<String, dynamic>> get allActivities => _allActivities;
+  bool get isLoading => _isLoading;
 
   // Filtered activities based on current filters
   List<Map<String, dynamic>> get filteredActivities {
@@ -139,6 +143,11 @@ class ActivityLogController extends ChangeNotifier {
                   'metadata': row['metadata'] ?? {},
                 };
               }).toList();
+
+              // Mark loading as complete after first data
+              if (_isLoading) {
+                _isLoading = false;
+              }
 
               notifyListeners();
             }

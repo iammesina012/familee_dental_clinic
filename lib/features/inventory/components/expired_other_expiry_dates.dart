@@ -2,16 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
 import 'package:familee_dental/features/inventory/controller/expired_view_supply_controller.dart';
+import 'package:shimmer/shimmer.dart';
 
-class ExpiredOtherExpiryBatches extends StatelessWidget {
+class ExpiredOtherExpiryBatches extends StatefulWidget {
   final InventoryItem item;
   const ExpiredOtherExpiryBatches({super.key, required this.item});
+
+  @override
+  State<ExpiredOtherExpiryBatches> createState() =>
+      _ExpiredOtherExpiryBatchesState();
+}
+
+class _ExpiredOtherExpiryBatchesState extends State<ExpiredOtherExpiryBatches> {
+  bool _isFirstLoad = true;
+
+  Widget _buildSkeletonLoader(ThemeData theme, ColorScheme scheme) {
+    return Shimmer.fromColors(
+      baseColor: theme.brightness == Brightness.dark
+          ? Colors.grey[800]!
+          : Colors.grey[300]!,
+      highlightColor: theme.brightness == Brightness.dark
+          ? Colors.grey[700]!
+          : Colors.grey[100]!,
+      child: Column(
+        children: List.generate(
+            3,
+            (index) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                  ),
+                  height: 50,
+                )),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    if (item.noExpiry == true) {
+
+    if (widget.item.noExpiry == true) {
       return Container(
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 12),
@@ -38,13 +75,22 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
 
     return StreamBuilder<List<InventoryItem>>(
       stream: controller.getOtherExpiredBatchesStream(
-          item.name, item.brand, item.id),
+          widget.item.name, widget.item.brand, widget.item.id),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 28),
-            child: Center(child: CircularProgressIndicator()),
-          );
+        // Show skeleton only on first load when there's no data
+        if (_isFirstLoad && !snapshot.hasData) {
+          return _buildSkeletonLoader(theme, scheme);
+        }
+
+        // Mark as loaded once we have data
+        if (snapshot.hasData && _isFirstLoad) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _isFirstLoad = false;
+              });
+            }
+          });
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Container(
@@ -73,8 +119,9 @@ class ExpiredOtherExpiryBatches extends StatelessWidget {
         final batches = snapshot.data!;
         DateTime? currentDt;
         try {
-          currentDt = DateTime.tryParse(item.expiry ?? '') ??
-              DateTime.tryParse((item.expiry ?? '').replaceAll('/', '-'));
+          currentDt = DateTime.tryParse(widget.item.expiry ?? '') ??
+              DateTime.tryParse(
+                  (widget.item.expiry ?? '').replaceAll('/', '-'));
         } catch (_) {
           currentDt = null;
         }

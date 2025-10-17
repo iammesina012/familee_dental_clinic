@@ -33,7 +33,7 @@ Future<void> main() async {
   // Load environment 1
   await dotenv.load(fileName: ".env");
 
-  // Get Supabase credentials from environment variables
+  // get Supabase credentials from environment variables
   final supabaseUrl = dotenv.env['SUPABASE_URL'];
   final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
   final serviceRoleKey = dotenv.env['SUPABASE_SERVICE_ROLE_KEY'];
@@ -65,7 +65,6 @@ Future<void> main() async {
   } catch (e) {
     debugPrint("Automatic backup service init failed: $e");
   }
-  // Note: Deep link handling is now managed in AuthWrapper
 
   // Initialize theme mode from persisted preference before running app
   final prefs = await SharedPreferences.getInstance();
@@ -174,6 +173,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     // Load user role if user is logged in
     if (isLoggedIn) {
       await _userRoleProvider.loadUserRole();
+      // Push notifications disabled: no device token storage
     }
 
     setState(() {
@@ -197,3 +197,5 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return _isLoggedIn ? const Dashboard() : const Login();
   }
 }
+
+// Firebase background handler removed

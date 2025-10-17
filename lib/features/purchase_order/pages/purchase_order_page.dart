@@ -8,6 +8,8 @@ import 'dart:async'; // Added for StreamSubscription
 import 'package:familee_dental/features/activity_log/controller/po_activity_controller.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
+import 'package:shimmer/shimmer.dart';
 
 class PurchaseOrderPage extends StatefulWidget {
   const PurchaseOrderPage({super.key});
@@ -52,6 +54,16 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
       // Load ALL POs from Supabase (real-time)
       _loadAllPOsFromSupabase();
+
+      // Wait for the current tab's stream to emit at least one event
+      // This ensures the RefreshIndicator shows its animation
+      if (activeTabIndex == 0) {
+        await _controller.getOpenPOsStream().first;
+      } else if (activeTabIndex == 1) {
+        await _controller.getApprovalPOsStream().first;
+      } else {
+        await _controller.getClosedPOsStream().first;
+      }
     } catch (e) {
       // Don't show error UI in async operations to avoid context issues
       // The error is logged for debugging purposes
@@ -203,9 +215,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     try {
-      final theme = Theme.of(context);
-      final scheme = theme.colorScheme;
       return Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
@@ -223,17 +235,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           elevation: theme.appBarTheme.elevation ?? 5,
           shadowColor: theme.appBarTheme.shadowColor ?? theme.shadowColor,
           actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 5.0),
-              child: IconButton(
-                icon: const Icon(Icons.notifications_outlined,
-                    color: Colors.red, size: 30),
-                tooltip: 'Notifications',
-                onPressed: () {
-                  Navigator.pushNamed(context, '/notifications');
-                },
-              ),
-            ),
+            const NotificationBadgeButton(),
           ],
         ),
         drawer: const MyDrawer(),
@@ -402,12 +404,75 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                   final data =
                                       snapshot.data ?? const <PurchaseOrder>[];
                                   final displayed = _applySearchFilter(data);
+
+                                  // Show skeleton loader on first load
                                   if (snapshot.connectionState ==
                                           ConnectionState.waiting &&
                                       data.isEmpty) {
-                                    return Center(
-                                        child: CircularProgressIndicator());
+                                    final isDark =
+                                        Theme.of(context).brightness ==
+                                            Brightness.dark;
+                                    final baseColor = isDark
+                                        ? Colors.grey[800]!
+                                        : Colors.grey[300]!;
+                                    final highlightColor = isDark
+                                        ? Colors.grey[700]!
+                                        : Colors.grey[100]!;
+
+                                    return ListView.separated(
+                                      physics: NeverScrollableScrollPhysics(),
+                                      padding: EdgeInsets.all(12),
+                                      itemCount: 5,
+                                      separatorBuilder: (_, __) =>
+                                          SizedBox(height: 8),
+                                      itemBuilder: (_, __) =>
+                                          Shimmer.fromColors(
+                                        baseColor: baseColor,
+                                        highlightColor: highlightColor,
+                                        child: Container(
+                                          height: 120,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      ),
+                                    );
                                   }
+
+                                  // Handle errors gracefully - show empty state with retry hint
+                                  if (snapshot.hasError && data.isEmpty) {
+                                    return Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.cloud_off_outlined,
+                                              size: 64, color: Colors.grey),
+                                          SizedBox(height: 16),
+                                          Text(
+                                            "Connection Issue",
+                                            style: AppFonts.sfProStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: theme
+                                                  .textTheme.bodyMedium?.color,
+                                            ),
+                                          ),
+                                          SizedBox(height: 8),
+                                          Text(
+                                            "Pull down to refresh",
+                                            style: AppFonts.sfProStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
                                   if (displayed.isEmpty) {
                                     return Center(
                                       child: Column(
@@ -515,35 +580,69 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       );
     } catch (e) {
       return Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
           title: Text(
             "Purchase Order",
-            style:
-                AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: AppFonts.sfProStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: theme.appBarTheme.titleTextStyle?.color ??
+                  theme.textTheme.titleLarge?.color,
+            ),
           ),
-          backgroundColor: Colors.white,
+          centerTitle: true,
+          backgroundColor: theme.appBarTheme.backgroundColor,
+          toolbarHeight: 70,
+          iconTheme: theme.appBarTheme.iconTheme,
         ),
+        drawer: const MyDrawer(),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.red),
+              Icon(Icons.refresh, size: 64, color: Colors.grey),
               SizedBox(height: 16),
               Text(
-                'Error loading Purchase Order page',
+                'Something went wrong',
                 style: AppFonts.sfProStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: theme.textTheme.bodyMedium?.color,
                 ),
               ),
               SizedBox(height: 8),
               Text(
-                'Error: $e',
+                'Please try again',
                 style: AppFonts.sfProStyle(
                   fontSize: 14,
                   color: Colors.grey[600],
                 ),
                 textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    // Trigger rebuild
+                  });
+                },
+                icon: Icon(Icons.refresh, color: Colors.white),
+                label: Text(
+                  'Retry',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF00D4AA),
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ],
           ),
@@ -949,9 +1048,10 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       ),
     );
 
+    final userRoleProvider = UserRoleProvider();
+
     // Only add slidable functionality for "Open" POs
     if (po.status == 'Open') {
-      final userRoleProvider = UserRoleProvider();
       final isStaff = userRoleProvider.isStaff;
 
       if (isStaff) {
@@ -1022,7 +1122,41 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       }
     }
 
-    // Return regular card for non-Open POs
+    // Add slidable delete for "Closed" POs - Only Owner can delete
+    if (po.status == 'Closed') {
+      final isOwner = userRoleProvider.isOwner;
+
+      if (isOwner) {
+        // For owner users: only left slide (Delete)
+        return Slidable(
+          key: Key('slidable-${po.id}'),
+          closeOnScroll: true,
+          endActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            extentRatio: 0.35,
+            children: [
+              // Delete action - Only for Owner users
+              SlidableAction(
+                onPressed: (_) async {
+                  final confirmed = await _showDeleteConfirmation(po);
+                  if (confirmed) {
+                    // PO will be deleted in the confirmation dialog
+                  }
+                },
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                icon: Icons.delete,
+                label: 'Delete',
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ],
+          ),
+          child: cardContent,
+        );
+      }
+    }
+
+    // Return regular card for non-Open/Closed POs or users without permissions
     return cardContent;
   }
 

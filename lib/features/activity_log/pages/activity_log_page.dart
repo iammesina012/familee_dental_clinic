@@ -3,6 +3,8 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/features/activity_log/controller/activity_log_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
+import 'package:shimmer/shimmer.dart';
 
 class ActivityLogPage extends StatefulWidget {
   const ActivityLogPage({super.key});
@@ -654,6 +656,31 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     return rows;
   }
 
+  Widget _buildSkeletonLoader(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 8,
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: baseColor,
+          highlightColor: highlightColor,
+          child: Container(
+            height: 80,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -676,20 +703,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
         shadowColor: Theme.of(context).appBarTheme.shadowColor ??
             Theme.of(context).shadowColor,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 5.0),
-            child: IconButton(
-              icon: const Icon(
-                Icons.notifications_outlined,
-                color: Colors.red,
-                size: 30,
-              ),
-              tooltip: 'Notifications',
-              onPressed: () {
-                Navigator.pushNamed(context, '/notifications');
-              },
-            ),
-          ),
+          const NotificationBadgeButton(),
         ],
       ),
       drawer: const MyDrawer(),
@@ -906,6 +920,11 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                         child: ListenableBuilder(
                           listenable: _controller,
                           builder: (context, child) {
+                            // Show skeleton loader during initial load
+                            if (_controller.isLoading) {
+                              return _buildSkeletonLoader(context);
+                            }
+
                             final filteredActivities =
                                 _controller.filteredActivities;
 

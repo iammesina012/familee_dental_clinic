@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 import 'package:familee_dental/features/inventory/pages/manage_brands_suppliers_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:shimmer/shimmer.dart';
 
 class InventoryFilterModal extends StatefulWidget {
   final void Function(Map<String, dynamic> filters)? onApply;
@@ -721,9 +722,38 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                         StreamBuilder<List<String>>(
                           stream: filterController.getBrandNamesStream(),
                           builder: (context, snapshot) {
+                            // Only show skeleton on first load, not on every interaction
                             if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return Center(child: CircularProgressIndicator());
+                                    ConnectionState.waiting &&
+                                !snapshot.hasData) {
+                              final isDark = Theme.of(context).brightness ==
+                                  Brightness.dark;
+                              final baseColor = isDark
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[300]!;
+                              final highlightColor = isDark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[100]!;
+
+                              return Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: List.generate(
+                                  4,
+                                  (_) => Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      width: 100,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
                             }
                             final brands = snapshot.data ?? [];
                             return _filterChips(
@@ -743,9 +773,38 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                         StreamBuilder<List<String>>(
                           stream: filterController.getSupplierNamesStream(),
                           builder: (context, snapshot) {
+                            // Only show skeleton on first load, not on every interaction
                             if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return Center(child: CircularProgressIndicator());
+                                    ConnectionState.waiting &&
+                                !snapshot.hasData) {
+                              final isDark = Theme.of(context).brightness ==
+                                  Brightness.dark;
+                              final baseColor = isDark
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[300]!;
+                              final highlightColor = isDark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[100]!;
+
+                              return Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: List.generate(
+                                  4,
+                                  (_) => Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      width: 100,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
                             }
                             final suppliers = snapshot.data ?? [];
                             return _filterChips(

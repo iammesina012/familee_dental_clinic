@@ -6,6 +6,8 @@ import 'package:familee_dental/features/stock_deduction/controller/sd_preset_man
 import 'package:familee_dental/features/stock_deduction/pages/sd_edit_preset_page.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
+import 'package:shimmer/shimmer.dart';
 
 class PresetManagementPage extends StatefulWidget {
   const PresetManagementPage({super.key});
@@ -20,12 +22,14 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
   final SdActivityController _activityController = SdActivityController();
   List<Map<String, dynamic>> _allPresets = [];
   List<Map<String, dynamic>> _filteredPresets = [];
+  List<Map<String, dynamic>> _lastKnownPresets = []; // Cache last known data
   Timer? _debounceTimer;
   // Track which preset dropdown is expanded
   String? _expandedPresetId;
   // Stream key for forcing refresh
   late Stream<List<Map<String, dynamic>>> _presetsStream;
   int _streamKey = 0;
+  bool _isFirstLoad = true;
 
   @override
   void initState() {
@@ -86,6 +90,10 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
     _streamKey++;
     _initializeStream();
     setState(() {});
+
+    // Wait for the stream to emit at least one event
+    // This ensures the RefreshIndicator shows its animation
+    await _presetsStream.first;
   }
 
   void _createNewPreset() async {
@@ -133,6 +141,61 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
     }
   }
 
+  Widget _buildSkeletonLoader(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    return ResponsiveContainer(
+      maxWidth: 1100,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            children: [
+              // Search bar skeleton
+              Shimmer.fromColors(
+                baseColor: baseColor,
+                highlightColor: highlightColor,
+                child: Container(
+                  height: 56,
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Preset cards skeleton
+              Expanded(
+                child: ListView.builder(
+                  itemCount: 5,
+                  itemBuilder: (context, index) {
+                    return Shimmer.fromColors(
+                      baseColor: baseColor,
+                      highlightColor: highlightColor,
+                      child: Container(
+                        height: 120,
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -154,17 +217,7 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
         shadowColor: Theme.of(context).appBarTheme.shadowColor ??
             Theme.of(context).shadowColor,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 5.0),
-            child: IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: Colors.red, size: 30),
-              tooltip: 'Notifications',
-              onPressed: () {
-                Navigator.pushNamed(context, '/notifications');
-              },
-            ),
-          ),
+          const NotificationBadgeButton(),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -179,12 +232,20 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
           key: ValueKey(_streamKey),
           stream: _presetsStream,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFF00D4AA),
-                ),
-              );
+            // Show skeleton loader only on first load
+            if (_isFirstLoad && !snapshot.hasData) {
+              return _buildSkeletonLoader(context);
+            }
+
+            // Mark first load as complete once we have data
+            if (snapshot.hasData && _isFirstLoad) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _isFirstLoad = false;
+                  });
+                }
+              });
             }
 
             if (snapshot.hasError) {
@@ -196,7 +257,22 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
               );
             }
 
-            _allPresets = snapshot.data ?? [];
+            // Update data and cache it when we have valid data
+            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+              _allPresets = snapshot.data!;
+              _lastKnownPresets = List.from(snapshot.data!);
+            } else if (snapshot.hasData &&
+                snapshot.data!.isEmpty &&
+                _lastKnownPresets.isEmpty) {
+              // Only update to empty if we never had data
+              _allPresets = [];
+            } else if (!snapshot.hasData && _lastKnownPresets.isNotEmpty) {
+              // During refresh, use cached data
+              _allPresets = _lastKnownPresets;
+            } else {
+              _allPresets = snapshot.data ?? [];
+            }
+
             _filterPresets();
 
             return ResponsiveContainer(
@@ -294,6 +370,9 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
   }
 
   Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : const Color(0xFF8B5A8B);
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -302,13 +381,17 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
+              color: isDark
+                  ? Colors.grey.withOpacity(0.2)
+                  : Colors.white.withOpacity(0.3),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.bookmark_outline,
               size: 60,
-              color: Color(0xFF8B5A8B),
+              color: isDark
+                  ? Colors.white.withOpacity(0.7)
+                  : const Color(0xFF8B5A8B),
             ),
           ),
           const SizedBox(height: 24),
@@ -319,7 +402,7 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
             style: AppFonts.sfProStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF8B5A8B),
+              color: textColor,
             ),
           ),
           const SizedBox(height: 8),
@@ -329,7 +412,7 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
                 : 'Try adjusting your search terms',
             style: AppFonts.sfProStyle(
               fontSize: 14,
-              color: const Color(0xFF8B5A8B).withOpacity(0.7),
+              color: textColor.withOpacity(0.7),
             ),
           ),
         ],

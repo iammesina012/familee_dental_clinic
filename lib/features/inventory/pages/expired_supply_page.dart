@@ -5,6 +5,7 @@ import 'package:familee_dental/features/inventory/components/inventory_item_card
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
 import 'package:familee_dental/features/inventory/controller/expired_supply_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:shimmer/shimmer.dart';
 
 class ExpiredSupplyPage extends StatefulWidget {
   const ExpiredSupplyPage({super.key});
@@ -16,22 +17,6 @@ class ExpiredSupplyPage extends StatefulWidget {
 class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
   final ExpiredSupplyController controller = ExpiredSupplyController();
   String searchText = '';
-
-  // ─── Real-time State ─────────────────────────────────────────────────────
-  Key _streamKey = UniqueKey();
-
-  // Method to force complete refresh
-  void _forceRefresh() {
-    setState(() {
-      _streamKey = UniqueKey();
-    });
-    // Also trigger a rebuild of the entire widget
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
 
   @override
   void initState() {
@@ -75,9 +60,11 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
-            _forceRefresh();
-            // Wait a bit for the stream to update
-            await Future.delayed(Duration(milliseconds: 500));
+            // Force rebuild and wait for stream
+            setState(() {});
+            // Wait for the stream to emit at least one event
+            // This ensures the RefreshIndicator shows its animation
+            await controller.getSuppliesStream(archived: false).first;
           },
           child: ResponsiveContainer(
             maxWidth: 1200,
@@ -128,13 +115,50 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                   // Expired supplies grid
                   Expanded(
                     child: StreamBuilder<List<InventoryItem>>(
-                      key: _streamKey,
                       stream: controller.getSuppliesStream(archived: false),
                       builder: (context, snapshot) {
+                        // Only show loading on first load, not on refresh
                         if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return Center(
-                            child: CircularProgressIndicator(),
+                                ConnectionState.waiting &&
+                            !snapshot.hasData) {
+                          final isDark =
+                              Theme.of(context).brightness == Brightness.dark;
+                          final baseColor =
+                              isDark ? Colors.grey[800]! : Colors.grey[300]!;
+                          final highlightColor =
+                              isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              return GridView.builder(
+                                physics: NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: constraints.maxWidth > 800
+                                      ? 4
+                                      : constraints.maxWidth > 600
+                                          ? 3
+                                          : 2,
+                                  mainAxisSpacing: 8,
+                                  crossAxisSpacing: 8,
+                                  childAspectRatio:
+                                      constraints.maxWidth < 400 ? 0.7 : 0.85,
+                                ),
+                                itemCount: 8,
+                                itemBuilder: (context, index) {
+                                  return Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
                           );
                         }
 
@@ -195,12 +219,16 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                           );
                         }
 
-                        // Use controller to filter expired items and apply search
+                        // Filter expired items from stream data and apply search
+                        final allItems = snapshot.data!;
                         final expiredItems =
-                            controller.getFilteredExpiredSupplies(
-                                snapshot.data!, searchText);
+                            controller.filterExpiredItems(allItems);
+                        final grouped =
+                            controller.groupExpiredByProduct(expiredItems);
+                        final filteredItems =
+                            controller.applySearchFilter(grouped, searchText);
 
-                        if (expiredItems.isEmpty) {
+                        if (filteredItems.isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -255,9 +283,9 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                                 crossAxisSpacing: 8,
                                 childAspectRatio: aspectRatio,
                               ),
-                              itemCount: expiredItems.length,
+                              itemCount: filteredItems.length,
                               itemBuilder: (context, index) {
-                                final item = expiredItems[index];
+                                final item = filteredItems[index];
                                 return GestureDetector(
                                   onTap: () async {
                                     final result = await Navigator.push(
@@ -267,11 +295,11 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                                             ExpiredViewSupplyPage(item: item),
                                       ),
                                     );
-                                    // Refresh the stream when returning from view page
+                                    // Force rebuild when returning from view page (stream updates automatically)
                                     if (result == true ||
                                         result == 'deleted' ||
                                         result == 'disposed') {
-                                      _forceRefresh();
+                                      setState(() {});
                                     }
                                   },
                                   child: InventoryItemCard(

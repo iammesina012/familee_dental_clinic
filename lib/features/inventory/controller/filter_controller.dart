@@ -350,39 +350,52 @@ class FilterController {
   Future<void> deleteBrand(String brandName) async {
     if (brandName.trim().isEmpty) return;
 
-    // Delete brand from brands collection
-    await _supabase.from('brands').delete().eq('name', brandName.trim());
+    try {
+      // Update all supplies with this brand to use "N/A" and store original brand
+      await _supabase.from('supplies').update({
+        'brand': 'N/A',
+        'original_brand':
+            brandName.trim(), // Store original brand for restoration
+      }).eq('brand', brandName.trim());
 
-    // Log the brand deletion activity
-    await InventoryActivityController().logBrandDeleted(
-      brandName: brandName.trim(),
-    );
+      // Delete brand from brands collection
+      await _supabase.from('brands').delete().eq('name', brandName.trim());
 
-    // Update all supplies with this brand to use "N/A" and store original brand
-    await _supabase.from('supplies').update({
-      'brand': 'N/A',
-      'original_brand':
-          brandName.trim(), // Store original brand for restoration
-    }).eq('brand', brandName.trim());
+      // Log the brand deletion activity
+      await InventoryActivityController().logBrandDeleted(
+        brandName: brandName.trim(),
+      );
+    } catch (e) {
+      print('Error deleting brand: $e');
+      rethrow;
+    }
   }
 
   // Delete supplier and update all supplies to use "N/A"
   Future<void> deleteSupplier(String supplierName) async {
     if (supplierName.trim().isEmpty) return;
 
-    // Delete supplier from suppliers collection
-    await _supabase.from('suppliers').delete().eq('name', supplierName.trim());
+    try {
+      // Update all supplies with this supplier to use "N/A" and store original supplier
+      await _supabase.from('supplies').update({
+        'supplier': 'N/A',
+        'original_supplier':
+            supplierName.trim(), // Store original supplier for restoration
+      }).eq('supplier', supplierName.trim());
 
-    // Log the supplier deletion activity
-    await InventoryActivityController().logSupplierDeleted(
-      supplierName: supplierName.trim(),
-    );
+      // Delete supplier from suppliers collection
+      await _supabase
+          .from('suppliers')
+          .delete()
+          .eq('name', supplierName.trim());
 
-    // Update all supplies with this supplier to use "N/A" and store original supplier
-    await _supabase.from('supplies').update({
-      'supplier': 'N/A',
-      'original_supplier':
-          supplierName.trim(), // Store original supplier for restoration
-    }).eq('supplier', supplierName.trim());
+      // Log the supplier deletion activity
+      await InventoryActivityController().logSupplierDeleted(
+        supplierName: supplierName.trim(),
+      );
+    } catch (e) {
+      print('Error deleting supplier: $e');
+      rethrow;
+    }
   }
 }

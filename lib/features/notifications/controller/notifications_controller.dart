@@ -129,6 +129,9 @@ class NotificationsController {
       if (supplyName != null) 'supply_name': supplyName,
       if (poCode != null) 'po_code': poCode,
     });
+
+    // Send push notification
+    await _sendPushNotification(title, message);
   }
 
   // Inventory stock alert methods
@@ -257,6 +260,11 @@ class NotificationsController {
     print(
         'Relative time calculation: now=$now, createdAt=$createdAt, difference=${difference.inSeconds}s');
 
+    // Handle negative time (future timestamps due to timezone issues)
+    if (difference.isNegative) {
+      return 'Just now';
+    }
+
     if (difference.inSeconds < 60) {
       return '${difference.inSeconds}s ago';
     } else if (difference.inMinutes < 60) {
@@ -377,5 +385,27 @@ class NotificationsController {
       );
       return;
     }
+  }
+
+  // Push sending skipped: keep in-app notifications only
+  Future<void> _sendPushNotification(String title, String message) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+      // No-op for now; relying on in-app notifications and Firebase Console tests
+      print(
+          'Push skipped (no Edge Function): $title - $message for user: ${user.id}');
+    } catch (e) {
+      print('Error (push skipped): $e');
+    }
+  }
+
+  // Test function to send a test push notification
+  Future<void> sendTestNotification() async {
+    await createNotification(
+      title: 'Test Notification',
+      message: 'This is a test push notification from FamiLee Dental!',
+      type: 'test',
+    );
   }
 }

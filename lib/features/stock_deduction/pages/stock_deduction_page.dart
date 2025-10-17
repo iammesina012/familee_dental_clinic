@@ -7,6 +7,7 @@ import 'package:familee_dental/features/inventory/controller/inventory_controlle
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 
 class StockDeductionPage extends StatefulWidget {
   const StockDeductionPage({super.key});
@@ -804,17 +805,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             shadowColor: Theme.of(context).appBarTheme.shadowColor ??
                 Theme.of(context).shadowColor,
             actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 5.0),
-                child: IconButton(
-                  icon: const Icon(Icons.notifications_outlined,
-                      color: Colors.red, size: 30),
-                  tooltip: 'Notifications',
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/notifications');
-                  },
-                ),
-              ),
+              const NotificationBadgeButton(),
             ],
           ),
           drawer: MyDrawer(

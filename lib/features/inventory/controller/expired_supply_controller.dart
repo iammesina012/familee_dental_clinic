@@ -5,13 +5,14 @@ import 'package:familee_dental/features/activity_log/controller/inventory_activi
 class ExpiredSupplyController {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Get stream of all supplies from Supabase (do not filter by archived in query
-  /// to ensure documents without the field are included). Filter archived
-  /// client-side instead.
+  /// Get stream of supplies from Supabase with database filtering for better realtime performance
   Stream<List<InventoryItem>> getSuppliesStream({bool archived = false}) {
-    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
-      return data
-          .map((row) {
+    return _supabase
+        .from('supplies')
+        .stream(primaryKey: ['id'])
+        .eq('archived', archived)
+        .map((data) {
+          return data.map((row) {
             return InventoryItem(
               id: row['id'] as String,
               name: row['name'] ?? '',
@@ -26,10 +27,8 @@ class ExpiredSupplyController {
               noExpiry: row['no_expiry'] ?? false,
               archived: row['archived'] ?? false,
             );
-          })
-          .where((item) => item.archived == archived)
-          .toList();
-    });
+          }).toList();
+        });
   }
 
   /// Filter expired items from the supplies stream

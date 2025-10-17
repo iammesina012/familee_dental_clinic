@@ -3,6 +3,7 @@ import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_add_supply_preset_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:shimmer/shimmer.dart';
 
 class StockDeductionAddSupplyForPresetPage extends StatefulWidget {
   const StockDeductionAddSupplyForPresetPage({super.key});
@@ -20,6 +21,7 @@ class _StockDeductionAddSupplyForPresetPageState
   bool _multiSelectMode = false;
   final Set<String> _selectedIds = {};
   final Map<String, GroupedInventoryItem> _selectedItems = {};
+  bool _isFirstLoad = true;
 
   @override
   void initState() {
@@ -110,11 +112,68 @@ class _StockDeductionAddSupplyForPresetPageState
     );
   }
 
+  Widget _buildSkeletonLoader(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    return Column(
+      children: [
+        // Search bar skeleton
+        Shimmer.fromColors(
+          baseColor: baseColor,
+          highlightColor: highlightColor,
+          child: Container(
+            height: 56,
+            margin: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Supply grid skeleton
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth > 800
+                  ? 4
+                  : constraints.maxWidth > 600
+                      ? 3
+                      : 2;
+
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.9,
+                ),
+                itemCount: 12,
+                itemBuilder: (context, index) {
+                  return Shimmer.fromColors(
+                    baseColor: baseColor,
+                    highlightColor: highlightColor,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Read existing selections to prevent duplicates
-    final args = ModalRoute.of(context)?.settings.arguments;
-    final Set<String> existingDocIds = _controller.parseExistingDocIds(args);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -193,8 +252,20 @@ class _StockDeductionAddSupplyForPresetPageState
                     stream:
                         _controller.getGroupedSuppliesStream(archived: false),
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                      // Show skeleton loader only on first load
+                      if (_isFirstLoad && !snapshot.hasData) {
+                        return _buildSkeletonLoader(context);
+                      }
+
+                      // Mark first load as complete once we have data
+                      if (snapshot.hasData && _isFirstLoad) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            setState(() {
+                              _isFirstLoad = false;
+                            });
+                          }
+                        });
                       }
 
                       if (snapshot.hasError) {

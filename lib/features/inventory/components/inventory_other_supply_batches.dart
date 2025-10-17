@@ -3,29 +3,73 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/inventory/pages/view_supply_page.dart'; // for status helpers
 import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
+import 'package:shimmer/shimmer.dart';
 
-class SupabaseOtherSupplyBatches extends StatelessWidget {
+class SupabaseOtherSupplyBatches extends StatefulWidget {
   final InventoryItem item;
   const SupabaseOtherSupplyBatches({super.key, required this.item});
+
+  @override
+  State<SupabaseOtherSupplyBatches> createState() =>
+      _SupabaseOtherSupplyBatchesState();
+}
+
+class _SupabaseOtherSupplyBatchesState
+    extends State<SupabaseOtherSupplyBatches> {
+  bool _isFirstLoad = true;
+
+  Widget _buildSkeletonLoader(ThemeData theme, ColorScheme scheme) {
+    return Shimmer.fromColors(
+      baseColor: theme.brightness == Brightness.dark
+          ? Colors.grey[800]!
+          : Colors.grey[300]!,
+      highlightColor: theme.brightness == Brightness.dark
+          ? Colors.grey[700]!
+          : Colors.grey[100]!,
+      child: Column(
+        children: List.generate(
+            3,
+            (index) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                  ),
+                  height: 50,
+                )),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    // Remove the early return for noExpiry items - now we show all batches regardless of expiry
-
     final controller = ViewSupplyController();
 
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: Supabase.instance.client
           .from('supplies')
-          .stream(primaryKey: ['id']).eq('name', item.name),
+          .stream(primaryKey: ['id']).eq('name', widget.item.name),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 28),
-            child: Center(child: CircularProgressIndicator()),
-          );
+        // Show skeleton only on first load when there's no data
+        if (_isFirstLoad && !snapshot.hasData) {
+          return _buildSkeletonLoader(theme, scheme);
+        }
+
+        // Mark as loaded once we have data
+        if (snapshot.hasData && _isFirstLoad) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _isFirstLoad = false;
+              });
+            }
+          });
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Container(
@@ -69,16 +113,16 @@ class SupabaseOtherSupplyBatches extends StatelessWidget {
         }).where((batch) {
           // Keep only same category using normalized comparison
           final batchCat = batch.category.trim().toLowerCase();
-          final currentCat = item.category.trim().toLowerCase();
+          final currentCat = widget.item.category.trim().toLowerCase();
           if (batchCat != currentCat) return false;
 
           // Exclude the item we are viewing
-          if (batch.id == item.id) return false;
+          if (batch.id == widget.item.id) return false;
 
           // Filter out expired batches ONLY for non-archived view and ONLY for items WITH expiry dates.
           // When viewing an archived item, include expired batches so they are visible.
           // Items with no expiry are always included regardless of archived status.
-          final bool viewingArchived = item.archived;
+          final bool viewingArchived = widget.item.archived;
           if (!viewingArchived &&
               !batch.noExpiry &&
               batch.expiry != null &&
@@ -106,7 +150,7 @@ class SupabaseOtherSupplyBatches extends StatelessWidget {
         // Filter out zero-stock batches only if there are other batches with stock
         // Include the main item's stock in the calculation
         final hasStockBatches =
-            item.stock > 0 || batches.any((batch) => batch.stock > 0);
+            widget.item.stock > 0 || batches.any((batch) => batch.stock > 0);
         if (hasStockBatches) {
           batches.removeWhere((batch) => batch.stock == 0);
         }

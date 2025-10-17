@@ -12,7 +12,55 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class EmployeeListController {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Get all Supabase users
+  /// Get all users as a realtime stream
+  Stream<List<Map<String, dynamic>>> getUsersStream() {
+    // Note: We need to ensure admin exists first, but we can't await in a stream
+    // So we'll do the transformation in the map
+    return _supabase
+        .from('user_roles')
+        .stream(primaryKey: ['id']).map((response) {
+      List<Map<String, dynamic>> users = [];
+
+      for (var userData in response) {
+        final user = {
+          'uid': userData['id'] ?? '',
+          'email': userData['email'] ?? '',
+          'displayName': userData['name'] ?? 'User',
+          'name': userData['name'] ?? 'User',
+          'username': userData['username'] ?? '',
+          'role': userData['role'] ?? 'Staff',
+          'isActive': userData['is_active'] ?? true,
+          'createdAt': userData['created_at'],
+          'updatedAt': userData['updated_at'],
+        };
+        users.add(user);
+      }
+
+      // Sort: Owner first, then Admin, then Staff, then by name A-Z
+      users.sort((a, b) {
+        final aRole = a['role'] ?? 'Staff';
+        final bRole = b['role'] ?? 'Staff';
+
+        // Role hierarchy: Owner > Admin > Staff
+        final roleOrder = {'Owner': 0, 'Admin': 1, 'Staff': 2};
+        final aRoleOrder = roleOrder[aRole] ?? 2;
+        final bRoleOrder = roleOrder[bRole] ?? 2;
+
+        if (aRoleOrder != bRoleOrder) {
+          return aRoleOrder.compareTo(bRoleOrder);
+        }
+
+        // If same role, sort by name A-Z
+        final aName = (a['name'] ?? '').toString().toLowerCase();
+        final bName = (b['name'] ?? '').toString().toLowerCase();
+        return aName.compareTo(bName);
+      });
+
+      return users;
+    });
+  }
+
+  /// Get all Supabase users (legacy - kept for backwards compatibility)
   Future<List<Map<String, dynamic>>> getUsers() async {
     try {
       // Ensure admin user exists in Supabase
