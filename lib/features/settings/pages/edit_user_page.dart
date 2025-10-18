@@ -211,153 +211,161 @@ class _EditUserPageState extends State<EditUserPage> {
           elevation: theme.appBarTheme.elevation,
           shadowColor: theme.appBarTheme.shadowColor,
         ),
-        body: ResponsiveContainer(
-          maxWidth: 900,
-          child: SafeArea(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : SingleChildScrollView(
-                    padding: EdgeInsets.all(
-                        MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Name Field
-                          _buildTextField(
-                            controller: _nameController,
-                            label: 'Name',
-                            hint: 'Enter name',
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Name is required';
-                              }
-                              return null;
-                            },
-                            theme: theme,
-                            fieldKey: 'name',
-                          ),
-                          const SizedBox(height: 12),
+        body: SafeArea(
+          top: false,
+          child: ResponsiveContainer(
+            maxWidth: 900,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : SingleChildScrollView(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width < 768
+                            ? 1.0
+                            : 16.0,
+                        vertical: 12.0,
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Name Field
+                            _buildTextField(
+                              controller: _nameController,
+                              label: 'Name',
+                              hint: 'Enter name',
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Name is required';
+                                }
+                                return null;
+                              },
+                              theme: theme,
+                              fieldKey: 'name',
+                            ),
+                            const SizedBox(height: 12),
 
-                          // Username Field
-                          _buildTextField(
-                            controller: _usernameController,
-                            label: 'Username',
-                            hint: 'Enter username',
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Username is required';
-                              }
-                              return null;
-                            },
-                            theme: theme,
-                            fieldKey: 'username',
-                          ),
-                          const SizedBox(height: 12),
+                            // Username Field
+                            _buildTextField(
+                              controller: _usernameController,
+                              label: 'Username',
+                              hint: 'Enter username',
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Username is required';
+                                }
+                                return null;
+                              },
+                              theme: theme,
+                              fieldKey: 'username',
+                            ),
+                            const SizedBox(height: 12),
 
-                          // Email Field (Enabled)
-                          _buildTextField(
-                            controller: _emailController,
-                            label: 'Email',
-                            hint: 'Enter email address',
-                            keyboardType: TextInputType.emailAddress,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Email is required';
-                              }
-                              if (!_controller.isEmailValid(value)) {
-                                return 'Please enter a valid email';
-                              }
-                              return null;
-                            },
-                            theme: theme,
-                            fieldKey: 'email',
-                          ),
-                          const SizedBox(height: 12),
+                            // Email Field (Enabled)
+                            _buildTextField(
+                              controller: _emailController,
+                              label: 'Email',
+                              hint: 'Enter email address',
+                              keyboardType: TextInputType.emailAddress,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Email is required';
+                                }
+                                if (!_controller.isEmailValid(value)) {
+                                  return 'Please enter a valid email';
+                                }
+                                return null;
+                              },
+                              theme: theme,
+                              fieldKey: 'email',
+                            ),
+                            const SizedBox(height: 12),
 
-                          // Role and Status Row
-                          Row(
-                            children: [
-                              // Role Dropdown
-                              Expanded(
-                                child: _buildRoleDropdown(theme),
-                              ),
-                              const SizedBox(width: 12),
-                              // Status Dropdown
-                              Expanded(
-                                child: _buildStatusDropdown(theme),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Reset Password Button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () => _showResetPasswordDialog(),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                            // Role and Status Row
+                            Row(
+                              children: [
+                                // Role Dropdown
+                                Expanded(
+                                  child: _buildRoleDropdown(theme),
                                 ),
-                                elevation: 1,
-                              ),
-                              child: const Text(
-                                'Reset Password',
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro',
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color: Colors.white,
+                                const SizedBox(width: 12),
+                                // Status Dropdown
+                                Expanded(
+                                  child: _buildStatusDropdown(theme),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Reset Password Button
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () => _showResetPasswordDialog(),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 1,
+                                ),
+                                child: const Text(
+                                  'Reset Password',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro',
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
+                            const SizedBox(height: 16),
 
-                          // Save Button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isSaving ? null : _saveUser,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00D4AA),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                            // Save Button
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _isSaving ? null : _saveUser,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00D4AA),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 1,
                                 ),
-                                elevation: 1,
+                                child: _isSaving
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Save Changes',
+                                        style: TextStyle(
+                                          fontFamily: 'SF Pro',
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                               ),
-                              child: _isSaving
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Save Changes',
-                                      style: TextStyle(
-                                        fontFamily: 'SF Pro',
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                      ),
-                                    ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+            ),
           ),
         ),
       ),

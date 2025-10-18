@@ -151,9 +151,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
           child: Align(
             alignment: Alignment.topCenter,
             child: SingleChildScrollView(
-              padding: MediaQuery.of(context).size.width < 768
-                  ? const EdgeInsets.all(8.0)
-                  : const EdgeInsets.all(16.0),
+              padding: EdgeInsets.symmetric(
+                horizontal:
+                    MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                vertical: 12.0,
+              ),
               child: Form(
                 key: _formKey,
                 child: Column(

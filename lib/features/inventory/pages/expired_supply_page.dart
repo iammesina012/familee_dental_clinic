@@ -69,8 +69,11 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
           child: ResponsiveContainer(
             maxWidth: 1200,
             child: Padding(
-              padding: EdgeInsets.all(
-                  MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+              padding: EdgeInsets.symmetric(
+                horizontal:
+                    MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                vertical: 12.0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
@@ -145,8 +146,10 @@ class _AppTutorialPageState extends State<AppTutorialPage> {
       body: ResponsiveContainer(
         maxWidth: 1000,
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(
-              MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+          padding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+            vertical: 12.0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -372,13 +375,29 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
         enableCaption: true,
         controlsVisibleAtStart: true,
         startAt: 0,
+        useHybridComposition: true, // Better performance
       ),
     );
+
+    // Lock orientation to portrait to prevent landscape lock
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
   }
 
   @override
   void dispose() {
     _controller.dispose();
+
+    // Restore normal orientation when video is closed
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
     super.dispose();
   }
 

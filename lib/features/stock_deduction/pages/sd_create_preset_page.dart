@@ -353,8 +353,11 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
           maxWidth: 1100,
           child: SafeArea(
             child: Padding(
-              padding: EdgeInsets.all(
-                  MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+              padding: EdgeInsets.symmetric(
+                horizontal:
+                    MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                vertical: 12.0,
+              ),
               child: Column(
                 children: [
                   // Preset name input and Save button row

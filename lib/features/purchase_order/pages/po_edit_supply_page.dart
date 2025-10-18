@@ -131,8 +131,10 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
         maxWidth: 1000,
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.all(
-                MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+            padding: EdgeInsets.symmetric(
+              horizontal: MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+              vertical: 12.0,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -373,7 +375,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                             children: [
                               // Qty stepper
                               Container(
-                                width: 150,
+                                width: 120,
                                 decoration: BoxDecoration(
                                   color: scheme.surface,
                                   borderRadius: BorderRadius.circular(8),
@@ -398,7 +400,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         icon: Icon(Icons.remove,
                                             color: theme.iconTheme.color
                                                 ?.withOpacity(0.7),
-                                            size: 18),
+                                            size: 16),
                                       ),
                                     ),
                                     Expanded(
@@ -407,7 +409,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         keyboardType: TextInputType.number,
                                         textAlign: TextAlign.center,
                                         style: AppFonts.sfProStyle(
-                                            fontSize: 16,
+                                            fontSize: 14,
                                             fontWeight: FontWeight.bold,
                                             color: theme
                                                 .textTheme.bodyMedium?.color),
@@ -419,7 +421,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                       ),
                                     ),
                                     SizedBox(
-                                      width: 40,
+                                      width: 32,
                                       child: IconButton(
                                         onPressed: () {
                                           final currentQty = int.tryParse(
@@ -432,7 +434,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                           });
                                         },
                                         icon: const Icon(Icons.add,
-                                            color: Color(0xFF00D4AA), size: 18),
+                                            color: Color(0xFF00D4AA), size: 16),
                                       ),
                                     ),
                                   ],
@@ -474,24 +476,27 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         const Icon(Icons.event,
                                             color: Color(0xFF00D4AA), size: 18),
                                         const SizedBox(width: 8),
-                                        Text(
-                                          _batchExpiries[i] != null
-                                              ? '${_batchExpiries[i]!.year}/${_batchExpiries[i]!.month.toString().padLeft(2, '0')}/${_batchExpiries[i]!.day.toString().padLeft(2, '0')}'
-                                              : _batchNoExpirySelected[i]
-                                                  ? 'No Expiry Date'
-                                                  : 'Set expiry date',
-                                          style: AppFonts.sfProStyle(
-                                              fontSize: 16,
-                                              color: _batchExpiries[i] != null
-                                                  ? theme.textTheme.bodyMedium
-                                                      ?.color
-                                                  : _batchNoExpirySelected[i]
-                                                      ? theme.textTheme
-                                                          .bodyMedium?.color
-                                                          ?.withOpacity(0.8)
-                                                      : theme.textTheme
-                                                          .bodyMedium?.color
-                                                          ?.withOpacity(0.6)),
+                                        Expanded(
+                                          child: Text(
+                                            _batchExpiries[i] != null
+                                                ? '${_batchExpiries[i]!.year}/${_batchExpiries[i]!.month.toString().padLeft(2, '0')}/${_batchExpiries[i]!.day.toString().padLeft(2, '0')}'
+                                                : _batchNoExpirySelected[i]
+                                                    ? 'No Expiry Date'
+                                                    : 'Set expiry date',
+                                            style: AppFonts.sfProStyle(
+                                                fontSize: 16,
+                                                color: _batchExpiries[i] != null
+                                                    ? theme.textTheme.bodyMedium
+                                                        ?.color
+                                                    : _batchNoExpirySelected[i]
+                                                        ? theme.textTheme
+                                                            .bodyMedium?.color
+                                                            ?.withOpacity(0.8)
+                                                        : theme.textTheme
+                                                            .bodyMedium?.color
+                                                            ?.withOpacity(0.6)),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
                                       ],
                                     ),

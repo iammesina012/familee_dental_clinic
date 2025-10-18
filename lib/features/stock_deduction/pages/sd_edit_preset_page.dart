@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_edit_preset_controller.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart'; // Add this import
 
@@ -346,114 +347,123 @@ class _EditPresetPageState extends State<EditPresetPage> {
           backgroundColor: const Color(0xFF00D4AA),
           child: const Icon(Icons.add, color: Colors.white),
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
-            child: Column(
-              children: [
-                // Preset name input and save button side by side
-                Row(
-                  children: [
-                    // Preset name input with bookmark icon
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Theme.of(context)
-                                  .shadowColor
-                                  .withOpacity(0.08),
-                              spreadRadius: 1,
-                              blurRadius: 3,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                          border: Border.all(
-                            color:
-                                Theme.of(context).dividerColor.withOpacity(0.2),
-                          ),
-                        ),
-                        child: TextField(
-                          controller: _nameController,
-                          decoration: InputDecoration(
-                            hintText: 'Enter preset name...',
-                            hintStyle: AppFonts.sfProStyle(
-                                fontSize: 16,
+        body: ResponsiveContainer(
+          maxWidth: 1100,
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal:
+                    MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                vertical: 12.0,
+              ),
+              child: Column(
+                children: [
+                  // Preset name input and save button side by side
+                  Row(
+                    children: [
+                      // Preset name input with bookmark icon
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
                                 color: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.color
-                                    ?.withOpacity(0.6)),
-                            prefixIcon: Icon(Icons.bookmark_outline,
-                                color: Theme.of(context).iconTheme.color),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
+                                    .shadowColor
+                                    .withOpacity(0.08),
+                                spreadRadius: 1,
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .dividerColor
+                                  .withOpacity(0.2),
                             ),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
                           ),
-                          style: AppFonts.sfProStyle(fontSize: 16),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Save button
-                    ElevatedButton(
-                      onPressed:
-                          _presetSupplies.isNotEmpty ? _savePreset : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _presetSupplies.isNotEmpty
-                            ? const Color(0xFF00D4AA)
-                            : Colors.grey[400],
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Update Preset',
-                        style: AppFonts.sfProStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Supplies list
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Theme.of(context).colorScheme.surface
-                          : const Color(0xFFE8D5E8),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(context).dividerColor.withOpacity(0.2),
-                      ),
-                    ),
-                    child: _presetSupplies.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(12),
-                            itemCount: _presetSupplies.length,
-                            itemBuilder: (context, index) {
-                              final item = _presetSupplies[index];
-                              return _buildSupplyCard(item, index);
-                            },
+                          child: TextField(
+                            controller: _nameController,
+                            decoration: InputDecoration(
+                              hintText: 'Enter preset name...',
+                              hintStyle: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.color
+                                      ?.withOpacity(0.6)),
+                              prefixIcon: Icon(Icons.bookmark_outline,
+                                  color: Theme.of(context).iconTheme.color),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              filled: true,
+                              fillColor: Theme.of(context).colorScheme.surface,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                            ),
+                            style: AppFonts.sfProStyle(fontSize: 16),
                           ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Save button
+                      ElevatedButton(
+                        onPressed:
+                            _presetSupplies.isNotEmpty ? _savePreset : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _presetSupplies.isNotEmpty
+                              ? const Color(0xFF00D4AA)
+                              : Colors.grey[400],
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Update Preset',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+
+                  // Supplies list
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.surface
+                            : const Color(0xFFE8D5E8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color:
+                              Theme.of(context).dividerColor.withOpacity(0.2),
+                        ),
+                      ),
+                      child: _presetSupplies.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(12),
+                              itemCount: _presetSupplies.length,
+                              itemBuilder: (context, index) {
+                                final item = _presetSupplies[index];
+                                return _buildSupplyCard(item, index);
+                              },
+                            ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

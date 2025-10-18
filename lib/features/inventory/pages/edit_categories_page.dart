@@ -169,8 +169,11 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
               return ResponsiveContainer(
                 maxWidth: 1000,
                 child: Padding(
-                  padding: EdgeInsets.all(
-                      MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+                  padding: EdgeInsets.symmetric(
+                    horizontal:
+                        MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                    vertical: 12.0,
+                  ),
                   child: ListView.separated(
                     physics: NeverScrollableScrollPhysics(),
                     itemCount: 5,
@@ -244,8 +247,11 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
               maxWidth: 800,
               child: ListView.builder(
                 physics: AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.all(
-                    MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+                padding: EdgeInsets.symmetric(
+                  horizontal:
+                      MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                  vertical: 12.0,
+                ),
                 itemCount: categories.length,
                 itemBuilder: (context, index) {
                   final categoryName = categories[index];

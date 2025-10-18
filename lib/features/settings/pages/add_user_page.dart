@@ -179,196 +179,203 @@ class _AddUserPageState extends State<AddUserPage> {
           elevation: theme.appBarTheme.elevation,
           shadowColor: theme.appBarTheme.shadowColor,
         ),
-        body: ResponsiveContainer(
-          maxWidth: 900,
-          child: SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(
-                  MediaQuery.of(context).size.width < 768 ? 8.0 : 20.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Default Password Info
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: theme.brightness == Brightness.dark
-                            ? Colors.blue.withOpacity(0.1)
-                            : Colors.blue.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.blue.withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            color: Colors.blue,
-                            size: 20,
+        body: SafeArea(
+          top: false,
+          child: ResponsiveContainer(
+            maxWidth: 900,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal:
+                      MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                  vertical: 12.0,
+                ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Default Password Info
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.blue.withOpacity(0.1)
+                              : Colors.blue.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.blue.withOpacity(0.3),
+                            width: 1,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Default password: famiLee2021',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontSize: 14,
-                                color: Colors.blue,
-                                fontWeight: FontWeight.w500,
-                              ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.blue,
+                              size: 20,
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Name Field
-                    _buildTextField(
-                      controller: _nameController,
-                      label: 'Name',
-                      hint: 'Enter display name',
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Name is required';
-                        }
-                        return null;
-                      },
-                      theme: theme,
-                      fieldKey: 'name',
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Username Field
-                    _buildTextField(
-                      controller: _usernameController,
-                      label: 'Username',
-                      hint: 'Enter username',
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Username is required';
-                        }
-                        if (_usernameError != null) {
-                          return _usernameError;
-                        }
-                        return null;
-                      },
-                      onChanged: (value) async {
-                        // Clear previous error
-                        setState(() {
-                          _usernameError = null;
-                        });
-
-                        // Real-time username validation
-                        if (value.isNotEmpty) {
-                          final isTaken =
-                              await _controller.isUsernameTaken(value.trim());
-                          if (isTaken && mounted) {
-                            setState(() {
-                              _usernameError = 'Username is already taken';
-                            });
-                          }
-                        }
-                      },
-                      theme: theme,
-                      fieldKey: 'username',
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Email Field
-                    _buildTextField(
-                      controller: _emailController,
-                      label: 'Email',
-                      hint: 'Enter email address',
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Email is required';
-                        }
-                        if (!_controller.isEmailValid(value)) {
-                          return 'Please enter a valid email';
-                        }
-                        if (_emailError != null) {
-                          return _emailError;
-                        }
-                        return null;
-                      },
-                      onChanged: (value) async {
-                        // Clear previous error
-                        setState(() {
-                          _emailError = null;
-                        });
-
-                        // Real-time email validation
-                        if (value.isNotEmpty &&
-                            _controller.isEmailValid(value)) {
-                          final isTaken =
-                              await _controller.isEmailTaken(value.trim());
-                          if (isTaken && mounted) {
-                            setState(() {
-                              _emailError = 'Email is already taken';
-                            });
-                          }
-                        }
-                      },
-                      theme: theme,
-                      fieldKey: 'email',
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Role Field - Only show if there are multiple role options
-                    if (_controller.getAvailableRoles().length > 1) ...[
-                      _buildRoleDropdown(theme),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Show role info if Admin (since they can only assign Staff)
-                    if (userRoleProvider.isAdmin &&
-                        _controller.getAvailableRoles().length == 1) ...[
-                      _buildRoleInfo(theme),
-                      const SizedBox(height: 16),
-                    ],
-
-                    const SizedBox(height: 16),
-
-                    // Create User Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isCreating ? null : _createUser,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00D4AA),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 1,
-                        ),
-                        child: _isCreating
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Create User',
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Default password: famiLee2021',
                                 style: TextStyle(
                                   fontFamily: 'SF Pro',
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color: Colors.white,
+                                  fontSize: 14,
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+
+                      // Name Field
+                      _buildTextField(
+                        controller: _nameController,
+                        label: 'Name',
+                        hint: 'Enter display name',
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Name is required';
+                          }
+                          return null;
+                        },
+                        theme: theme,
+                        fieldKey: 'name',
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Username Field
+                      _buildTextField(
+                        controller: _usernameController,
+                        label: 'Username',
+                        hint: 'Enter username',
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Username is required';
+                          }
+                          if (_usernameError != null) {
+                            return _usernameError;
+                          }
+                          return null;
+                        },
+                        onChanged: (value) async {
+                          // Clear previous error
+                          setState(() {
+                            _usernameError = null;
+                          });
+
+                          // Real-time username validation
+                          if (value.isNotEmpty) {
+                            final isTaken =
+                                await _controller.isUsernameTaken(value.trim());
+                            if (isTaken && mounted) {
+                              setState(() {
+                                _usernameError = 'Username is already taken';
+                              });
+                            }
+                          }
+                        },
+                        theme: theme,
+                        fieldKey: 'username',
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Email Field
+                      _buildTextField(
+                        controller: _emailController,
+                        label: 'Email',
+                        hint: 'Enter email address',
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Email is required';
+                          }
+                          if (!_controller.isEmailValid(value)) {
+                            return 'Please enter a valid email';
+                          }
+                          if (_emailError != null) {
+                            return _emailError;
+                          }
+                          return null;
+                        },
+                        onChanged: (value) async {
+                          // Clear previous error
+                          setState(() {
+                            _emailError = null;
+                          });
+
+                          // Real-time email validation
+                          if (value.isNotEmpty &&
+                              _controller.isEmailValid(value)) {
+                            final isTaken =
+                                await _controller.isEmailTaken(value.trim());
+                            if (isTaken && mounted) {
+                              setState(() {
+                                _emailError = 'Email is already taken';
+                              });
+                            }
+                          }
+                        },
+                        theme: theme,
+                        fieldKey: 'email',
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Role Field - Only show if there are multiple role options
+                      if (_controller.getAvailableRoles().length > 1) ...[
+                        _buildRoleDropdown(theme),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Show role info if Admin (since they can only assign Staff)
+                      if (userRoleProvider.isAdmin &&
+                          _controller.getAvailableRoles().length == 1) ...[
+                        _buildRoleInfo(theme),
+                        const SizedBox(height: 16),
+                      ],
+
+                      const SizedBox(height: 16),
+
+                      // Create User Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isCreating ? null : _createUser,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00D4AA),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 1,
+                          ),
+                          child: _isCreating
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text(
+                                  'Create User',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro',
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

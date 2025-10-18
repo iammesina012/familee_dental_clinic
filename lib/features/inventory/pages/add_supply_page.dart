@@ -179,8 +179,12 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
           child: ResponsiveContainer(
             maxWidth: 900,
             child: Padding(
-              padding: EdgeInsets.all(
-                  MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0),
+              padding: EdgeInsets.symmetric(
+                horizontal: MediaQuery.of(context).size.width < 768
+                    ? 1.0
+                    : 16.0, // Reduce horizontal
+                vertical: 12.0, // Keep vertical as needed
+              ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
