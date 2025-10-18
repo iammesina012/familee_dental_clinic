@@ -4,6 +4,7 @@ import 'package:familee_dental/features/inventory/components/inventory_item_card
 import 'package:familee_dental/features/inventory/controller/archive_supply_controller.dart';
 import 'package:familee_dental/features/inventory/pages/view_supply_page.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 import 'package:shimmer/shimmer.dart';
 
 class ArchiveSupplyPage extends StatefulWidget {
@@ -158,6 +159,19 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                     child: StreamBuilder<List<InventoryItem>>(
                       stream: controller.getArchivedSupplies(),
                       builder: (context, snapshot) {
+                        // Handle errors
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text(
+                              'Error loading archived supplies',
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: Colors.red,
+                              ),
+                            ),
+                          );
+                        }
+
                         // Only show loading on first load, not on refresh
                         if (snapshot.connectionState ==
                                 ConnectionState.waiting &&

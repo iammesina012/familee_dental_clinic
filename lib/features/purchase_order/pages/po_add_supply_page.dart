@@ -69,7 +69,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 0.9,
+                  childAspectRatio: 0.75,
                 ),
                 itemCount: 12,
                 itemBuilder: (context, index) {
@@ -185,8 +185,8 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                 Expanded(
                   child: StreamBuilder<List<GroupedInventoryItem>>(
                     // Use catalog stream to include products even if only expired batches exist
-                    stream:
-                        catalogController.getAllProductsStream(archived: false),
+                    stream: catalogController.getAllProductsStream(
+                        archived: false, expired: false),
                     builder: (context, snapshot) {
                       // Show skeleton loader only on first load
                       if (_isFirstLoad && !snapshot.hasData) {
@@ -288,7 +288,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                       : 2,
                               crossAxisSpacing: 12,
                               mainAxisSpacing: 12,
-                              childAspectRatio: 0.9,
+                              childAspectRatio: 0.75,
                             ),
                             itemCount: filteredGroups.length,
                             itemBuilder: (context, index) {
@@ -337,22 +337,37 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                             : Icon(Icons.image_not_supported,
                                                 size: 96, color: Colors.grey),
                                         SizedBox(height: 16),
-                                        // Flexible text container
+                                        // Product Name (exact same as inventory)
                                         Flexible(
                                           child: Text(
                                             item.name,
-                                            style: AppFonts.sfProStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                              color: theme
-                                                  .textTheme.bodyMedium?.color,
-                                            ),
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                                color: theme.textTheme
+                                                    .bodyMedium?.color),
                                             textAlign: TextAlign.center,
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        // Expiry chip intentionally hidden on Add Supply (PO)
+                                        const SizedBox(height: 10),
+
+                                        // Stock Information (exact same as inventory)
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              'Stock: ${group.totalStock}',
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 14,
+                                                  color: theme.textTheme
+                                                      .bodyMedium?.color),
+                                            ),
+                                          ],
+                                        ),
                                       ],
                                     ),
                                   ),

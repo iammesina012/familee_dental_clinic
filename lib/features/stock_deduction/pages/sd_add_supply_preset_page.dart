@@ -251,8 +251,8 @@ class _StockDeductionAddSupplyForPresetPageState
                 const SizedBox(height: 16),
                 Expanded(
                   child: StreamBuilder<List<GroupedInventoryItem>>(
-                    stream:
-                        _controller.getGroupedSuppliesStream(archived: false),
+                    stream: _controller.getGroupedSuppliesStream(
+                        archived: false, expired: false),
                     builder: (context, snapshot) {
                       // Show skeleton loader only on first load
                       if (_isFirstLoad && !snapshot.hasData) {

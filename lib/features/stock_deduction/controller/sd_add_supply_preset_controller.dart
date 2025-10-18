@@ -62,9 +62,10 @@ class SdAddSupplyPresetController {
 
   // Get inventory stream
   Stream<List<GroupedInventoryItem>> getGroupedSuppliesStream(
-      {bool archived = false}) {
+      {bool archived = false, bool? expired}) {
     // Use catalog stream so products remain visible even if only expired batches exist
-    return _catalogController.getAllProductsStream(archived: archived);
+    return _catalogController.getAllProductsStream(
+        archived: archived, expired: expired);
   }
 
   // Search filtering logic with multi-word support

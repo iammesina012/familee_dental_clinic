@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:familee_dental/features/auth/pages/login_page.dart';
@@ -30,6 +31,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Set orientation based on device type
+  // Mobile: Portrait only, Tablet: All orientations
+  await _setOrientationBasedOnDevice();
 
   // Load environment 1
   await dotenv.load(fileName: ".env");
@@ -196,5 +201,32 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
 
     return _isLoggedIn ? const Dashboard() : const Login();
+  }
+}
+
+// Helper function to set orientation based on device type
+Future<void> _setOrientationBasedOnDevice() async {
+  // Get screen size to determine if it's mobile or tablet
+  final data = MediaQueryData.fromView(
+      WidgetsBinding.instance.platformDispatcher.views.first);
+  final size = data.size;
+  final shortestSide = size.shortestSide;
+
+  // Consider devices with shortest side < 600 as mobile
+  // Devices with shortest side >= 600 are considered tablets
+  if (shortestSide < 600) {
+    // Mobile: Lock to portrait only
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  } else {
+    // Tablet: Allow all orientations
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
   }
 }

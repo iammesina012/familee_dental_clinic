@@ -35,6 +35,19 @@ class _ExpiredViewSupplyPageState extends State<ExpiredViewSupplyPage> {
       key: _streamKey,
       stream: controller.supplyStream(widget.item.id),
       builder: (context, snapshot) {
+        // Handle errors
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Error loading supply details',
+              style: AppFonts.sfProStyle(
+                fontSize: 16,
+                color: Colors.red,
+              ),
+            ),
+          );
+        }
+
         // Always use stream data if available, otherwise use the initial item from widget
         // This ensures we always have data to display and never show loading indicator
         final updatedItem = snapshot.hasData && snapshot.data != null

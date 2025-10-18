@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 import 'package:shimmer/shimmer.dart';
 
 class EditCategoriesPage extends StatefulWidget {
@@ -158,6 +159,19 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
         child: StreamBuilder<List<String>>(
           stream: categoriesController.getCategoriesStream(),
           builder: (context, snapshot) {
+            // Handle errors
+            if (snapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Error loading categories',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 16,
+                    color: Colors.red,
+                  ),
+                ),
+              );
+            }
+
             // Show skeleton loader only on first load
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {

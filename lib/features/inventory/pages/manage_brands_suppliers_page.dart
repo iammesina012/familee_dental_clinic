@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 import 'package:shimmer/shimmer.dart';
 
 class ManageBrandsSuppliersPage extends StatefulWidget {
@@ -95,6 +96,19 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                       StreamBuilder<List<Brand>>(
                         stream: filterController.getBrandsStream(),
                         builder: (context, snapshot) {
+                          // Handle errors
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text(
+                                'Error loading brands',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            );
+                          }
+
                           // Show skeleton loader on first load only
                           if (snapshot.connectionState ==
                                   ConnectionState.waiting &&
@@ -278,6 +292,19 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                       StreamBuilder<List<Supplier>>(
                         stream: filterController.getSuppliersStream(),
                         builder: (context, snapshot) {
+                          // Handle errors
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text(
+                                'Error loading suppliers',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            );
+                          }
+
                           // Show skeleton loader on first load only
                           if (snapshot.connectionState ==
                                   ConnectionState.waiting &&

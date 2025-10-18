@@ -120,6 +120,19 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                     child: StreamBuilder<List<InventoryItem>>(
                       stream: controller.getSuppliesStream(archived: false),
                       builder: (context, snapshot) {
+                        // Handle errors
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text(
+                              'Error loading expired supplies',
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: Colors.red,
+                              ),
+                            ),
+                          );
+                        }
+
                         // Only show loading on first load, not on refresh
                         if (snapshot.connectionState ==
                                 ConnectionState.waiting &&

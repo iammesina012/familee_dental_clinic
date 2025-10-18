@@ -23,74 +23,6 @@ class _StockDeductionAddSupplyPageState
   final Map<String, InventoryItem> _selectedItems = {};
   bool _isFirstLoad = true;
 
-  Widget _expiryChip(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? Theme.of(context).colorScheme.surface
-            : Colors.grey[200],
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Theme.of(context).dividerColor.withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.calendar_today_outlined,
-              size: 12,
-              color: Theme.of(context).iconTheme.color?.withOpacity(0.8)),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: AppFonts.sfProStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).textTheme.bodyMedium?.color,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _stockChip(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? Theme.of(context).colorScheme.surface
-            : Colors.grey[200],
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Theme.of(context).dividerColor.withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.inventory_2_outlined,
-              size: 12,
-              color: Theme.of(context).iconTheme.color?.withOpacity(0.8)),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: AppFonts.sfProStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).textTheme.bodyMedium?.color,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _showOutOfStockDialog(String name) async {
     await showDialog<void>(
       context: context,
@@ -305,8 +237,8 @@ class _StockDeductionAddSupplyPageState
                 const SizedBox(height: 16),
                 Expanded(
                   child: StreamBuilder<List<GroupedInventoryItem>>(
-                    stream:
-                        _controller.getGroupedSuppliesStream(archived: false),
+                    stream: _controller.getGroupedSuppliesStream(
+                        archived: false, expired: false),
                     builder: (context, snapshot) {
                       // Show skeleton loader only on first load
                       if (_isFirstLoad && !snapshot.hasData) {
@@ -454,116 +386,8 @@ class _StockDeductionAddSupplyPageState
                                         context, _controller.toReturnMap(item));
                                   }
                                 },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color:
-                                        Theme.of(context).colorScheme.surface,
-                                    borderRadius: BorderRadius.circular(16),
-                                    // Highlight when selected (visual only)
-                                    border: selected
-                                        ? Border.all(
-                                            color: const Color(0xFF00D4AA),
-                                            width: 2)
-                                        : null,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Theme.of(context)
-                                            .shadowColor
-                                            .withOpacity(0.15),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                            12, 4, 12, 4),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            item.imageUrl.isNotEmpty
-                                                ? Image.network(
-                                                    item.imageUrl,
-                                                    width: 96,
-                                                    height: 96,
-                                                    fit: BoxFit.contain,
-                                                    errorBuilder: (context,
-                                                            error,
-                                                            stackTrace) =>
-                                                        const Icon(
-                                                            Icons
-                                                                .image_not_supported,
-                                                            size: 96,
-                                                            color: Colors.grey),
-                                                  )
-                                                : const Icon(
-                                                    Icons.image_not_supported,
-                                                    size: 96,
-                                                    color: Colors.grey),
-                                            const SizedBox(height: 16),
-                                            Flexible(
-                                              child: Text(
-                                                item.name,
-                                                style: AppFonts.sfProStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16,
-                                                    color: Theme.of(context)
-                                                        .textTheme
-                                                        .bodyMedium
-                                                        ?.color),
-                                                textAlign: TextAlign.center,
-                                                maxLines: 3,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            _expiryChip('Expiry: ' +
-                                                _controller.formatExpiry(
-                                                    item.expiry,
-                                                    item.noExpiry)),
-                                            const SizedBox(height: 6),
-                                            _stockChip('Stock: ' +
-                                                item.stock.toString()),
-                                          ],
-                                        ),
-                                      ),
-                                      if (_multiSelectMode)
-                                        Positioned(
-                                          top: 8,
-                                          right: 8,
-                                          child: Container(
-                                            width: 22,
-                                            height: 22,
-                                            decoration: BoxDecoration(
-                                              color: selected
-                                                  ? const Color(0xFF00D4AA)
-                                                  : Theme.of(context)
-                                                      .colorScheme
-                                                      .surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(100),
-                                              border: Border.all(
-                                                  color: selected
-                                                      ? const Color(0xFF00D4AA)
-                                                      : Theme.of(context)
-                                                          .dividerColor
-                                                          .withOpacity(0.4),
-                                                  width: 2),
-                                            ),
-                                            child: selected
-                                                ? const Icon(Icons.check,
-                                                    color: Colors.white,
-                                                    size: 16)
-                                                : null,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
+                                child: _buildInventoryStyleCard(
+                                    context, item, selected),
                               );
                             },
                           );
@@ -626,6 +450,163 @@ class _StockDeductionAddSupplyPageState
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildInventoryStyleCard(
+      BuildContext context, InventoryItem item, bool selected) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: selected
+            ? Border.all(color: const Color(0xFF00D4AA), width: 2)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: (theme.brightness == Brightness.dark
+                    ? Colors.black
+                    : Colors.black)
+                .withOpacity(0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Product Image (exact same as inventory)
+                item.imageUrl.isNotEmpty
+                    ? Image.network(
+                        item.imageUrl,
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(Icons.image_not_supported,
+                              size: 96, color: Colors.grey);
+                        },
+                      )
+                    : Icon(Icons.image_not_supported,
+                        size: 96, color: Colors.grey),
+                const SizedBox(height: 16),
+
+                // Product Name (exact same as inventory)
+                Flexible(
+                  child: Text(
+                    item.name,
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: theme.textTheme.bodyMedium?.color),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Stock Information (exact same as inventory)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Stock: ${item.stock}',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                          color: theme.textTheme.bodyMedium?.color),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Expiry Date Information (exact same as inventory)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.blue[50]!,
+                        Colors.blue[100]!,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[600],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.calendar_today,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _controller.formatExpiry(item.expiry, item.noExpiry),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue[800],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Selection indicator
+          if (_multiSelectMode)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: selected ? const Color(0xFF00D4AA) : scheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected
+                        ? const Color(0xFF00D4AA)
+                        : theme.dividerColor.withOpacity(0.4),
+                    width: 2,
+                  ),
+                ),
+                child: selected
+                    ? const Icon(Icons.check, color: Colors.white, size: 16)
+                    : null,
+              ),
+            ),
+        ],
       ),
     );
   }

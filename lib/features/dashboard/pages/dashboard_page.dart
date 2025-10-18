@@ -5,6 +5,7 @@ import 'package:familee_dental/features/dashboard/services/fast_moving_service.d
 import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 import 'package:shimmer/shimmer.dart';
 
 class Dashboard extends StatefulWidget {
@@ -160,6 +161,19 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                       StreamBuilder<Map<String, dynamic>>(
                         stream: _analyticsService.getInventoryStatsStream(),
                         builder: (context, snapshot) {
+                          // Handle errors
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text(
+                                'Error loading inventory stats',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            );
+                          }
+
                           // Only show loading state on first load, not on refresh
                           if (snapshot.connectionState ==
                                   ConnectionState.waiting &&
@@ -554,6 +568,19 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
               StreamBuilder<Map<String, int>>(
                 stream: _analyticsService.getExpiryCountsStream(),
                 builder: (context, snapshot) {
+                  // Handle errors
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        'Error loading expiry data',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 16,
+                          color: Colors.red,
+                        ),
+                      ),
+                    );
+                  }
+
                   final expired = snapshot.data != null
                       ? (snapshot.data!['expired'] ?? 0)
                       : 0;
@@ -634,6 +661,19 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                           window: const Duration(days: 90),
                         ),
                         builder: (context, snapshot) {
+                          // Handle errors
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text(
+                                'Error loading fast moving items',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            );
+                          }
+
                           // Show skeleton loader on first load
                           if (snapshot.connectionState ==
                                   ConnectionState.waiting &&

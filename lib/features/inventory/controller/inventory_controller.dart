@@ -1,6 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
-import 'package:flutter/foundation.dart';
 
 class InventoryController {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -43,11 +42,17 @@ class InventoryController {
 
   // New method to get grouped supplies for main inventory display
   Stream<List<GroupedInventoryItem>> getGroupedSuppliesStream(
-      {bool? archived}) {
+      {bool? archived, bool? expired}) {
     return getSuppliesStream(archived: archived).map((items) {
-      // Keep ALL items (including expired ones) for proper status display
-      // The GroupedInventoryItem.getStatus() method will handle showing "Expired" status
-      return _groupItems(items);
+      // Filter out expired items if expired: false is specified
+      List<InventoryItem> filteredItems = items;
+      if (expired == false) {
+        filteredItems = items.where((item) {
+          if (item.expiry == null) return true; // Keep items without expiry
+          return DateTime.now().isBefore(DateTime.parse(item.expiry!));
+        }).toList();
+      }
+      return _groupItems(filteredItems);
     });
   }
 
@@ -280,10 +285,34 @@ class InventoryController {
             .compareTo(a.mainItem.name.toLowerCase()));
         break;
       case "Quantity (Low → High)":
-        sorted.sort((a, b) => a.mainItem.stock.compareTo(b.mainItem.stock));
+        sorted.sort((a, b) {
+          // Primary: Total stock (low to high)
+          final stockCompare = a.totalStock.compareTo(b.totalStock);
+          if (stockCompare != 0) return stockCompare;
+
+          // Secondary: Reverse expiry order for Low to High (no expiry first)
+          final expiryCompare =
+              _expiryOrder(b.mainItem).compareTo(_expiryOrder(a.mainItem));
+          if (expiryCompare != 0) return expiryCompare;
+
+          // Tertiary: Same as High to Low (status)
+          return _statusOrder(a.mainItem).compareTo(_statusOrder(b.mainItem));
+        });
         break;
       case "Quantity (High → Low)":
-        sorted.sort((a, b) => b.mainItem.stock.compareTo(a.mainItem.stock));
+        sorted.sort((a, b) {
+          // Primary: Total stock (high to low)
+          final stockCompare = b.totalStock.compareTo(a.totalStock);
+          if (stockCompare != 0) return stockCompare;
+
+          // Secondary: Expiry date (earliest first)
+          final expiryCompare =
+              _expiryOrder(a.mainItem).compareTo(_expiryOrder(b.mainItem));
+          if (expiryCompare != 0) return expiryCompare;
+
+          // Tertiary: Status (as final tiebreaker)
+          return _statusOrder(a.mainItem).compareTo(_statusOrder(b.mainItem));
+        });
         break;
       case "Status (Low Stock → In Stock)":
         sorted.sort((a, b) =>

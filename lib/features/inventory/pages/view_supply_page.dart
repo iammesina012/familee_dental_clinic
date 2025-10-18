@@ -8,6 +8,7 @@ import 'package:familee_dental/features/inventory/controller/view_supply_control
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class InventoryViewSupplyPage extends StatefulWidget {
@@ -45,6 +46,19 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
       key: _streamKey,
       stream: controller.supplyStream(widget.item.id),
       builder: (context, snapshot) {
+        // Handle errors
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Error loading supply details',
+              style: AppFonts.sfProStyle(
+                fontSize: 16,
+                color: Colors.red,
+              ),
+            ),
+          );
+        }
+
         // Always use stream data if available, otherwise use the initial item from widget
         // This ensures we always have data to display and never show loading indicator
         final updatedItem = snapshot.hasData && snapshot.data != null

@@ -9,27 +9,31 @@ class CatalogController {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   Stream<List<GroupedInventoryItem>> getAllProductsStream(
-      {bool archived = false}) {
+      {bool archived = false, bool? expired}) {
     return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
-      final items = data
-          .map((row) {
-            return InventoryItem(
-              id: row['id'] as String,
-              name: row['name'] ?? '',
-              imageUrl: row['image_url'] ?? '',
-              category: row['category'] ?? '',
-              cost: (row['cost'] ?? 0).toDouble(),
-              stock: (row['stock'] ?? 0) as int,
-              unit: row['unit'] ?? '',
-              supplier: row['supplier'] ?? '',
-              brand: row['brand'] ?? '',
-              expiry: row['expiry'],
-              noExpiry: row['no_expiry'] ?? false,
-              archived: row['archived'] ?? false,
-            );
-          })
-          .where((it) => it.archived == archived)
-          .toList();
+      final items = data.map((row) {
+        return InventoryItem(
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: (row['stock'] ?? 0) as int,
+          unit: row['unit'] ?? '',
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
+        );
+      }).where((it) {
+        if (it.archived != archived) return false;
+        if (expired == false) {
+          if (it.expiry == null) return true; // Keep items without expiry
+          return DateTime.now().isBefore(DateTime.parse(it.expiry!));
+        }
+        return true;
+      }).toList();
 
       // Group by product key: NAME ONLY (normalized)
       final Map<String, List<InventoryItem>> byProduct = {};

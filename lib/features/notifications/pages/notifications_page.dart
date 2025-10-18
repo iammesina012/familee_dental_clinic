@@ -84,6 +84,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         stream:
                             _controller.getNotificationsStreamLimited(max: 20),
                         builder: (context, snapshot) {
+                          // Handle errors
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text(
+                                'Error loading notifications',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            );
+                          }
+
                           final all =
                               snapshot.data ?? const <AppNotification>[];
                           final items = all.take(_visibleCount).toList();

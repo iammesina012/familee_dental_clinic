@@ -286,14 +286,30 @@ class NotificationsController {
   Future<void> checkStockLevelNotification(
       String supplyName, int newStock, int previousStock) async {
     try {
-      // Calculate total stock across all batches of this supply
+      // Calculate total stock across all batches of this supply (excluding expired)
       final totalStockData = await _supabase
           .from('supplies')
-          .select('stock')
+          .select('stock, expiry, no_expiry')
           .eq('name', supplyName)
           .eq('archived', false);
 
       final totalCurrentStock = totalStockData
+          .where((row) {
+            // Filter out expired supplies
+            if (row['no_expiry'] == true)
+              return true; // Keep items with no expiry
+            if (row['expiry'] == null)
+              return true; // Keep items without expiry date
+
+            try {
+              final expiryDate =
+                  DateTime.parse(row['expiry'].toString().replaceAll('/', '-'));
+              return DateTime.now()
+                  .isBefore(expiryDate); // Keep only non-expired items
+            } catch (e) {
+              return true; // Keep items with invalid expiry dates
+            }
+          })
           .map((row) => (row['stock'] ?? 0) as int)
           .fold(0, (sum, stock) => sum + stock);
 
