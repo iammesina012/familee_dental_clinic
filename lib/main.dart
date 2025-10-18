@@ -21,6 +21,7 @@ import 'package:familee_dental/features/activity_log/pages/activity_log_page.dar
 import 'package:familee_dental/features/notifications/pages/notifications_page.dart';
 import 'package:familee_dental/features/backup_restore/services/automatic_backup_service.dart';
 import 'package:familee_dental/features/settings/pages/settings_page.dart';
+import 'package:familee_dental/features/settings/pages/app_tutorial_page.dart';
 import 'package:familee_dental/features/backup_restore/pages/backup_restore_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
@@ -124,6 +125,7 @@ class MainApp extends StatelessWidget {
             '/activity-log': (context) => const ActivityLogPage(),
             '/notifications': (context) => const NotificationsPage(),
             '/settings': (context) => const SettingsPage(),
+            '/tutorial': (context) => const AppTutorialPage(),
             '/backup-restore': (context) {
               final userRoleProvider = UserRoleProvider();
               if (!userRoleProvider.isOwner) {
@@ -173,7 +175,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     // Load user role if user is logged in
     if (isLoggedIn) {
       await _userRoleProvider.loadUserRole();
-      // Push notifications disabled: no device token storage
     }
 
     setState(() {
@@ -197,5 +198,3 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return _isLoggedIn ? const Dashboard() : const Login();
   }
 }
-
-// Firebase background handler removed

@@ -196,7 +196,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       color: null,
                     ),
                     onTap: () {
-                      // TODO: Navigate to app tutorial
+                      Navigator.pushNamed(context, '/tutorial');
                     },
                   ),
                 ],
