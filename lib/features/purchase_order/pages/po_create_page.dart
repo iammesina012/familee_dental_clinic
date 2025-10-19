@@ -20,6 +20,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
   final CreatePOController _controller = CreatePOController();
   TextEditingController? _autocompleteController;
   bool _nameListenerAttached = false;
+  String? validationError;
 
   // Editing mode variables
   bool _isEditing = false;
@@ -90,6 +91,185 @@ class _CreatePOPageState extends State<CreatePOPage> {
 
   double _calculateTotalCost() {
     return _controller.calculateTotalCost(addedSupplies);
+  }
+
+  // Helper function to validate alphanumeric input
+  bool _isValidAlphanumeric(String text) {
+    if (text.trim().isEmpty) return false;
+    // Check if the text contains only numbers
+    if (RegExp(r'^[0-9]+$').hasMatch(text.trim())) {
+      return false;
+    }
+    // Check if the text contains at least one letter and allows common characters
+    return RegExp(r'^[a-zA-Z0-9\s\-_\.]+$').hasMatch(text.trim()) &&
+        RegExp(r'[a-zA-Z]').hasMatch(text.trim());
+  }
+
+  // Show confirmation dialog for saving PO
+  Future<bool> _showSaveConfirmation() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final controllerToCheck = _autocompleteController ?? purchaseNameController;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon and Title
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.save,
+                        color: Color(0xFF00D4AA),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      _isEditing
+                          ? 'Update Purchase Order'
+                          : 'Create Purchase Order',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      _isEditing
+                          ? 'Are you sure you want to update this purchase order?'
+                          : 'Are you sure you want to create this purchase order?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // PO Details
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[800] : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Purchase Order: ${controllerToCheck.text.trim()}',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Supplies: ${addedSupplies.map((s) => s['supplyName'] ?? s['name'] ?? 'Unknown').join(', ')}',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Cancel first, then Save - matching exit dialog pattern)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              _isEditing ? 'Update PO' : 'Create PO',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
   }
 
   @override
@@ -220,15 +400,24 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                     ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide.none,
+                                      borderSide: validationError != null
+                                          ? BorderSide(
+                                              color: Colors.red[600]!, width: 1)
+                                          : BorderSide.none,
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide.none,
+                                      borderSide: validationError != null
+                                          ? BorderSide(
+                                              color: Colors.red[600]!, width: 1)
+                                          : BorderSide.none,
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide.none,
+                                      borderSide: validationError != null
+                                          ? BorderSide(
+                                              color: Colors.red[600]!, width: 2)
+                                          : BorderSide.none,
                                     ),
                                     contentPadding: EdgeInsets.symmetric(
                                       vertical: 12,
@@ -236,7 +425,21 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                     ),
                                     filled: true,
                                     fillColor: scheme.surface,
+                                    errorText: validationError,
+                                    errorStyle: TextStyle(
+                                      fontFamily: 'SF Pro',
+                                      fontSize: 12,
+                                      color: Colors.red[600],
+                                    ),
                                   ),
+                                  onChanged: (value) {
+                                    // Clear validation error when user starts typing
+                                    if (validationError != null) {
+                                      setState(() {
+                                        validationError = null;
+                                      });
+                                    }
+                                  },
                                 );
                               },
                               optionsBuilder:
@@ -1165,8 +1368,24 @@ class _CreatePOPageState extends State<CreatePOPage> {
     // Use the autocomplete controller if available, otherwise fall back to purchaseNameController
     final controllerToCheck = _autocompleteController ?? purchaseNameController;
 
+    // Clear previous validation error
+    setState(() {
+      validationError = null;
+    });
+
     if (controllerToCheck.text.trim().isEmpty) {
-      _showErrorDialog('Please enter a purchase order name.');
+      setState(() {
+        validationError = 'Please enter a purchase order name';
+      });
+      return;
+    }
+
+    // Validate alphanumeric input
+    if (!_isValidAlphanumeric(controllerToCheck.text.trim())) {
+      setState(() {
+        validationError =
+            'Purchase order name must contain letters and cannot be only numbers or special characters.';
+      });
       return;
     }
 
@@ -1175,6 +1394,10 @@ class _CreatePOPageState extends State<CreatePOPage> {
           'Please add at least one supply to the restocking list.');
       return;
     }
+
+    // Show confirmation dialog first
+    final confirmed = await _showSaveConfirmation();
+    if (!confirmed) return;
 
     setState(() {
       _isSaving = true;

@@ -378,11 +378,19 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
         useHybridComposition: true, // Better performance
       ),
     );
+  }
 
-    // Lock orientation to portrait to prevent landscape lock
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Allow all orientations for video watching
+    // Users can rotate to landscape for better video experience
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
     ]);
   }
 
@@ -390,15 +398,26 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
   void dispose() {
     _controller.dispose();
 
-    // Restore normal orientation when video is closed
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // Restore normal app orientation when video is closed
+    // This will use the same logic as the main app (mobile: portrait, tablet: all)
+    _restoreAppOrientation();
 
     super.dispose();
+  }
+
+  // Helper method to restore the original app orientation
+  void _restoreAppOrientation() {
+    // Get screen size to determine if it's mobile or tablet
+    final shortestSide = MediaQuery.of(context).size.shortestSide;
+
+    if (shortestSide < 600) {
+      // Mobile: Lock to portrait only (restore original app behavior)
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
+    // Tablets: Don't set any restrictions (let them rotate freely as per original app)
   }
 
   @override

@@ -489,113 +489,147 @@ class _ExpiredViewSupplyPageState extends State<ExpiredViewSupplyPage> {
     required InventoryItem item,
   }) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Dialog(
-      backgroundColor: theme.dialogBackgroundColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width < 768 ? 300 : 400,
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 400,
+          minWidth: 350,
         ),
-        child: Container(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: confirmColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 32, color: confirmColor),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon and Title
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: confirmColor.withOpacity(0.1),
+                shape: BoxShape.circle,
               ),
-              SizedBox(height: 16),
-              Text(
-                title,
-                style: AppFonts.sfProStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: theme.textTheme.titleLarge?.color,
-                ),
-                textAlign: TextAlign.center,
+              child: Icon(
+                icon,
+                color: confirmColor,
+                size: 32,
               ),
-              SizedBox(height: 8),
-              Text(
-                content,
-                style: AppFonts.sfProStyle(
-                  fontSize: 16,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-                ),
-                textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+
+            // Title
+            Text(
+              title,
+              style: TextStyle(
+                fontFamily: 'SF Pro',
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.titleLarge?.color,
               ),
-              SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text(
-                        'Cancel',
-                        style: AppFonts.sfProStyle(
-                          fontSize: 16,
-                          color: theme.textTheme.bodyMedium?.color
-                              ?.withOpacity(0.7),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+
+            // Content
+            Text(
+              content,
+              style: TextStyle(
+                fontFamily: 'SF Pro',
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: theme.textTheme.bodyMedium?.color,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+
+            // Buttons (Cancel first, then Confirm - matching exit dialog pattern)
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
                         ),
                       ),
                     ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        // Delete the item first
-                        final controller = ExpiredViewSupplyController();
-                        try {
-                          await controller.deleteSupply(item.id);
-                          if (context.mounted) {
-                            // Show success message first
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Supply deleted permanently!'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                            // Small delay to show success message, then navigate back
-                            await Future.delayed(Duration(milliseconds: 500));
-                            // Navigate back to expired supply page with result
-                            Navigator.of(context).pop('deleted');
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to delete supply: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      // Delete the item first
+                      final controller = ExpiredViewSupplyController();
+                      try {
+                        await controller.deleteSupply(item.id);
+                        if (context.mounted) {
+                          // Show success message first
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Supply deleted permanently!'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          // Small delay to show success message, then navigate back
+                          await Future.delayed(Duration(milliseconds: 500));
+                          // Navigate back to expired supply page with result
+                          Navigator.of(context).pop('deleted');
                         }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: confirmColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to delete supply: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: confirmColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(
-                        confirmText,
-                        style: AppFonts.sfProStyle(
-                          fontSize: 16,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      elevation: 2,
+                    ),
+                    child: Text(
+                      confirmText,
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontSize: 16,
                       ),
                     ),
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

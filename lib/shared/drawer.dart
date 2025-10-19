@@ -49,7 +49,8 @@ class MyDrawer extends StatelessWidget {
                   Navigator.pop(context);
                 }
                 if (currentRoute != '/dashboard') {
-                  Navigator.pushReplacementNamed(context, '/dashboard');
+                  Navigator.pushNamedAndRemoveUntil(
+                      context, '/dashboard', (route) => false);
                 }
               },
             ),
@@ -69,7 +70,7 @@ class MyDrawer extends StatelessWidget {
                   Navigator.pop(context);
                 }
                 if (currentRoute != '/inventory') {
-                  Navigator.pushReplacementNamed(context, '/inventory');
+                  Navigator.pushNamed(context, '/inventory');
                 }
               },
             ),
@@ -89,7 +90,7 @@ class MyDrawer extends StatelessWidget {
                   Navigator.pop(context);
                 }
                 if (currentRoute != '/purchase-order') {
-                  Navigator.pushReplacementNamed(context, '/purchase-order');
+                  Navigator.pushNamed(context, '/purchase-order');
                 }
               },
             ),
@@ -109,7 +110,7 @@ class MyDrawer extends StatelessWidget {
                   Navigator.pop(context);
                 }
                 if (currentRoute != '/stock-deduction') {
-                  Navigator.pushReplacementNamed(context, '/stock-deduction');
+                  Navigator.pushNamed(context, '/stock-deduction');
                 }
               },
             ),
@@ -131,7 +132,7 @@ class MyDrawer extends StatelessWidget {
                     Navigator.pop(context);
                   }
                   if (currentRoute != '/activity-log') {
-                    Navigator.pushReplacementNamed(context, '/activity-log');
+                    Navigator.pushNamed(context, '/activity-log');
                   }
                 },
               ),
@@ -312,6 +313,30 @@ class MyDrawer extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: Text(
+                        'Logout',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro',
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop(false),
                       style: TextButton.styleFrom(
@@ -331,30 +356,6 @@ class MyDrawer extends StatelessWidget {
                           fontFamily: 'SF Pro',
                           fontWeight: FontWeight.w500,
                           color: theme.textTheme.bodyMedium?.color,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        elevation: 2,
-                      ),
-                      child: Text(
-                        'Logout',
-                        style: TextStyle(
-                          fontFamily: 'SF Pro',
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
                           fontSize: 16,
                         ),
                       ),

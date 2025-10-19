@@ -204,7 +204,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 }
 
-// Helper function to set orientation based on device type
+//Helper function to set orientation based on device type
 Future<void> _setOrientationBasedOnDevice() async {
   // Get screen size to determine if it's mobile or tablet
   final data = MediaQueryData.fromView(
@@ -220,13 +220,6 @@ Future<void> _setOrientationBasedOnDevice() async {
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
-  } else {
-    // Tablet: Allow all orientations
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
   }
+  // Tablets: Don't set any orientation restrictions (let them rotate freely)
 }

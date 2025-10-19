@@ -783,7 +783,11 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           if (_deductions.isNotEmpty) {
             return await _confirmLeave();
           }
-          return true;
+          // Navigate back to Dashboard when back button is pressed
+          // Use popUntil to go back to existing Dashboard instead of creating a new one
+          Navigator.popUntil(
+              context, (route) => route.settings.name == '/dashboard');
+          return false; // Prevent default back behavior
         },
         child: Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,

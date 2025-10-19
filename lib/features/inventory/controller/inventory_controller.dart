@@ -375,9 +375,34 @@ class InventoryController {
   }
 
   int _statusOrder(InventoryItem item) {
-    if (item.stock == 0) return 2;
-    if (item.stock <= 2) return 0;
-    return 1;
+    // Priority 1: Out of Stock (highest priority)
+    if (item.stock == 0) return 0;
+
+    // Priority 2: Expiring (within 30 days) - check expiry date
+    if (!item.noExpiry && item.expiry != null && item.expiry!.isNotEmpty) {
+      try {
+        final date = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+        if (date != null) {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          final dateOnly = DateTime(date.year, date.month, date.day);
+          final daysUntilExpiry = dateOnly.difference(today).inDays;
+
+          // If expiring within 30 days, return priority 1
+          if (daysUntilExpiry <= 30 && daysUntilExpiry >= 0) {
+            return 1; // Expiring status
+          }
+        }
+      } catch (e) {
+        // Continue to next priority
+      }
+    }
+
+    // Priority 3: Low Stock (stock <= 2)
+    if (item.stock <= 2) return 2;
+
+    // Priority 4: In Stock (lowest priority)
+    return 3;
   }
 
   int _expiryOrder(InventoryItem item) {
@@ -409,7 +434,13 @@ class InventoryController {
       }
     }
 
-    // Priority 4: Items with no expiry (at the very end)
+    // Priority 3: Items with no expiry - sort by stock status
+    // Low Stock items should come before In Stock items
+    if (item.stock <= 2) {
+      return 999999999998; // Low stock with no expiry
+    }
+
+    // Priority 4: In Stock items with no expiry (at the very end)
     return 999999999999;
   }
 

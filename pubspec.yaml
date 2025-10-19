@@ -92,18 +92,22 @@ flutter:
   fonts:
     - family: SF Pro
       fonts:
-        - asset: assets/fonts/SFPRODISPLAYBOLD.OTF
-          weight: 700
-        - asset: assets/fonts/SFPRODISPLAYMEDIUM.OTF
-          weight: 500
         - asset: assets/fonts/SFPRODISPLAYREGULAR.OTF
           weight: 400
+        - asset: assets/fonts/SFPRODISPLAYMEDIUM.OTF
+          weight: 500
+        - asset: assets/fonts/SFPRODISPLAYMEDIUM.OTF
+          weight: 600
+        - asset: assets/fonts/SFPRODISPLAYBOLD.OTF
+          weight: 700
     - family: Poppins
       fonts:
         - asset: assets/fonts/POPPINS-REGULAR.TTF
           weight: 400
         - asset: assets/fonts/POPPINS-MEDIUM.TTF
           weight: 500
+        - asset: assets/fonts/POPPINS-SEMIBOLD.TTF
+          weight: 600
         - asset: assets/fonts/POPPINS-BOLD.TTF
           weight: 700
     - family: Inter

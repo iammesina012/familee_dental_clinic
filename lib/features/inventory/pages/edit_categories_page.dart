@@ -15,6 +15,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
   final CategoriesController categoriesController = CategoriesController();
   final Map<String, TextEditingController> editControllers = {};
   final Map<String, bool> isEditing = {};
+  final Map<String, String?> validationErrors = {};
 
   @override
   void dispose() {
@@ -37,17 +38,39 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     });
   }
 
+  // Helper function to validate alphanumeric input
+  bool _isValidAlphanumeric(String text) {
+    if (text.trim().isEmpty) return false;
+    // Check if the text contains only numbers
+    if (RegExp(r'^[0-9]+$').hasMatch(text.trim())) {
+      return false;
+    }
+    // Check if the text contains at least one letter and allows common characters
+    return RegExp(r'^[a-zA-Z0-9\s\-_\.]+$').hasMatch(text.trim()) &&
+        RegExp(r'[a-zA-Z]').hasMatch(text.trim());
+  }
+
   Future<void> _saveEdit(String oldName) async {
     final newName = editControllers[oldName]?.text.trim();
+
+    // Clear previous validation error
+    setState(() {
+      validationErrors[oldName] = null;
+    });
+
     if (newName == null || newName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please enter a valid category name',
-            style: TextStyle(fontFamily: 'SF Pro'),
-          ),
-        ),
-      );
+      setState(() {
+        validationErrors[oldName] = 'Please enter a valid category name';
+      });
+      return;
+    }
+
+    // Validate alphanumeric input
+    if (!_isValidAlphanumeric(newName)) {
+      setState(() {
+        validationErrors[oldName] =
+            'Category name must contain letters and cannot be only numbers or special characters.';
+      });
       return;
     }
 
@@ -55,6 +78,10 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
       _cancelEditing(oldName);
       return;
     }
+
+    // Show confirmation dialog first
+    final confirmed = await _showEditConfirmation(oldName, newName);
+    if (!confirmed) return;
 
     try {
       await categoriesController.updateCategory(oldName, newName);
@@ -312,18 +339,31 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
                                         borderSide: BorderSide(
-                                            color: Color(0xFF4E38D4)),
+                                            color: validationErrors[
+                                                        categoryName] !=
+                                                    null
+                                                ? Colors.red[600]!
+                                                : Color(0xFF4E38D4)),
                                       ),
                                       enabledBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
                                         borderSide: BorderSide(
-                                            color: theme.dividerColor
-                                                .withOpacity(0.2)),
+                                            color: validationErrors[
+                                                        categoryName] !=
+                                                    null
+                                                ? Colors.red[600]!
+                                                : theme.dividerColor
+                                                    .withOpacity(0.2)),
                                       ),
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
                                         borderSide: BorderSide(
-                                            color: Color(0xFF4E38D4), width: 2),
+                                            color: validationErrors[
+                                                        categoryName] !=
+                                                    null
+                                                ? Colors.red[600]!
+                                                : Color(0xFF4E38D4),
+                                            width: 2),
                                       ),
                                       contentPadding: EdgeInsets.symmetric(
                                           horizontal: 16, vertical: 12),
@@ -335,6 +375,12 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                                         fontWeight: FontWeight.w500,
                                         fontStyle: FontStyle.normal,
                                       ),
+                                      errorText: validationErrors[categoryName],
+                                      errorStyle: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontSize: 12,
+                                        color: Colors.red[600],
+                                      ),
                                     ),
                                     style: TextStyle(
                                       fontFamily: 'SF Pro',
@@ -344,6 +390,15 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                                     ),
                                     textCapitalization:
                                         TextCapitalization.words,
+                                    onChanged: (value) {
+                                      // Clear validation error when user starts typing
+                                      if (validationErrors[categoryName] !=
+                                          null) {
+                                        setState(() {
+                                          validationErrors[categoryName] = null;
+                                        });
+                                      }
+                                    },
                                   )
                                 : Text(
                                     categoryName,
@@ -439,25 +494,19 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
 
   Widget _buildDeleteDialog(BuildContext context, String categoryName) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Dialog(
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
       ),
-      elevation: 8,
-      backgroundColor: theme.dialogBackgroundColor,
       child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: theme.dialogBackgroundColor,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+        constraints: const BoxConstraints(
+          maxWidth: 400,
+          minWidth: 350,
         ),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -496,14 +545,14 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                 fontFamily: 'SF Pro',
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                color: theme.textTheme.bodyMedium?.color,
                 height: 1.4,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
 
-            // Buttons
+            // Buttons (Cancel first, then Delete - matching exit dialog pattern)
             Row(
               children: [
                 Expanded(
@@ -513,7 +562,11 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: theme.dividerColor),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                     child: Text(
@@ -521,8 +574,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontWeight: FontWeight.w500,
-                        color:
-                            theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                        color: theme.textTheme.bodyMedium?.color,
                         fontSize: 16,
                       ),
                     ),
@@ -558,5 +610,132 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
         ),
       ),
     );
+  }
+
+  Future<bool> _showEditConfirmation(String oldName, String newName) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon and Title
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.edit,
+                        color: Color(0xFF00D4AA),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Update Category',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      'Are you sure you want to change "$oldName" to "$newName"?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Cancel first, then Update - matching exit dialog pattern)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Update',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
   }
 }

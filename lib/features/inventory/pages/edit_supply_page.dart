@@ -19,6 +19,29 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
   final CategoriesController categoriesController = CategoriesController();
   Map<String, String?> validationErrors = {};
   bool _hasUnsavedChanges = false;
+  bool _isSaving = false; // Add loading state for save button
+
+  bool _hasChanges() {
+    final currentName = controller.nameController.text.trim();
+    final currentCategory = controller.selectedCategory ?? '';
+    final currentStock = controller.stock;
+    final currentUnit = controller.selectedUnit ?? '';
+    final currentCost = controller.costController.text.trim();
+    final currentSupplier = controller.supplierController.text.trim();
+    final currentBrand = controller.brandController.text.trim();
+    final currentExpiry = controller.expiryController.text.trim();
+    final currentNoExpiry = controller.noExpiry;
+
+    return currentName != _originalName ||
+        currentCategory != _originalCategory ||
+        currentStock != _originalStock ||
+        currentUnit != _originalUnit ||
+        currentCost != _originalCost.toString() ||
+        currentSupplier != _originalSupplier ||
+        currentBrand != _originalBrand ||
+        currentExpiry != _originalExpiry ||
+        currentNoExpiry != _originalNoExpiry;
+  }
 
   // Store original values to compare against
   String _originalName = '';
@@ -737,11 +760,15 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                   borderRadius: BorderRadius.circular(10)),
                             ),
                             child: Text('Cancel'),
-                            onPressed: () async {
-                              if (await _onWillPop()) {
-                                Navigator.of(context).pop();
-                              }
-                            },
+                            onPressed: _isSaving
+                                ? null
+                                : () async {
+                                    if (_isSaving)
+                                      return; // Prevent canceling while saving
+                                    if (await _onWillPop()) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
                           ),
                           const SizedBox(width: 12),
                           ElevatedButton(
@@ -753,29 +780,64 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10)),
                             ),
-                            child: Text('Save'),
-                            onPressed: () async {
-                              final errors = controller.validateFields();
-                              if (errors.isNotEmpty) {
-                                setState(() {
-                                  validationErrors = errors;
-                                });
-                                return;
-                              }
-                              final result =
-                                  await controller.updateSupply(widget.item.id);
-                              if (result == null) {
-                                if (!mounted) return;
-                                _hasUnsavedChanges =
-                                    false; // Reset flag on successful save
-                                Navigator.of(context).pop(true);
-                              } else {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(result)),
-                                );
-                              }
-                            },
+                            child: _isSaving
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ),
+                                  )
+                                : Text('Save'),
+                            onPressed: (_isSaving || !_hasChanges())
+                                ? null
+                                : () async {
+                                    if (_isSaving)
+                                      return; // Prevent multiple submissions
+
+                                    // Show confirmation dialog first (only if there are changes)
+                                    final confirmed =
+                                        await _showSaveConfirmation();
+                                    if (!confirmed) return;
+
+                                    setState(() {
+                                      _isSaving = true;
+                                    });
+
+                                    try {
+                                      final errors =
+                                          controller.validateFields();
+                                      if (errors.isNotEmpty) {
+                                        setState(() {
+                                          validationErrors = errors;
+                                          _isSaving = false;
+                                        });
+                                        return;
+                                      }
+                                      final result = await controller
+                                          .updateSupply(widget.item.id);
+                                      if (result == null) {
+                                        if (!mounted) return;
+                                        _hasUnsavedChanges =
+                                            false; // Reset flag on successful save
+                                        Navigator.of(context).pop(true);
+                                      } else {
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(content: Text(result)),
+                                        );
+                                      }
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() {
+                                          _isSaving = false;
+                                        });
+                                      }
+                                    }
+                                  },
                           ),
                         ],
                       ),
@@ -786,6 +848,266 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Future<bool> _showSaveConfirmation() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon and Title
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.edit,
+                        color: Color(0xFF00D4AA),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Confirm Edit Supply',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content - Show changes being made
+                    Text(
+                      'Please review the changes before updating this supply:',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Changes Container
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _buildChangesList(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Cancel first, then Update - matching exit dialog pattern)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Update Supply',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+  }
+
+  List<Widget> _buildChangesList() {
+    final changes = <Widget>[];
+
+    // Check each field for changes
+    final currentName = controller.nameController.text.trim();
+    if (currentName != _originalName) {
+      changes.add(_buildChangeRow('Name', _originalName, currentName));
+    }
+
+    final currentCategory = controller.selectedCategory ?? '';
+    if (currentCategory != _originalCategory) {
+      changes
+          .add(_buildChangeRow('Category', _originalCategory, currentCategory));
+    }
+
+    final currentStock = controller.stock;
+    final currentUnit = controller.selectedUnit ?? '';
+    final currentStockText = '$currentStock $currentUnit';
+    final originalStockText = '$_originalStock $_originalUnit';
+    if (currentStockText != originalStockText) {
+      changes
+          .add(_buildChangeRow('Stock', originalStockText, currentStockText));
+    }
+
+    final currentCost = controller.costController.text.trim();
+    final originalCostText = '₱$_originalCost';
+    final currentCostText = '₱$currentCost';
+    if (currentCostText != originalCostText) {
+      changes.add(_buildChangeRow('Cost', originalCostText, currentCostText));
+    }
+
+    final currentSupplier = controller.supplierController.text.trim();
+    if (currentSupplier != _originalSupplier) {
+      changes
+          .add(_buildChangeRow('Supplier', _originalSupplier, currentSupplier));
+    }
+
+    final currentBrand = controller.brandController.text.trim();
+    if (currentBrand != _originalBrand) {
+      changes.add(_buildChangeRow('Brand', _originalBrand, currentBrand));
+    }
+
+    final currentExpiry = controller.expiryController.text.trim();
+    final currentNoExpiry = controller.noExpiry;
+    String currentExpiryText;
+    String originalExpiryText;
+
+    if (currentNoExpiry) {
+      currentExpiryText = 'No expiry date';
+    } else {
+      currentExpiryText =
+          currentExpiry.isEmpty ? 'Not specified' : currentExpiry;
+    }
+
+    if (_originalNoExpiry) {
+      originalExpiryText = 'No expiry date';
+    } else {
+      originalExpiryText =
+          _originalExpiry.isEmpty ? 'Not specified' : _originalExpiry;
+    }
+
+    if (currentExpiryText != originalExpiryText) {
+      changes.add(
+          _buildChangeRow('Expiry', originalExpiryText, currentExpiryText));
+    }
+
+    return changes;
+  }
+
+  Widget _buildChangeRow(String label, String originalValue, String newValue) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontFamily: 'SF Pro',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: theme.textTheme.bodyMedium?.color,
+            ),
+          ),
+          Text(
+            originalValue,
+            style: TextStyle(
+              fontFamily: 'SF Pro',
+              fontSize: 14,
+              color: Colors.red[600],
+              decoration: TextDecoration.lineThrough,
+            ),
+          ),
+          Text(
+            ' → ',
+            style: TextStyle(
+              fontFamily: 'SF Pro',
+              fontSize: 14,
+              color: theme.textTheme.bodyMedium?.color,
+            ),
+          ),
+          Text(
+            newValue,
+            style: TextStyle(
+              fontFamily: 'SF Pro',
+              fontSize: 14,
+              color: Colors.green[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

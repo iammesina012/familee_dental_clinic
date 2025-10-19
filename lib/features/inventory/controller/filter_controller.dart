@@ -185,26 +185,35 @@ class FilterController {
   Future<void> updateBrandName(String oldName, String newName) async {
     if (oldName.trim().isEmpty || newName.trim().isEmpty) return;
 
-    // Update brand in brands collection
-    final brandResponse = await _supabase
-        .from('brands')
-        .select('id')
-        .eq('name', oldName.trim())
-        .limit(1);
+    // Check if the new brand name already exists
+    final newBrandExists = await brandExists(newName.trim());
 
-    if (brandResponse.isNotEmpty) {
+    if (newBrandExists) {
+      // If new brand already exists, just update all supplies to use the existing brand
       await _supabase
-          .from('brands')
-          .update({'name': newName.trim()}).eq('id', brandResponse.first['id']);
+          .from('supplies')
+          .update({'brand': newName.trim()}).eq('brand', oldName.trim());
     } else {
-      // If old brand doesn't exist in brands collection, add the new one
-      await addBrandIfNotExists(newName.trim());
-    }
+      // If new brand doesn't exist, update the old brand name
+      final brandResponse = await _supabase
+          .from('brands')
+          .select('id')
+          .eq('name', oldName.trim())
+          .limit(1);
 
-    // Update all supplies with this brand
-    await _supabase
-        .from('supplies')
-        .update({'brand': newName.trim()}).eq('brand', oldName.trim());
+      if (brandResponse.isNotEmpty) {
+        await _supabase.from('brands').update({'name': newName.trim()}).eq(
+            'id', brandResponse.first['id']);
+      } else {
+        // If old brand doesn't exist in brands collection, add the new one
+        await addBrandIfNotExists(newName.trim());
+      }
+
+      // Update all supplies with this brand
+      await _supabase
+          .from('supplies')
+          .update({'brand': newName.trim()}).eq('brand', oldName.trim());
+    }
 
     // Log the brand update activity
     await InventoryActivityController().logBrandUpdated(
@@ -217,25 +226,35 @@ class FilterController {
   Future<void> updateSupplierName(String oldName, String newName) async {
     if (oldName.trim().isEmpty || newName.trim().isEmpty) return;
 
-    // Update supplier in suppliers collection
-    final supplierResponse = await _supabase
-        .from('suppliers')
-        .select('id')
-        .eq('name', oldName.trim())
-        .limit(1);
+    // Check if the new supplier name already exists
+    final newSupplierExists = await supplierExists(newName.trim());
 
-    if (supplierResponse.isNotEmpty) {
-      await _supabase.from('suppliers').update({'name': newName.trim()}).eq(
-          'id', supplierResponse.first['id']);
+    if (newSupplierExists) {
+      // If new supplier already exists, just update all supplies to use the existing supplier
+      await _supabase
+          .from('supplies')
+          .update({'supplier': newName.trim()}).eq('supplier', oldName.trim());
     } else {
-      // If old supplier doesn't exist in suppliers collection, add the new one
-      await addSupplierIfNotExists(newName.trim());
-    }
+      // If new supplier doesn't exist, update the old supplier name
+      final supplierResponse = await _supabase
+          .from('suppliers')
+          .select('id')
+          .eq('name', oldName.trim())
+          .limit(1);
 
-    // Update all supplies with this supplier
-    await _supabase
-        .from('supplies')
-        .update({'supplier': newName.trim()}).eq('supplier', oldName.trim());
+      if (supplierResponse.isNotEmpty) {
+        await _supabase.from('suppliers').update({'name': newName.trim()}).eq(
+            'id', supplierResponse.first['id']);
+      } else {
+        // If old supplier doesn't exist in suppliers collection, add the new one
+        await addSupplierIfNotExists(newName.trim());
+      }
+
+      // Update all supplies with this supplier
+      await _supabase
+          .from('supplies')
+          .update({'supplier': newName.trim()}).eq('supplier', oldName.trim());
+    }
 
     // Log the supplier update activity
     await InventoryActivityController().logSupplierUpdated(
