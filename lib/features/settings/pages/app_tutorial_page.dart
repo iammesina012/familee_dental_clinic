@@ -38,7 +38,7 @@ class _AppTutorialPageState extends State<AppTutorialPage> {
       title: "Dashboard",
       description: "Learn how to navigate and use the main dashboard",
       icon: Icons.dashboard_outlined,
-      videoId: "j5QXvMb9X7g",
+      videoId: "7PwyGX27gh0",
       features: [
         "View your dashboard overview",
         "Check inventory status",
@@ -51,7 +51,7 @@ class _AppTutorialPageState extends State<AppTutorialPage> {
       title: "Inventory",
       description: "Learn how to manage your supplies and inventory",
       icon: Icons.inventory_2_outlined,
-      videoId: "OVBDjVaSN0M",
+      videoId: "dWFlCKIMI9o",
       features: [
         "Add and Edit supplies ",
         "Check archived and expired supplies",
@@ -64,7 +64,7 @@ class _AppTutorialPageState extends State<AppTutorialPage> {
       title: "Purchase Orders",
       description: "Create and manage purchase orders for your supplies",
       icon: Icons.shopping_cart_outlined,
-      videoId: "zbc_HnTr-8M", // Replace with your YouTube video ID
+      videoId: "P4a-g0AI4vw",
       features: [
         "Creation of Purchase Orders",
         "Add supplies to PO",
@@ -77,7 +77,7 @@ class _AppTutorialPageState extends State<AppTutorialPage> {
       title: "Stock Deduction",
       description: "Deduct stock and manage presets",
       icon: Icons.remove_circle_outlined,
-      videoId: "J11NGGS8buQ",
+      videoId: "_BGwP7aYUHE",
       features: [
         "Deduct supplies from inventory",
         "Create preset templates",
@@ -90,7 +90,7 @@ class _AppTutorialPageState extends State<AppTutorialPage> {
       title: "Activity Log",
       description: "Monitor all activities and changes in your app",
       icon: Icons.history_outlined,
-      videoId: "T5t8dSb35zg",
+      videoId: "F00FkNc3d50",
       features: [
         "View recent activities",
         "Filter by category",
@@ -103,7 +103,7 @@ class _AppTutorialPageState extends State<AppTutorialPage> {
       title: "Settings",
       description: "Configure your app and manage user access",
       icon: Icons.settings_outlined,
-      videoId: "RANpaLeww8M",
+      videoId: "qhzPCndTZgM",
       features: [
         "Configure app setttings",
         "Set up preferred notifications",
@@ -407,17 +407,38 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
 
   // Helper method to restore the original app orientation
   void _restoreAppOrientation() {
-    // Get screen size to determine if it's mobile or tablet
-    final shortestSide = MediaQuery.of(context).size.shortestSide;
+    // Check if context is still valid before using MediaQuery
+    if (!mounted) return;
 
-    if (shortestSide < 600) {
-      // Mobile: Lock to portrait only (restore original app behavior)
+    try {
+      // Get screen size to determine if it's mobile or tablet
+      final shortestSide = MediaQuery.of(context).size.shortestSide;
+
+      if (shortestSide < 600) {
+        // Mobile: Lock to portrait only (restore original app behavior)
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ]);
+      }
+      // Tablets: Don't set any restrictions (let them rotate freely as per original app)
+    } catch (e) {
+      // If context is invalid, just set default orientation
       SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
         DeviceOrientation.portraitDown,
       ]);
     }
-    // Tablets: Don't set any restrictions (let them rotate freely as per original app)
+  }
+
+  // Helper method to allow all orientations (for fullscreen video)
+  void _allowAllOrientations() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
   }
 
   @override
@@ -451,7 +472,9 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
                     ProgressBar(isExpanded: true),
                     RemainingDuration(),
                     PlaybackSpeedButton(),
-                    FullScreenButton(),
+                    // Only show fullscreen button for tablets (landscape capable)
+                    if (MediaQuery.of(context).size.shortestSide >= 600)
+                      FullScreenButton(),
                   ],
                 ),
                 builder: (context, player) {

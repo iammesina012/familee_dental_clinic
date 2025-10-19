@@ -215,11 +215,9 @@ Future<void> _setOrientationBasedOnDevice() async {
   // Consider devices with shortest side < 600 as mobile
   // Devices with shortest side >= 600 are considered tablets
   if (shortestSide < 600) {
-    // Mobile: Lock to portrait only
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
   }
-  // Tablets: Don't set any orientation restrictions (let them rotate freely)
 }
