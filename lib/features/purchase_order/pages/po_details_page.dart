@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';
@@ -500,69 +501,32 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
   // Handle mark all as received - automatically checks all items and then marks as received
   Future<void> _handleMarkAllReceived() async {
-    // Find the first supplier with pending items
-    final suppliers =
-        _controller.groupSuppliesBySupplier(_purchaseOrder.supplies);
-    for (final entry in suppliers.entries) {
-      final supplierName = entry.key;
-      final items = entry.value;
-      final pendingItems =
-          items.where((item) => !_controller.isSupplyReceived(item)).toList();
+    // Find the first pending supply to mark as received
+    final pendingSupplies = _purchaseOrder.supplies
+        .where((supply) => !_controller.isSupplyReceived(supply))
+        .toList();
 
-      if (pendingItems.isNotEmpty) {
-        // Automatically check all items for this supplier
-        setState(() {
-          _checkedItems[supplierName] ??= <String>{};
-
-          // Check all expiry batches
-          for (int itemIndex = 0;
-              itemIndex < pendingItems.length;
-              itemIndex++) {
-            final item = pendingItems[itemIndex];
-            final batches = item['expiryBatches'] as List<dynamic>?;
-            if (batches != null && batches.isNotEmpty) {
-              for (final batch in batches) {
-                final String? date = _formatExpiry(batch['expiryDate']);
-                final int qty = int.tryParse('${batch['quantity'] ?? 0}') ?? 0;
-                if (date != null) {
-                  final batchKey =
-                      '${supplierName}_${item['name']}_${date}_${qty}_${itemIndex}';
-                  _checkedItems[supplierName]!.add(batchKey);
-                }
-              }
-            } else {
-              // Check single expiry date or no expiry
-              final single = _formatExpiry(item['expiryDate']);
-              if (single != null) {
-                final singleKey =
-                    '${supplierName}_${item['name']}_${single}_${itemIndex}';
-                _checkedItems[supplierName]!.add(singleKey);
-              } else {
-                // No expiry date
-                final noExpiryKey =
-                    '${supplierName}_${item['name']}_no_expiry_${itemIndex}';
-                _checkedItems[supplierName]!.add(noExpiryKey);
-              }
-            }
-          }
-        });
-
-        // Show confirmation dialog first
-        await _showMarkAsReceivedConfirmation(supplierName, pendingItems);
-        return;
-      }
+    if (pendingSupplies.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No pending supplies to receive'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
     }
-  }
 
-  Future<void> _showMarkAsReceivedConfirmation(
-      String supplierName, List<Map<String, dynamic>> pendingItems) async {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    // Get the first pending supply (the one that was clicked)
+    final targetSupply = pendingSupplies.first;
 
-    return showDialog<void>(
+    // Show confirmation dialog first
+    final confirm = await showDialog<bool>(
       context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
+      builder: (context) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
         return Dialog(
           backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
           shape: RoundedRectangleBorder(
@@ -603,7 +567,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
                 // Message
                 Text(
-                  'Are you sure you want to mark all pending supplies as received?',
+                  'Are you sure you want to mark this supply as received?',
                   textAlign: TextAlign.center,
                   style: AppFonts.sfProStyle(
                     fontSize: 14,
@@ -616,31 +580,8 @@ class _PODetailsPageState extends State<PODetailsPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: Text(
-                          'Cancel',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _confirmMarkAllReceived(supplierName, pendingItems);
-                        },
+                        onPressed: () => Navigator.of(context).pop(true),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -658,6 +599,32 @@ class _PODetailsPageState extends State<PODetailsPage> {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: const BorderSide(
+                              color: Colors.grey,
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -666,6 +633,75 @@ class _PODetailsPageState extends State<PODetailsPage> {
         );
       },
     );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      // Update the purchase order with received status (no receipt details)
+      final updatedSupplies =
+          List<Map<String, dynamic>>.from(_purchaseOrder.supplies);
+
+      final String nowIso = DateTime.now().toIso8601String();
+      // Find and update only the target supply
+      final idx = updatedSupplies.indexOf(targetSupply);
+      if (idx != -1) {
+        updatedSupplies[idx] = {
+          ...targetSupply,
+          'status': 'Received',
+          'receivedAt': nowIso,
+        };
+      }
+
+      final newReceivedCount =
+          updatedSupplies.where((s) => s['status'] == 'Received').length;
+      String newStatus = _purchaseOrder.status;
+      if (newReceivedCount == updatedSupplies.length) {
+        newStatus = 'Approval';
+      }
+
+      final updatedPO = PurchaseOrder(
+        id: _purchaseOrder.id,
+        code: _purchaseOrder.code,
+        name: _purchaseOrder.name,
+        createdAt: _purchaseOrder.createdAt,
+        status: newStatus,
+        supplies: updatedSupplies,
+        receivedCount: newReceivedCount,
+      );
+
+      await _poSupabase.updatePOInSupabase(updatedPO);
+      setState(() {
+        _purchaseOrder = updatedPO;
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Supply marked as received successfully!',
+              style: AppFonts.sfProStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white),
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handlePartialReceive() async {
@@ -690,14 +726,97 @@ class _PODetailsPageState extends State<PODetailsPage> {
   }
 
   Future<void> _handleSave() async {
-    // TODO: Implement save functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Save functionality coming soon!'),
-        backgroundColor: Colors.blue,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    // Show receipt details dialog for saving
+    final suppliers =
+        _controller.groupSuppliesBySupplier(_purchaseOrder.supplies);
+    if (suppliers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No supplies to save'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Get the first supplier for the dialog
+    final firstSupplier = suppliers.keys.first;
+    final receiptDetails = await _showReceiptDetailsDialog(firstSupplier);
+    if (receiptDetails == null) return; // user tapped Back
+
+    setState(() => _isLoading = true);
+    try {
+      // Upload receipt image to cloud storage first
+      String? receiptImageUrl;
+      if (receiptDetails.image != null) {
+        receiptImageUrl = await _receiptStorage.uploadReceiptImage(
+          receiptDetails.image!,
+        );
+      }
+
+      // Update the purchase order with receipt details
+      final updatedSupplies =
+          List<Map<String, dynamic>>.from(_purchaseOrder.supplies);
+
+      final String nowIso = DateTime.now().toIso8601String();
+      for (final supply in _purchaseOrder.supplies) {
+        final idx = updatedSupplies.indexOf(supply);
+        updatedSupplies[idx] = {
+          ...supply,
+          'receiptDrNo': receiptDetails.drNumber,
+          'receiptRecipient': receiptDetails.recipient,
+          'receiptRemarks': receiptDetails.remarks,
+          'receiptImageUrl': receiptImageUrl,
+          'savedAt': nowIso,
+        };
+      }
+
+      // Add recipient to suggestions
+      await _controller.addRecipientSuggestion(receiptDetails.recipient);
+
+      final updatedPO = PurchaseOrder(
+        id: _purchaseOrder.id,
+        code: _purchaseOrder.code,
+        name: _purchaseOrder.name,
+        createdAt: _purchaseOrder.createdAt,
+        status: _purchaseOrder.status,
+        supplies: updatedSupplies,
+        receivedCount: _purchaseOrder.receivedCount,
+      );
+
+      await _poSupabase.updatePOInSupabase(updatedPO);
+      setState(() {
+        _purchaseOrder = updatedPO;
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Receipt details saved successfully!',
+              style: AppFonts.sfProStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white),
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _showPartialReceiveDialog(
@@ -708,12 +827,18 @@ class _PODetailsPageState extends State<PODetailsPage> {
     // Create a map to track quantities for each supply
     final Map<String, int> quantities = {};
     final Map<String, String> expiryDates = {};
+    final Map<String, TextEditingController> quantityControllers = {};
 
     // Initialize with current quantities and expiry dates
     for (final supply in supplies) {
       final supplyId =
           supply['id']?.toString() ?? supply['name']?.toString() ?? '';
       quantities[supplyId] = int.tryParse('${supply['quantity'] ?? 0}') ?? 0;
+
+      // Initialize text controller for this supply
+      quantityControllers[supplyId] = TextEditingController(
+        text: '${quantities[supplyId]}',
+      );
 
       // Get the first expiry date if available
       final batches = supply['expiryBatches'] as List<dynamic>?;
@@ -778,37 +903,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
-                            // Headers
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    'Quantity',
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.textTheme.bodyMedium?.color,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    'Expiry dates',
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.textTheme.bodyMedium?.color,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Supply rows
+                            // Supply cards
                             ...supplies.map((supply) {
                               final supplyId = supply['id']?.toString() ??
                                   supply['name']?.toString() ??
@@ -816,110 +911,365 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               final currentQty = quantities[supplyId] ?? 0;
                               final expiryDate =
                                   expiryDates[supplyId] ?? 'No expiry';
+                              final supplyName =
+                                  _controller.getSupplyName(supply);
+                              final maxQuantity =
+                                  int.tryParse('${supply['quantity'] ?? 0}') ??
+                                      0;
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 16),
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.surface
-                                      .withOpacity(0.5),
+                                  color: isDark
+                                      ? const Color(0xFF3C3C3C)
+                                      : Colors.white,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: theme.dividerColor.withOpacity(0.2),
-                                    width: 1,
-                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
-                                child: Row(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Quantity column
-                                    Expanded(
-                                      flex: 2,
-                                      child: Row(
-                                        children: [
-                                          IconButton(
-                                            onPressed: () {
-                                              if (currentQty > 0) {
-                                                setState(() {
-                                                  quantities[supplyId] =
-                                                      currentQty - 1;
-                                                });
-                                              }
-                                            },
-                                            icon: Icon(
-                                              Icons.remove,
-                                              color: theme
-                                                  .textTheme.bodyMedium?.color,
-                                            ),
-                                          ),
-                                          Container(
-                                            width: 60,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: theme.colorScheme.surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: theme.dividerColor
-                                                    .withOpacity(0.3),
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              '${quantities[supplyId] ?? 0}',
-                                              textAlign: TextAlign.center,
-                                              style: AppFonts.sfProStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                                color: theme
-                                                    .textTheme.bodyLarge?.color,
-                                              ),
-                                            ),
-                                          ),
-                                          IconButton(
-                                            onPressed: () {
-                                              setState(() {
-                                                quantities[supplyId] =
-                                                    currentQty + 1;
-                                              });
-                                            },
-                                            icon: Icon(
-                                              Icons.add,
-                                              color: theme
-                                                  .textTheme.bodyMedium?.color,
-                                            ),
-                                          ),
-                                        ],
+                                    // Supply name
+                                    Text(
+                                      supplyName,
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.textTheme.bodyLarge?.color,
                                       ),
                                     ),
-                                    const SizedBox(width: 16),
+                                    const SizedBox(height: 16),
 
-                                    // Expiry dates column
-                                    Expanded(
-                                      flex: 2,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.surface,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: theme.dividerColor
-                                                .withOpacity(0.3),
-                                            width: 1,
+                                    // Quantity and Expiry sections
+                                    Row(
+                                      children: [
+                                        // Quantity section
+                                        Flexible(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Quantity',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: theme.textTheme
+                                                      .bodyMedium?.color,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Container(
+                                                height: 36,
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.center,
+                                                  children: [
+                                                    Container(
+                                                      width: 32,
+                                                      height: 32,
+                                                      decoration: BoxDecoration(
+                                                        color: isDark
+                                                            ? const Color(
+                                                                0xFF2C2C2C)
+                                                            : Colors.white,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                        border: Border.all(
+                                                          color: theme
+                                                              .dividerColor
+                                                              .withOpacity(0.3),
+                                                          width: 1,
+                                                        ),
+                                                      ),
+                                                      child: InkWell(
+                                                        onTap: () {
+                                                          final currentValue =
+                                                              quantities[
+                                                                      supplyId] ??
+                                                                  1;
+                                                          if (currentValue >
+                                                              0) {
+                                                            final newValue =
+                                                                currentValue -
+                                                                    1;
+                                                            quantities[
+                                                                    supplyId] =
+                                                                newValue;
+                                                            quantityControllers[
+                                                                        supplyId]
+                                                                    ?.text =
+                                                                '$newValue';
+                                                            setState(() {});
+                                                          }
+                                                        },
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                        child: Center(
+                                                          child: Icon(
+                                                            Icons.remove,
+                                                            size: 16,
+                                                            color: theme
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.color,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Container(
+                                                      width: 50,
+                                                      height: 32,
+                                                      decoration: BoxDecoration(
+                                                        color: isDark
+                                                            ? const Color(
+                                                                0xFF2C2C2C)
+                                                            : Colors.white,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                        border: Border.all(
+                                                          color: theme
+                                                              .dividerColor
+                                                              .withOpacity(0.3),
+                                                          width: 1,
+                                                        ),
+                                                      ),
+                                                      child: Container(
+                                                        alignment:
+                                                            Alignment.center,
+                                                        child: TextFormField(
+                                                          controller:
+                                                              quantityControllers[
+                                                                  supplyId],
+                                                          textAlign:
+                                                              TextAlign.center,
+                                                          keyboardType:
+                                                              TextInputType
+                                                                  .number,
+                                                          maxLength: 2,
+                                                          inputFormatters: [
+                                                            FilteringTextInputFormatter
+                                                                .digitsOnly,
+                                                            LengthLimitingTextInputFormatter(
+                                                                2),
+                                                            _QuantityInputFormatter(
+                                                                maxQuantity),
+                                                          ],
+                                                          style: AppFonts
+                                                              .sfProStyle(
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: theme
+                                                                .textTheme
+                                                                .bodyLarge
+                                                                ?.color,
+                                                          ),
+                                                          decoration:
+                                                              const InputDecoration(
+                                                            border: InputBorder
+                                                                .none,
+                                                            contentPadding:
+                                                                EdgeInsets.zero,
+                                                            counterText: '',
+                                                            isDense: true,
+                                                          ),
+                                                          onChanged: (value) {
+                                                            final cleanValue =
+                                                                value.replaceAll(
+                                                                    RegExp(
+                                                                        r'[^0-9]'),
+                                                                    '');
+                                                            if (cleanValue
+                                                                .isEmpty) {
+                                                              quantities[
+                                                                  supplyId] = 1;
+                                                              return;
+                                                            }
+                                                            final intValue =
+                                                                int.tryParse(
+                                                                        cleanValue) ??
+                                                                    1;
+                                                            if (intValue < 0) {
+                                                              quantities[
+                                                                  supplyId] = 0;
+                                                            } else if (intValue >
+                                                                maxQuantity) {
+                                                              quantities[
+                                                                      supplyId] =
+                                                                  maxQuantity;
+                                                            } else {
+                                                              quantities[
+                                                                      supplyId] =
+                                                                  intValue;
+                                                            }
+                                                          },
+                                                          onFieldSubmitted:
+                                                              (value) {
+                                                            final cleanValue =
+                                                                value.replaceAll(
+                                                                    RegExp(
+                                                                        r'[^0-9]'),
+                                                                    '');
+                                                            if (cleanValue
+                                                                .isEmpty) {
+                                                              quantities[
+                                                                  supplyId] = 1;
+                                                              return;
+                                                            }
+                                                            final intValue =
+                                                                int.tryParse(
+                                                                        cleanValue) ??
+                                                                    1;
+                                                            if (intValue < 0) {
+                                                              quantities[
+                                                                  supplyId] = 0;
+                                                            } else if (intValue >
+                                                                maxQuantity) {
+                                                              quantities[
+                                                                      supplyId] =
+                                                                  maxQuantity;
+                                                            } else {
+                                                              quantities[
+                                                                      supplyId] =
+                                                                  intValue;
+                                                            }
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Container(
+                                                      width: 32,
+                                                      height: 32,
+                                                      decoration: BoxDecoration(
+                                                        color: isDark
+                                                            ? const Color(
+                                                                0xFF2C2C2C)
+                                                            : Colors.white,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                        border: Border.all(
+                                                          color: theme
+                                                              .dividerColor
+                                                              .withOpacity(0.3),
+                                                          width: 1,
+                                                        ),
+                                                      ),
+                                                      child: InkWell(
+                                                        onTap: () {
+                                                          final currentValue =
+                                                              quantities[
+                                                                      supplyId] ??
+                                                                  1;
+                                                          if (currentValue <
+                                                              maxQuantity) {
+                                                            final newValue =
+                                                                currentValue +
+                                                                    1;
+                                                            quantities[
+                                                                    supplyId] =
+                                                                newValue;
+                                                            quantityControllers[
+                                                                        supplyId]
+                                                                    ?.text =
+                                                                '$newValue';
+                                                            setState(() {});
+                                                          }
+                                                        },
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                        child: Center(
+                                                          child: Icon(
+                                                            Icons.add,
+                                                            size: 16,
+                                                            color: theme
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.color,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        child: Text(
-                                          expiryDate,
-                                          style: AppFonts.sfProStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            color: theme
-                                                .textTheme.bodyMedium?.color,
+                                        const SizedBox(width: 80),
+
+                                        // Expiry dates section
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Expiry dates',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: theme.textTheme
+                                                      .bodyMedium?.color,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Container(
+                                                width: double.infinity,
+                                                height: 36,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: isDark
+                                                      ? const Color(0xFF2C2C2C)
+                                                      : Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: theme.dividerColor
+                                                        .withOpacity(0.3),
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: Align(
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  child: Text(
+                                                    expiryDate,
+                                                    style: AppFonts.sfProStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: theme.textTheme
+                                                          .bodyMedium?.color,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -966,7 +1316,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                             );
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
+                            backgroundColor: const Color(0xFF00D4AA),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 24, vertical: 12),
                             shape: RoundedRectangleBorder(
@@ -1713,11 +2063,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                                   ),
                                                                 )
                                                               : Text(
-                                                                  'Mark all as received',
+                                                                  'Mark as received',
                                                                   style: AppFonts
                                                                       .sfProStyle(
                                                                     fontSize:
-                                                                        12,
+                                                                        13,
                                                                     fontWeight:
                                                                         FontWeight
                                                                             .bold,
@@ -3720,6 +4070,43 @@ class _AnimatedClosedAlertState extends State<_AnimatedClosedAlert>
           ),
         ),
       ),
+    );
+  }
+}
+
+class _QuantityInputFormatter extends TextInputFormatter {
+  final int maxQuantity;
+
+  _QuantityInputFormatter(this.maxQuantity);
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Only allow digits
+    final cleanValue = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (cleanValue.isEmpty) {
+      return const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+    }
+
+    final intValue = int.tryParse(cleanValue) ?? 0;
+
+    // Allow 0 to maxQuantity (0 means not received, 1+ means received)
+    if (intValue > maxQuantity) {
+      return TextEditingValue(
+        text: '$maxQuantity',
+        selection: TextSelection.collapsed(offset: '$maxQuantity'.length),
+      );
+    }
+
+    return TextEditingValue(
+      text: cleanValue,
+      selection: TextSelection.collapsed(offset: cleanValue.length),
     );
   }
 }
