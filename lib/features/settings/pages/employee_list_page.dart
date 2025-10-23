@@ -98,6 +98,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
     final userRoleProvider = UserRoleProvider();
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(

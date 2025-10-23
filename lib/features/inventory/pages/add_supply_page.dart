@@ -438,6 +438,12 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                                 controller.stockController,
                                             textAlign: TextAlign.center,
                                             keyboardType: TextInputType.number,
+                                            inputFormatters: [
+                                              FilteringTextInputFormatter
+                                                  .digitsOnly,
+                                              LengthLimitingTextInputFormatter(
+                                                  2),
+                                            ],
                                             decoration: InputDecoration(
                                                 border: InputBorder.none),
                                             style: TextStyle(
@@ -448,8 +454,14 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                             onChanged: (val) {
                                               _markAsChanged();
                                               setState(() {
-                                                controller.stock =
+                                                final qty =
                                                     int.tryParse(val) ?? 0;
+                                                controller.stock =
+                                                    qty > 99 ? 99 : qty;
+                                                if (qty > 99) {
+                                                  controller.stockController
+                                                      .text = '99';
+                                                }
                                                 // Clear validation error when user types
                                                 if (validationErrors['stock'] !=
                                                     null) {
@@ -466,17 +478,20 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                             color: theme.iconTheme.color),
                                         splashRadius: 18,
                                         onPressed: () {
-                                          _markAsChanged();
-                                          setState(() {
-                                            controller.stock++;
-                                            controller.stockController.text =
-                                                controller.stock.toString();
-                                            // Clear validation error when user changes
-                                            if (validationErrors['stock'] !=
-                                                null) {
-                                              validationErrors['stock'] = null;
-                                            }
-                                          });
+                                          if (controller.stock < 99) {
+                                            _markAsChanged();
+                                            setState(() {
+                                              controller.stock++;
+                                              controller.stockController.text =
+                                                  controller.stock.toString();
+                                              // Clear validation error when user changes
+                                              if (validationErrors['stock'] !=
+                                                  null) {
+                                                validationErrors['stock'] =
+                                                    null;
+                                              }
+                                            });
+                                          }
                                         },
                                       ),
                                     ],

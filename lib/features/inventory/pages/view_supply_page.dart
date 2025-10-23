@@ -80,6 +80,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
             );
           });
           return Scaffold(
+            resizeToAvoidBottomInset: false,
             appBar: AppBar(title: Text("Inventory")),
             body: Center(child: CircularProgressIndicator()),
           );
@@ -219,6 +220,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
       InventoryItem updatedItem, String status) {
     final theme = Theme.of(context);
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(

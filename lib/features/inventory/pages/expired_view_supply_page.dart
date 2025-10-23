@@ -70,6 +70,7 @@ class _ExpiredViewSupplyPageState extends State<ExpiredViewSupplyPage> {
       String status) {
     final theme = Theme.of(context);
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(

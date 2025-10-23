@@ -33,6 +33,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: BackButton(color: theme.iconTheme.color),

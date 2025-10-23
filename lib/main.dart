@@ -32,10 +32,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set orientation based on device type
-  // Mobile: Portrait only, Tablet: All orientations
-  await _setOrientationBasedOnDevice();
-
   // Load environment 1
   await dotenv.load(fileName: ".env");
 
@@ -93,7 +89,10 @@ class MainApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: mode,
-          home: const AuthWrapper(),
+          home: const Scaffold(
+            resizeToAvoidBottomInset: false,
+            body: AuthWrapper(),
+          ),
           routes: {
             '/login': (context) => const Login(),
             '/forgot-password': (context) => const ForgotPasswordPage(),
@@ -201,23 +200,5 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
 
     return _isLoggedIn ? const Dashboard() : const Login();
-  }
-}
-
-//Helper function to set orientation based on device type
-Future<void> _setOrientationBasedOnDevice() async {
-  // Get screen size to determine if it's mobile or tablet
-  final data = MediaQueryData.fromView(
-      WidgetsBinding.instance.platformDispatcher.views.first);
-  final size = data.size;
-  final shortestSide = size.shortestSide;
-
-  // Consider devices with shortest side < 600 as mobile
-  // Devices with shortest side >= 600 are considered tablets
-  if (shortestSide < 600) {
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
   }
 }

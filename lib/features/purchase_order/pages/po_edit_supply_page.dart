@@ -96,6 +96,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
@@ -408,6 +409,17 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         controller: _batchQtyControllers[i],
                                         keyboardType: TextInputType.number,
                                         textAlign: TextAlign.center,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                          LengthLimitingTextInputFormatter(2),
+                                        ],
+                                        onChanged: (value) {
+                                          final qty = int.tryParse(value);
+                                          if (qty != null && qty > 99) {
+                                            _batchQtyControllers[i].text = '99';
+                                          }
+                                        },
                                         style: AppFonts.sfProStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.bold,
@@ -428,10 +440,12 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                                   _batchQtyControllers[i]
                                                       .text) ??
                                               1;
-                                          setState(() {
-                                            _batchQtyControllers[i].text =
-                                                (currentQty + 1).toString();
-                                          });
+                                          if (currentQty < 99) {
+                                            setState(() {
+                                              _batchQtyControllers[i].text =
+                                                  (currentQty + 1).toString();
+                                            });
+                                          }
                                         },
                                         icon: const Icon(Icons.add,
                                             color: Color(0xFF00D4AA), size: 16),

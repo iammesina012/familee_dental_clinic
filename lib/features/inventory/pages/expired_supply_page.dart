@@ -37,6 +37,7 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(

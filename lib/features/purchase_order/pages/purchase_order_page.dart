@@ -10,6 +10,7 @@ import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:familee_dental/features/auth/services/auth_service.dart';
 
 class PurchaseOrderPage extends StatefulWidget {
   const PurchaseOrderPage({super.key});
@@ -229,6 +230,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
         child: Scaffold(
           backgroundColor: theme.scaffoldBackgroundColor,
           appBar: AppBar(
+            automaticallyImplyLeading: MediaQuery.of(context).size.width >= 900
+                ? false
+                : true, // Remove back button on desktop
             title: Text("Purchase Order",
                 style: AppFonts.sfProStyle(
                   fontSize: 20,
@@ -246,353 +250,385 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
               const NotificationBadgeButton(),
             ],
           ),
-          drawer: const MyDrawer(),
-          body: ResponsiveContainer(
-            maxWidth: 1200,
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal:
-                      MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
-                  vertical: 12.0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Summary Section
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: scheme.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.shadowColor.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                        border: Border.all(
-                            color: theme.dividerColor.withOpacity(0.2)),
+          drawer: MediaQuery.of(context).size.width >= 900
+              ? null
+              : const MyDrawer(),
+          body: MediaQuery.of(context).size.width >= 900
+              ? _buildWithNavigationRail(theme, scheme)
+              : ResponsiveContainer(
+                  maxWidth: 1200,
+                  child: SafeArea(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width < 768
+                            ? 1.0
+                            : 16.0,
+                        vertical: 12.0,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSummaryItem(
-                              "Open", "${_getSummaryCounts()['Open']}"),
-                          _buildSummaryItem(
-                              "Approval", "${_getSummaryCounts()['Approval']}"),
-                          _buildSummaryItem(
-                              "Closed", "${_getSummaryCounts()['Closed']}"),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Search and Create PO Section
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: searchController,
-                            onChanged: (value) {
-                              setState(() {
-                                // This will trigger rebuild when search text changes
-                              });
-                            },
-                            decoration: InputDecoration(
-                              hintText: 'Search PO...',
-                              hintStyle: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withOpacity(0.6),
-                              ),
-                              prefixIcon: Icon(Icons.search,
-                                  color: theme.iconTheme.color),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: EdgeInsets.symmetric(
-                                  vertical: 0, horizontal: 16),
-                              filled: true,
-                              fillColor: scheme.surface,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: () async {
-                            final result = await Navigator.pushNamed(
-                                context, '/create-po');
-                            if (!mounted) return;
-                            if (result == true) {
-                              await _load();
-                            } else {
-                              await _load();
-                            }
-                          },
-                          icon: Icon(Icons.add, color: Colors.white),
-                          label: Text(
-                            'Create PO',
-                            style: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFF00D4AA),
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
-                            shape: RoundedRectangleBorder(
+                          // Summary Section
+                          Container(
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: scheme.surface,
                               borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.shadowColor.withOpacity(0.1),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                              border: Border.all(
+                                  color: theme.dividerColor.withOpacity(0.2)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _buildSummaryItem(
+                                    "Open", "${_getSummaryCounts()['Open']}"),
+                                _buildSummaryItem("Approval",
+                                    "${_getSummaryCounts()['Approval']}"),
+                                _buildSummaryItem("Closed",
+                                    "${_getSummaryCounts()['Closed']}"),
+                              ],
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 16),
+                          SizedBox(height: 16),
 
-                    // Main Content Area
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: theme.brightness == Brightness.dark
-                              ? theme.colorScheme.surface
-                              : const Color(0xFFE8D5E8),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: theme.dividerColor.withOpacity(0.2)),
-                        ),
-                        child: Column(
-                          children: [
-                            // Tabs
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                          // Search and Create PO Section
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: searchController,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      // This will trigger rebuild when search text changes
+                                    });
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: 'Search PO...',
+                                    hintStyle: AppFonts.sfProStyle(
+                                      fontSize: 16,
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.6),
+                                    ),
+                                    prefixIcon: Icon(Icons.search,
+                                        color: theme.iconTheme.color),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: EdgeInsets.symmetric(
+                                        vertical: 0, horizontal: 16),
+                                    filled: true,
+                                    fillColor: scheme.surface,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              ElevatedButton.icon(
+                                onPressed: () async {
+                                  final result = await Navigator.pushNamed(
+                                      context, '/create-po');
+                                  if (!mounted) return;
+                                  if (result == true) {
+                                    await _load();
+                                  } else {
+                                    await _load();
+                                  }
+                                },
+                                icon: Icon(Icons.add, color: Colors.white),
+                                label: Text(
+                                  'Create PO',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Color(0xFF00D4AA),
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 16),
+
+                          // Main Content Area
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: theme.brightness == Brightness.dark
+                                    ? theme.colorScheme.surface
+                                    : const Color(0xFFE8D5E8),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: theme.dividerColor.withOpacity(0.2)),
+                              ),
+                              child: Column(
                                 children: [
-                                  _buildTab("Open", activeTabIndex == 0, () {
-                                    setState(() {
-                                      activeTabIndex = 0;
-                                    });
-                                  }),
-                                  SizedBox(width: 12),
-                                  _buildTab("Approval", activeTabIndex == 1,
-                                      () {
-                                    setState(() {
-                                      activeTabIndex = 1;
-                                    });
-                                  }),
-                                  SizedBox(width: 12),
-                                  _buildTab("Closed", activeTabIndex == 2, () {
-                                    setState(() {
-                                      activeTabIndex = 2;
-                                    });
-                                  }),
+                                  // Tabs
+                                  Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        _buildTab("Open", activeTabIndex == 0,
+                                            () {
+                                          setState(() {
+                                            activeTabIndex = 0;
+                                          });
+                                        }),
+                                        SizedBox(width: 12),
+                                        _buildTab(
+                                            "Approval", activeTabIndex == 1,
+                                            () {
+                                          setState(() {
+                                            activeTabIndex = 1;
+                                          });
+                                        }),
+                                        SizedBox(width: 12),
+                                        _buildTab("Closed", activeTabIndex == 2,
+                                            () {
+                                          setState(() {
+                                            activeTabIndex = 2;
+                                          });
+                                        }),
+                                      ],
+                                    ),
+                                  ),
+
+                                  Expanded(
+                                    child: RefreshIndicator(
+                                      onRefresh: _load,
+                                      child: StreamBuilder<List<PurchaseOrder>>(
+                                        stream: activeTabIndex == 0
+                                            ? _controller.getOpenPOsStream()
+                                            : activeTabIndex == 1
+                                                ? _controller
+                                                    .getApprovalPOsStream()
+                                                : _controller
+                                                    .getClosedPOsStream(),
+                                        builder: (context, snapshot) {
+                                          final data = snapshot.data ??
+                                              const <PurchaseOrder>[];
+                                          final displayed =
+                                              _applySearchFilter(data);
+
+                                          // Show skeleton loader on first load
+                                          if (snapshot.connectionState ==
+                                                  ConnectionState.waiting &&
+                                              data.isEmpty) {
+                                            final isDark =
+                                                Theme.of(context).brightness ==
+                                                    Brightness.dark;
+                                            final baseColor = isDark
+                                                ? Colors.grey[800]!
+                                                : Colors.grey[300]!;
+                                            final highlightColor = isDark
+                                                ? Colors.grey[700]!
+                                                : Colors.grey[100]!;
+
+                                            return ListView.separated(
+                                              physics:
+                                                  NeverScrollableScrollPhysics(),
+                                              padding: EdgeInsets.all(12),
+                                              clipBehavior: Clip.hardEdge,
+                                              itemCount: 5,
+                                              separatorBuilder: (_, __) =>
+                                                  SizedBox(height: 8),
+                                              itemBuilder: (_, __) =>
+                                                  Shimmer.fromColors(
+                                                baseColor: baseColor,
+                                                highlightColor: highlightColor,
+                                                child: Container(
+                                                  height: 120,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }
+
+                                          // Handle errors gracefully - show empty state with retry hint
+                                          if (snapshot.hasError &&
+                                              data.isEmpty) {
+                                            return Center(
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.cloud_off_outlined,
+                                                      size: 64,
+                                                      color: Colors.grey),
+                                                  SizedBox(height: 16),
+                                                  Text(
+                                                    "Connection Issue",
+                                                    style: AppFonts.sfProStyle(
+                                                      fontSize: 18,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: theme.textTheme
+                                                          .bodyMedium?.color,
+                                                    ),
+                                                  ),
+                                                  SizedBox(height: 8),
+                                                  Text(
+                                                    "Pull down to refresh",
+                                                    style: AppFonts.sfProStyle(
+                                                      fontSize: 14,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }
+
+                                          if (displayed.isEmpty) {
+                                            return Center(
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Container(
+                                                    width: 120,
+                                                    height: 120,
+                                                    decoration: BoxDecoration(
+                                                      color: theme.brightness ==
+                                                              Brightness.dark
+                                                          ? theme.colorScheme
+                                                              .surface
+                                                          : scheme.surface
+                                                              .withOpacity(0.6),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              20),
+                                                      border: Border.all(
+                                                        color: theme.brightness ==
+                                                                Brightness.dark
+                                                            ? theme.dividerColor
+                                                                .withOpacity(
+                                                                    0.2)
+                                                            : theme.dividerColor
+                                                                .withOpacity(
+                                                                    0.3),
+                                                      ),
+                                                    ),
+                                                    child: Icon(
+                                                      Icons
+                                                          .shopping_cart_outlined,
+                                                      size: 60,
+                                                      color: theme.brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : const Color(
+                                                              0xFF8B5A8B),
+                                                    ),
+                                                  ),
+                                                  SizedBox(height: 24),
+                                                  Text(
+                                                    "No Purchase Order Yet",
+                                                    style: AppFonts.sfProStyle(
+                                                      fontSize: 18,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: theme.brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : const Color(
+                                                              0xFF8B5A8B),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }
+                                          return ListView.separated(
+                                            physics:
+                                                AlwaysScrollableScrollPhysics(),
+                                            padding: EdgeInsets.all(12),
+                                            clipBehavior: Clip.hardEdge,
+                                            itemCount: displayed.length,
+                                            separatorBuilder: (_, __) =>
+                                                SizedBox(height: 8),
+                                            itemBuilder: (context, index) {
+                                              final po = displayed[index];
+                                              // Auto-open specific PO details if requested
+                                              if (_openPOCode != null &&
+                                                  !_autoOpeningDetails &&
+                                                  po.code == _openPOCode) {
+                                                // Delay navigation until after first frame
+                                                _autoOpeningDetails = true;
+                                                // capture intent (not used further, just ensures we clear before rebuilds)
+                                                _openPOCode =
+                                                    null; // prevent repeats during rebuilds
+                                                WidgetsBinding.instance
+                                                    .addPostFrameCallback(
+                                                        (_) async {
+                                                  final result =
+                                                      await Navigator.pushNamed(
+                                                    context,
+                                                    '/po-details',
+                                                    arguments: {
+                                                      'purchaseOrder': po
+                                                    },
+                                                  );
+                                                  // Keep current tab; react to closed redirect if needed
+                                                  if (result is Map &&
+                                                      result['switchToClosed'] ==
+                                                          true) {
+                                                    setState(() {
+                                                      activeTabIndex = 2;
+                                                    });
+                                                  }
+                                                  // Release guard after navigation completes
+                                                  _autoOpeningDetails = false;
+                                                });
+                                              }
+                                              return _buildPOCard(po);
+                                            },
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-
-                            Expanded(
-                              child: RefreshIndicator(
-                                onRefresh: _load,
-                                child: StreamBuilder<List<PurchaseOrder>>(
-                                  stream: activeTabIndex == 0
-                                      ? _controller.getOpenPOsStream()
-                                      : activeTabIndex == 1
-                                          ? _controller.getApprovalPOsStream()
-                                          : _controller.getClosedPOsStream(),
-                                  builder: (context, snapshot) {
-                                    final data = snapshot.data ??
-                                        const <PurchaseOrder>[];
-                                    final displayed = _applySearchFilter(data);
-
-                                    // Show skeleton loader on first load
-                                    if (snapshot.connectionState ==
-                                            ConnectionState.waiting &&
-                                        data.isEmpty) {
-                                      final isDark =
-                                          Theme.of(context).brightness ==
-                                              Brightness.dark;
-                                      final baseColor = isDark
-                                          ? Colors.grey[800]!
-                                          : Colors.grey[300]!;
-                                      final highlightColor = isDark
-                                          ? Colors.grey[700]!
-                                          : Colors.grey[100]!;
-
-                                      return ListView.separated(
-                                        physics: NeverScrollableScrollPhysics(),
-                                        padding: EdgeInsets.all(12),
-                                        itemCount: 5,
-                                        separatorBuilder: (_, __) =>
-                                            SizedBox(height: 8),
-                                        itemBuilder: (_, __) =>
-                                            Shimmer.fromColors(
-                                          baseColor: baseColor,
-                                          highlightColor: highlightColor,
-                                          child: Container(
-                                            height: 120,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }
-
-                                    // Handle errors gracefully - show empty state with retry hint
-                                    if (snapshot.hasError && data.isEmpty) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.cloud_off_outlined,
-                                                size: 64, color: Colors.grey),
-                                            SizedBox(height: 16),
-                                            Text(
-                                              "Connection Issue",
-                                              style: AppFonts.sfProStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                                color: theme.textTheme
-                                                    .bodyMedium?.color,
-                                              ),
-                                            ),
-                                            SizedBox(height: 8),
-                                            Text(
-                                              "Pull down to refresh",
-                                              style: AppFonts.sfProStyle(
-                                                fontSize: 14,
-                                                color: Colors.grey[600],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-
-                                    if (displayed.isEmpty) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Container(
-                                              width: 120,
-                                              height: 120,
-                                              decoration: BoxDecoration(
-                                                color: theme.brightness ==
-                                                        Brightness.dark
-                                                    ? theme.colorScheme.surface
-                                                    : scheme.surface
-                                                        .withOpacity(0.6),
-                                                borderRadius:
-                                                    BorderRadius.circular(20),
-                                                border: Border.all(
-                                                  color: theme.brightness ==
-                                                          Brightness.dark
-                                                      ? theme.dividerColor
-                                                          .withOpacity(0.2)
-                                                      : theme.dividerColor
-                                                          .withOpacity(0.3),
-                                                ),
-                                              ),
-                                              child: Icon(
-                                                Icons.shopping_cart_outlined,
-                                                size: 60,
-                                                color: theme.brightness ==
-                                                        Brightness.dark
-                                                    ? Colors.white
-                                                    : const Color(0xFF8B5A8B),
-                                              ),
-                                            ),
-                                            SizedBox(height: 24),
-                                            Text(
-                                              "No Purchase Order Yet",
-                                              style: AppFonts.sfProStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                                color: theme.brightness ==
-                                                        Brightness.dark
-                                                    ? Colors.white
-                                                    : const Color(0xFF8B5A8B),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                    return ListView.separated(
-                                      physics: AlwaysScrollableScrollPhysics(),
-                                      padding: EdgeInsets.all(12),
-                                      itemCount: displayed.length,
-                                      separatorBuilder: (_, __) =>
-                                          SizedBox(height: 8),
-                                      itemBuilder: (context, index) {
-                                        final po = displayed[index];
-                                        // Auto-open specific PO details if requested
-                                        if (_openPOCode != null &&
-                                            !_autoOpeningDetails &&
-                                            po.code == _openPOCode) {
-                                          // Delay navigation until after first frame
-                                          _autoOpeningDetails = true;
-                                          // capture intent (not used further, just ensures we clear before rebuilds)
-                                          _openPOCode =
-                                              null; // prevent repeats during rebuilds
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) async {
-                                            final result =
-                                                await Navigator.pushNamed(
-                                              context,
-                                              '/po-details',
-                                              arguments: {'purchaseOrder': po},
-                                            );
-                                            // Keep current tab; react to closed redirect if needed
-                                            if (result is Map &&
-                                                result['switchToClosed'] ==
-                                                    true) {
-                                              setState(() {
-                                                activeTabIndex = 2;
-                                              });
-                                            }
-                                            // Release guard after navigation completes
-                                            _autoOpeningDetails = false;
-                                          });
-                                        }
-                                        return _buildPOCard(po);
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
         ),
       );
     } catch (e) {
       return Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
           title: Text(
@@ -609,7 +645,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
           toolbarHeight: 70,
           iconTheme: theme.appBarTheme.iconTheme,
         ),
-        drawer: const MyDrawer(),
+        drawer:
+            MediaQuery.of(context).size.width >= 900 ? null : const MyDrawer(),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1069,68 +1106,72 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
       if (isStaff) {
         // For staff users: only right slide (Edit), no left slide
-        return Slidable(
-          key: Key('slidable-${po.id}'),
-          closeOnScroll: true,
-          startActionPane: ActionPane(
-            motion: const DrawerMotion(),
-            extentRatio: 0.35,
-            children: [
-              // Edit action - Available for Staff
-              SlidableAction(
-                onPressed: (_) => _editPO(po),
-                backgroundColor: const Color(0xFF00D4AA),
-                foregroundColor: Colors.white,
-                icon: Icons.edit,
-                label: 'Edit',
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ],
+        return ClipRect(
+          child: Slidable(
+            key: Key('slidable-${po.id}'),
+            closeOnScroll: true,
+            startActionPane: ActionPane(
+              motion: const DrawerMotion(),
+              extentRatio: 0.35,
+              children: [
+                // Edit action - Available for Staff
+                SlidableAction(
+                  onPressed: (_) => _editPO(po),
+                  backgroundColor: const Color(0xFF00D4AA),
+                  foregroundColor: Colors.white,
+                  icon: Icons.edit,
+                  label: 'Edit',
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ],
+            ),
+            // No endActionPane for staff - no left slide
+            child: cardContent,
           ),
-          // No endActionPane for staff - no left slide
-          child: cardContent,
         );
       } else {
         // For admin users: both left and right slides
-        return Slidable(
-          key: Key('slidable-${po.id}'),
-          closeOnScroll: true,
-          startActionPane: ActionPane(
-            motion: const DrawerMotion(),
-            extentRatio: 0.35,
-            children: [
-              // Edit action - Available for Admin
-              SlidableAction(
-                onPressed: (_) => _editPO(po),
-                backgroundColor: const Color(0xFF00D4AA),
-                foregroundColor: Colors.white,
-                icon: Icons.edit,
-                label: 'Edit',
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ],
+        return ClipRect(
+          child: Slidable(
+            key: Key('slidable-${po.id}'),
+            closeOnScroll: true,
+            startActionPane: ActionPane(
+              motion: const DrawerMotion(),
+              extentRatio: 0.35,
+              children: [
+                // Edit action - Available for Admin
+                SlidableAction(
+                  onPressed: (_) => _editPO(po),
+                  backgroundColor: const Color(0xFF00D4AA),
+                  foregroundColor: Colors.white,
+                  icon: Icons.edit,
+                  label: 'Edit',
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ],
+            ),
+            endActionPane: ActionPane(
+              motion: const DrawerMotion(),
+              extentRatio: 0.35,
+              children: [
+                // Delete action - Only for Admin users
+                SlidableAction(
+                  onPressed: (_) async {
+                    final confirmed = await _showDeleteConfirmation(po);
+                    if (confirmed) {
+                      // PO will be deleted in the confirmation dialog
+                    }
+                  },
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  icon: Icons.delete,
+                  label: 'Delete',
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ],
+            ),
+            child: cardContent,
           ),
-          endActionPane: ActionPane(
-            motion: const DrawerMotion(),
-            extentRatio: 0.35,
-            children: [
-              // Delete action - Only for Admin users
-              SlidableAction(
-                onPressed: (_) async {
-                  final confirmed = await _showDeleteConfirmation(po);
-                  if (confirmed) {
-                    // PO will be deleted in the confirmation dialog
-                  }
-                },
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                icon: Icons.delete,
-                label: 'Delete',
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ],
-          ),
-          child: cardContent,
         );
       }
     }
@@ -1141,30 +1182,32 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
       if (isOwner) {
         // For owner users: only left slide (Delete)
-        return Slidable(
-          key: Key('slidable-${po.id}'),
-          closeOnScroll: true,
-          endActionPane: ActionPane(
-            motion: const DrawerMotion(),
-            extentRatio: 0.35,
-            children: [
-              // Delete action - Only for Owner users
-              SlidableAction(
-                onPressed: (_) async {
-                  final confirmed = await _showDeleteConfirmation(po);
-                  if (confirmed) {
-                    // PO will be deleted in the confirmation dialog
-                  }
-                },
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                icon: Icons.delete,
-                label: 'Delete',
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ],
+        return ClipRect(
+          child: Slidable(
+            key: Key('slidable-${po.id}'),
+            closeOnScroll: true,
+            endActionPane: ActionPane(
+              motion: const DrawerMotion(),
+              extentRatio: 0.35,
+              children: [
+                // Delete action - Only for Owner users
+                SlidableAction(
+                  onPressed: (_) async {
+                    final confirmed = await _showDeleteConfirmation(po);
+                    if (confirmed) {
+                      // PO will be deleted in the confirmation dialog
+                    }
+                  },
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  icon: Icons.delete,
+                  label: 'Delete',
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ],
+            ),
+            child: cardContent,
           ),
-          child: cardContent,
         );
       }
     }
@@ -1380,6 +1423,545 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,
                                 color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+  }
+
+  Widget _buildWithNavigationRail(ThemeData theme, ColorScheme scheme) {
+    final userRoleProvider = UserRoleProvider();
+    final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
+
+    return Row(
+      children: [
+        NavigationRail(
+          minWidth: 150,
+          selectedIndex: 2, // Purchase Order is at index 2
+          labelType: NavigationRailLabelType.all,
+          useIndicator: true,
+          backgroundColor: theme.scaffoldBackgroundColor,
+          selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
+          selectedLabelTextStyle: AppFonts.sfProStyle(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.primary,
+          ),
+          unselectedLabelTextStyle: AppFonts.sfProStyle(
+            fontWeight: FontWeight.w500,
+            color: theme.textTheme.bodyMedium?.color,
+          ),
+          leading: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: Image.asset(
+                      'assets/images/logo/logo_101.png',
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: 60,
+                          height: 60,
+                          color: Colors.blue,
+                          child: const Icon(
+                            Icons.medical_services,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'FamiLee Dental',
+                  style: AppFonts.sfProStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    color: theme.textTheme.titleMedium?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          destinations: [
+            const NavigationRailDestination(
+              icon: Icon(Icons.dashboard),
+              label: Text('Dashboard'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.inventory),
+              label: Text('Inventory'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.shopping_cart),
+              label: Text('Purchase Order'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.playlist_remove),
+              label: Text('Stock Deduction'),
+            ),
+            if (canAccessActivityLog)
+              const NavigationRailDestination(
+                icon: Icon(Icons.history),
+                label: Text('Activity Logs'),
+              ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.settings),
+              label: Text('Settings'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.logout),
+              label: Text('Logout'),
+            ),
+          ],
+          onDestinationSelected: (index) async {
+            if (index == 0) {
+              Navigator.pushNamed(context, '/dashboard');
+            } else if (index == 1) {
+              Navigator.pushNamed(context, '/inventory');
+            } else if (index == 2) {
+              // Already on Purchase Order
+            } else if (index == 3) {
+              Navigator.pushNamed(context, '/stock-deduction');
+            } else if (canAccessActivityLog && index == 4) {
+              Navigator.pushNamed(context, '/activity-log');
+            } else if (index == (canAccessActivityLog ? 5 : 4)) {
+              Navigator.pushNamed(context, '/settings');
+            } else if (index == (canAccessActivityLog ? 6 : 5)) {
+              await _handleLogout();
+            }
+          },
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: ResponsiveContainer(
+            maxWidth: 1200,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal:
+                      MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                  vertical: 12.0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Summary Section (same as mobile version starting from line ~268)
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: scheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.shadowColor.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                        border: Border.all(
+                            color: theme.dividerColor.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildSummaryItem(
+                              "Open", "${_getSummaryCounts()['Open']}"),
+                          _buildSummaryItem(
+                              "Approval", "${_getSummaryCounts()['Approval']}"),
+                          _buildSummaryItem(
+                              "Closed", "${_getSummaryCounts()['Closed']}"),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // Search and Create PO Section
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: searchController,
+                            decoration: InputDecoration(
+                              hintText: 'Search PO...',
+                              hintStyle: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.6),
+                              ),
+                              prefixIcon: Icon(Icons.search,
+                                  color: theme.iconTheme.color),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: EdgeInsets.symmetric(
+                                  vertical: 0, horizontal: 16),
+                              filled: true,
+                              fillColor: scheme.surface,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final result = await Navigator.pushNamed(
+                                context, '/create-po');
+                            if (!mounted) return;
+                            if (result == true) {
+                              await _load();
+                            } else {
+                              await _load();
+                            }
+                          },
+                          icon: Icon(Icons.add, color: Colors.white),
+                          label: Text(
+                            'Create PO',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFF00D4AA),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+
+                    // Main Content Area with tabs
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: theme.brightness == Brightness.dark
+                              ? theme.colorScheme.surface
+                              : const Color(0xFFE8D5E8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: theme.dividerColor.withOpacity(0.2)),
+                        ),
+                        child: Column(
+                          children: [
+                            // Tabs
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _buildTab("Open", activeTabIndex == 0, () {
+                                    setState(() {
+                                      activeTabIndex = 0;
+                                    });
+                                  }),
+                                  SizedBox(width: 12),
+                                  _buildTab("Approval", activeTabIndex == 1,
+                                      () {
+                                    setState(() {
+                                      activeTabIndex = 1;
+                                    });
+                                  }),
+                                  SizedBox(width: 12),
+                                  _buildTab("Closed", activeTabIndex == 2, () {
+                                    setState(() {
+                                      activeTabIndex = 2;
+                                    });
+                                  }),
+                                ],
+                              ),
+                            ),
+
+                            Expanded(
+                              child: RefreshIndicator(
+                                onRefresh: _load,
+                                child: StreamBuilder<List<PurchaseOrder>>(
+                                  stream: activeTabIndex == 0
+                                      ? _controller.getOpenPOsStream()
+                                      : activeTabIndex == 1
+                                          ? _controller.getApprovalPOsStream()
+                                          : _controller.getClosedPOsStream(),
+                                  builder: (context, snapshot) {
+                                    List<PurchaseOrder> displayed = [];
+                                    bool loading = false;
+
+                                    if (activeTabIndex == 0) {
+                                      loading = !_loadedOpen;
+                                    } else if (activeTabIndex == 1) {
+                                      loading = !_loadedApproval;
+                                    } else if (activeTabIndex == 2) {
+                                      loading = !_loadedClosed;
+                                    }
+
+                                    if (loading) {
+                                      final isDark =
+                                          theme.brightness == Brightness.dark;
+                                      final baseColor = isDark
+                                          ? Colors.grey[800]!
+                                          : Colors.grey[300]!;
+                                      final highlightColor = isDark
+                                          ? Colors.grey[700]!
+                                          : Colors.grey[100]!;
+
+                                      return ListView.separated(
+                                        physics:
+                                            AlwaysScrollableScrollPhysics(),
+                                        padding: EdgeInsets.all(12),
+                                        itemCount: 5,
+                                        separatorBuilder: (_, __) =>
+                                            SizedBox(height: 8),
+                                        itemBuilder: (_, __) =>
+                                            Shimmer.fromColors(
+                                          baseColor: baseColor,
+                                          highlightColor: highlightColor,
+                                          child: Container(
+                                            height: 120,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }
+
+                                    if (snapshot.hasData) {
+                                      displayed = snapshot.data!;
+                                    }
+
+                                    if (displayed.isEmpty) {
+                                      return Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.receipt_long,
+                                                size: 64, color: Colors.grey),
+                                            SizedBox(height: 16),
+                                            Text(
+                                              'No Purchase Orders',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+
+                                    return ListView.separated(
+                                      physics: AlwaysScrollableScrollPhysics(),
+                                      padding: EdgeInsets.all(12),
+                                      clipBehavior: Clip.hardEdge,
+                                      itemCount: displayed.length,
+                                      separatorBuilder: (_, __) =>
+                                          SizedBox(height: 8),
+                                      itemBuilder: (context, index) {
+                                        final po = displayed[index];
+                                        if (_openPOCode != null &&
+                                            !_autoOpeningDetails &&
+                                            po.code == _openPOCode) {
+                                          _autoOpeningDetails = true;
+                                          _openPOCode = null;
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) async {
+                                            final result =
+                                                await Navigator.pushNamed(
+                                              context,
+                                              '/po-details',
+                                              arguments: {'purchaseOrder': po},
+                                            );
+                                            if (result is Map &&
+                                                result['switchToClosed'] ==
+                                                    true) {
+                                              setState(() {
+                                                activeTabIndex = 2;
+                                              });
+                                            }
+                                            _autoOpeningDetails = false;
+                                          });
+                                        }
+                                        return _buildPOCard(po);
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    final shouldLogout = await _showLogoutDialog(context);
+    if (shouldLogout == true) {
+      final authService = AuthService();
+      await authService.logout();
+      if (context.mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    }
+  }
+
+  Future<bool> _showLogoutDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.logout,
+                        color: Colors.red,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Are you sure you want to logout?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: const Text(
+                              'Yes',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'No',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
                                 fontSize: 16,
                               ),
                             ),

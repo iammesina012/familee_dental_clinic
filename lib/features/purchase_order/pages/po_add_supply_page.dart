@@ -103,6 +103,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
         ...List.from(routeArgs['existingIds']).map((e) => e.toString()),
     };
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(

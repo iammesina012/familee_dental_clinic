@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
 import 'package:familee_dental/features/purchase_order/controller/po_create_controller.dart';
@@ -16,18 +15,12 @@ class CreatePOPage extends StatefulWidget {
 class _CreatePOPageState extends State<CreatePOPage> {
   final TextEditingController purchaseNameController = TextEditingController();
   List<Map<String, dynamic>> addedSupplies = [];
-  bool _isSaving = false; // Prevent double-save
   final CreatePOController _controller = CreatePOController();
-  TextEditingController? _autocompleteController;
-  bool _nameListenerAttached = false;
-  String? validationError;
 
   // Editing mode variables
   bool _isEditing = false;
   PurchaseOrder? _editingPO;
-  bool _shouldSetAutocompleteText = false;
   bool _hasInitializedEditingMode = false;
-  String _originalName = '';
   List<Map<String, dynamic>> _originalSupplies = [];
 
   @override
@@ -57,30 +50,13 @@ class _CreatePOPageState extends State<CreatePOPage> {
       // Pre-populate the form with existing PO data
       purchaseNameController.text = _editingPO!.name;
       addedSupplies = List<Map<String, dynamic>>.from(_editingPO!.supplies);
-      _originalName = _editingPO!.name;
       _originalSupplies = List<Map<String, dynamic>>.from(_editingPO!.supplies);
-      _shouldSetAutocompleteText = true;
       _hasInitializedEditingMode = true;
 
       setState(() {
         // Trigger rebuild to show the pre-populated data
       });
     }
-  }
-
-  String _getCurrentName() {
-    final controllerToCheck = _autocompleteController ?? purchaseNameController;
-    return controllerToCheck.text.trim();
-  }
-
-  bool _hasUnsavedChanges() {
-    if (!_isEditing) {
-      return addedSupplies.isNotEmpty && _getCurrentName().isNotEmpty;
-    }
-    final bool nameChanged = _getCurrentName() != _originalName;
-    final bool suppliesChanged =
-        jsonEncode(addedSupplies) != jsonEncode(_originalSupplies);
-    return nameChanged || suppliesChanged;
   }
 
   @override
@@ -93,23 +69,276 @@ class _CreatePOPageState extends State<CreatePOPage> {
     return _controller.calculateTotalCost(addedSupplies);
   }
 
-  // Helper function to validate alphanumeric input
-  bool _isValidAlphanumeric(String text) {
-    if (text.trim().isEmpty) return false;
-    // Check if the text contains only numbers
-    if (RegExp(r'^[0-9]+$').hasMatch(text.trim())) {
-      return false;
+  // Get the supplier name from current supplies
+  String _getCurrentSupplierName() {
+    if (addedSupplies.isEmpty) return 'Unknown Supplier';
+
+    // Get the supplier name from the first supply
+    String supplierName =
+        addedSupplies.first['supplierName'] ?? 'Unknown Supplier';
+
+    // Check if all supplies have the same supplier
+    bool allSameSupplier = addedSupplies.every((supply) =>
+        (supply['supplierName'] ?? 'Unknown Supplier') == supplierName);
+
+    if (allSameSupplier) {
+      return supplierName;
+    } else {
+      // If supplies have different suppliers, show "Mixed Suppliers"
+      return 'Mixed Suppliers';
     }
-    // Check if the text contains at least one letter and allows common characters
-    return RegExp(r'^[a-zA-Z0-9\s\-_\.]+$').hasMatch(text.trim()) &&
-        RegExp(r'[a-zA-Z]').hasMatch(text.trim());
+  }
+
+  // Check if there are unsaved changes
+  bool _hasUnsavedChanges() {
+    if (!_isEditing) {
+      return addedSupplies.isNotEmpty;
+    }
+
+    // For editing mode, compare current supplies with original supplies
+    if (addedSupplies.length != _originalSupplies.length) {
+      return true;
+    }
+
+    // Create sets of supply identifiers to compare (ignoring order)
+    Set<String> currentSupplyIds = addedSupplies
+        .map((supply) =>
+            '${supply['supplyId']}_${supply['supplyName']}_${supply['supplierName']}_${supply['brandName']}_${supply['quantity']}_${supply['cost']}')
+        .toSet();
+
+    Set<String> originalSupplyIds = _originalSupplies
+        .map((supply) =>
+            '${supply['supplyId']}_${supply['supplyName']}_${supply['supplierName']}_${supply['brandName']}_${supply['quantity']}_${supply['cost']}')
+        .toSet();
+
+    // Compare the sets (order doesn't matter)
+    return !currentSupplyIds.difference(originalSupplyIds).isEmpty ||
+        !originalSupplyIds.difference(currentSupplyIds).isEmpty;
+  }
+
+  // Show confirmation dialog for clearing all supplies
+  Future<bool> _showClearAllConfirmation() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon and Title
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.clear_all,
+                        color: Colors.red,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Clear All Supplies',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      'Are you sure you want to remove all supplies from the restocking list? This action cannot be undone.',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Cancel first, then Clear All)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Clear All',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+  }
+
+  // Save purchase orders - split by supplier
+  Future<void> _savePurchaseOrders() async {
+    if (addedSupplies.isEmpty) {
+      _showErrorDialog(
+          'Please add at least one supply to the restocking list.');
+      return;
+    }
+
+    // Group supplies by supplier
+    Map<String, List<Map<String, dynamic>>> suppliesBySupplier = {};
+    for (var supply in addedSupplies) {
+      String supplierName = supply['supplierName'] ?? 'Unknown Supplier';
+      if (!suppliesBySupplier.containsKey(supplierName)) {
+        suppliesBySupplier[supplierName] = [];
+      }
+      suppliesBySupplier[supplierName]!.add(supply);
+    }
+
+    // Show confirmation dialog
+    final confirmed = await _showSaveConfirmation(suppliesBySupplier);
+    if (!confirmed) return;
+
+    try {
+      if (_isEditing && _editingPO != null) {
+        // Update existing PO
+        final recalculatedReceived = addedSupplies
+            .where((s) => (s['status'] ?? 'Pending') == 'Received')
+            .length;
+        final updatedPO = PurchaseOrder(
+          id: _editingPO!.id,
+          code: _editingPO!.code,
+          name: _getCurrentSupplierName(), // Update PO name to current supplier
+          createdAt: _editingPO!.createdAt, // Keep original creation date
+          status: _editingPO!.status, // Keep original status
+          supplies: List<Map<String, dynamic>>.from(addedSupplies),
+          receivedCount: recalculatedReceived, // Recalculate received count
+        );
+        await _controller.updatePO(updatedPO, previousPO: _editingPO);
+      } else {
+        // Create new POs for each supplier
+        final now = DateTime.now();
+        for (var entry in suppliesBySupplier.entries) {
+          String supplierName = entry.key;
+          List<Map<String, dynamic>> supplies = entry.value;
+
+          final code = await _controller.getNextCodeAndIncrement();
+          final po = PurchaseOrder(
+            id: '${now.millisecondsSinceEpoch}_${supplierName.hashCode}',
+            code: code,
+            name: supplierName, // Use supplier name as PO name
+            createdAt: now,
+            status: 'Open',
+            supplies: List<Map<String, dynamic>>.from(supplies),
+            receivedCount: 0,
+          );
+          await _controller.savePO(po);
+        }
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isEditing
+                ? 'Purchase Order updated successfully!'
+                : suppliesBySupplier.length == 1
+                    ? 'Purchase Order saved successfully!'
+                    : '${suppliesBySupplier.length} Purchase Orders saved successfully!',
+            style: AppFonts.sfProStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.white,
+            ),
+          ),
+          backgroundColor: Color(0xFF00D4AA),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+
+      // Navigate back to Purchase Order page and signal success
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      _showErrorDialog('Failed to save purchase orders: $e');
+    }
   }
 
   // Show confirmation dialog for saving PO
-  Future<bool> _showSaveConfirmation() async {
+  Future<bool> _showSaveConfirmation(
+      Map<String, List<Map<String, dynamic>>> suppliesBySupplier) async {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final controllerToCheck = _autocompleteController ?? purchaseNameController;
 
     return await showDialog<bool>(
           context: context,
@@ -148,7 +377,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                     Text(
                       _isEditing
                           ? 'Update Purchase Order'
-                          : 'Create Purchase Order',
+                          : suppliesBySupplier.length == 1
+                              ? 'Create Purchase Order'
+                              : 'Create ${suppliesBySupplier.length} Purchase Orders',
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontSize: 20,
@@ -163,7 +394,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                     Text(
                       _isEditing
                           ? 'Are you sure you want to update this purchase order?'
-                          : 'Are you sure you want to create this purchase order?',
+                          : suppliesBySupplier.length == 1
+                              ? 'Are you sure you want to create this purchase order?'
+                              : 'Supplies will be split into ${suppliesBySupplier.length} purchase orders by supplier:',
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontSize: 16,
@@ -175,38 +408,103 @@ class _CreatePOPageState extends State<CreatePOPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // PO Details
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.grey[800] : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Purchase Order: ${controllerToCheck.text.trim()}',
-                            style: TextStyle(
-                              fontFamily: 'SF Pro',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: theme.textTheme.bodyMedium?.color,
+                    // PO Details - Show details for both creating and editing
+                    if (_isEditing) ...[
+                      // Show current PO details when editing
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.grey[800]
+                                      : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _getCurrentSupplierName(),
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF00D4AA),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Supplies: ${addedSupplies.map((s) => s['supplyName'] ?? s['name'] ?? 'Unknown').join(', ')}',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Supplies: ${addedSupplies.map((s) => s['supplyName'] ?? s['name'] ?? 'Unknown').join(', ')}',
-                            style: TextStyle(
-                              fontFamily: 'SF Pro',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: theme.textTheme.bodyMedium?.color,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                    ] else ...[
+                      // Show supplier breakdown when creating new POs
+                      ...suppliesBySupplier.entries.map((entry) {
+                        String supplierName = entry.key;
+                        List<Map<String, dynamic>> supplies = entry.value;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.grey[800]
+                                        : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        supplierName,
+                                        style: TextStyle(
+                                          fontFamily: 'SF Pro',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF00D4AA),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Supplies: ${supplies.map((s) => s['supplyName'] ?? s['name'] ?? 'Unknown').join(', ')}',
+                                        style: TextStyle(
+                                          fontFamily: 'SF Pro',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color:
+                                              theme.textTheme.bodyMedium?.color,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ],
                     const SizedBox(height: 24),
 
                     // Buttons (Cancel first, then Save - matching exit dialog pattern)
@@ -275,8 +573,8 @@ class _CreatePOPageState extends State<CreatePOPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
@@ -322,460 +620,6 @@ class _CreatePOPageState extends State<CreatePOPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Purchase Name Section
-                Container(
-                  padding:
-                      EdgeInsets.all(MediaQuery.of(context).size.width * 0.03),
-                  decoration: BoxDecoration(
-                    color: theme.brightness == Brightness.dark
-                        ? theme.colorScheme.surface
-                        : const Color(0xFFE8D5E8),
-                    borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Use column layout for smaller screens
-                      if (constraints.maxWidth < 600) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Purchase Name:",
-                              style: AppFonts.sfProStyle(
-                                fontSize:
-                                    MediaQuery.of(context).size.width * 0.04,
-                                fontWeight: FontWeight.bold,
-                                color: theme.brightness == Brightness.dark
-                                    ? theme.textTheme.bodyMedium?.color
-                                    : const Color(0xFF8B5A8B),
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Autocomplete<String>(
-                              fieldViewBuilder: (context, textEditingController,
-                                  focusNode, onFieldSubmitted) {
-                                // Store reference to the autocomplete controller
-                                _autocompleteController = textEditingController;
-                                if (!_nameListenerAttached) {
-                                  _autocompleteController!.addListener(() {
-                                    if (mounted) setState(() {});
-                                  });
-                                  _nameListenerAttached = true;
-                                }
-
-                                // Set the text if we're in editing mode and haven't set it yet
-                                if (_shouldSetAutocompleteText &&
-                                    _editingPO != null) {
-                                  WidgetsBinding.instance
-                                      .addPostFrameCallback((_) {
-                                    if (mounted) {
-                                      textEditingController.text =
-                                          _editingPO!.name;
-                                      setState(() {
-                                        _shouldSetAutocompleteText = false;
-                                      });
-                                    }
-                                  });
-                                }
-
-                                return TextField(
-                                  controller: textEditingController,
-                                  focusNode: focusNode,
-                                  style: AppFonts.sfProStyle(
-                                    fontSize:
-                                        MediaQuery.of(context).size.width *
-                                            0.04,
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: 'Type here...',
-                                    hintStyle: AppFonts.sfProStyle(
-                                      fontSize:
-                                          MediaQuery.of(context).size.width *
-                                              0.04,
-                                      color: theme.textTheme.bodyMedium?.color
-                                          ?.withOpacity(0.4),
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: validationError != null
-                                          ? BorderSide(
-                                              color: Colors.red[600]!, width: 1)
-                                          : BorderSide.none,
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: validationError != null
-                                          ? BorderSide(
-                                              color: Colors.red[600]!, width: 1)
-                                          : BorderSide.none,
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: validationError != null
-                                          ? BorderSide(
-                                              color: Colors.red[600]!, width: 2)
-                                          : BorderSide.none,
-                                    ),
-                                    contentPadding: EdgeInsets.symmetric(
-                                      vertical: 12,
-                                      horizontal: 16,
-                                    ),
-                                    filled: true,
-                                    fillColor: scheme.surface,
-                                    errorText: validationError,
-                                    errorStyle: TextStyle(
-                                      fontFamily: 'SF Pro',
-                                      fontSize: 12,
-                                      color: Colors.red[600],
-                                    ),
-                                  ),
-                                  onChanged: (value) {
-                                    // Clear validation error when user starts typing
-                                    if (validationError != null) {
-                                      setState(() {
-                                        validationError = null;
-                                      });
-                                    }
-                                  },
-                                );
-                              },
-                              optionsBuilder:
-                                  (TextEditingValue textEditingValue) async {
-                                if (textEditingValue.text.trim().isEmpty) {
-                                  return const Iterable<String>.empty();
-                                }
-                                return await _controller
-                                    .getSuggestions(textEditingValue.text);
-                              },
-                              onSelected: (String selection) {
-                                // This is called when a suggestion is selected
-                                // The text field will be automatically updated
-                              },
-                              optionsViewBuilder:
-                                  (context, onSelected, options) {
-                                return Material(
-                                  elevation: 4.0,
-                                  child: Container(
-                                    constraints: BoxConstraints(
-                                      maxHeight: options.length *
-                                          56.0, // Increased height for better spacing
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: scheme.surface,
-                                      borderRadius: BorderRadius.circular(8),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: theme.shadowColor
-                                              .withOpacity(0.12),
-                                          blurRadius: 8,
-                                          offset: Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: ListView.builder(
-                                      padding: EdgeInsets.zero,
-                                      shrinkWrap:
-                                          true, // Make it only as tall as needed
-                                      itemCount: options.length,
-                                      itemBuilder:
-                                          (BuildContext context, int index) {
-                                        final option = options.elementAt(index);
-                                        return ListTile(
-                                          dense:
-                                              true, // Make tiles more compact
-                                          contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 4,
-                                          ),
-                                          title: Text(
-                                            option,
-                                            style: AppFonts.sfProStyle(
-                                              fontSize: 16,
-                                              color: theme
-                                                  .textTheme.bodyMedium?.color,
-                                            ),
-                                          ),
-                                          onTap: () {
-                                            onSelected(option);
-                                          },
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: Builder(builder: (context) {
-                                final bool disabled = _isSaving ||
-                                    (_isEditing
-                                        ? !_hasUnsavedChanges()
-                                        : addedSupplies.isEmpty);
-                                return ElevatedButton(
-                                  onPressed:
-                                      disabled ? null : _savePurchaseOrder,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: disabled
-                                        ? Colors.grey[400]
-                                        : Color(0xFF00D4AA),
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 12,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _isSaving
-                                        ? (_isEditing
-                                            ? 'Updating...'
-                                            : 'Saving...')
-                                        : (_isEditing ? 'Update' : 'Save'),
-                                    style: AppFonts.sfProStyle(
-                                      fontSize:
-                                          MediaQuery.of(context).size.width *
-                                              0.04,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ],
-                        );
-                      } else {
-                        // Use row layout for larger screens
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Purchase Name:",
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.brightness == Brightness.dark
-                                          ? Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.color
-                                          : const Color(0xFF8B5A8B),
-                                    ),
-                                  ),
-                                  SizedBox(height: 8),
-                                  Autocomplete<String>(
-                                    fieldViewBuilder: (context,
-                                        textEditingController,
-                                        focusNode,
-                                        onFieldSubmitted) {
-                                      // Store reference to the autocomplete controller
-                                      _autocompleteController =
-                                          textEditingController;
-                                      if (!_nameListenerAttached) {
-                                        _autocompleteController!
-                                            .addListener(() {
-                                          if (mounted) setState(() {});
-                                        });
-                                        _nameListenerAttached = true;
-                                      }
-
-                                      // Set the text if we're in editing mode and haven't set it yet
-                                      if (_shouldSetAutocompleteText &&
-                                          _editingPO != null) {
-                                        WidgetsBinding.instance
-                                            .addPostFrameCallback((_) {
-                                          if (mounted) {
-                                            textEditingController.text =
-                                                _editingPO!.name;
-                                            setState(() {
-                                              _shouldSetAutocompleteText =
-                                                  false;
-                                            });
-                                          }
-                                        });
-                                      }
-
-                                      return TextField(
-                                        controller: textEditingController,
-                                        focusNode: focusNode,
-                                        style: AppFonts.sfProStyle(
-                                          fontSize: 16,
-                                          color: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.color,
-                                        ),
-                                        decoration: InputDecoration(
-                                          hintText: 'Type here...',
-                                          hintStyle: AppFonts.sfProStyle(
-                                            fontSize: 16,
-                                            color: Colors.grey[400],
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            borderSide: BorderSide(
-                                                color: Colors.white
-                                                    .withOpacity(0.2),
-                                                width: 1),
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            borderSide: BorderSide(
-                                                color: Colors.white
-                                                    .withOpacity(0.2),
-                                                width: 1),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            borderSide: BorderSide(
-                                                color: Colors.white
-                                                    .withOpacity(0.3),
-                                                width: 1.2),
-                                          ),
-                                          contentPadding: EdgeInsets.symmetric(
-                                            vertical: 12,
-                                            horizontal: 16,
-                                          ),
-                                          filled: true,
-                                          fillColor: Theme.of(context)
-                                              .colorScheme
-                                              .surface,
-                                        ),
-                                      );
-                                    },
-                                    optionsBuilder: (TextEditingValue
-                                        textEditingValue) async {
-                                      if (textEditingValue.text
-                                          .trim()
-                                          .isEmpty) {
-                                        return const Iterable<String>.empty();
-                                      }
-                                      return await _controller.getSuggestions(
-                                          textEditingValue.text);
-                                    },
-                                    onSelected: (String selection) {
-                                      // This is called when a suggestion is selected
-                                      // The text field will be automatically updated
-                                    },
-                                    optionsViewBuilder:
-                                        (context, onSelected, options) {
-                                      return Material(
-                                        elevation: 4.0,
-                                        child: Container(
-                                          constraints: BoxConstraints(
-                                            maxHeight: options.length *
-                                                56.0, // Increased height for better spacing
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: scheme.surface,
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: theme.shadowColor
-                                                    .withOpacity(0.12),
-                                                blurRadius: 8,
-                                                offset: Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: ListView.builder(
-                                            padding: EdgeInsets.zero,
-                                            shrinkWrap:
-                                                true, // Make it only as tall as needed
-                                            itemCount: options.length,
-                                            itemBuilder: (BuildContext context,
-                                                int index) {
-                                              final option =
-                                                  options.elementAt(index);
-                                              return ListTile(
-                                                dense:
-                                                    true, // Make tiles more compact
-                                                contentPadding:
-                                                    EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 4,
-                                                ),
-                                                title: Text(
-                                                  option,
-                                                  style: AppFonts.sfProStyle(
-                                                    fontSize: 16,
-                                                    color: Theme.of(context)
-                                                        .textTheme
-                                                        .bodyMedium
-                                                        ?.color,
-                                                  ),
-                                                ),
-                                                onTap: () {
-                                                  onSelected(option);
-                                                },
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(width: 16),
-                            Builder(builder: (context) {
-                              final bool disabled = _isSaving ||
-                                  (_isEditing
-                                      ? !_hasUnsavedChanges()
-                                      : addedSupplies.isNotEmpty
-                                          ? false
-                                          : true);
-                              return ElevatedButton(
-                                onPressed: disabled ? null : _savePurchaseOrder,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: disabled
-                                      ? Colors.grey[400]
-                                      : Color(0xFF00D4AA),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: Text(
-                                  _isSaving
-                                      ? (_isEditing
-                                          ? 'Updating...'
-                                          : 'Saving...')
-                                      : (_isEditing ? 'Update' : 'Save'),
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              );
-                            }),
-                          ],
-                        );
-                      }
-                    },
-                  ),
-                ),
-                SizedBox(height: 16),
-
                 // Supplies List Section
                 Expanded(
                   child: Container(
@@ -944,22 +788,54 @@ class _CreatePOPageState extends State<CreatePOPage> {
                       : const Color(0xFF8B5A8B),
                 ),
               ),
-              // Clear All Button
-              TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    addedSupplies.clear();
-                  });
-                },
-                icon: Icon(Icons.clear_all, color: Colors.red, size: 20),
-                label: Text(
-                  'Clear All',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.red,
+              Row(
+                children: [
+                  // Clear All Button
+                  TextButton.icon(
+                    onPressed: () async {
+                      final confirmed = await _showClearAllConfirmation();
+                      if (confirmed) {
+                        setState(() {
+                          addedSupplies.clear();
+                        });
+                      }
+                    },
+                    icon: Icon(Icons.clear_all, color: Colors.red, size: 20),
+                    label: Text(
+                      'Clear All',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.red,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  // Save Button
+                  ElevatedButton(
+                    onPressed:
+                        _hasUnsavedChanges() ? _savePurchaseOrders : null,
+                    child: Text(
+                      'Save',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _hasUnsavedChanges()
+                          ? const Color(0xFF00D4AA)
+                          : Colors.grey[400],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1362,111 +1238,6 @@ class _CreatePOPageState extends State<CreatePOPage> {
     );
   }
 
-  Future<void> _savePurchaseOrder() async {
-    if (_isSaving) return; // Prevent double-save
-
-    // Use the autocomplete controller if available, otherwise fall back to purchaseNameController
-    final controllerToCheck = _autocompleteController ?? purchaseNameController;
-
-    // Clear previous validation error
-    setState(() {
-      validationError = null;
-    });
-
-    if (controllerToCheck.text.trim().isEmpty) {
-      setState(() {
-        validationError = 'Please enter a purchase order name';
-      });
-      return;
-    }
-
-    // Validate alphanumeric input
-    if (!_isValidAlphanumeric(controllerToCheck.text.trim())) {
-      setState(() {
-        validationError =
-            'Purchase order name must contain letters and cannot be only numbers or special characters.';
-      });
-      return;
-    }
-
-    if (addedSupplies.isEmpty) {
-      _showErrorDialog(
-          'Please add at least one supply to the restocking list.');
-      return;
-    }
-
-    // Show confirmation dialog first
-    final confirmed = await _showSaveConfirmation();
-    if (!confirmed) return;
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    if (_isEditing && _editingPO != null) {
-      // Update existing PO
-      final recalculatedReceived = addedSupplies
-          .where((s) => (s['status'] ?? 'Pending') == 'Received')
-          .length;
-      final updatedPO = PurchaseOrder(
-        id: _editingPO!.id,
-        code: _editingPO!.code,
-        name: controllerToCheck.text.trim(),
-        createdAt: _editingPO!.createdAt, // Keep original creation date
-        status: _editingPO!.status, // Keep original status
-        supplies: List<Map<String, dynamic>>.from(addedSupplies),
-        receivedCount: recalculatedReceived, // Recalculate received count
-      );
-      await _controller.updatePO(updatedPO, previousPO: _editingPO);
-    } else {
-      // Create new PO
-      final now = DateTime.now();
-      final code = await _controller.getNextCodeAndIncrement();
-      final po = PurchaseOrder(
-        id: '${now.millisecondsSinceEpoch}',
-        code: code,
-        name: controllerToCheck.text.trim(),
-        createdAt: now,
-        status: 'Open',
-        supplies: List<Map<String, dynamic>>.from(addedSupplies),
-        receivedCount: 0,
-      );
-      await _controller.savePO(po);
-    }
-
-    // Add PO name to suggestions for future use
-    await _controller.addSuggestion(controllerToCheck.text.trim());
-
-    setState(() {
-      _isSaving = false;
-    });
-
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isEditing
-              ? 'Purchase Order updated successfully!'
-              : 'Purchase Order saved successfully!',
-          style: AppFonts.sfProStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: Color(0xFF00D4AA),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
-
-    // Navigate back to Purchase Order page and signal success
-    Navigator.of(context).pop(true);
-  }
-
   void _editSupply(Map<String, dynamic> supply, int index) async {
     // Navigate to edit supply page
     final result = await Navigator.pushNamed(
@@ -1575,78 +1346,130 @@ class _CreatePOPageState extends State<CreatePOPage> {
   }
 
   void _handleBackPress() {
-    // If there are supplies in the list, show confirmation dialog
-    if (addedSupplies.isNotEmpty ||
-        purchaseNameController.text.trim().isNotEmpty) {
+    // If there are unsaved changes, show confirmation dialog
+    if (_hasUnsavedChanges()) {
       showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (BuildContext context) {
-          return ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 300),
-            child: AlertDialog(
-              contentPadding:
-                  EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              title: Text(
-                _isEditing ? 'Cancel Editing' : 'Cancel Purchase Order',
-                style: AppFonts.sfProStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+          final theme = Theme.of(context);
+          final isDark = theme.brightness == Brightness.dark;
+
+          return Dialog(
+            backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              constraints: const BoxConstraints(
+                maxWidth: 400,
+                minWidth: 350,
               ),
-              content: Text(
-                _isEditing
-                    ? 'You have unsaved changes. Are you sure you want to cancel editing this purchase order?'
-                    : 'You have unsaved changes. Are you sure you want to cancel this purchase order?',
-                style: AppFonts.sfProStyle(fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              actions: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop(); // Close dialog
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[600],
-                        ),
-                        child: Text(
-                          'Continue Editing',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            color: Colors.white,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Icon and Title
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.warning,
+                      color: Colors.orange,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Title
+                  Text(
+                    _isEditing ? 'Cancel Editing' : 'Cancel Purchase Order',
+                    style: TextStyle(
+                      fontFamily: 'SF Pro',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: theme.textTheme.titleLarge?.color,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Content
+                  Text(
+                    _isEditing
+                        ? 'You have unsaved changes. Are you sure you want to cancel editing this purchase order?'
+                        : 'You have unsaved changes. Are you sure you want to cancel this purchase order?',
+                    style: TextStyle(
+                      fontFamily: 'SF Pro',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: theme.textTheme.bodyMedium?.color,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Buttons (Cancel first, then Continue Editing)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            Navigator.of(context).pop();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 2,
+                          ),
+                          child: Text(
+                            _isEditing ? 'Cancel Edit' : 'Cancel PO',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop(); // Close dialog
-                          Navigator.of(context)
-                              .pop(); // Go back to previous page
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                        ),
-                        child: Text(
-                          _isEditing ? 'Cancel Edit' : 'Cancel PO',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00D4AA),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 2,
+                          ),
+                          child: Text(
+                            'Continue Editing',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           );
         },

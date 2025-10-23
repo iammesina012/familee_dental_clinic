@@ -420,189 +420,80 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Stock + Inventory units
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      // Cost + Inventory units
+                      Row(
                         children: [
-                          Text('Stock',
-                              style: theme.textTheme.bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.w500)),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.surface,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: theme.dividerColor
-                                                .withOpacity(0.2)),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          IconButton(
-                                            icon: Icon(Icons.remove,
-                                                color: theme.iconTheme.color),
-                                            splashRadius: 18,
-                                            onPressed: () {
-                                              if (controller.stock > 0) {
-                                                _markAsChanged();
-                                                setState(() {
-                                                  controller.stock--;
-                                                  controller.stockController
-                                                          .text =
-                                                      controller.stock
-                                                          .toString();
-                                                  // Clear validation error when user changes
-                                                  if (validationErrors[
-                                                          'stock'] !=
-                                                      null) {
-                                                    validationErrors['stock'] =
-                                                        null;
-                                                  }
-                                                });
-                                              }
-                                            },
-                                          ),
-                                          SizedBox(
-                                            width: 32,
-                                            child: Center(
-                                              child: TextField(
-                                                controller:
-                                                    controller.stockController,
-                                                textAlign: TextAlign.center,
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                decoration: InputDecoration(
-                                                    border: InputBorder.none),
-                                                style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: theme.textTheme
-                                                        .bodyMedium?.color),
-                                                onChanged: (val) {
-                                                  _markAsChanged();
-                                                  setState(() {
-                                                    controller.stock =
-                                                        int.tryParse(val) ?? 0;
-                                                    // Clear validation error when user types
-                                                    if (validationErrors[
-                                                            'stock'] !=
-                                                        null) {
-                                                      validationErrors[
-                                                          'stock'] = null;
-                                                    }
-                                                  });
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                          IconButton(
-                                            icon: Icon(Icons.add,
-                                                color: theme.iconTheme.color),
-                                            splashRadius: 18,
-                                            onPressed: () {
-                                              _markAsChanged();
-                                              setState(() {
-                                                controller.stock++;
-                                                controller
-                                                        .stockController.text =
-                                                    controller.stock.toString();
-                                                // Clear validation error when user changes
-                                                if (validationErrors['stock'] !=
-                                                    null) {
-                                                  validationErrors['stock'] =
-                                                      null;
-                                                }
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextField(
+                                    controller: controller.costController,
+                                    keyboardType:
+                                        TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                          RegExp(r'^\d*\.?\d{0,2}')),
+                                    ],
+                                    decoration: InputDecoration(
+                                      labelText: 'Cost *',
+                                      border: OutlineInputBorder(),
+                                      errorStyle: TextStyle(color: Colors.red),
+                                      hintText: 'Enter amount (e.g., 150.00)',
                                     ),
-                                    _buildValidationError(
-                                        validationErrors['stock']),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    DropdownButtonFormField<String>(
-                                      value: controller.selectedUnit,
-                                      decoration: InputDecoration(
-                                        labelText: 'Inventory units *',
-                                        border: OutlineInputBorder(),
-                                        errorStyle:
-                                            TextStyle(color: Colors.red),
-                                      ),
-                                      items: ['Box', 'Piece', 'Pack']
-                                          .map((u) => DropdownMenuItem(
-                                              value: u, child: Text(u)))
-                                          .toList(),
-                                      onChanged: (val) {
-                                        _markAsChanged();
+                                    onChanged: (value) {
+                                      _markAsChanged();
+                                      // Clear validation error when user types
+                                      if (validationErrors['cost'] != null) {
                                         setState(() {
-                                          controller.selectedUnit = val;
-                                          // Clear validation error when user selects
-                                          if (validationErrors['unit'] !=
-                                              null) {
-                                            validationErrors['unit'] = null;
-                                          }
+                                          validationErrors['cost'] = null;
                                         });
-                                      },
-                                    ),
-                                    _buildValidationError(
-                                        validationErrors['unit']),
-                                  ],
-                                ),
+                                      }
+                                    },
+                                  ),
+                                  _buildValidationError(
+                                      validationErrors['cost']),
+                                ],
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Cost full width
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: controller.costController,
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                  RegExp(r'^\d*\.?\d{0,2}')),
-                            ],
-                            decoration: InputDecoration(
-                              labelText: 'Cost *',
-                              border: OutlineInputBorder(),
-                              errorStyle: TextStyle(color: Colors.red),
-                              hintText: 'Enter amount (e.g., 150.00)',
                             ),
-                            onChanged: (value) {
-                              _markAsChanged();
-                              // Clear validation error when user types
-                              if (validationErrors['cost'] != null) {
-                                setState(() {
-                                  validationErrors['cost'] = null;
-                                });
-                              }
-                            },
                           ),
-                          _buildValidationError(validationErrors['cost']),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  DropdownButtonFormField<String>(
+                                    value: controller.selectedUnit,
+                                    decoration: InputDecoration(
+                                      labelText: 'Inventory units *',
+                                      border: OutlineInputBorder(),
+                                      errorStyle: TextStyle(color: Colors.red),
+                                    ),
+                                    items: ['Box', 'Piece', 'Pack']
+                                        .map((u) => DropdownMenuItem(
+                                            value: u, child: Text(u)))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      _markAsChanged();
+                                      setState(() {
+                                        controller.selectedUnit = val;
+                                        // Clear validation error when user selects
+                                        if (validationErrors['unit'] != null) {
+                                          validationErrors['unit'] = null;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  _buildValidationError(
+                                      validationErrors['unit']),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 14),

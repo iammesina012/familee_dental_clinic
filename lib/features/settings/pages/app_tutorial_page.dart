@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
@@ -119,6 +118,7 @@ class _AppTutorialPageState extends State<AppTutorialPage> {
     final scheme = theme.colorScheme;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
@@ -381,64 +381,9 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    // Allow all orientations for video watching
-    // Users can rotate to landscape for better video experience
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-  }
-
-  @override
   void dispose() {
     _controller.dispose();
-
-    // Restore normal app orientation when video is closed
-    // This will use the same logic as the main app (mobile: portrait, tablet: all)
-    _restoreAppOrientation();
-
     super.dispose();
-  }
-
-  // Helper method to restore the original app orientation
-  void _restoreAppOrientation() {
-    // Check if context is still valid before using MediaQuery
-    if (!mounted) return;
-
-    try {
-      // Get screen size to determine if it's mobile or tablet
-      final shortestSide = MediaQuery.of(context).size.shortestSide;
-
-      if (shortestSide < 600) {
-        // Mobile: Lock to portrait only (restore original app behavior)
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.portraitDown,
-        ]);
-      }
-      // Tablets: Don't set any restrictions (let them rotate freely as per original app)
-    } catch (e) {
-      // If context is invalid, just set default orientation
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]);
-    }
-  }
-
-  // Helper method to allow all orientations (for fullscreen video)
-  void _allowAllOrientations() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
   }
 
   @override

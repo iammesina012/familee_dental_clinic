@@ -6,6 +6,8 @@ import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:shimmer/shimmer.dart';
 
 class Dashboard extends StatefulWidget {
@@ -68,8 +70,10 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         return await _showExitDialog(context);
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
+          automaticallyImplyLeading: false, // Remove back button
           title: const Text(
             "Dashboard",
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -84,8 +88,12 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
             const NotificationBadgeButton(),
           ],
         ),
-        drawer: const MyDrawer(),
-        body: _buildDashboardContent(theme),
+        // Use Drawer for mobile, NavigationRail for tablet/desktop
+        drawer:
+            MediaQuery.of(context).size.width >= 900 ? null : const MyDrawer(),
+        body: MediaQuery.of(context).size.width >= 900
+            ? _buildRailLayout(context, theme)
+            : _buildDashboardContent(theme),
       ),
     );
   }
@@ -966,6 +974,293 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
       ),
     );
   }
+
+  Widget _buildRailLayout(BuildContext context, ThemeData theme) {
+    // Main destinations (top section)
+    final List<_RailDestination> mainDestinations = [
+      _RailDestination(
+          icon: Icons.dashboard, label: 'Dashboard', route: '/dashboard'),
+      _RailDestination(
+          icon: Icons.inventory, label: 'Inventory', route: '/inventory'),
+      _RailDestination(
+          icon: Icons.shopping_cart,
+          label: 'Purchase Order',
+          route: '/purchase-order'),
+      _RailDestination(
+          icon: Icons.playlist_remove,
+          label: 'Stock Deduction',
+          route: '/stock-deduction'),
+    ];
+
+    // Use the same role logic as drawer for conditional Activity Log
+    final userRoleProvider = UserRoleProvider();
+    final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
+
+    // Bottom destinations (Settings and Logout)
+    final List<_RailDestination> bottomDestinations = [
+      _RailDestination(
+          icon: Icons.settings, label: 'Settings', route: '/settings'),
+      _RailDestination(icon: Icons.logout, label: 'Logout', route: '/logout'),
+    ];
+
+    // Combine all destinations
+    final destinations = [
+      ...mainDestinations,
+      if (canAccessActivityLog)
+        _RailDestination(
+            icon: Icons.history,
+            label: 'Activity Logs',
+            route: '/activity-log'),
+      ...bottomDestinations,
+    ];
+
+    // Dashboard is selected here
+    final int selectedIndex = 0;
+
+    return Row(
+      children: [
+        NavigationRail(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          selectedIndex: selectedIndex,
+          labelType: NavigationRailLabelType.all,
+          useIndicator: true,
+          minWidth: 150,
+          indicatorColor: theme.colorScheme.primary.withOpacity(0.12),
+          selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
+          selectedLabelTextStyle: AppFonts.sfProStyle(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.primary,
+          ),
+          unselectedLabelTextStyle: AppFonts.sfProStyle(
+            fontWeight: FontWeight.w500,
+            color: theme.textTheme.bodyMedium?.color,
+          ),
+          leading: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: Image.asset(
+                      'assets/images/logo/logo_101.png',
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: 60,
+                          height: 60,
+                          color: Colors.blue,
+                          child: const Icon(
+                            Icons.medical_services,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'FamiLee Dental',
+                  style: AppFonts.sfProStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    color: theme.textTheme.titleMedium?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          destinations: [
+            for (final d in destinations)
+              NavigationRailDestination(
+                icon: Icon(d.icon),
+                selectedIcon: Icon(d.icon),
+                label: Text(d.label),
+              ),
+          ],
+          onDestinationSelected: (int index) {
+            final dest = destinations[index];
+            final currentRoute = ModalRoute.of(context)?.settings.name;
+
+            // Handle logout separately
+            if (dest.route == '/logout') {
+              _handleLogout(context);
+              return;
+            }
+
+            if (currentRoute != dest.route) {
+              Navigator.pushNamed(context, dest.route);
+            }
+          },
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(child: _buildDashboardContent(theme)),
+      ],
+    );
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    final shouldLogout = await _showLogoutDialog(context);
+    if (shouldLogout == true) {
+      final authService = AuthService();
+      await authService.logout();
+      // ignore: use_build_context_synchronously
+      Navigator.pushReplacementNamed(context, '/login');
+    }
+  }
+
+  Future<bool> _showLogoutDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon and Title
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.logout,
+                        color: Colors.red,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      'Are you sure you want to logout?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Yes first, then No)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Yes',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'No',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false; // Default to false if dialog is dismissed
+  }
+}
+
+class _RailDestination {
+  final IconData icon;
+  final String label;
+  final String route;
+
+  _RailDestination(
+      {required this.icon, required this.label, required this.route});
 }
 
 class _FastMovingRow extends StatelessWidget {

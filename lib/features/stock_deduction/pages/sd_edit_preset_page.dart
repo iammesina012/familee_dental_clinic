@@ -311,6 +311,7 @@ class _EditPresetPageState extends State<EditPresetPage> {
         return true;
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: Text(

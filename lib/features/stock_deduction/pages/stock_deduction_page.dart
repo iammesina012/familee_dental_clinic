@@ -8,6 +8,8 @@ import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/auth/services/auth_service.dart';
 
 class StockDeductionPage extends StatefulWidget {
   const StockDeductionPage({super.key});
@@ -120,7 +122,9 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
       final int current = (_deductions[index]['deductQty'] as int);
       final int maxStock = (_deductions[index]['stock'] ?? 0) as int;
       final int next = current + 1;
-      _deductions[index]['deductQty'] = next > maxStock ? maxStock : next;
+      // Limit to both max stock and 99
+      final int limit = maxStock < 99 ? maxStock : 99;
+      _deductions[index]['deductQty'] = next > limit ? limit : next;
     });
   }
 
@@ -792,6 +796,9 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
         child: Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
+            automaticallyImplyLeading: MediaQuery.of(context).size.width >= 900
+                ? false
+                : true, // Remove back button on desktop
             title: Text(
               'Quick Deduction',
               style: AppFonts.sfProStyle(
@@ -812,263 +819,285 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
               const NotificationBadgeButton(),
             ],
           ),
-          drawer: MyDrawer(
-            beforeNavigate: () async {
-              if (_deductions.isNotEmpty) {
-                return await _confirmLeave();
-              }
-              return true;
-            },
-          ),
+          drawer: MediaQuery.of(context).size.width >= 900
+              ? null
+              : MyDrawer(
+                  beforeNavigate: () async {
+                    if (_deductions.isNotEmpty) {
+                      return await _confirmLeave();
+                    }
+                    return true;
+                  },
+                ),
           floatingActionButton: FloatingActionButton(
             onPressed: _openAddSupply,
             backgroundColor: const Color(0xFF00D4AA),
             child: const Icon(Icons.add, color: Colors.white),
           ),
-          body: ResponsiveContainer(
-            maxWidth: 1200,
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal:
-                      MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
-                  vertical: 12.0,
-                ),
-                child: Column(
-                  children: [
-                    // Top bar for in-page actions
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        ElevatedButton(
-                          onPressed: _createPreset,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00D4AA),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
+          body: MediaQuery.of(context).size.width >= 900
+              ? _buildWithNavigationRail()
+              : ResponsiveContainer(
+                  maxWidth: 1200,
+                  child: SafeArea(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width < 768
+                            ? 1.0
+                            : 16.0,
+                        vertical: 12.0,
+                      ),
+                      child: Column(
+                        children: [
+                          // Top bar for in-page actions
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              ElevatedButton(
+                                onPressed: _createPreset,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00D4AA),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: Text(
+                                  'Presets',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: _deductions.isEmpty ? null : _save,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _deductions.isEmpty
+                                      ? Colors.grey[400]
+                                      : const Color(0xFF00D4AA),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: Text(
+                                  'Deduct',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: Text(
-                            'Presets',
-                            style: AppFonts.sfProStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _deductions.isEmpty ? null : _save,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _deductions.isEmpty
-                                ? Colors.grey[400]
-                                : const Color(0xFF00D4AA),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: Text(
-                            'Deduct',
-                            style: AppFonts.sfProStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Theme.of(context).colorScheme.surface
-                              : const Color(0xFFE8D5E8),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color:
-                                Theme.of(context).dividerColor.withOpacity(0.2),
-                          ),
-                        ),
-                        child: _deductions.isEmpty
-                            ? _buildEmptyState()
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(12),
-                                itemCount: _deductions.length,
-                                itemBuilder: (context, index) {
-                                  final item = _deductions[index];
-                                  return Slidable(
-                                      key: ValueKey(
-                                          'deduct-${item['docId'] ?? index}'),
-                                      closeOnScroll: true,
-                                      endActionPane: ActionPane(
-                                        motion: const DrawerMotion(),
-                                        extentRatio: 0.35,
-                                        children: [
-                                          SlidableAction(
-                                            onPressed: (_) =>
-                                                _removeDeductionAt(index),
-                                            backgroundColor: Colors.red,
-                                            foregroundColor: Colors.white,
-                                            icon: Icons.delete,
-                                            label: 'Remove',
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Card(
-                                        margin:
-                                            const EdgeInsets.only(bottom: 12),
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .surface,
-                                        elevation: 2,
-                                        shadowColor: Theme.of(context)
-                                            .shadowColor
-                                            .withOpacity(0.15),
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                            side: BorderSide(
-                                              color: Theme.of(context)
-                                                  .dividerColor
-                                                  .withOpacity(0.2),
-                                              width: 1,
-                                            )),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 14, vertical: 16),
-                                          child: ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                                minHeight: 84),
-                                            child: Row(
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Theme.of(context).colorScheme.surface
+                                    : const Color(0xFFE8D5E8),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Theme.of(context)
+                                      .dividerColor
+                                      .withOpacity(0.2),
+                                ),
+                              ),
+                              child: _deductions.isEmpty
+                                  ? _buildEmptyState()
+                                  : ListView.builder(
+                                      padding: const EdgeInsets.all(12),
+                                      itemCount: _deductions.length,
+                                      itemBuilder: (context, index) {
+                                        final item = _deductions[index];
+                                        return Slidable(
+                                            key: ValueKey(
+                                                'deduct-${item['docId'] ?? index}'),
+                                            closeOnScroll: true,
+                                            endActionPane: ActionPane(
+                                              motion: const DrawerMotion(),
+                                              extentRatio: 0.35,
                                               children: [
-                                                ClipRRect(
+                                                SlidableAction(
+                                                  onPressed: (_) =>
+                                                      _removeDeductionAt(index),
+                                                  backgroundColor: Colors.red,
+                                                  foregroundColor: Colors.white,
+                                                  icon: Icons.delete,
+                                                  label: 'Remove',
                                                   borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  child: Image.network(
-                                                    item['imageUrl'] ?? '',
-                                                    width: 48,
-                                                    height: 48,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder:
-                                                        (_, __, ___) =>
-                                                            Container(
-                                                      width: 48,
-                                                      height: 48,
-                                                      color: Colors.grey[200],
-                                                      child: const Icon(
-                                                          Icons.inventory,
-                                                          color: Colors.grey),
-                                                    ),
-                                                  ),
+                                                      BorderRadius.circular(12),
                                                 ),
-                                                const SizedBox(width: 14),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
+                                              ],
+                                            ),
+                                            child: Card(
+                                              margin: const EdgeInsets.only(
+                                                  bottom: 12),
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .surface,
+                                              elevation: 2,
+                                              shadowColor: Theme.of(context)
+                                                  .shadowColor
+                                                  .withOpacity(0.15),
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  side: BorderSide(
+                                                    color: Theme.of(context)
+                                                        .dividerColor
+                                                        .withOpacity(0.2),
+                                                    width: 1,
+                                                  )),
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 16),
+                                                child: ConstrainedBox(
+                                                  constraints:
+                                                      const BoxConstraints(
+                                                          minHeight: 84),
+                                                  child: Row(
                                                     children: [
-                                                      Text(
-                                                        item['name'] ?? '',
-                                                        style:
-                                                            AppFonts.sfProStyle(
+                                                      ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
+                                                        child: Image.network(
+                                                          item['imageUrl'] ??
+                                                              '',
+                                                          width: 48,
+                                                          height: 48,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder:
+                                                              (_, __, ___) =>
+                                                                  Container(
+                                                            width: 48,
+                                                            height: 48,
+                                                            color: Colors
+                                                                .grey[200],
+                                                            child: const Icon(
+                                                                Icons.inventory,
+                                                                color: Colors
+                                                                    .grey),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 14),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            Text(
+                                                              item['name'] ??
+                                                                  '',
+                                                              style: AppFonts.sfProStyle(
+                                                                  fontSize: 16,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                  color: Theme.of(
+                                                                          context)
+                                                                      .textTheme
+                                                                      .bodyMedium
+                                                                      ?.color),
+                                                              maxLines: 2,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                            const SizedBox(
+                                                                height: 8),
+                                                            _expiryChip('Expiry: ' +
+                                                                _formatExpiry(
+                                                                    item[
+                                                                        'expiry'],
+                                                                    item['noExpiry']
+                                                                        as bool?)),
+                                                            const SizedBox(
+                                                                height: 6),
+                                                            _stockChip('Stock: ' +
+                                                                ((_deductions[index]
+                                                                            [
+                                                                            'stock'] ??
+                                                                        0) as int)
+                                                                    .toString()),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          IconButton(
+                                                            onPressed: () =>
+                                                                _decrementQty(
+                                                                    index),
+                                                            icon: Icon(
+                                                              Icons
+                                                                  .remove_circle_outline,
+                                                              color: Theme.of(
+                                                                      context)
+                                                                  .iconTheme
+                                                                  .color,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            (_deductions[index][
+                                                                        'deductQty']
+                                                                    as int)
+                                                                .toString(),
+                                                            style: AppFonts.sfProStyle(
                                                                 fontSize: 16,
                                                                 fontWeight:
                                                                     FontWeight
-                                                                        .w500,
+                                                                        .bold,
                                                                 color: Theme.of(
                                                                         context)
                                                                     .textTheme
                                                                     .bodyMedium
                                                                     ?.color),
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                      _expiryChip('Expiry: ' +
-                                                          _formatExpiry(
-                                                              item['expiry'],
-                                                              item['noExpiry']
-                                                                  as bool?)),
-                                                      const SizedBox(height: 6),
-                                                      _stockChip('Stock: ' +
-                                                          ((_deductions[index][
-                                                                      'stock'] ??
-                                                                  0) as int)
-                                                              .toString()),
+                                                          ),
+                                                          IconButton(
+                                                            onPressed: () =>
+                                                                _incrementQty(
+                                                                    index),
+                                                            icon: Icon(
+                                                              Icons
+                                                                  .add_circle_outline,
+                                                              color: Theme.of(
+                                                                      context)
+                                                                  .iconTheme
+                                                                  .color,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      )
                                                     ],
                                                   ),
                                                 ),
-                                                const SizedBox(width: 12),
-                                                Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    IconButton(
-                                                      onPressed: () =>
-                                                          _decrementQty(index),
-                                                      icon: Icon(
-                                                        Icons
-                                                            .remove_circle_outline,
-                                                        color: Theme.of(context)
-                                                            .iconTheme
-                                                            .color,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      (_deductions[index]
-                                                                  ['deductQty']
-                                                              as int)
-                                                          .toString(),
-                                                      style:
-                                                          AppFonts.sfProStyle(
-                                                              fontSize: 16,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              color: Theme.of(
-                                                                      context)
-                                                                  .textTheme
-                                                                  .bodyMedium
-                                                                  ?.color),
-                                                    ),
-                                                    IconButton(
-                                                      onPressed: () =>
-                                                          _incrementQty(index),
-                                                      icon: Icon(
-                                                        Icons
-                                                            .add_circle_outline,
-                                                        color: Theme.of(context)
-                                                            .iconTheme
-                                                            .color,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                )
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ));
-                                },
-                              ),
+                                              ),
+                                            ));
+                                      },
+                                    ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
         ));
   }
 
@@ -1091,10 +1120,12 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                     : Colors.transparent,
               ),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.shopping_basket_outlined,
               size: 60,
-              color: Colors.white,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF8B5A8B),
             ),
           ),
           const SizedBox(height: 24),
@@ -1121,5 +1152,437 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildWithNavigationRail() {
+    final theme = Theme.of(context);
+    final userRoleProvider = UserRoleProvider();
+    final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
+
+    return Row(
+      children: [
+        NavigationRail(
+          minWidth: 150,
+          selectedIndex: 3, // Stock Deduction is at index 3
+          labelType: NavigationRailLabelType.all,
+          useIndicator: true,
+          backgroundColor: theme.scaffoldBackgroundColor,
+          selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
+          selectedLabelTextStyle: AppFonts.sfProStyle(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.primary,
+          ),
+          unselectedLabelTextStyle: AppFonts.sfProStyle(
+            fontWeight: FontWeight.w500,
+            color: theme.textTheme.bodyMedium?.color,
+          ),
+          leading: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: Image.asset(
+                      'assets/images/logo/logo_101.png',
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: 60,
+                          height: 60,
+                          color: Colors.blue,
+                          child: const Icon(
+                            Icons.medical_services,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'FamiLee Dental',
+                  style: AppFonts.sfProStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    color: theme.textTheme.titleMedium?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          destinations: [
+            const NavigationRailDestination(
+              icon: Icon(Icons.dashboard),
+              label: Text('Dashboard'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.inventory),
+              label: Text('Inventory'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.shopping_cart),
+              label: Text('Purchase Order'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.playlist_remove),
+              label: Text('Stock Deduction'),
+            ),
+            if (canAccessActivityLog)
+              const NavigationRailDestination(
+                icon: Icon(Icons.history),
+                label: Text('Activity Logs'),
+              ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.settings),
+              label: Text('Settings'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.logout),
+              label: Text('Logout'),
+            ),
+          ],
+          onDestinationSelected: (index) async {
+            // Check if there are unsaved deductions before navigation
+            bool canNavigate = true;
+            if (_deductions.isNotEmpty) {
+              canNavigate = await _confirmLeave();
+            }
+
+            if (!canNavigate) return;
+
+            if (index == 0) {
+              Navigator.pushNamed(context, '/dashboard');
+            } else if (index == 1) {
+              Navigator.pushNamed(context, '/inventory');
+            } else if (index == 2) {
+              Navigator.pushNamed(context, '/purchase-order');
+            } else if (index == 3) {
+              // Already on Stock Deduction
+            } else if (canAccessActivityLog && index == 4) {
+              Navigator.pushNamed(context, '/activity-log');
+            } else if (index == (canAccessActivityLog ? 5 : 4)) {
+              Navigator.pushNamed(context, '/settings');
+            } else if (index == (canAccessActivityLog ? 6 : 5)) {
+              await _handleLogout();
+            }
+          },
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: ResponsiveContainer(
+            maxWidth: 1200,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal:
+                      MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                  vertical: 12.0,
+                ),
+                child: _buildStockDeductionContent(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStockDeductionContent() {
+    final theme = Theme.of(context);
+
+    return Column(
+      children: [
+        // Top bar for in-page actions
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            ElevatedButton(
+              onPressed: _createPreset,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00D4AA),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                'Presets',
+                style: AppFonts.sfProStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _deductions.isEmpty ? null : _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _deductions.isEmpty
+                    ? Colors.grey[400]
+                    : const Color(0xFF00D4AA),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                'Deduct',
+                style: AppFonts.sfProStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.brightness == Brightness.dark
+                  ? theme.colorScheme.surface
+                  : const Color(0xFFE8D5E8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.dividerColor.withOpacity(0.2),
+              ),
+            ),
+            child: _deductions.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _deductions.length,
+                    itemBuilder: (context, index) {
+                      final item = _deductions[index];
+                      return Slidable(
+                        key: ValueKey('deduct-${item['docId'] ?? index}'),
+                        closeOnScroll: true,
+                        endActionPane: ActionPane(
+                          motion: const DrawerMotion(),
+                          extentRatio: 0.35,
+                          children: [
+                            SlidableAction(
+                              onPressed: (_) => _removeDeductionAt(index),
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              icon: Icons.delete,
+                              label: 'Remove',
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ],
+                        ),
+                        child: Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          color: theme.colorScheme.surface,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(16),
+                            title: Text(
+                              item['supply']['name'],
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Quantity: ${item['quantity']}',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 14,
+                                    color: theme.textTheme.bodyMedium?.color
+                                        ?.withOpacity(0.7),
+                                  ),
+                                ),
+                                if (item['notes'] != null &&
+                                    item['notes'].isNotEmpty)
+                                  Text(
+                                    'Notes: ${item['notes']}',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 14,
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _removeDeductionAt(index),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    // Check for unsaved deductions
+    bool canLogout = true;
+    if (_deductions.isNotEmpty) {
+      canLogout = await _confirmLeave();
+    }
+
+    if (!canLogout) return;
+
+    final shouldLogout = await _showLogoutDialog(context);
+    if (shouldLogout == true) {
+      final authService = AuthService();
+      await authService.logout();
+      if (context.mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    }
+  }
+
+  Future<bool> _showLogoutDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.logout,
+                        color: Colors.red,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Are you sure you want to logout?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: const Text(
+                              'Yes',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'No',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
   }
 }

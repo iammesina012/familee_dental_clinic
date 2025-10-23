@@ -161,6 +161,7 @@ class _StockDeductionAddSupplyPageState
     final args = ModalRoute.of(context)?.settings.arguments;
     final Set<String> existingDocIds = _controller.parseExistingDocIds(args);
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(

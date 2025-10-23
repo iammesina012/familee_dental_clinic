@@ -1,6 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'filter_controller.dart';
@@ -151,12 +150,6 @@ class EditSupplyController {
       errors['cost'] = 'Cost must be a valid number.';
     }
 
-    if (stockController.text.trim().isEmpty) {
-      errors['stock'] = 'Please enter the stock quantity.';
-    } else if (int.tryParse(stockController.text.trim()) == null) {
-      errors['stock'] = 'Stock must be a valid number.';
-    }
-
     // Validate supplier name (now required)
     if (supplierController.text.trim().isEmpty) {
       errors['supplier'] = 'Please enter the supplier name.';
@@ -197,7 +190,6 @@ class EditSupplyController {
       "image_url": imageUrl ?? "", // Make image optional
       "category": selectedCategory ?? "",
       "cost": double.tryParse(costController.text.trim()) ?? 0.0,
-      "stock": int.tryParse(stockController.text.trim()) ?? 0,
       "unit": selectedUnit ?? "",
       "supplier": supplierController.text.trim().isEmpty
           ? "N/A"
@@ -326,13 +318,6 @@ class EditSupplyController {
           'new': selectedCategory ?? 'Unknown Category',
         };
       }
-      if ((int.tryParse(stockController.text.trim()) ?? 0) !=
-          (originalStock ?? 0)) {
-        fieldChanges['Stock'] = {
-          'previous': originalStock ?? 0,
-          'new': int.tryParse(stockController.text.trim()) ?? 0,
-        };
-      }
       if (selectedUnit != (originalUnit ?? '')) {
         fieldChanges['Unit'] = {
           'previous': originalUnit ?? 'N/A',
@@ -392,16 +377,6 @@ class EditSupplyController {
 
       // Check for notifications
       final notificationsController = NotificationsController();
-      final newStock = int.tryParse(stockController.text.trim()) ?? 0;
-
-      // Check stock level notifications if stock changed
-      if (newStock != (originalStock ?? 0)) {
-        await notificationsController.checkStockLevelNotification(
-          nameController.text.trim(),
-          newStock,
-          originalStock ?? 0,
-        );
-      }
 
       // Check expiry notifications if expiry changed
       if ((expiryController.text.trim() != (originalExpiry ?? '')) ||
