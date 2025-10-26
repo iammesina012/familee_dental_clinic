@@ -373,6 +373,12 @@ class _PODetailsPageState extends State<PODetailsPage> {
     return false;
   }
 
+  bool _hasReceiptDetails() {
+    // Check if any supply has receipt details
+    return _purchaseOrder.supplies.any((supply) =>
+        supply['receiptDrNo'] != null || supply['receiptImagePath'] != null);
+  }
+
   // Get or create a controller for a specific supply
   TextEditingController _getRemarksController(
       String supplierName, int supplyIndex, String initialText) {
@@ -933,7 +939,14 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
     // Get the first supplier for the dialog
     final firstSupplier = suppliers.keys.first;
-    final receiptDetails = await _showReceiptDetailsDialog(firstSupplier);
+
+    // Check if receipt details already exist
+    bool hasReceiptDetails = _purchaseOrder.supplies.any((supply) =>
+        supply['receiptDrNo'] != null || supply['receiptImagePath'] != null);
+
+    // Pass disableSave flag if receipt details already exist
+    final receiptDetails = await _showReceiptDetailsDialog(firstSupplier,
+        disableSave: hasReceiptDetails);
     if (receiptDetails == null) return; // user tapped Back
 
     setState(() => _isLoading = true);
@@ -1668,32 +1681,268 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   await _showPartialReceiveConfirmation(
                                       context);
                               if (confirmed == true) {
-                                // Process all partial receives at once
-                                await _controller
-                                    .processMultiplePartialReceives(
-                                  po: _purchaseOrder,
-                                  supplyQuantities: supplyQuantities,
-                                );
+                                // Close the quantity dialog first
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
 
-                                // Close dialog and show success message
-                                Navigator.of(context).pop();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        'Partial receive completed successfully!'),
-                                    backgroundColor: Colors.green,
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
+                                // Check if this is the first partial receive (no receipt details yet)
+                                bool hasReceiptDetails = _purchaseOrder.supplies
+                                    .any((supply) =>
+                                        supply['receiptDrNo'] != null ||
+                                        supply['receiptImagePath'] != null);
 
-                                // Reload PO data and refresh the page
-                                await _reloadPOData();
-                                setState(() {});
+                                // If no receipt details exist yet, show receipt details dialog
+                                if (!hasReceiptDetails) {
+                                  // Get supplier name for receipt details dialog
+                                  final supplierName = _purchaseOrder
+                                          .supplies.first['supplierName'] ??
+                                      _purchaseOrder
+                                          .supplies.first['supplier'] ??
+                                      'Supplier';
+
+                                  // Show receipt details dialog
+                                  final receiptDetails =
+                                      await _showReceiptDetailsDialog(
+                                          supplierName);
+
+                                  if (receiptDetails != null && mounted) {
+                                    // Upload receipt image to cloud storage
+                                    String? receiptImageUrl;
+                                    if (receiptDetails.image != null) {
+                                      receiptImageUrl = await _receiptStorage
+                                          .uploadReceiptImage(
+                                              receiptDetails.image!);
+                                    }
+
+                                    // Process partial receives
+                                    await _controller
+                                        .processMultiplePartialReceives(
+                                      po: _purchaseOrder,
+                                      supplyQuantities: supplyQuantities,
+                                    );
+
+                                    // Reload the PO to get updated supplies
+                                    final reloadedPO =
+                                        await _poSupabase.getPOByIdFromSupabase(
+                                            _purchaseOrder.id);
+
+                                    if (reloadedPO != null && mounted) {
+                                      // Update all supplies with receipt details
+                                      final updatedSupplies =
+                                          List<Map<String, dynamic>>.from(
+                                              reloadedPO.supplies);
+                                      final String nowIso =
+                                          DateTime.now().toIso8601String();
+
+                                      for (int i = 0;
+                                          i < updatedSupplies.length;
+                                          i++) {
+                                        // Add receipt details to all supplies
+                                        updatedSupplies[i] = {
+                                          ...updatedSupplies[i],
+                                          'receiptDrNo':
+                                              receiptDetails.drNumber,
+                                          'receiptRecipient':
+                                              receiptDetails.recipient,
+                                          'receiptRemarks':
+                                              receiptDetails.remarks,
+                                          'receiptImagePath': receiptImageUrl,
+                                          'receiptDate': nowIso,
+                                        };
+                                      }
+
+                                      // Add recipient to suggestions
+                                      if (receiptDetails.recipient.isNotEmpty) {
+                                        await _controller
+                                            .addRecipientSuggestion(
+                                                receiptDetails.recipient);
+                                      }
+
+                                      // Update PO with receipt details and set status to Approval
+                                      final updatedPO = PurchaseOrder(
+                                        id: _purchaseOrder.id,
+                                        code: _purchaseOrder.code,
+                                        name: _purchaseOrder.name,
+                                        createdAt: _purchaseOrder.createdAt,
+                                        status:
+                                            'Approval', // Change status to Approval
+                                        supplies: updatedSupplies,
+                                        receivedCount:
+                                            _purchaseOrder.receivedCount,
+                                      );
+
+                                      await _poSupabase
+                                          .updatePOInSupabase(updatedPO);
+
+                                      if (mounted) {
+                                        setState(() {
+                                          _purchaseOrder = updatedPO;
+                                        });
+                                      }
+
+                                      if (mounted) {
+                                        final messenger =
+                                            ScaffoldMessenger.maybeOf(context);
+                                        if (messenger != null) {
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'Receipt details saved and partial receive completed successfully!'),
+                                              backgroundColor: Colors.green,
+                                              duration:
+                                                  const Duration(seconds: 3),
+                                            ),
+                                          );
+                                        }
+                                      }
+
+                                      // Navigate back to PO list and switch to Approval tab
+                                      Future.delayed(
+                                          const Duration(milliseconds: 300),
+                                          () {
+                                        if (mounted) {
+                                          Navigator.of(context)
+                                              .pop({'switchToApproval': true});
+                                        }
+                                      });
+                                    }
+                                  } else if (mounted) {
+                                    // User canceled receipt details dialog, just process partial receive
+                                    await _controller
+                                        .processMultiplePartialReceives(
+                                      po: _purchaseOrder,
+                                      supplyQuantities: supplyQuantities,
+                                    );
+
+                                    await _reloadPOData();
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
+
+                                    if (mounted) {
+                                      final messenger =
+                                          ScaffoldMessenger.maybeOf(context);
+                                      if (messenger != null) {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                'Partial receive completed successfully!'),
+                                            backgroundColor: Colors.green,
+                                            duration:
+                                                const Duration(seconds: 2),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  }
+                                } else {
+                                  // Receipt details already exist - skip the dialog, just process partial receive
+                                  // Process partial receive
+                                  await _controller
+                                      .processMultiplePartialReceives(
+                                    po: _purchaseOrder,
+                                    supplyQuantities: supplyQuantities,
+                                  );
+
+                                  // Reload the PO to get updated supplies with new quantities
+                                  final reloadedPO = await _poSupabase
+                                      .getPOByIdFromSupabase(_purchaseOrder.id);
+
+                                  if (reloadedPO != null && mounted) {
+                                    // Check if all supplies are now fully received
+                                    final allSuppliesReceived =
+                                        reloadedPO.supplies.every((supply) =>
+                                            supply['status'] == 'Received');
+
+                                    if (allSuppliesReceived) {
+                                      // All supplies received, move to Approval
+                                      final updatedPO = PurchaseOrder(
+                                        id: reloadedPO.id,
+                                        code: reloadedPO.code,
+                                        name: reloadedPO.name,
+                                        createdAt: reloadedPO.createdAt,
+                                        status: 'Approval',
+                                        supplies: reloadedPO.supplies,
+                                        receivedCount: reloadedPO.receivedCount,
+                                      );
+
+                                      await _poSupabase
+                                          .updatePOInSupabase(updatedPO);
+
+                                      if (mounted) {
+                                        setState(() {
+                                          _purchaseOrder = updatedPO;
+                                        });
+                                      }
+
+                                      if (mounted) {
+                                        final messenger =
+                                            ScaffoldMessenger.maybeOf(context);
+                                        if (messenger != null) {
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'All supplies received! Moving to Approval.'),
+                                              backgroundColor: Colors.green,
+                                              duration:
+                                                  const Duration(seconds: 3),
+                                            ),
+                                          );
+                                        }
+                                      }
+
+                                      // Navigate back to PO list and switch to Approval tab
+                                      Future.delayed(
+                                          const Duration(milliseconds: 300),
+                                          () {
+                                        if (mounted) {
+                                          Navigator.of(context)
+                                              .pop({'switchToApproval': true});
+                                        }
+                                      });
+                                    } else {
+                                      // Still partially received, stay in Partial section
+                                      if (mounted) {
+                                        final messenger =
+                                            ScaffoldMessenger.maybeOf(context);
+                                        if (messenger != null) {
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'Partial receive completed successfully!'),
+                                              backgroundColor: Colors.green,
+                                              duration:
+                                                  const Duration(seconds: 2),
+                                            ),
+                                          );
+                                        }
+                                      }
+
+                                      // Reload PO data and refresh the page
+                                      await _reloadPOData();
+                                      if (mounted) {
+                                        setState(() {});
+                                      }
+                                    }
+                                  }
+                                }
                               }
                             } catch (e) {
                               // Handle errors with more detailed information
                               print('Error in partial receive: $e');
-                              Navigator.of(context).pop();
+
+                              // Add a small delay to ensure context is stable
+                              await Future.delayed(
+                                  const Duration(milliseconds: 100));
+
+                              if (context.mounted) {
+                                try {
+                                  Navigator.of(context).pop();
+                                } catch (e) {
+                                  print('Error closing dialog: $e');
+                                }
+                              }
 
                               // Show more specific error message
                               String errorMessage =
@@ -1711,13 +1960,23 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                     'Error processing partial receive: $e';
                               }
 
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(errorMessage),
-                                  backgroundColor: Colors.red,
-                                  duration: const Duration(seconds: 5),
-                                ),
-                              );
+                              if (mounted && context.mounted) {
+                                final messenger =
+                                    ScaffoldMessenger.maybeOf(context);
+                                if (messenger != null) {
+                                  try {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(errorMessage),
+                                        backgroundColor: Colors.red,
+                                        duration: const Duration(seconds: 5),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    print('Error showing SnackBar: $e');
+                                  }
+                                }
+                              }
                             }
                           },
                           style: ElevatedButton.styleFrom(
@@ -2147,7 +2406,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                           height: 40,
                           margin: const EdgeInsets.only(right: 8),
                           decoration: BoxDecoration(
-                            gradient: _hasNoChanges()
+                            gradient: (_hasNoChanges() || _hasReceiptDetails())
                                 ? null
                                 : const LinearGradient(
                                     colors: [
@@ -2155,8 +2414,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                       Color(0xFF00B894),
                                     ],
                                   ),
+                            color: (_hasNoChanges() || _hasReceiptDetails())
+                                ? Colors.grey.withOpacity(0.3)
+                                : null,
                             borderRadius: BorderRadius.circular(8),
-                            boxShadow: _hasNoChanges()
+                            boxShadow: (_hasNoChanges() || _hasReceiptDetails())
                                 ? null
                                 : [
                                     BoxShadow(
@@ -2168,13 +2430,16 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   ],
                           ),
                           child: ElevatedButton(
-                            onPressed: (_isLoading || _hasNoChanges())
+                            onPressed: (_isLoading ||
+                                    _hasNoChanges() ||
+                                    _hasReceiptDetails())
                                 ? null
                                 : _handleSave,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _hasNoChanges()
-                                  ? Colors.grey.withOpacity(0.3)
-                                  : Colors.transparent,
+                              backgroundColor:
+                                  (_hasNoChanges() || _hasReceiptDetails())
+                                      ? Colors.grey.withOpacity(0.3)
+                                      : Colors.transparent,
                               shadowColor: Colors.transparent,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -2458,7 +2723,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                               .start,
                                                       children: [
                                                         Text(
-                                                          (allReceived &&
+                                                          ((allReceived ||
+                                                                      _purchaseOrder
+                                                                              .status ==
+                                                                          'Approval' ||
+                                                                      _purchaseOrder
+                                                                              .status ==
+                                                                          'Partially Received') &&
                                                                   supplierDrNo !=
                                                                       null)
                                                               ? '${_controller.getSupplyName(items.first)} (${supplierDrNo})'
@@ -2648,7 +2919,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
                                                 // Mark all as received button (right aligned)
                                                 if (!allReceived &&
-                                                    _hasPendingItems())
+                                                    _hasPendingItems() &&
+                                                    _purchaseOrder.status !=
+                                                        'Approval')
                                                   Row(
                                                     mainAxisAlignment:
                                                         MainAxisAlignment.end,
@@ -2769,7 +3042,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                   }),
                                                 ),
 
-                                                if (allReceived &&
+                                                if ((allReceived ||
+                                                        _purchaseOrder.status ==
+                                                            'Approval' ||
+                                                        _purchaseOrder.status ==
+                                                            'Partially Received') &&
                                                     (supplierRecipient !=
                                                             null ||
                                                         supplierImagePath !=
@@ -2780,7 +3057,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                             top: 8),
                                                     child: Row(
                                                       children: [
-                                                        if (allReceived &&
+                                                        if ((allReceived ||
+                                                                _purchaseOrder
+                                                                        .status ==
+                                                                    'Approval' ||
+                                                                _purchaseOrder
+                                                                        .status ==
+                                                                    'Partially Received') &&
                                                             supplierRecipient !=
                                                                 null)
                                                           Text(
@@ -2794,7 +3077,13 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                             ),
                                                           ),
                                                         const Spacer(),
-                                                        if (allReceived &&
+                                                        if ((allReceived ||
+                                                                _purchaseOrder
+                                                                        .status ==
+                                                                    'Approval' ||
+                                                                _purchaseOrder
+                                                                        .status ==
+                                                                    'Partially Received') &&
                                                             supplierImagePath !=
                                                                 null)
                                                           TextButton.icon(
@@ -3917,8 +4206,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
   }
 
   // Secondary dialog to capture receipt details with Back -> returns to previous dialog
-  Future<_ReceiptDetails?> _showReceiptDetailsDialog(
-      String supplierName) async {
+  Future<_ReceiptDetails?> _showReceiptDetailsDialog(String supplierName,
+      {bool disableSave = false}) async {
+    print(
+        'DEBUG: _showReceiptDetailsDialog called with disableSave = $disableSave');
+
     final TextEditingController drController = TextEditingController();
     final TextEditingController recipientController = TextEditingController();
     final TextEditingController remarksController = TextEditingController();
@@ -4302,86 +4594,105 @@ class _PODetailsPageState extends State<PODetailsPage> {
                           ),
                           const SizedBox(width: 8),
                           TextButton(
-                            onPressed: () async {
-                              final dr = drController.text.trim();
-                              final rec = recipientController.text.trim();
-                              bool ok = true;
+                            onPressed: disableSave
+                                ? null
+                                : () async {
+                                    final dr = drController.text.trim();
+                                    final rec = recipientController.text.trim();
+                                    bool ok = true;
 
-                              // Check for duplicate receipt number
-                              if (dr.isNotEmpty) {
-                                final isDuplicate = await _controller
-                                    .isReceiptNumberDuplicate(dr);
-                                if (isDuplicate) {
-                                  drError = 'Receipt number already exists';
-                                  ok = false;
-                                }
-                              }
+                                    // Check for duplicate receipt number
+                                    if (dr.isNotEmpty) {
+                                      final isDuplicate = await _controller
+                                          .isReceiptNumberDuplicate(dr);
+                                      if (isDuplicate) {
+                                        drError =
+                                            'Receipt number already exists';
+                                        ok = false;
+                                      }
+                                    }
 
-                              if (dr.isEmpty || !drPattern.hasMatch(dr)) {
-                                drError = 'Please enter alphanumeric only';
-                                ok = false;
-                              }
-                              if (rec.isEmpty ||
-                                  !recipientPattern.hasMatch(rec)) {
-                                recipientError = 'Please enter letters only';
-                                ok = false;
-                              }
-                              if (pickedImage == null) {
-                                imageError = 'Please attach a receipt image';
-                                ok = false;
-                              }
-                              if (!ok) {
-                                setLocal(() {});
-                                return;
-                              }
-                              final confirm = await showDialog<bool>(
-                                    context: context,
-                                    barrierDismissible: false,
-                                    builder: (context) => AlertDialog(
-                                      title: Text('Save receipt details',
-                                          style: AppFonts.sfProStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold)),
-                                      content: Text(
-                                          'Do you want to save these receipt details?',
-                                          style: AppFonts.sfProStyle(
-                                              fontSize: 14)),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context).pop(false),
-                                          child: Text('Cancel',
-                                              style: AppFonts.sfProStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600)),
-                                        ),
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context).pop(true),
-                                          child: Text('Save',
-                                              style: AppFonts.sfProStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
-                                                  color:
-                                                      const Color(0xFF00D4AA))),
-                                        ),
-                                      ],
-                                    ),
-                                  ) ??
-                                  false;
-                              if (!confirm) return;
-                              Navigator.of(context).pop(_ReceiptDetails(
-                                drNumber: dr,
-                                recipient: rec,
-                                remarks: remarksController.text.trim(),
-                                image: pickedImage,
-                              ));
-                            },
-                            child: Text('Save',
-                                style: AppFonts.sfProStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF00D4AA))),
+                                    if (dr.isEmpty || !drPattern.hasMatch(dr)) {
+                                      drError =
+                                          'Please enter alphanumeric only';
+                                      ok = false;
+                                    }
+                                    if (rec.isEmpty ||
+                                        !recipientPattern.hasMatch(rec)) {
+                                      recipientError =
+                                          'Please enter letters only';
+                                      ok = false;
+                                    }
+                                    if (pickedImage == null) {
+                                      imageError =
+                                          'Please attach a receipt image';
+                                      ok = false;
+                                    }
+                                    if (!ok) {
+                                      setLocal(() {});
+                                      return;
+                                    }
+                                    final confirm = await showDialog<bool>(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (context) => AlertDialog(
+                                            title: Text('Save receipt details',
+                                                style: AppFonts.sfProStyle(
+                                                    fontSize: 16,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                            content: Text(
+                                                'Do you want to save these receipt details?',
+                                                style: AppFonts.sfProStyle(
+                                                    fontSize: 14)),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context)
+                                                        .pop(false),
+                                                child: Text('Cancel',
+                                                    style: AppFonts.sfProStyle(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600)),
+                                              ),
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context)
+                                                        .pop(true),
+                                                child: Text('Save',
+                                                    style: AppFonts.sfProStyle(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: const Color(
+                                                            0xFF00D4AA))),
+                                              ),
+                                            ],
+                                          ),
+                                        ) ??
+                                        false;
+                                    if (!confirm) return;
+                                    Navigator.of(context).pop(_ReceiptDetails(
+                                      drNumber: dr,
+                                      recipient: rec,
+                                      remarks: remarksController.text.trim(),
+                                      image: pickedImage,
+                                    ));
+                                  },
+                            style: TextButton.styleFrom(
+                              foregroundColor: disableSave
+                                  ? Colors.grey
+                                  : const Color(0xFF00D4AA),
+                              disabledForegroundColor: Colors.grey,
+                            ),
+                            child: Opacity(
+                              opacity: disableSave ? 0.4 : 1.0,
+                              child: Text('Save',
+                                  style: AppFonts.sfProStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600)),
+                            ),
                           ),
                         ],
                       ),

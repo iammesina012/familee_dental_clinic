@@ -629,13 +629,21 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                                       'purchaseOrder': po
                                                     },
                                                   );
-                                                  // Keep current tab; react to closed redirect if needed
-                                                  if (result is Map &&
-                                                      result['switchToClosed'] ==
-                                                          true) {
-                                                    setState(() {
-                                                      activeTabIndex = 2;
-                                                    });
+                                                  // Keep current tab; react to closed or approval redirect if needed
+                                                  if (result is Map) {
+                                                    if (result[
+                                                            'switchToClosed'] ==
+                                                        true) {
+                                                      setState(() {
+                                                        activeTabIndex = 2;
+                                                      });
+                                                    } else if (result[
+                                                            'switchToApproval'] ==
+                                                        true) {
+                                                      setState(() {
+                                                        activeTabIndex = 2;
+                                                      });
+                                                    }
                                                   }
                                                   // Release guard after navigation completes
                                                   _autoOpeningDetails = false;
@@ -988,10 +996,16 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
               arguments: {'purchaseOrder': po},
             );
             // Refresh the data when returning from PO Details
-            if (result is Map && result['switchToClosed'] == true) {
-              setState(() {
-                activeTabIndex = 2; // Closed tab
-              });
+            if (result is Map) {
+              if (result['switchToClosed'] == true) {
+                setState(() {
+                  activeTabIndex = 2; // Closed tab
+                });
+              } else if (result['switchToApproval'] == true) {
+                setState(() {
+                  activeTabIndex = 2; // Approval tab (index 2)
+                });
+              }
             }
             _load();
           } catch (e) {
@@ -1864,12 +1878,19 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                               '/po-details',
                                               arguments: {'purchaseOrder': po},
                                             );
-                                            if (result is Map &&
-                                                result['switchToClosed'] ==
-                                                    true) {
-                                              setState(() {
-                                                activeTabIndex = 2;
-                                              });
+                                            if (result is Map) {
+                                              if (result['switchToClosed'] ==
+                                                  true) {
+                                                setState(() {
+                                                  activeTabIndex = 2;
+                                                });
+                                              } else if (result[
+                                                      'switchToApproval'] ==
+                                                  true) {
+                                                setState(() {
+                                                  activeTabIndex = 2;
+                                                });
+                                              }
                                             }
                                             _autoOpeningDetails = false;
                                           });

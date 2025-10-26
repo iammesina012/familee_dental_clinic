@@ -96,18 +96,44 @@ class PODetailsController {
   // Approve a purchase order (change status to Closed)
   Future<PurchaseOrder> approvePurchaseOrder(PurchaseOrder po) async {
     try {
-      // First, restock inventory with received supplies (before changing status)
-      await _restockInventory(po);
+      // Reload fresh PO from database to ensure we have the latest supply data
+      final freshPO = await _poController.getPOByIdFromSupabase(po.id);
+      if (freshPO == null) {
+        throw Exception('PO not found');
+      }
 
-      // Only after successful restock, create new PO instance with Closed status
+      // Check if there are any partially received supplies
+      final hasPartiallyReceived = freshPO.supplies
+          .any((supply) => supply['status'] == 'Partially Received');
+
+      // Check if all supplies are fully received
+      final allSuppliesReceived =
+          freshPO.supplies.every((supply) => supply['status'] == 'Received');
+
+      // First, restock inventory with received supplies (before changing status)
+      // This will update the restockedQuantities in the supplies
+      final restockedSupplies = await _restockInventory(freshPO);
+
+      // Determine the new status based on the supplies' states
+      String newStatus;
+      if (allSuppliesReceived) {
+        newStatus = 'Closed';
+      } else if (hasPartiallyReceived) {
+        newStatus = 'Partially Received';
+      } else {
+        newStatus = 'Closed';
+      }
+
+      // Only after successful restock, create new PO instance with the updated supplies
       final updatedPO = PurchaseOrder(
-        id: po.id,
-        code: po.code,
-        name: po.name,
-        createdAt: po.createdAt,
-        status: 'Closed',
-        supplies: po.supplies,
-        receivedCount: po.receivedCount,
+        id: freshPO.id,
+        code: freshPO.code,
+        name: freshPO.name,
+        createdAt: freshPO.createdAt,
+        status: newStatus,
+        supplies:
+            restockedSupplies, // Use the supplies with updated restockedQuantities
+        receivedCount: freshPO.receivedCount,
       );
 
       // Save the updated PO directly to Supabase for real-time updates
@@ -184,16 +210,18 @@ class PODetailsController {
   }
 
   // Restock inventory with received supplies from PO
-  Future<void> _restockInventory(PurchaseOrder po) async {
+  Future<List<Map<String, dynamic>>> _restockInventory(PurchaseOrder po) async {
     try {
-      // Get only received supplies
+      // Get received and partially received supplies
       final receivedSupplies = po.supplies
-          .where((supply) => supply['status'] == 'Received')
+          .where((supply) =>
+              supply['status'] == 'Received' ||
+              supply['status'] == 'Partially Received')
           .toList();
 
       if (receivedSupplies.isEmpty) {
         print('No received supplies to restock');
-        return;
+        return po.supplies;
       }
 
       print('Restocking ${receivedSupplies.length} received supplies');
@@ -339,8 +367,55 @@ class PODetailsController {
           }
         }
 
-        // If we have explicit batches, restock each; otherwise restock single batch
-        if (expiryBatches != null && expiryBatches.isNotEmpty) {
+        // Check if this supply was already fully restocked (for "Received" status)
+        if (supply['status'] == 'Received' &&
+            supply['alreadyFullyRestocked'] == true) {
+          print(
+              'Supply $supplyName already fully restocked in previous approval, skipping');
+          continue;
+        }
+
+        // Check if this is a partially received supply
+        final Map<String, int>? receivedQuantities =
+            supply['receivedQuantities'] != null
+                ? Map<String, int>.from(supply['receivedQuantities'])
+                : null;
+
+        final Map<String, int> restockedQuantities =
+            supply['restockedQuantities'] != null
+                ? Map<String, int>.from(supply['restockedQuantities'])
+                : <String, int>{};
+
+        // If we have receivedQuantities (partial receive), restock only the difference
+        if (receivedQuantities != null && receivedQuantities.isNotEmpty) {
+          bool hasSomethingToRestock = false;
+
+          for (final entry in receivedQuantities.entries) {
+            final String expiryKey = entry.key;
+            final int totalReceived = entry.value;
+            final int alreadyRestocked = restockedQuantities[expiryKey] ?? 0;
+            final int quantitiesToRestock = totalReceived - alreadyRestocked;
+
+            if (quantitiesToRestock > 0) {
+              hasSomethingToRestock = true;
+              String? expDate = expiryKey == 'No expiry' || expiryKey.isEmpty
+                  ? null
+                  : expiryKey;
+              await mergeOneBatch(qty: quantitiesToRestock, exp: expDate);
+
+              // Update restockedQuantities to track what we just restocked
+              restockedQuantities[expiryKey] = totalReceived;
+            }
+          }
+
+          // Only update the supply if we actually restocked something
+          if (hasSomethingToRestock) {
+            supply['restockedQuantities'] = restockedQuantities;
+          }
+        } else if (expiryBatches != null && expiryBatches.isNotEmpty) {
+          // Fully received supply with explicit batches - mark as fully restocked after restocking
+          supply['alreadyFullyRestocked'] = true;
+          // If we have explicit batches, restock each; otherwise restock single batch
           for (final b in expiryBatches) {
             final int q = int.tryParse('${b['quantity'] ?? 0}') ?? 0;
             final String? e = (b['expiryDate']?.toString().isNotEmpty ?? false)
@@ -359,8 +434,13 @@ class PODetailsController {
           if (singleQty > 0) {
             await mergeOneBatch(qty: singleQty, exp: singleExp);
           }
+          // Fully received supply with single batch - mark as fully restocked
+          supply['alreadyFullyRestocked'] = true;
         }
       }
+
+      // Return the updated supplies with restockedQuantities
+      return po.supplies;
     } catch (e) {
       print('Error in _restockInventory: $e');
       rethrow;
@@ -394,9 +474,9 @@ class PODetailsController {
     return quantity * cost;
   }
 
-  // Check if PO can be approved (all supplies received)
+  // Check if PO can be approved (in Approval status)
   bool canApprovePO(PurchaseOrder po) {
-    return po.status == 'Approval' && po.receivedCount == po.supplies.length;
+    return po.status == 'Approval';
   }
 
   // Check if PO can be rejected (currently in Approval state)
