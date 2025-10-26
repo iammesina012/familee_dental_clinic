@@ -25,6 +25,11 @@ class POListController {
     return _poController.getOpenPOsStream();
   }
 
+  // Load partial POs from Supabase stream
+  Stream<List<PurchaseOrder>> getPartialPOsStream() {
+    return _poController.getPartialPOsStream();
+  }
+
   // Get all POs from local storage (backup)
   Future<List<PurchaseOrder>> getAllPOs() async {
     return await _poController.getAll();
@@ -76,12 +81,28 @@ class POListController {
     List<PurchaseOrder> allPOs,
     List<PurchaseOrder> closedPOs,
   ) {
-    int openCount = allPOs.where((po) => po.status == 'Open').length;
+    // Filter Open POs to only include those with pending supplies
+    int openCount = allPOs
+        .where((po) =>
+            po.status == 'Open' &&
+            po.supplies.every((supply) => supply['status'] == 'Pending'))
+        .length;
+
+    // Count POs with partially received OR received supplies
+    int partialCount = allPOs
+        .where((po) =>
+            po.status == 'Open' &&
+            po.supplies.any((supply) =>
+                supply['status'] == 'Partially Received' ||
+                supply['status'] == 'Received'))
+        .length;
+
     int approvalCount = allPOs.where((po) => po.status == 'Approval').length;
     int closedCount = closedPOs.length;
 
     return {
       'Open': openCount,
+      'Partial': partialCount,
       'Approval': approvalCount,
       'Closed': closedCount,
     };

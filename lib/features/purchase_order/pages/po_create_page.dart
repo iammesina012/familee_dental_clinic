@@ -136,13 +136,13 @@ class _CreatePOPageState extends State<CreatePOPage> {
                   minWidth: 350,
                 ),
                 padding: const EdgeInsets.all(24),
-                child: Column(
+            child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: [
+              children: [
                     // Icon and Title
-                    Container(
+                Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                         color: Colors.red.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
@@ -155,12 +155,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
                     const SizedBox(height: 16),
 
                     // Title
-                    Text(
+                            Text(
                       'Clear All Supplies',
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                         color: theme.textTheme.titleLarge?.color,
                       ),
                       textAlign: TextAlign.center,
@@ -174,7 +174,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                         fontFamily: 'SF Pro',
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
+                                    color: theme.textTheme.bodyMedium?.color,
                         height: 1.4,
                       ),
                       textAlign: TextAlign.center,
@@ -190,7 +190,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(8),
                                 side: BorderSide(
                                   color: isDark
                                       ? Colors.grey.shade600
@@ -218,7 +218,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(8),
                               ),
                               elevation: 2,
                             ),
@@ -228,7 +228,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,
                                 color: Colors.white,
-                                fontSize: 16,
+                                              fontSize: 16,
                               ),
                             ),
                           ),
@@ -236,10 +236,10 @@ class _CreatePOPageState extends State<CreatePOPage> {
                       ],
                     ),
                   ],
-                ),
-              ),
-            );
-          },
+                                    ),
+                                  ),
+                                );
+                              },
         ) ??
         false;
   }
@@ -321,10 +321,10 @@ class _CreatePOPageState extends State<CreatePOPage> {
           backgroundColor: Color(0xFF00D4AA),
           duration: Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
       );
 
       // Navigate back to Purchase Order page and signal success
@@ -383,7 +383,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                                      fontWeight: FontWeight.bold,
                         color: theme.textTheme.titleLarge?.color,
                       ),
                       textAlign: TextAlign.center,
@@ -424,10 +424,10 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                       : Colors.grey[100],
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
                                       _getCurrentSupplierName(),
                                       style: TextStyle(
                                         fontFamily: 'SF Pro',
@@ -464,9 +464,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                           child: Row(
                             children: [
                               Expanded(
-                                child: Container(
+                                        child: Container(
                                   padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
+                                          decoration: BoxDecoration(
                                     color: isDark
                                         ? Colors.grey[800]
                                         : Colors.grey[100],
@@ -495,9 +495,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                           color:
                                               theme.textTheme.bodyMedium?.color,
                                         ),
-                                      ),
-                                    ],
-                                  ),
+                                              ),
+                                            ],
+                                          ),
                                 ),
                               ),
                             ],
@@ -543,17 +543,17 @@ class _CreatePOPageState extends State<CreatePOPage> {
                               backgroundColor: const Color(0xFF00D4AA),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
                               elevation: 2,
-                            ),
-                            child: Text(
+                                ),
+                                child: Text(
                               _isEditing ? 'Update PO' : 'Create PO',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,
-                                color: Colors.white,
+                                    color: Colors.white,
                                 fontSize: 16,
                               ),
                             ),
@@ -604,9 +604,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
               tooltip: 'Notifications',
               onPressed: () {
                 Navigator.pushNamed(context, '/notifications');
-              },
-            ),
-          ),
+                    },
+                  ),
+                ),
         ],
       ),
       body: ResponsiveContainer(
@@ -790,25 +790,25 @@ class _CreatePOPageState extends State<CreatePOPage> {
               ),
               Row(
                 children: [
-                  // Clear All Button
-                  TextButton.icon(
+              // Clear All Button
+              TextButton.icon(
                     onPressed: () async {
                       final confirmed = await _showClearAllConfirmation();
                       if (confirmed) {
-                        setState(() {
-                          addedSupplies.clear();
-                        });
+                  setState(() {
+                    addedSupplies.clear();
+                  });
                       }
-                    },
-                    icon: Icon(Icons.clear_all, color: Colors.red, size: 20),
-                    label: Text(
-                      'Clear All',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.red,
-                      ),
-                    ),
+                },
+                icon: Icon(Icons.clear_all, color: Colors.red, size: 20),
+                label: Text(
+                  'Clear All',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.red,
+                  ),
+                ),
                   ),
                   const SizedBox(width: 8),
                   // Save Button
@@ -1386,22 +1386,22 @@ class _CreatePOPageState extends State<CreatePOPage> {
 
                   // Title
                   Text(
-                    _isEditing ? 'Cancel Editing' : 'Cancel Purchase Order',
+                _isEditing ? 'Cancel Editing' : 'Cancel Purchase Order',
                     style: TextStyle(
                       fontFamily: 'SF Pro',
                       fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                       color: theme.textTheme.titleLarge?.color,
-                    ),
+                ),
                     textAlign: TextAlign.center,
-                  ),
+              ),
                   const SizedBox(height: 12),
 
                   // Content
                   Text(
-                    _isEditing
-                        ? 'You have unsaved changes. Are you sure you want to cancel editing this purchase order?'
-                        : 'You have unsaved changes. Are you sure you want to cancel this purchase order?',
+                _isEditing
+                    ? 'You have unsaved changes. Are you sure you want to cancel editing this purchase order?'
+                    : 'You have unsaved changes. Are you sure you want to cancel this purchase order?',
                     style: TextStyle(
                       fontFamily: 'SF Pro',
                       fontSize: 16,
@@ -1409,20 +1409,20 @@ class _CreatePOPageState extends State<CreatePOPage> {
                       color: theme.textTheme.bodyMedium?.color,
                       height: 1.4,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
+                textAlign: TextAlign.center,
+              ),
                   const SizedBox(height: 24),
 
                   // Buttons (Cancel first, then Continue Editing)
                   Row(
-                    children: [
+                  children: [
                       Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
+                      child: ElevatedButton(
+                        onPressed: () {
                             Navigator.of(context).pop();
                             Navigator.of(context).pop();
-                          },
-                          style: ElevatedButton.styleFrom(
+                        },
+                        style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1430,23 +1430,23 @@ class _CreatePOPageState extends State<CreatePOPage> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             elevation: 2,
-                          ),
-                          child: Text(
+                        ),
+                        child: Text(
                             _isEditing ? 'Cancel Edit' : 'Cancel PO',
                             style: TextStyle(
                               fontFamily: 'SF Pro',
                               fontWeight: FontWeight.w500,
-                              color: Colors.white,
+                            color: Colors.white,
                               fontSize: 16,
-                            ),
                           ),
                         ),
                       ),
+                    ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: ElevatedButton(
+                      child: ElevatedButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          style: ElevatedButton.styleFrom(
+                        style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00D4AA),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1454,21 +1454,21 @@ class _CreatePOPageState extends State<CreatePOPage> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             elevation: 2,
-                          ),
-                          child: Text(
+                        ),
+                        child: Text(
                             'Continue Editing',
                             style: TextStyle(
                               fontFamily: 'SF Pro',
                               fontWeight: FontWeight.w500,
-                              color: Colors.white,
+                            color: Colors.white,
                               fontSize: 16,
-                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
+              ],
               ),
             ),
           );

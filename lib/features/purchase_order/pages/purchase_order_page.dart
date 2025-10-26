@@ -26,11 +26,13 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       []; // Separate list for closed POs from Supabase
   List<PurchaseOrder> _approvalOrders = []; // Separate list for approval POs
   List<PurchaseOrder> _openOrders = []; // Separate list for open POs
+  List<PurchaseOrder> _partialOrders = []; // Separate list for partial POs
   int activeTabIndex = 0;
   final TextEditingController searchController = TextEditingController();
 
   // Stream subscriptions for proper disposal
   StreamSubscription<List<PurchaseOrder>>? _openSubscription;
+  StreamSubscription<List<PurchaseOrder>>? _partialSubscription;
   StreamSubscription<List<PurchaseOrder>>? _approvalSubscription;
   StreamSubscription<List<PurchaseOrder>>? _closedSubscription;
   StreamSubscription<List<PurchaseOrder>>? _allSubscription;
@@ -42,6 +44,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   bool _autoOpeningDetails = false; // prevent stacked navigations
   // Info banner removed
   bool _loadedOpen = false;
+  bool _loadedPartial = false;
   bool _loadedApproval = false;
   bool _loadedClosed = false;
 
@@ -80,6 +83,23 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
             setState(() {
               _openOrders = openPOs;
               _loadedOpen = true;
+            });
+            _resolveSmartRedirect();
+          }
+        },
+        onError: (error) {
+          // Don't use ScaffoldMessenger in stream error handlers
+          // The error will be handled gracefully without showing UI
+        },
+      );
+
+      // Load Partial POs
+      _partialSubscription = _controller.getPartialPOsStream().listen(
+        (partialPOs) {
+          if (mounted) {
+            setState(() {
+              _partialOrders = partialPOs;
+              _loadedPartial = true;
             });
             _resolveSmartRedirect();
           }
@@ -208,6 +228,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   void dispose() {
     searchController.dispose();
     _openSubscription?.cancel();
+    _partialSubscription?.cancel();
     _approvalSubscription?.cancel();
     _closedSubscription?.cancel();
     _allSubscription?.cancel();
@@ -289,6 +310,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                               children: [
                                 _buildSummaryItem(
                                     "Open", "${_getSummaryCounts()['Open']}"),
+                                _buildSummaryItem("Partial",
+                                    "${_getSummaryCounts()['Partial']}"),
                                 _buildSummaryItem("Approval",
                                     "${_getSummaryCounts()['Approval']}"),
                                 _buildSummaryItem("Closed",
@@ -399,17 +422,24 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                         }),
                                         SizedBox(width: 12),
                                         _buildTab(
-                                            "Approval", activeTabIndex == 1,
-                                            () {
+                                            "Partial", activeTabIndex == 1, () {
                                           setState(() {
                                             activeTabIndex = 1;
                                           });
                                         }),
                                         SizedBox(width: 12),
-                                        _buildTab("Closed", activeTabIndex == 2,
+                                        _buildTab(
+                                            "Approval", activeTabIndex == 2,
                                             () {
                                           setState(() {
                                             activeTabIndex = 2;
+                                          });
+                                        }),
+                                        SizedBox(width: 12),
+                                        _buildTab("Closed", activeTabIndex == 3,
+                                            () {
+                                          setState(() {
+                                            activeTabIndex = 3;
                                           });
                                         }),
                                       ],
@@ -424,9 +454,12 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                             ? _controller.getOpenPOsStream()
                                             : activeTabIndex == 1
                                                 ? _controller
-                                                    .getApprovalPOsStream()
-                                                : _controller
-                                                    .getClosedPOsStream(),
+                                                    .getPartialPOsStream()
+                                                : activeTabIndex == 2
+                                                    ? _controller
+                                                        .getApprovalPOsStream()
+                                                    : _controller
+                                                        .getClosedPOsStream(),
                                         builder: (context, snapshot) {
                                           final data = snapshot.data ??
                                               const <PurchaseOrder>[];
@@ -704,7 +737,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   void _resolveSmartRedirect() {
     if (_openPOCode == null || _autoOpeningDetails) return;
     // Wait until all streams have delivered at least one snapshot to avoid false "not found"
-    if (!(_loadedOpen && _loadedApproval && _loadedClosed)) {
+    if (!(_loadedOpen && _loadedPartial && _loadedApproval && _loadedClosed)) {
       return;
     }
     // Find target PO across current lists to determine actual status
@@ -888,6 +921,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   Map<String, int> _getSummaryCounts() {
     return {
       'Open': _openOrders.length,
+      'Partial': _partialOrders.length,
       'Approval': _approvalOrders.length,
       'Closed': _closedOrders.length,
     };
@@ -1597,6 +1631,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                           _buildSummaryItem(
                               "Open", "${_getSummaryCounts()['Open']}"),
                           _buildSummaryItem(
+                              "Partial", "${_getSummaryCounts()['Partial']}"),
+                          _buildSummaryItem(
                               "Approval", "${_getSummaryCounts()['Approval']}"),
                           _buildSummaryItem(
                               "Closed", "${_getSummaryCounts()['Closed']}"),
@@ -1698,16 +1734,22 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                     });
                                   }),
                                   SizedBox(width: 12),
-                                  _buildTab("Approval", activeTabIndex == 1,
-                                      () {
+                                  _buildTab("Partial", activeTabIndex == 1, () {
                                     setState(() {
                                       activeTabIndex = 1;
                                     });
                                   }),
                                   SizedBox(width: 12),
-                                  _buildTab("Closed", activeTabIndex == 2, () {
+                                  _buildTab("Approval", activeTabIndex == 2,
+                                      () {
                                     setState(() {
                                       activeTabIndex = 2;
+                                    });
+                                  }),
+                                  SizedBox(width: 12),
+                                  _buildTab("Closed", activeTabIndex == 3, () {
+                                    setState(() {
+                                      activeTabIndex = 3;
                                     });
                                   }),
                                 ],
@@ -1721,8 +1763,12 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                   stream: activeTabIndex == 0
                                       ? _controller.getOpenPOsStream()
                                       : activeTabIndex == 1
-                                          ? _controller.getApprovalPOsStream()
-                                          : _controller.getClosedPOsStream(),
+                                          ? _controller.getPartialPOsStream()
+                                          : activeTabIndex == 2
+                                              ? _controller
+                                                  .getApprovalPOsStream()
+                                              : _controller
+                                                  .getClosedPOsStream(),
                                   builder: (context, snapshot) {
                                     List<PurchaseOrder> displayed = [];
                                     bool loading = false;
@@ -1730,8 +1776,10 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                     if (activeTabIndex == 0) {
                                       loading = !_loadedOpen;
                                     } else if (activeTabIndex == 1) {
-                                      loading = !_loadedApproval;
+                                      loading = !_loadedPartial;
                                     } else if (activeTabIndex == 2) {
+                                      loading = !_loadedApproval;
+                                    } else if (activeTabIndex == 3) {
                                       loading = !_loadedClosed;
                                     }
 

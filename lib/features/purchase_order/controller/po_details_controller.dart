@@ -135,11 +135,22 @@ class PODetailsController {
 
   // Reject a purchase order (move back to Open for editing)
   Future<PurchaseOrder> rejectPurchaseOrder(PurchaseOrder po) async {
-    // Reset all supplies back to Pending but KEEP any existing expiry dates
+    // Reset all supplies back to Pending and CLEAR all receipt details AND partial receive quantities
     final List<Map<String, dynamic>> resetSupplies = po.supplies
         .map((s) => {
               ...s,
               'status': 'Pending',
+              // Clear all receipt-related fields
+              'receivedAt': null,
+              'receiptDrNo': null,
+              'receiptRecipient': null,
+              'receiptRemarks': null,
+              'receiptImagePath': null,
+              'receiptImageUrl': null,
+              'receiptDate': null,
+              'savedAt': null,
+              // Clear all partial receive quantities
+              'receivedQuantities': null,
             })
         .toList();
 
@@ -532,6 +543,295 @@ class PODetailsController {
       return false; // No duplicate found
     } catch (e) {
       return false; // On error, allow the receipt number
+    }
+  }
+
+  // Process multiple partial receives at once
+  Future<void> processMultiplePartialReceives({
+    required PurchaseOrder po,
+    required Map<String, Map<String, int>> supplyQuantities,
+  }) async {
+    try {
+      print(
+          'Debug: Processing multiple partial receives for ${supplyQuantities.length} supplies');
+
+      // Create a copy of the PO supplies to work with
+      final updatedSupplies = List<Map<String, dynamic>>.from(po.supplies);
+
+      // Process each supply
+      for (final supplyEntry in supplyQuantities.entries) {
+        final supplyId = supplyEntry.key;
+        final expiryQuantities = supplyEntry.value;
+
+        print(
+            'Debug: Processing supplyId: $supplyId with quantities: $expiryQuantities');
+
+        // Find the supply in the PO
+        int supplyIndex = -1;
+
+        // Strategy 1: Exact match with supplyId
+        supplyIndex = updatedSupplies.indexWhere((supply) {
+          final supplyIdFromSupply = supply['supplyId']?.toString() ??
+              supply['id']?.toString() ??
+              supply['name']?.toString() ??
+              '';
+          return supplyIdFromSupply == supplyId;
+        });
+
+        // Strategy 2: If not found, try matching by name
+        if (supplyIndex == -1) {
+          supplyIndex = updatedSupplies.indexWhere((supply) {
+            final supplyName = getSupplyName(supply);
+            return supplyName == supplyId;
+          });
+        }
+
+        if (supplyIndex == -1) {
+          print('Debug: Supply not found: $supplyId');
+          continue;
+        }
+
+        final supply = updatedSupplies[supplyIndex];
+        print(
+            'Debug: Found supply at index $supplyIndex: ${getSupplyName(supply)}');
+
+        // Update the supply's received quantities
+        final updatedSupply = Map<String, dynamic>.from(supply);
+
+        // Initialize received quantities if not exists
+        if (updatedSupply['receivedQuantities'] == null) {
+          updatedSupply['receivedQuantities'] = <String, int>{};
+        }
+
+        // Update received quantities for all expiry dates
+        final receivedQuantities =
+            Map<String, int>.from(updatedSupply['receivedQuantities']);
+        for (final expiryEntry in expiryQuantities.entries) {
+          final expiryDate = expiryEntry.key;
+          final receivedQty = expiryEntry.value;
+
+          // Add to existing quantity instead of overwriting
+          final existingQty = receivedQuantities[expiryDate] ?? 0;
+          receivedQuantities[expiryDate] = existingQty + receivedQty;
+          print(
+              'Debug: Added received quantity for $expiryDate: $receivedQty (total: ${receivedQuantities[expiryDate]})');
+        }
+        updatedSupply['receivedQuantities'] = receivedQuantities;
+
+        // Calculate total received quantity across all expiry batches
+        final totalQuantity = int.tryParse('${supply['quantity'] ?? 0}') ?? 0;
+        final totalReceived =
+            receivedQuantities.values.fold(0, (sum, qty) => sum + qty);
+
+        print(
+            'Debug: Total quantity: $totalQuantity, Total received: $totalReceived');
+
+        // Update status based on total received vs total quantity
+        if (totalReceived >= totalQuantity) {
+          updatedSupply['status'] = 'Received';
+          print('Debug: Supply marked as Received');
+        } else if (totalReceived > 0) {
+          updatedSupply['status'] = 'Partially Received';
+          print('Debug: Supply marked as Partially Received');
+        } else {
+          updatedSupply['status'] = 'Pending';
+          print('Debug: Supply remains Pending');
+        }
+
+        // Update the supply in the list
+        updatedSupplies[supplyIndex] = updatedSupply;
+        print(
+            'Debug: Updated supply $supplyId with status: ${updatedSupply['status']}');
+      }
+
+      // Update the PO in database once with all changes
+      final updatedPO = PurchaseOrder(
+        id: po.id,
+        code: po.code,
+        name: po.name,
+        supplies: updatedSupplies,
+        status: po.status,
+        createdAt: po.createdAt,
+        receivedCount: po.receivedCount,
+      );
+
+      print('Debug: Saving updated PO to database with all changes...');
+      await _poController.save(updatedPO);
+      print('Debug: PO saved successfully with all partial receives');
+
+      // Log activities for all supplies
+      for (final supplyEntry in supplyQuantities.entries) {
+        final supplyId = supplyEntry.key;
+        final expiryQuantities = supplyEntry.value;
+
+        for (final expiryEntry in expiryQuantities.entries) {
+          final expiryDate = expiryEntry.key;
+          final receivedQty = expiryEntry.value;
+
+          await _logPartialReceiveActivity(
+              po.id, supplyId, receivedQty, expiryDate);
+        }
+      }
+      print('Debug: All activities logged successfully');
+    } catch (e) {
+      throw Exception('Failed to process multiple partial receives: $e');
+    }
+  }
+
+  // Process partial receive for a specific supply
+  Future<void> processPartialReceive({
+    required PurchaseOrder po,
+    required String supplyId,
+    required int receivedQuantity,
+    required String expiryDate,
+  }) async {
+    try {
+      // Debug: Print all supplies for troubleshooting
+      print('Debug: Looking for supplyId: $supplyId');
+      print('Debug: Available supplies in PO:');
+      for (int i = 0; i < po.supplies.length; i++) {
+        final supply = po.supplies[i];
+        final supplyName = getSupplyName(supply);
+        final supplyIdFromSupply = supply['id']?.toString() ??
+            supply['name']?.toString() ??
+            'supply_$i';
+        print('  [$i] Name: $supplyName, ID: $supplyIdFromSupply');
+      }
+
+      // Find the supply in the PO - try multiple matching strategies
+      int supplyIndex = -1;
+
+      // Strategy 1: Exact match with ID or name
+      print('Debug: Strategy 1 - Trying exact match for supplyId: $supplyId');
+      supplyIndex = po.supplies.indexWhere((supply) {
+        final supplyIdFromSupply = supply['supplyId']?.toString() ??
+            supply['id']?.toString() ??
+            supply['name']?.toString() ??
+            '';
+        final matches = supplyIdFromSupply == supplyId;
+        print(
+            'Debug: Comparing "$supplyIdFromSupply" == "$supplyId" -> $matches');
+        return matches;
+      });
+      print('Debug: Strategy 1 result: supplyIndex = $supplyIndex');
+
+      // Strategy 2: If not found, try matching by name only
+      if (supplyIndex == -1) {
+        print('Debug: Strategy 2 - Trying name match for supplyId: $supplyId');
+        supplyIndex = po.supplies.indexWhere((supply) {
+          final supplyName = getSupplyName(supply);
+          final matches = supplyName == supplyId;
+          print(
+              'Debug: Comparing supplyName "$supplyName" == "$supplyId" -> $matches');
+          return matches;
+        });
+        print('Debug: Strategy 2 result: supplyIndex = $supplyIndex');
+      }
+
+      // Strategy 3: If still not found, try index-based matching
+      if (supplyIndex == -1) {
+        print('Debug: Strategy 3 - Trying index match for supplyId: $supplyId');
+        final indexMatch = RegExp(r'supply_(\d+)').firstMatch(supplyId);
+        if (indexMatch != null) {
+          final index = int.tryParse(indexMatch.group(1) ?? '');
+          print('Debug: Extracted index: $index');
+          if (index != null && index < po.supplies.length) {
+            supplyIndex = index;
+            print('Debug: Strategy 3 result: supplyIndex = $supplyIndex');
+          }
+        }
+        print('Debug: Strategy 3 final result: supplyIndex = $supplyIndex');
+      }
+
+      if (supplyIndex == -1) {
+        print('Debug: Supply not found with any strategy');
+        throw Exception('Supply not found: $supplyId');
+      }
+
+      final supply = po.supplies[supplyIndex];
+      print(
+          'Debug: Found supply at index $supplyIndex: ${getSupplyName(supply)}');
+
+      // Update the supply's received quantities
+      final updatedSupply = Map<String, dynamic>.from(supply);
+
+      // Initialize received quantities if not exists
+      if (updatedSupply['receivedQuantities'] == null) {
+        updatedSupply['receivedQuantities'] = <String, int>{};
+      }
+
+      // Update received quantity for this expiry batch
+      final receivedQuantities =
+          Map<String, int>.from(updatedSupply['receivedQuantities']);
+      receivedQuantities[expiryDate] = receivedQuantity;
+      updatedSupply['receivedQuantities'] = receivedQuantities;
+
+      // Calculate total received quantity across all expiry batches
+      final totalQuantity = int.tryParse('${supply['quantity'] ?? 0}') ?? 0;
+      final totalReceived =
+          receivedQuantities.values.fold(0, (sum, qty) => sum + qty);
+
+      print(
+          'Debug: Total quantity: $totalQuantity, Total received: $totalReceived');
+
+      // Update status based on total received vs total quantity
+      if (totalReceived >= totalQuantity) {
+        updatedSupply['status'] = 'Received';
+        print('Debug: Supply marked as Received');
+      } else if (totalReceived > 0) {
+        updatedSupply['status'] = 'Partially Received';
+        print('Debug: Supply marked as Partially Received');
+      } else {
+        updatedSupply['status'] = 'Pending';
+        print('Debug: Supply remains Pending');
+      }
+
+      // Update the supply in the PO
+      final updatedSupplies = List<Map<String, dynamic>>.from(po.supplies);
+      updatedSupplies[supplyIndex] = updatedSupply;
+
+      // Update the PO in database
+      final updatedPO = PurchaseOrder(
+        id: po.id,
+        code: po.code,
+        name: po.name,
+        supplies: updatedSupplies,
+        status: po.status,
+        createdAt: po.createdAt,
+        receivedCount: po.receivedCount,
+      );
+
+      print('Debug: Saving updated PO to database...');
+      await _poController.save(updatedPO);
+      print('Debug: PO saved successfully');
+
+      // Log the activity
+      await _logPartialReceiveActivity(
+          po.id, supplyId, receivedQuantity, expiryDate);
+      print('Debug: Activity logged successfully');
+    } catch (e) {
+      throw Exception('Failed to process partial receive: $e');
+    }
+  }
+
+  // Log partial receive activity
+  Future<void> _logPartialReceiveActivity(
+    String poId,
+    String supplyId,
+    int quantity,
+    String expiryDate,
+  ) async {
+    try {
+      await _supabase.from('activity_logs').insert({
+        'po_id': poId,
+        'action': 'partial_receive',
+        'details': 'Received $quantity units for expiry $expiryDate',
+        'supply_id': supplyId,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      // Log error but don't fail the main operation
+      print('Failed to log activity: $e');
     }
   }
 }

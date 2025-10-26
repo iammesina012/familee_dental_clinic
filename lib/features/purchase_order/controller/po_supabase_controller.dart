@@ -201,9 +201,34 @@ class POSupabaseController {
           final list = data.map((row) {
             return PurchaseOrder.fromMap(row);
           }).toList();
-          list.sort((a, b) =>
+          // Filter to only include POs with pending supplies (no partial receives)
+          final filteredList = list.where((po) {
+            return po.supplies.every((supply) => supply['status'] == 'Pending');
+          }).toList();
+          filteredList.sort((a, b) =>
               _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
-          return list;
+          return filteredList;
+        });
+  }
+
+  Stream<List<PurchaseOrder>> getPartialPOsStream() {
+    return _supabase
+        .from('purchase_orders')
+        .stream(primaryKey: ['id'])
+        .eq('status', 'Open')
+        .map((data) {
+          final list = data.map((row) {
+            return PurchaseOrder.fromMap(row);
+          }).toList();
+          // Filter to include POs with at least one partially received OR received supply
+          final filteredList = list.where((po) {
+            return po.supplies.any((supply) =>
+                supply['status'] == 'Partially Received' ||
+                supply['status'] == 'Received');
+          }).toList();
+          filteredList.sort((a, b) =>
+              _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
+          return filteredList;
         });
   }
 
