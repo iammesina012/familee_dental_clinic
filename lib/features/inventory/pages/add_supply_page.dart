@@ -21,9 +21,12 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
 
   // Store original values to compare against
   String _originalName = '';
+  String _originalType = '';
   String _originalCategory = '';
-  int _originalStock = 0;
-  String _originalUnit = '';
+  int _originalPackagingQuantity = 1;
+  int _originalPackagingContent = 1;
+  String _originalPackagingUnit = 'Box';
+  String _originalPackagingContentType = 'Pieces';
   double _originalCost = 0.0;
   String _originalSupplier = '';
   String _originalBrand = '';
@@ -36,9 +39,13 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
     super.initState();
     // Initialize original values to match controller's default state
     _originalName = controller.nameController.text.trim();
+    _originalType = controller.typeController.text.trim();
     _originalCategory = controller.selectedCategory ?? '';
-    _originalStock = controller.stock;
-    _originalUnit = controller.selectedUnit ?? '';
+    _originalPackagingQuantity = controller.packagingQuantity;
+    _originalPackagingContent = controller.packagingContent;
+    _originalPackagingUnit = controller.selectedPackagingUnit ?? 'Box';
+    _originalPackagingContentType =
+        controller.selectedPackagingContent ?? 'Pieces';
     _originalCost =
         double.tryParse(controller.costController.text.trim()) ?? 0.0;
     _originalSupplier = controller.supplierController.text.trim();
@@ -67,11 +74,59 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
     );
   }
 
+  // Helper method to get packaging content options based on selected unit
+  List<String> _getPackagingContentOptions(String? packagingUnit) {
+    switch (packagingUnit) {
+      case 'Pack':
+      case 'Box':
+      case 'Bundle':
+        return ['Pieces'];
+      case 'Bottle':
+        return ['mL', 'L'];
+      case 'Jug':
+        return ['mL', 'L'];
+      case 'Pad':
+        return ['Cartridge'];
+      case 'Piece':
+      case 'Spool':
+      case 'Tub':
+        return []; // These don't need packaging content
+      default:
+        return ['Pieces', 'Units', 'Items', 'Count'];
+    }
+  }
+
+  // Helper method to check if packaging content should be disabled
+  bool _isPackagingContentDisabled(String? packagingUnit) {
+    return packagingUnit == 'Piece' ||
+        packagingUnit == 'Spool' ||
+        packagingUnit == 'Tub';
+  }
+
+  // Helper method to get valid packaging content value
+  String? _getValidPackagingContentValue() {
+    final options =
+        _getPackagingContentOptions(controller.selectedPackagingUnit);
+    if (options.isEmpty) return null;
+
+    // If current value is valid, use it; otherwise use first option
+    if (controller.selectedPackagingContent != null &&
+        options.contains(controller.selectedPackagingContent)) {
+      return controller.selectedPackagingContent;
+    }
+
+    return options.first;
+  }
+
   void _markAsChanged() {
     final currentName = controller.nameController.text.trim();
+    final currentType = controller.typeController.text.trim();
     final currentCategory = controller.selectedCategory ?? '';
-    final currentStock = controller.stock;
-    final currentUnit = controller.selectedUnit ?? '';
+    final currentPackagingQuantity = controller.packagingQuantity;
+    final currentPackagingContent = controller.packagingContent;
+    final currentPackagingUnit = controller.selectedPackagingUnit ?? 'Box';
+    final currentPackagingContentType =
+        controller.selectedPackagingContent ?? 'Pieces';
     final currentCost =
         double.tryParse(controller.costController.text.trim()) ?? 0.0;
     final currentSupplier = controller.supplierController.text.trim();
@@ -80,9 +135,12 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
     final currentNoExpiry = controller.noExpiry;
 
     final hasChanges = currentName != _originalName ||
+        currentType != _originalType ||
         currentCategory != _originalCategory ||
-        currentStock != _originalStock ||
-        currentUnit != _originalUnit ||
+        currentPackagingQuantity != _originalPackagingQuantity ||
+        currentPackagingContent != _originalPackagingContent ||
+        currentPackagingUnit != _originalPackagingUnit ||
+        currentPackagingContentType != _originalPackagingContentType ||
         currentCost != _originalCost ||
         currentSupplier != _originalSupplier ||
         currentBrand != _originalBrand ||
@@ -298,7 +356,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                   ),
                   const SizedBox(height: 32),
 
-                  // Name + Category
+                  // Item Name + Type Name
                   Row(
                     children: [
                       Expanded(
@@ -314,13 +372,21 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                   border: OutlineInputBorder(),
                                   errorStyle: TextStyle(color: Colors.red),
                                 ),
-                                onChanged: (value) {
+                                onChanged: (value) async {
                                   _markAsChanged();
                                   // Clear validation error when user types
                                   if (validationErrors['name'] != null) {
                                     setState(() {
                                       validationErrors['name'] = null;
                                     });
+                                  }
+
+                                  // Auto-fill supplier and brand if supply name exists
+                                  if (value.trim().isNotEmpty) {
+                                    await controller
+                                        .autoFillFromExistingSupply(value);
+                                    setState(
+                                        () {}); // Refresh UI to show autofilled values
                                   }
                                 },
                               ),
@@ -332,247 +398,36 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.only(left: 8.0),
-                          child: StreamBuilder<List<String>>(
-                            stream: categoriesController.getCategoriesStream(),
-                            builder: (context, snapshot) {
-                              // Cache categories when available
-                              if (snapshot.hasData && snapshot.data != null) {
-                                _cachedCategories = snapshot.data;
-                              }
-
-                              // Use cached categories if available
-                              final categories = _cachedCategories ?? [];
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  DropdownButtonFormField<String>(
-                                    value: controller.selectedCategory,
-                                    decoration: InputDecoration(
-                                      labelText: 'Category *',
-                                      border: OutlineInputBorder(),
-                                      errorStyle: TextStyle(color: Colors.red),
-                                    ),
-                                    items: categories
-                                        .map((c) => DropdownMenuItem(
-                                            value: c, child: Text(c)))
-                                        .toList(),
-                                    onChanged: (value) {
-                                      _markAsChanged();
-                                      setState(() {
-                                        controller.selectedCategory = value;
-                                        // Clear validation error when user selects
-                                        if (validationErrors['category'] !=
-                                            null) {
-                                          validationErrors['category'] = null;
-                                        }
-                                      });
-                                    },
-                                  ),
-                                  _buildValidationError(
-                                      validationErrors['category']),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Stock + Inventory units
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Stock',
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.surface,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                        color: theme.dividerColor
-                                            .withOpacity(0.2)),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(Icons.remove,
-                                            color: theme.iconTheme.color),
-                                        splashRadius: 18,
-                                        onPressed: () {
-                                          if (controller.stock > 0) {
-                                            _markAsChanged();
-                                            setState(() {
-                                              controller.stock--;
-                                              controller.stockController.text =
-                                                  controller.stock.toString();
-                                              // Clear validation error when user changes
-                                              if (validationErrors['stock'] !=
-                                                  null) {
-                                                validationErrors['stock'] =
-                                                    null;
-                                              }
-                                            });
-                                          }
-                                        },
-                                      ),
-                                      SizedBox(
-                                        width: 32,
-                                        child: Center(
-                                          child: TextField(
-                                            controller:
-                                                controller.stockController,
-                                            textAlign: TextAlign.center,
-                                            keyboardType: TextInputType.number,
-                                            inputFormatters: [
-                                              FilteringTextInputFormatter
-                                                  .digitsOnly,
-                                              LengthLimitingTextInputFormatter(
-                                                  2),
-                                            ],
-                                            decoration: InputDecoration(
-                                                border: InputBorder.none),
-                                            style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w500,
-                                                color: theme.textTheme
-                                                    .bodyMedium?.color),
-                                            onChanged: (val) {
-                                              _markAsChanged();
-                                              setState(() {
-                                                final qty =
-                                                    int.tryParse(val) ?? 0;
-                                                controller.stock =
-                                                    qty > 99 ? 99 : qty;
-                                                if (qty > 99) {
-                                                  controller.stockController
-                                                      .text = '99';
-                                                }
-                                                // Clear validation error when user types
-                                                if (validationErrors['stock'] !=
-                                                    null) {
-                                                  validationErrors['stock'] =
-                                                      null;
-                                                }
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: Icon(Icons.add,
-                                            color: theme.iconTheme.color),
-                                        splashRadius: 18,
-                                        onPressed: () {
-                                          if (controller.stock < 99) {
-                                            _markAsChanged();
-                                            setState(() {
-                                              controller.stock++;
-                                              controller.stockController.text =
-                                                  controller.stock.toString();
-                                              // Clear validation error when user changes
-                                              if (validationErrors['stock'] !=
-                                                  null) {
-                                                validationErrors['stock'] =
-                                                    null;
-                                              }
-                                            });
-                                          }
-                                        },
-                                      ),
-                                    ],
-                                  ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TextField(
+                                controller: controller.typeController,
+                                decoration: InputDecoration(
+                                  labelText: 'Type Name',
+                                  border: OutlineInputBorder(),
+                                  errorStyle: TextStyle(color: Colors.red),
                                 ),
-                                _buildValidationError(
-                                    validationErrors['stock']),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                DropdownButtonFormField<String>(
-                                  value: controller.selectedUnit,
-                                  decoration: InputDecoration(
-                                    labelText: 'Inventory units *',
-                                    border: OutlineInputBorder(),
-                                    errorStyle: TextStyle(color: Colors.red),
-                                  ),
-                                  items: ['Box', 'Piece', 'Pack']
-                                      .map((u) => DropdownMenuItem(
-                                          value: u, child: Text(u)))
-                                      .toList(),
-                                  onChanged: (val) {
-                                    _markAsChanged();
+                                onChanged: (value) {
+                                  _markAsChanged();
+                                  // Clear validation error when user types
+                                  if (validationErrors['type'] != null) {
                                     setState(() {
-                                      controller.selectedUnit = val;
-                                      // Clear validation error when user selects
-                                      if (validationErrors['unit'] != null) {
-                                        validationErrors['unit'] = null;
-                                      }
+                                      validationErrors['type'] = null;
                                     });
-                                  },
-                                ),
-                                _buildValidationError(validationErrors['unit']),
-                              ],
-                            ),
+                                  }
+                                },
+                              ),
+                              _buildValidationError(validationErrors['type']),
+                            ],
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Cost full width
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: controller.costController,
-                        keyboardType:
-                            TextInputType.numberWithOptions(decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d{0,2}')),
-                        ],
-                        decoration: InputDecoration(
-                          labelText: 'Cost *',
-                          border: OutlineInputBorder(),
-                          errorStyle: TextStyle(color: Colors.red),
-                          hintText: 'Enter amount (e.g., 150.00)',
                         ),
-                        onChanged: (value) {
-                          _markAsChanged();
-                          // Clear validation error when user types
-                          if (validationErrors['cost'] != null) {
-                            setState(() {
-                              validationErrors['cost'] = null;
-                            });
-                          }
-                        },
                       ),
-                      _buildValidationError(validationErrors['cost']),
                     ],
                   ),
                   const SizedBox(height: 14),
 
-                  // Supplier + Brand
+                  // Supplier Name + Brand Name
                   Row(
                     children: [
                       Expanded(
@@ -634,6 +489,464 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                   ),
                   const SizedBox(height: 14),
 
+                  // Cost + Category
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TextField(
+                                controller: controller.costController,
+                                keyboardType: TextInputType.numberWithOptions(
+                                    decimal: true),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'^\d*\.?\d{0,2}')),
+                                ],
+                                decoration: InputDecoration(
+                                  labelText: 'Cost *',
+                                  border: OutlineInputBorder(),
+                                  errorStyle: TextStyle(color: Colors.red),
+                                  hintText: 'Enter amount (e.g., 150.00)',
+                                ),
+                                onChanged: (value) {
+                                  _markAsChanged();
+                                  // Clear validation error when user types
+                                  if (validationErrors['cost'] != null) {
+                                    setState(() {
+                                      validationErrors['cost'] = null;
+                                    });
+                                  }
+                                },
+                              ),
+                              _buildValidationError(validationErrors['cost']),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: StreamBuilder<List<String>>(
+                            stream: categoriesController.getCategoriesStream(),
+                            builder: (context, snapshot) {
+                              // Cache categories when available
+                              if (snapshot.hasData && snapshot.data != null) {
+                                _cachedCategories = snapshot.data;
+                              }
+
+                              // Use cached categories if available
+                              final categories = _cachedCategories ?? [];
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  DropdownButtonFormField<String>(
+                                    value: controller.selectedCategory,
+                                    decoration: InputDecoration(
+                                      labelText: 'Category *',
+                                      border: OutlineInputBorder(),
+                                      errorStyle: TextStyle(color: Colors.red),
+                                    ),
+                                    items: categories
+                                        .map((c) => DropdownMenuItem(
+                                            value: c, child: Text(c)))
+                                        .toList(),
+                                    onChanged: (value) {
+                                      _markAsChanged();
+                                      setState(() {
+                                        controller.selectedCategory = value;
+                                        // Clear validation error when user selects
+                                        if (validationErrors['category'] !=
+                                            null) {
+                                          validationErrors['category'] = null;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  _buildValidationError(
+                                      validationErrors['category']),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Packaging Unit + Quantity
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Quantity',
+                                  style: theme.textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color:
+                                          theme.dividerColor.withOpacity(0.2)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(Icons.remove,
+                                          color: theme.iconTheme.color),
+                                      splashRadius: 18,
+                                      onPressed: () {
+                                        if (controller.packagingQuantity > 1) {
+                                          _markAsChanged();
+                                          setState(() {
+                                            controller.packagingQuantity--;
+                                            controller
+                                                    .packagingQuantityController
+                                                    .text =
+                                                controller.packagingQuantity
+                                                    .toString();
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    Expanded(
+                                      child: TextField(
+                                        textAlign: TextAlign.center,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                          LengthLimitingTextInputFormatter(2),
+                                        ],
+                                        decoration: InputDecoration(
+                                            border: InputBorder.none),
+                                        style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w500,
+                                            color: theme
+                                                .textTheme.bodyMedium?.color),
+                                        controller: controller
+                                            .packagingQuantityController,
+                                        onChanged: (val) {
+                                          _markAsChanged();
+                                          setState(() {
+                                            final qty = int.tryParse(val) ?? 1;
+                                            controller.packagingQuantity =
+                                                qty > 99
+                                                    ? 99
+                                                    : (qty < 1 ? 1 : qty);
+                                            if (qty > 99) {
+                                              controller
+                                                  .packagingQuantityController
+                                                  .text = '99';
+                                            } else if (qty < 1) {
+                                              controller
+                                                  .packagingQuantityController
+                                                  .text = '1';
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.add,
+                                          color: theme.iconTheme.color),
+                                      splashRadius: 18,
+                                      onPressed: () {
+                                        if (controller.packagingQuantity < 99) {
+                                          _markAsChanged();
+                                          setState(() {
+                                            controller.packagingQuantity++;
+                                            controller
+                                                    .packagingQuantityController
+                                                    .text =
+                                                controller.packagingQuantity
+                                                    .toString();
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Packaging Unit',
+                                  style: theme.textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 6),
+                              DropdownButtonFormField<String>(
+                                value: controller.selectedPackagingUnit,
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  errorStyle: TextStyle(color: Colors.red),
+                                ),
+                                items: [
+                                  'Pack',
+                                  'Box',
+                                  'Bottle',
+                                  'Jug',
+                                  'Pad',
+                                  'Piece',
+                                  'Spool',
+                                  'Tub'
+                                ]
+                                    .map((u) => DropdownMenuItem(
+                                        value: u, child: Text(u)))
+                                    .toList(),
+                                onChanged: (val) {
+                                  _markAsChanged();
+                                  setState(() {
+                                    controller.selectedPackagingUnit = val;
+                                    // Reset packaging content if the new unit doesn't need it
+                                    if (_isPackagingContentDisabled(val)) {
+                                      controller.selectedPackagingContent =
+                                          null;
+                                      controller.packagingContent = 1;
+                                      controller.packagingContentController
+                                          .text = '1';
+                                    } else {
+                                      // Set default content based on unit
+                                      final options =
+                                          _getPackagingContentOptions(val);
+                                      if (options.isNotEmpty) {
+                                        controller.selectedPackagingContent =
+                                            options.first;
+                                      }
+                                    }
+                                    // Clear validation error when user selects
+                                    if (validationErrors['packagingUnit'] !=
+                                        null) {
+                                      validationErrors['packagingUnit'] = null;
+                                    }
+                                  });
+                                },
+                              ),
+                              _buildValidationError(
+                                  validationErrors['packagingUnit']),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Packaging Content + Quantity
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Quantity',
+                                  style: theme.textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color:
+                                          theme.dividerColor.withOpacity(0.2)),
+                                ),
+                                child: Opacity(
+                                  opacity: _isPackagingContentDisabled(
+                                          controller.selectedPackagingUnit)
+                                      ? 0.5
+                                      : 1.0,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(Icons.remove,
+                                            color: theme.iconTheme.color),
+                                        splashRadius: 18,
+                                        onPressed: _isPackagingContentDisabled(
+                                                controller
+                                                    .selectedPackagingUnit)
+                                            ? null
+                                            : () {
+                                                if (controller
+                                                        .packagingContent >
+                                                    1) {
+                                                  _markAsChanged();
+                                                  setState(() {
+                                                    controller
+                                                        .packagingContent--;
+                                                    controller
+                                                            .packagingContentController
+                                                            .text =
+                                                        controller
+                                                            .packagingContent
+                                                            .toString();
+                                                  });
+                                                }
+                                              },
+                                      ),
+                                      Expanded(
+                                        child: TextField(
+                                          textAlign: TextAlign.center,
+                                          keyboardType: TextInputType.number,
+                                          inputFormatters: [
+                                            FilteringTextInputFormatter
+                                                .digitsOnly,
+                                            LengthLimitingTextInputFormatter(3),
+                                          ],
+                                          decoration: InputDecoration(
+                                              border: InputBorder.none),
+                                          style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w500,
+                                              color: theme
+                                                  .textTheme.bodyMedium?.color),
+                                          controller: controller
+                                              .packagingContentController,
+                                          enabled: !_isPackagingContentDisabled(
+                                              controller.selectedPackagingUnit),
+                                          onChanged: _isPackagingContentDisabled(
+                                                  controller
+                                                      .selectedPackagingUnit)
+                                              ? null
+                                              : (val) {
+                                                  _markAsChanged();
+                                                  setState(() {
+                                                    final qty =
+                                                        int.tryParse(val) ?? 1;
+                                                    controller
+                                                            .packagingContent =
+                                                        qty > 999
+                                                            ? 999
+                                                            : (qty < 1
+                                                                ? 1
+                                                                : qty);
+                                                    if (qty > 999) {
+                                                      controller
+                                                          .packagingContentController
+                                                          .text = '999';
+                                                    } else if (qty < 1) {
+                                                      controller
+                                                          .packagingContentController
+                                                          .text = '1';
+                                                    }
+                                                  });
+                                                },
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.add,
+                                            color: theme.iconTheme.color),
+                                        splashRadius: 18,
+                                        onPressed: _isPackagingContentDisabled(
+                                                controller
+                                                    .selectedPackagingUnit)
+                                            ? null
+                                            : () {
+                                                if (controller
+                                                        .packagingContent <
+                                                    999) {
+                                                  _markAsChanged();
+                                                  setState(() {
+                                                    controller
+                                                        .packagingContent++;
+                                                    controller
+                                                            .packagingContentController
+                                                            .text =
+                                                        controller
+                                                            .packagingContent
+                                                            .toString();
+                                                  });
+                                                }
+                                              },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Packaging Content',
+                                  style: theme.textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 6),
+                              DropdownButtonFormField<String>(
+                                value: _isPackagingContentDisabled(
+                                        controller.selectedPackagingUnit)
+                                    ? null
+                                    : _getValidPackagingContentValue(),
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  errorStyle: TextStyle(color: Colors.red),
+                                ),
+                                items: _getPackagingContentOptions(
+                                        controller.selectedPackagingUnit)
+                                    .map((u) => DropdownMenuItem(
+                                        value: u, child: Text(u)))
+                                    .toList(),
+                                onChanged: _isPackagingContentDisabled(
+                                        controller.selectedPackagingUnit)
+                                    ? null
+                                    : (val) {
+                                        _markAsChanged();
+                                        setState(() {
+                                          controller.selectedPackagingContent =
+                                              val;
+                                          // Clear validation error when user selects
+                                          if (validationErrors[
+                                                  'packagingContent'] !=
+                                              null) {
+                                            validationErrors[
+                                                'packagingContent'] = null;
+                                          }
+                                        });
+                                      },
+                              ),
+                              _buildValidationError(
+                                  validationErrors['packagingContent']),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
                   // Expiry Date (disable if noExpiry checked)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -642,7 +955,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                         controller: controller.expiryController,
                         enabled: !controller.noExpiry,
                         decoration: InputDecoration(
-                          labelText: 'Expiry Date *',
+                          labelText: 'Expiry *',
                           border: OutlineInputBorder(),
                           suffixIcon: Icon(Icons.calendar_today, size: 18),
                           errorStyle: TextStyle(color: Colors.red),
@@ -886,12 +1199,8 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                         children: [
                           _buildDetailRow(
                               'Name', controller.nameController.text.trim()),
-                          _buildDetailRow('Category',
-                              controller.selectedCategory ?? 'Not selected'),
-                          _buildDetailRow('Stock',
-                              '${controller.stock} ${controller.selectedUnit ?? 'units'}'),
-                          _buildDetailRow('Cost',
-                              '₱${controller.costController.text.trim()}'),
+                          _buildDetailRow(
+                              'Type', controller.typeController.text.trim()),
                           _buildDetailRow(
                               'Supplier',
                               controller.supplierController.text.trim().isEmpty
@@ -902,6 +1211,16 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                               controller.brandController.text.trim().isEmpty
                                   ? 'Not specified'
                                   : controller.brandController.text.trim()),
+                          _buildDetailRow('Cost',
+                              '₱${controller.costController.text.trim()}'),
+                          _buildDetailRow('Category',
+                              controller.selectedCategory ?? 'Not selected'),
+                          _buildDetailRow('Packaging',
+                              '${controller.packagingQuantity} ${controller.selectedPackagingUnit ?? 'Box'}'),
+                          if (!_isPackagingContentDisabled(
+                              controller.selectedPackagingUnit))
+                            _buildDetailRow('Content',
+                                '${controller.packagingContent} ${controller.selectedPackagingContent ?? 'Pieces'}'),
                           if (controller.noExpiry)
                             _buildDetailRow('Expiry', 'No expiry date')
                           else
@@ -918,6 +1237,30 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                     // Buttons
                     Row(
                       children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Add Supply',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
@@ -938,30 +1281,6 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,
                                 color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              'Add Supply',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
                                 fontSize: 16,
                               ),
                             ),

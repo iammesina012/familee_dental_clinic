@@ -23,36 +23,54 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
 
   bool _hasChanges() {
     final currentName = controller.nameController.text.trim();
+    final currentType = controller.typeController.text.trim();
     final currentCategory = controller.selectedCategory ?? '';
     final currentStock = controller.stock;
     final currentUnit = controller.selectedUnit ?? '';
+    final currentPackagingUnit = controller.selectedPackagingUnit ?? '';
+    final currentPackagingContent = controller.selectedPackagingContent ?? '';
+    final currentPackagingQuantity = controller.packagingQuantity;
+    final currentPackagingContentQuantity = controller.packagingContent;
     final currentCost = controller.costController.text.trim();
     final currentSupplier = controller.supplierController.text.trim();
     final currentBrand = controller.brandController.text.trim();
     final currentExpiry = controller.expiryController.text.trim();
     final currentNoExpiry = controller.noExpiry;
+    final currentImageUrl = controller.imageUrl ?? '';
 
     return currentName != _originalName ||
+        currentType != _originalType ||
         currentCategory != _originalCategory ||
         currentStock != _originalStock ||
         currentUnit != _originalUnit ||
+        currentPackagingUnit != _originalPackagingUnit ||
+        currentPackagingContent != _originalPackagingContent ||
+        currentPackagingQuantity != _originalPackagingQuantity ||
+        currentPackagingContentQuantity != _originalPackagingContentQuantity ||
         currentCost != _originalCost.toString() ||
         currentSupplier != _originalSupplier ||
         currentBrand != _originalBrand ||
         currentExpiry != _originalExpiry ||
-        currentNoExpiry != _originalNoExpiry;
+        currentNoExpiry != _originalNoExpiry ||
+        currentImageUrl != _originalImageUrl;
   }
 
   // Store original values to compare against
   String _originalName = '';
+  String _originalType = '';
   String _originalCategory = '';
   int _originalStock = 0;
   String _originalUnit = '';
+  String _originalPackagingUnit = '';
+  String _originalPackagingContent = '';
+  int _originalPackagingQuantity = 1;
+  int _originalPackagingContentQuantity = 1;
   double _originalCost = 0.0;
   String _originalSupplier = '';
   String _originalBrand = '';
   String _originalExpiry = '';
   bool _originalNoExpiry = false;
+  String _originalImageUrl = '';
   List<String>? _cachedCategories;
 
   @override
@@ -61,15 +79,21 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     controller.initFromItem(widget.item);
     // Initialize original values after controller is populated
     _originalName = controller.nameController.text.trim();
+    _originalType = controller.typeController.text.trim();
     _originalCategory = controller.selectedCategory ?? '';
     _originalStock = controller.stock;
     _originalUnit = controller.selectedUnit ?? '';
+    _originalPackagingUnit = controller.selectedPackagingUnit ?? '';
+    _originalPackagingContent = controller.selectedPackagingContent ?? '';
+    _originalPackagingQuantity = controller.packagingQuantity;
+    _originalPackagingContentQuantity = controller.packagingContent;
     _originalCost =
         double.tryParse(controller.costController.text.trim()) ?? 0.0;
     _originalSupplier = controller.supplierController.text.trim();
     _originalBrand = controller.brandController.text.trim();
     _originalExpiry = controller.expiryController.text.trim();
     _originalNoExpiry = controller.noExpiry;
+    _originalImageUrl = controller.imageUrl ?? '';
   }
 
   @override
@@ -331,7 +355,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Name + Category
+                      // Item Name + Type Name
                       Row(
                         children: [
                           Expanded(
@@ -359,6 +383,71 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                   ),
                                   _buildValidationError(
                                       validationErrors['name']),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextField(
+                                    controller: controller.typeController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Type Name',
+                                      border: OutlineInputBorder(),
+                                      errorStyle: TextStyle(color: Colors.red),
+                                    ),
+                                    onChanged: (value) {
+                                      _markAsChanged();
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Cost + Category
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextField(
+                                    controller: controller.costController,
+                                    keyboardType:
+                                        TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                          RegExp(r'^\d*\.?\d{0,2}')),
+                                    ],
+                                    decoration: InputDecoration(
+                                      labelText: 'Cost *',
+                                      border: OutlineInputBorder(),
+                                      errorStyle: TextStyle(color: Colors.red),
+                                      hintText: 'Enter amount (e.g., 150.00)',
+                                    ),
+                                    onChanged: (value) {
+                                      _markAsChanged();
+                                      // Clear validation error when user types
+                                      if (validationErrors['cost'] != null) {
+                                        setState(() {
+                                          validationErrors['cost'] = null;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  _buildValidationError(
+                                      validationErrors['cost']),
                                 ],
                               ),
                             ),
@@ -413,84 +502,6 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                     ],
                                   );
                                 },
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Cost + Inventory units
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  TextField(
-                                    controller: controller.costController,
-                                    keyboardType:
-                                        TextInputType.numberWithOptions(
-                                            decimal: true),
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.allow(
-                                          RegExp(r'^\d*\.?\d{0,2}')),
-                                    ],
-                                    decoration: InputDecoration(
-                                      labelText: 'Cost *',
-                                      border: OutlineInputBorder(),
-                                      errorStyle: TextStyle(color: Colors.red),
-                                      hintText: 'Enter amount (e.g., 150.00)',
-                                    ),
-                                    onChanged: (value) {
-                                      _markAsChanged();
-                                      // Clear validation error when user types
-                                      if (validationErrors['cost'] != null) {
-                                        setState(() {
-                                          validationErrors['cost'] = null;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                  _buildValidationError(
-                                      validationErrors['cost']),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 8.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  DropdownButtonFormField<String>(
-                                    value: controller.selectedUnit,
-                                    decoration: InputDecoration(
-                                      labelText: 'Inventory units *',
-                                      border: OutlineInputBorder(),
-                                      errorStyle: TextStyle(color: Colors.red),
-                                    ),
-                                    items: ['Box', 'Piece', 'Pack']
-                                        .map((u) => DropdownMenuItem(
-                                            value: u, child: Text(u)))
-                                        .toList(),
-                                    onChanged: (val) {
-                                      _markAsChanged();
-                                      setState(() {
-                                        controller.selectedUnit = val;
-                                        // Clear validation error when user selects
-                                        if (validationErrors['unit'] != null) {
-                                          validationErrors['unit'] = null;
-                                        }
-                                      });
-                                    },
-                                  ),
-                                  _buildValidationError(
-                                      validationErrors['unit']),
-                                ],
                               ),
                             ),
                           ),
@@ -556,6 +567,380 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                   ),
                                   _buildValidationError(
                                       validationErrors['brand']),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Packaging Unit + Quantity
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Quantity',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.surface,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: theme.dividerColor
+                                              .withOpacity(0.2)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        IconButton(
+                                          icon: Icon(Icons.remove,
+                                              color: theme.iconTheme.color),
+                                          splashRadius: 18,
+                                          onPressed: () {
+                                            if (controller.packagingQuantity >
+                                                1) {
+                                              _markAsChanged();
+                                              setState(() {
+                                                controller.packagingQuantity--;
+                                                controller
+                                                        .packagingQuantityController
+                                                        .text =
+                                                    controller.packagingQuantity
+                                                        .toString();
+                                              });
+                                            }
+                                          },
+                                        ),
+                                        Expanded(
+                                          child: TextField(
+                                            textAlign: TextAlign.center,
+                                            keyboardType: TextInputType.number,
+                                            inputFormatters: [
+                                              FilteringTextInputFormatter
+                                                  .digitsOnly,
+                                              LengthLimitingTextInputFormatter(
+                                                  2),
+                                            ],
+                                            style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w500,
+                                                color: theme.textTheme
+                                                    .bodyMedium?.color),
+                                            controller: controller
+                                                .packagingQuantityController,
+                                            onChanged: (val) {
+                                              _markAsChanged();
+                                              setState(() {
+                                                final qty =
+                                                    int.tryParse(val) ?? 1;
+                                                controller.packagingQuantity =
+                                                    qty > 99
+                                                        ? 99
+                                                        : (qty < 1 ? 1 : qty);
+                                                if (qty > 99) {
+                                                  controller
+                                                      .packagingQuantityController
+                                                      .text = '99';
+                                                } else if (qty < 1) {
+                                                  controller
+                                                      .packagingQuantityController
+                                                      .text = '1';
+                                                }
+                                              });
+                                            },
+                                            decoration: InputDecoration(
+                                              border: InputBorder.none,
+                                              contentPadding: EdgeInsets.zero,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: Icon(Icons.add,
+                                              color: theme.iconTheme.color),
+                                          splashRadius: 18,
+                                          onPressed: () {
+                                            if (controller.packagingQuantity <
+                                                99) {
+                                              _markAsChanged();
+                                              setState(() {
+                                                controller.packagingQuantity++;
+                                                controller
+                                                        .packagingQuantityController
+                                                        .text =
+                                                    controller.packagingQuantity
+                                                        .toString();
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Packaging Unit',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 6),
+                                  DropdownButtonFormField<String>(
+                                    value: controller.selectedPackagingUnit,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      errorStyle: TextStyle(color: Colors.red),
+                                    ),
+                                    items: [
+                                      'Pack',
+                                      'Box',
+                                      'Bottle',
+                                      'Jug',
+                                      'Pad',
+                                      'Piece',
+                                      'Spool',
+                                      'Tub'
+                                    ]
+                                        .map((u) => DropdownMenuItem(
+                                            value: u, child: Text(u)))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      _markAsChanged();
+                                      setState(() {
+                                        controller.selectedPackagingUnit = val;
+                                        // Reset packaging content if the new unit doesn't need it
+                                        if (_isPackagingContentDisabled(val)) {
+                                          controller.selectedPackagingContent =
+                                              null;
+                                          controller.packagingContent = 1;
+                                          controller.packagingContentController
+                                              .text = '1';
+                                        } else {
+                                          // Set default content based on unit
+                                          final options =
+                                              _getPackagingContentOptions(val);
+                                          if (options.isNotEmpty) {
+                                            controller
+                                                    .selectedPackagingContent =
+                                                options.first;
+                                          }
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Packaging Content + Quantity
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Quantity',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.surface,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: theme.dividerColor
+                                              .withOpacity(0.2)),
+                                    ),
+                                    child: Opacity(
+                                      opacity: _isPackagingContentDisabled(
+                                              controller.selectedPackagingUnit)
+                                          ? 0.5
+                                          : 1.0,
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(Icons.remove,
+                                                color: theme.iconTheme.color),
+                                            splashRadius: 18,
+                                            onPressed: _isPackagingContentDisabled(
+                                                    controller
+                                                        .selectedPackagingUnit)
+                                                ? null
+                                                : () {
+                                                    if (controller
+                                                            .packagingContent >
+                                                        1) {
+                                                      _markAsChanged();
+                                                      setState(() {
+                                                        controller
+                                                            .packagingContent--;
+                                                        controller
+                                                                .packagingContentController
+                                                                .text =
+                                                            controller
+                                                                .packagingContent
+                                                                .toString();
+                                                      });
+                                                    }
+                                                  },
+                                          ),
+                                          Expanded(
+                                            child: TextField(
+                                              textAlign: TextAlign.center,
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              inputFormatters: [
+                                                FilteringTextInputFormatter
+                                                    .digitsOnly,
+                                                LengthLimitingTextInputFormatter(
+                                                    3),
+                                              ],
+                                              style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: theme.textTheme
+                                                      .bodyMedium?.color),
+                                              controller: controller
+                                                  .packagingContentController,
+                                              enabled:
+                                                  !_isPackagingContentDisabled(
+                                                      controller
+                                                          .selectedPackagingUnit),
+                                              onChanged:
+                                                  _isPackagingContentDisabled(
+                                                          controller
+                                                              .selectedPackagingUnit)
+                                                      ? null
+                                                      : (val) {
+                                                          _markAsChanged();
+                                                          setState(() {
+                                                            final qty =
+                                                                int.tryParse(
+                                                                        val) ??
+                                                                    1;
+                                                            controller
+                                                                    .packagingContent =
+                                                                qty > 999
+                                                                    ? 999
+                                                                    : (qty < 1
+                                                                        ? 1
+                                                                        : qty);
+                                                            if (qty > 999) {
+                                                              controller
+                                                                  .packagingContentController
+                                                                  .text = '999';
+                                                            } else if (qty <
+                                                                1) {
+                                                              controller
+                                                                  .packagingContentController
+                                                                  .text = '1';
+                                                            }
+                                                          });
+                                                        },
+                                              decoration: InputDecoration(
+                                                border: InputBorder.none,
+                                                contentPadding: EdgeInsets.zero,
+                                              ),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: Icon(Icons.add,
+                                                color: theme.iconTheme.color),
+                                            splashRadius: 18,
+                                            onPressed: _isPackagingContentDisabled(
+                                                    controller
+                                                        .selectedPackagingUnit)
+                                                ? null
+                                                : () {
+                                                    if (controller
+                                                            .packagingContent <
+                                                        999) {
+                                                      _markAsChanged();
+                                                      setState(() {
+                                                        controller
+                                                            .packagingContent++;
+                                                        controller
+                                                                .packagingContentController
+                                                                .text =
+                                                            controller
+                                                                .packagingContent
+                                                                .toString();
+                                                      });
+                                                    }
+                                                  },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Packaging Content',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 6),
+                                  DropdownButtonFormField<String>(
+                                    value: _getValidPackagingContentValue(),
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      errorStyle: TextStyle(color: Colors.red),
+                                    ),
+                                    items: _getPackagingContentOptions(
+                                            controller.selectedPackagingUnit)
+                                        .map((c) => DropdownMenuItem(
+                                            value: c, child: Text(c)))
+                                        .toList(),
+                                    onChanged: _isPackagingContentDisabled(
+                                            controller.selectedPackagingUnit)
+                                        ? null
+                                        : (val) {
+                                            _markAsChanged();
+                                            setState(() {
+                                              controller
+                                                      .selectedPackagingContent =
+                                                  val;
+                                            });
+                                          },
+                                  ),
                                 ],
                               ),
                             ),
@@ -825,9 +1210,33 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Buttons (Cancel first, then Update - matching exit dialog pattern)
+                    // Buttons (Update Supply first, then Cancel)
                     Row(
                       children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Update Supply',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
@@ -853,30 +1262,6 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              'Update Supply',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ],
@@ -895,6 +1280,11 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     final currentName = controller.nameController.text.trim();
     if (currentName != _originalName) {
       changes.add(_buildChangeRow('Name', _originalName, currentName));
+    }
+
+    final currentType = controller.typeController.text.trim();
+    if (currentType != _originalType) {
+      changes.add(_buildChangeRow('Type', _originalType, currentType));
     }
 
     final currentCategory = controller.selectedCategory ?? '';
@@ -917,6 +1307,36 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     final currentCostText = '₱$currentCost';
     if (currentCostText != originalCostText) {
       changes.add(_buildChangeRow('Cost', originalCostText, currentCostText));
+    }
+
+    // Packaging Unit
+    final currentPackagingUnit = controller.selectedPackagingUnit ?? '';
+    if (currentPackagingUnit != _originalPackagingUnit) {
+      changes.add(_buildChangeRow(
+          'Packaging Unit', _originalPackagingUnit, currentPackagingUnit));
+    }
+
+    // Packaging Quantity
+    if (controller.packagingQuantity != _originalPackagingQuantity) {
+      changes.add(_buildChangeRow(
+          'Packaging Quantity',
+          _originalPackagingQuantity.toString(),
+          controller.packagingQuantity.toString()));
+    }
+
+    // Packaging Content
+    final currentPackagingContent = controller.selectedPackagingContent ?? '';
+    if (currentPackagingContent != _originalPackagingContent) {
+      changes.add(_buildChangeRow('Packaging Content',
+          _originalPackagingContent, currentPackagingContent));
+    }
+
+    // Packaging Content Quantity
+    if (controller.packagingContent != _originalPackagingContentQuantity) {
+      changes.add(_buildChangeRow(
+          'Packaging Content Quantity',
+          _originalPackagingContentQuantity.toString(),
+          controller.packagingContent.toString()));
     }
 
     final currentSupplier = controller.supplierController.text.trim();
@@ -952,6 +1372,17 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     if (currentExpiryText != originalExpiryText) {
       changes.add(
           _buildChangeRow('Expiry', originalExpiryText, currentExpiryText));
+    }
+
+    // Image change detection
+    final currentImageUrl = controller.imageUrl ?? '';
+    if (currentImageUrl != _originalImageUrl) {
+      final originalImageText =
+          _originalImageUrl.isEmpty ? 'No image' : 'Image uploaded';
+      final currentImageText =
+          currentImageUrl.isEmpty ? 'No image' : 'Image uploaded';
+      changes
+          .add(_buildChangeRow('Image', originalImageText, currentImageText));
     }
 
     return changes;
@@ -1001,5 +1432,49 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
         ],
       ),
     );
+  }
+
+  // Helper method to get packaging content options based on selected unit
+  List<String> _getPackagingContentOptions(String? packagingUnit) {
+    switch (packagingUnit) {
+      case 'Pack':
+      case 'Box':
+      case 'Bundle':
+        return ['Pieces'];
+      case 'Bottle':
+        return ['mL', 'L'];
+      case 'Jug':
+        return ['mL', 'L'];
+      case 'Pad':
+        return ['Cartridge'];
+      case 'Piece':
+      case 'Spool':
+      case 'Tub':
+        return []; // These don't need packaging content
+      default:
+        return ['Pieces', 'Units', 'Items', 'Count'];
+    }
+  }
+
+  // Helper method to check if packaging content should be disabled
+  bool _isPackagingContentDisabled(String? packagingUnit) {
+    return packagingUnit == 'Piece' ||
+        packagingUnit == 'Spool' ||
+        packagingUnit == 'Tub';
+  }
+
+  // Helper method to get valid packaging content value
+  String? _getValidPackagingContentValue() {
+    final options =
+        _getPackagingContentOptions(controller.selectedPackagingUnit);
+    if (options.isEmpty) return null;
+
+    // If current value is valid, use it; otherwise use first option
+    if (controller.selectedPackagingContent != null &&
+        options.contains(controller.selectedPackagingContent)) {
+      return controller.selectedPackagingContent;
+    }
+
+    return options.first;
   }
 }

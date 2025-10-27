@@ -1,11 +1,16 @@
 class InventoryItem {
   final String id;
   final String name;
+  final String? type;
   final String imageUrl;
   final String category;
   final double cost;
   final int stock;
   final String unit;
+  final String? packagingUnit;
+  final String? packagingContent;
+  final int? packagingQuantity;
+  final int? packagingContentQuantity;
   final String supplier;
   final String brand;
   final String? expiry;
@@ -15,11 +20,16 @@ class InventoryItem {
   InventoryItem({
     required this.id,
     required this.name,
+    this.type,
     required this.imageUrl,
     required this.category,
     required this.cost,
     required this.stock,
     required this.unit,
+    this.packagingUnit,
+    this.packagingContent,
+    this.packagingQuantity,
+    this.packagingContentQuantity,
     required this.supplier,
     required this.brand,
     this.expiry,

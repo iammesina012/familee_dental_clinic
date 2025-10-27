@@ -11,15 +11,22 @@ class EditSupplyController {
   final SupabaseClient _supabase = Supabase.instance.client;
   final InventoryStorageService _storageService = InventoryStorageService();
   final nameController = TextEditingController();
+  final typeController = TextEditingController();
   final costController = TextEditingController();
   final stockController = TextEditingController();
   final supplierController = TextEditingController();
   final brandController = TextEditingController();
   final expiryController = TextEditingController();
+  final packagingQuantityController = TextEditingController(text: "1");
+  final packagingContentController = TextEditingController(text: "1");
 
   int stock = 0;
   String? selectedCategory;
   String? selectedUnit;
+  String? selectedPackagingUnit;
+  String? selectedPackagingContent;
+  int packagingQuantity = 1;
+  int packagingContent = 1;
   DateTime? expiryDate;
   bool noExpiry = false;
 
@@ -34,9 +41,14 @@ class EditSupplyController {
 
   // Store original values for comparison
   String? originalName;
+  String? originalType;
   String? originalCategory;
   int? originalStock;
   String? originalUnit;
+  String? originalPackagingUnit;
+  String? originalPackagingContent;
+  int? originalPackagingQuantity;
+  int? originalPackagingContentQuantity;
   double? originalCost;
   String? originalExpiry;
   bool? originalNoExpiry;
@@ -45,6 +57,7 @@ class EditSupplyController {
 
   void initFromItem(InventoryItem item) {
     nameController.text = item.name;
+    typeController.text = item.type ?? '';
     costController.text = item.cost.toString();
     stockController.text = item.stock.toString();
     supplierController.text = item.supplier == "N/A" ? "" : item.supplier;
@@ -53,6 +66,12 @@ class EditSupplyController {
     stock = item.stock;
     selectedCategory = item.category;
     selectedUnit = _normalizeUnit(item.unit);
+    selectedPackagingUnit = item.packagingUnit ?? 'Box';
+    selectedPackagingContent = item.packagingContent ?? 'Pieces';
+    packagingQuantity = item.packagingQuantity ?? 1;
+    packagingContent = item.packagingContentQuantity ?? 1;
+    packagingQuantityController.text = packagingQuantity.toString();
+    packagingContentController.text = packagingContent.toString();
     noExpiry = item.noExpiry;
     imageUrl = item.imageUrl;
     if (item.expiry != null && item.expiry!.isNotEmpty) {
@@ -65,9 +84,14 @@ class EditSupplyController {
 
     // Store original values for comparison
     originalName = item.name;
+    originalType = item.type ?? '';
     originalCategory = item.category;
     originalStock = item.stock;
     originalUnit = item.unit;
+    originalPackagingUnit = item.packagingUnit ?? 'Box';
+    originalPackagingContent = item.packagingContent ?? 'Pieces';
+    originalPackagingQuantity = item.packagingQuantity ?? 1;
+    originalPackagingContentQuantity = item.packagingContentQuantity ?? 1;
     originalCost = item.cost;
     originalExpiry = item.expiry;
     originalNoExpiry = item.noExpiry;
@@ -99,10 +123,19 @@ class EditSupplyController {
     return 'Piece';
   }
 
+  bool isPackagingContentDisabled() {
+    return selectedPackagingUnit == 'Piece' ||
+        selectedPackagingUnit == 'Spool' ||
+        selectedPackagingUnit == 'Tub';
+  }
+
   void dispose() {
     nameController.dispose();
+    typeController.dispose();
     costController.dispose();
     stockController.dispose();
+    packagingQuantityController.dispose();
+    packagingContentController.dispose();
     supplierController.dispose();
     brandController.dispose();
     expiryController.dispose();
@@ -187,10 +220,18 @@ class EditSupplyController {
   Map<String, dynamic> buildUpdatedData() {
     return {
       "name": nameController.text.trim(),
+      "type": typeController.text.trim(),
       "image_url": imageUrl ?? "", // Make image optional
       "category": selectedCategory ?? "",
       "cost": double.tryParse(costController.text.trim()) ?? 0.0,
-      "unit": selectedUnit ?? "",
+      "stock": packagingQuantity, // Use packagingQuantity for stock
+      "unit": selectedUnit ?? "", // Legacy column
+      "packaging_unit": selectedPackagingUnit ?? "",
+      "packaging_quantity": packagingQuantity,
+      "packaging_content":
+          isPackagingContentDisabled() ? "" : (selectedPackagingContent ?? ""),
+      "packaging_content_quantity":
+          isPackagingContentDisabled() ? 1 : packagingContent,
       "supplier": supplierController.text.trim().isEmpty
           ? "N/A"
           : supplierController.text.trim(),
@@ -226,11 +267,13 @@ class EditSupplyController {
 
       final DateTime? newExpiryDate = parseExpiry(newExpiry);
 
+      final String type = (updatedData['type'] ?? '').toString();
       final existingQuery = await _supabase
           .from('supplies')
           .select('*')
           .eq('name', name)
-          .eq('brand', brand);
+          .eq('brand', brand)
+          .eq('type', type);
 
       // Find a matching document (excluding current) with the same expiry (null == null allowed)
       Map<String, dynamic>? mergeTarget;
@@ -362,9 +405,17 @@ class EditSupplyController {
       // Log the edit activity with detailed field changes
       await InventoryActivityController().logInventorySupplyEdited(
         itemName: nameController.text.trim(),
+        type: typeController.text.trim(),
         category: selectedCategory ?? 'Unknown Category',
         stock: int.tryParse(stockController.text.trim()) ?? 0,
         unit: selectedUnit ?? 'Unknown Unit',
+        packagingUnit: selectedPackagingUnit ?? 'Unknown Unit',
+        packagingQuantity: packagingQuantity,
+        packagingContent: isPackagingContentDisabled()
+            ? ""
+            : (selectedPackagingContent ?? ""),
+        packagingContentQuantity:
+            isPackagingContentDisabled() ? 1 : packagingContent,
         cost: double.tryParse(costController.text.trim()),
         brand: brandController.text.trim(),
         supplier: supplierController.text.trim(),

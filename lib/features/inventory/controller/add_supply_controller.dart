@@ -1,6 +1,5 @@
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'filter_controller.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
@@ -11,15 +10,21 @@ class AddSupplyController {
   final SupabaseClient _supabase = Supabase.instance.client;
   final InventoryStorageService _storageService = InventoryStorageService();
   final nameController = TextEditingController();
+  final typeController = TextEditingController();
   final costController = TextEditingController();
   final stockController = TextEditingController(text: "0");
   final supplierController = TextEditingController();
   final brandController = TextEditingController();
   final expiryController = TextEditingController();
+  final packagingQuantityController = TextEditingController(text: "1");
+  final packagingContentController = TextEditingController(text: "1");
 
   int stock = 0;
+  int packagingQuantity = 1; // Default packaging quantity
+  int packagingContent = 1; // Default packaging content
   String? selectedCategory;
-  String? selectedUnit;
+  String? selectedPackagingUnit = 'Box';
+  String? selectedPackagingContent = 'Pieces';
   DateTime? expiryDate;
   bool noExpiry = false;
 
@@ -34,11 +39,14 @@ class AddSupplyController {
 
   void dispose() {
     nameController.dispose();
+    typeController.dispose();
     costController.dispose();
     stockController.dispose();
     supplierController.dispose();
     brandController.dispose();
     expiryController.dispose();
+    packagingQuantityController.dispose();
+    packagingContentController.dispose();
   }
 
   Future<String?> uploadImageToSupabase(XFile imageFile) async {
@@ -69,12 +77,28 @@ class AddSupplyController {
           'Item name must contain letters and cannot be only numbers.';
     }
 
+    // Validate type name (optional but if provided, should be valid)
+    if (typeController.text.trim().isNotEmpty &&
+        !_isValidAlphanumeric(typeController.text.trim())) {
+      errors['type'] =
+          'Type name must contain letters and cannot be only numbers.';
+    }
+
     if (selectedCategory == null || selectedCategory!.isEmpty) {
       errors['category'] = 'Please choose a category.';
     }
 
-    if (selectedUnit == null || selectedUnit!.isEmpty) {
-      errors['unit'] = 'Please choose a unit.';
+    if (selectedPackagingUnit == null || selectedPackagingUnit!.isEmpty) {
+      errors['packagingUnit'] = 'Please choose a packaging unit.';
+    }
+
+    if (selectedPackagingContent == null || selectedPackagingContent!.isEmpty) {
+      // Only require packaging content if the unit needs it
+      if (selectedPackagingUnit != 'Piece' &&
+          selectedPackagingUnit != 'Spool' &&
+          selectedPackagingUnit != 'Tub') {
+        errors['packagingContent'] = 'Please choose packaging content.';
+      }
     }
 
     if (costController.text.trim().isEmpty) {
@@ -83,10 +107,14 @@ class AddSupplyController {
       errors['cost'] = 'Cost must be a valid number.';
     }
 
-    if (stockController.text.trim().isEmpty) {
-      errors['stock'] = 'Please enter the stock quantity.';
-    } else if (int.tryParse(stockController.text.trim()) == null) {
-      errors['stock'] = 'Stock must be a valid number.';
+    // Validate packaging quantities
+    if (packagingQuantity < 1) {
+      errors['packagingQuantity'] = 'Packaging quantity must be at least 1.';
+    }
+
+    if (packagingContent < 1) {
+      errors['packagingContent'] =
+          'Packaging content quantity must be at least 1.';
     }
 
     // Validate supplier name (now required)
@@ -124,14 +152,27 @@ class AddSupplyController {
     return null;
   }
 
+  bool isPackagingContentDisabled() {
+    return selectedPackagingUnit == 'Piece' ||
+        selectedPackagingUnit == 'Spool' ||
+        selectedPackagingUnit == 'Tub';
+  }
+
   Map<String, dynamic> buildSupplyData() {
     return {
       "name": nameController.text.trim(),
+      "type": typeController.text.trim(),
       "image_url": imageUrl ?? "", // Make image optional
       "category": selectedCategory ?? "",
       "cost": double.tryParse(costController.text.trim()) ?? 0.0,
-      "stock": int.tryParse(stockController.text.trim()) ?? 0,
-      "unit": selectedUnit ?? "",
+      "stock": packagingQuantity, // Stock should be the packaging quantity
+      "unit": selectedPackagingUnit ?? "", // Legacy column
+      "packaging_unit": selectedPackagingUnit ?? "",
+      "packaging_quantity": packagingQuantity,
+      "packaging_content":
+          isPackagingContentDisabled() ? "" : (selectedPackagingContent ?? ""),
+      "packaging_content_quantity":
+          isPackagingContentDisabled() ? 1 : packagingContent,
       "supplier": supplierController.text.trim().isEmpty
           ? "N/A"
           : supplierController.text.trim(),
@@ -163,9 +204,16 @@ class AddSupplyController {
       // Log the activity
       await InventoryActivityController().logInventorySupplyAdded(
         itemName: nameController.text.trim(),
+        type: typeController.text.trim(),
         category: selectedCategory!,
-        stock: int.tryParse(stockController.text.trim()) ?? 0,
-        unit: selectedUnit!,
+        stock: packagingQuantity, // Use packaging quantity as stock
+        packagingUnit: selectedPackagingUnit!,
+        packagingQuantity: packagingQuantity,
+        packagingContent: isPackagingContentDisabled()
+            ? ""
+            : (selectedPackagingContent ?? ""),
+        packagingContentQuantity:
+            isPackagingContentDisabled() ? 1 : packagingContent,
         cost: double.tryParse(costController.text.trim()),
         brand: brandController.text.trim().isEmpty
             ? null
@@ -181,7 +229,7 @@ class AddSupplyController {
 
       // Check for notifications
       final notificationsController = NotificationsController();
-      final newStock = int.tryParse(stockController.text.trim()) ?? 0;
+      final newStock = packagingQuantity; // Use packaging quantity as stock
 
       // Check stock level notifications (new item, so previous stock is 0)
       await notificationsController.checkStockLevelNotification(
@@ -202,6 +250,62 @@ class AddSupplyController {
       return null; // Success
     } catch (e) {
       return 'Failed to add supply: $e';
+    }
+  }
+
+  // Smart autofill methods
+  Future<void> autoFillFromExistingSupply(String supplyName) async {
+    if (supplyName.trim().isEmpty) return;
+
+    try {
+      // Find existing supplies with the same name
+      final response = await _supabase
+          .from('supplies')
+          .select('supplier, brand, type')
+          .eq('name', supplyName.trim())
+          .eq('archived', false)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if (response.isNotEmpty) {
+        final row = response.first;
+        final supplier = row['supplier'] as String?;
+        final brand = row['brand'] as String?;
+
+        // Auto-fill supplier and brand if they exist and are not "N/A"
+        if (supplier != null && supplier.isNotEmpty && supplier != 'N/A') {
+          supplierController.text = supplier;
+        }
+        if (brand != null && brand.isNotEmpty && brand != 'N/A') {
+          brandController.text = brand;
+        }
+      }
+    } catch (e) {
+      print('Error auto-filling from existing supply: $e');
+    }
+  }
+
+  Future<List<String>> getExistingTypes(String supplyName) async {
+    if (supplyName.trim().isEmpty) return [];
+
+    try {
+      final response = await _supabase
+          .from('supplies')
+          .select('type')
+          .eq('name', supplyName.trim())
+          .eq('archived', false);
+
+      final types = <String>[];
+      for (final row in response) {
+        final type = row['type'] as String?;
+        if (type != null && type.isNotEmpty && !types.contains(type)) {
+          types.add(type);
+        }
+      }
+      return types;
+    } catch (e) {
+      print('Error getting existing types: $e');
+      return [];
     }
   }
 }

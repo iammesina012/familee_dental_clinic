@@ -30,12 +30,20 @@ class InventoryViewSupplyPage extends StatefulWidget {
 class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
   // Add a key to force rebuild when needed
   Key _streamKey = UniqueKey();
+  Key _dropdownKey = UniqueKey();
 
   // Method to refresh the stream
   void _refreshStream() {
     setState(() {
       _streamKey = UniqueKey();
+      _dropdownKey = UniqueKey();
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStream();
   }
 
   @override
@@ -419,15 +427,146 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const SizedBox(height: 18),
-                      Text(
-                        updatedItem.name,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 22,
-                            color:
-                                Theme.of(context).textTheme.bodyMedium?.color),
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
+                      // Supply name with type and dropdown
+                      Stack(
+                        children: [
+                          // Centered supply name
+                          Center(
+                            child: Text(
+                              updatedItem.type != null &&
+                                      updatedItem.type!.isNotEmpty
+                                  ? "${updatedItem.name} (${updatedItem.type})"
+                                  : updatedItem.name,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 22,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color),
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          // Dropdown positioned on the right
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                            child: FutureBuilder<List<String>>(
+                              key:
+                                  _dropdownKey, // Force refresh when data changes
+                              future: _getSupplyTypes(updatedItem.name),
+                              builder: (context, snapshot) {
+                                final existingTypes = snapshot.data ?? [];
+
+                                // If no type exists, show "Add type" button
+                                if (updatedItem.type == null ||
+                                    updatedItem.type!.isEmpty) {
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Theme.of(context).dividerColor,
+                                        width: 1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () =>
+                                            _showAddTypeDialog(updatedItem),
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 3,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.add,
+                                                size: 16,
+                                                color: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.color,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Add type',
+                                                style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                // If type exists, show dropdown
+                                return DropdownButton<String>(
+                                  value: updatedItem.type!,
+                                  items: [
+                                    // Current type
+                                    DropdownMenuItem<String>(
+                                      value: updatedItem.type!,
+                                      child: Text(updatedItem.type!),
+                                    ),
+                                    // Other existing types
+                                    ...existingTypes
+                                        .where(
+                                            (type) => type != updatedItem.type)
+                                        .map((type) => DropdownMenuItem<String>(
+                                              value: type,
+                                              child: Text(type),
+                                            )),
+                                    // Add new type option
+                                    DropdownMenuItem<String>(
+                                      value: 'ADD_NEW_TYPE',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.add, size: 16),
+                                          SizedBox(width: 4),
+                                          Text('Add type'),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (String? newType) {
+                                    if (newType == 'ADD_NEW_TYPE') {
+                                      _showAddTypeDialog(updatedItem);
+                                    } else if (newType != null &&
+                                        newType != updatedItem.type) {
+                                      _navigateToSupplyType(
+                                          updatedItem.name, newType);
+                                    }
+                                  },
+                                  underline: Container(),
+                                  icon: Icon(
+                                    Icons.arrow_drop_down,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -516,7 +655,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text("Unit",
+                                Text("Packaging Unit",
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -524,7 +663,9 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                                             fontWeight: FontWeight.bold,
                                             fontSize: 15)),
                                 const SizedBox(height: 4),
-                                Text(updatedItem.unit,
+                                Text(
+                                    updatedItem.packagingUnit ??
+                                        updatedItem.unit,
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -540,7 +681,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text("Cost",
+                                Text("Packaging Content",
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -548,7 +689,14 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                                             fontWeight: FontWeight.bold,
                                             fontSize: 15)),
                                 const SizedBox(height: 4),
-                                Text("₱${updatedItem.cost.toStringAsFixed(2)}",
+                                Text(
+                                    updatedItem.packagingContentQuantity !=
+                                                null &&
+                                            updatedItem
+                                                    .packagingContentQuantity! >
+                                                0
+                                        ? "${updatedItem.packagingContentQuantity} ${updatedItem.packagingContent ?? 'Pieces'}"
+                                        : "N/A",
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -757,6 +905,31 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 18),
+                      // Single Cost field centered
+                      Center(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text("Cost",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
+                            const SizedBox(height: 4),
+                            Text("₱${updatedItem.cost.toStringAsFixed(2)}",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 15),
+                                textAlign: TextAlign.center),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 28),
                       Divider(
                           thickness: 1.2,
@@ -919,6 +1092,206 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         ),
       ),
     );
+  }
+
+  // Helper method to get all types for a supply name
+  Future<List<String>> _getSupplyTypes(String supplyName) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase
+          .from('supplies')
+          .select('type')
+          .eq('name', supplyName)
+          .eq('archived', false);
+
+      final types = <String>[];
+      for (final row in response) {
+        final type = row['type'] as String?;
+        if (type != null && type.isNotEmpty && !types.contains(type)) {
+          types.add(type);
+        }
+      }
+      return types;
+    } catch (e) {
+      print('Error getting supply types: $e');
+      return [];
+    }
+  }
+
+  // Helper method to navigate to a specific supply type
+  void _navigateToSupplyType(String supplyName, String type) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase
+          .from('supplies')
+          .select('*')
+          .eq('name', supplyName)
+          .eq('type', type)
+          .eq('archived', false)
+          .limit(1);
+
+      if (response.isNotEmpty) {
+        final row = response.first;
+        final item = InventoryItem(
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          type: row['type'],
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: (row['stock'] ?? 0).toInt(),
+          unit: row['unit'] ?? '',
+          packagingUnit: row['packaging_unit'],
+          packagingContent: row['packaging_content'],
+          packagingQuantity: row['packaging_quantity'],
+          packagingContentQuantity: row['packaging_content_quantity'],
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
+        );
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => InventoryViewSupplyPage(
+              item: item,
+              skipAutoRedirect: widget.skipAutoRedirect,
+              hideOtherExpirySection: widget.hideOtherExpirySection,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error navigating to supply type: $e');
+    }
+  }
+
+  // Show dialog to add new type
+  void _showAddTypeDialog(InventoryItem currentItem) {
+    final typeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Add New Type'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Add a new type for "${currentItem.name}"'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: typeController,
+                decoration: InputDecoration(
+                  labelText: 'Type Name',
+                  border: OutlineInputBorder(),
+                  hintText: 'e.g., Blue, White, Large',
+                ),
+                autofocus: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newType = typeController.text.trim();
+                if (newType.isNotEmpty) {
+                  Navigator.of(context).pop();
+                  await _createNewType(currentItem, newType);
+                }
+              },
+              child: Text('Add Type'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Create new supply item with same details but new type
+  Future<void> _createNewType(InventoryItem currentItem, String newType) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Create new supply item with same details but new type
+      final newSupplyData = {
+        'name': currentItem.name,
+        'type': newType,
+        'image_url': currentItem.imageUrl,
+        'category': currentItem.category,
+        'cost': currentItem.cost,
+        'stock': currentItem.stock,
+        'unit': currentItem.unit,
+        'packaging_unit': currentItem.packagingUnit,
+        'packaging_quantity': currentItem.packagingQuantity,
+        'packaging_content': currentItem.packagingContent,
+        'packaging_content_quantity': currentItem.packagingContentQuantity,
+        'supplier': currentItem.supplier,
+        'brand': currentItem.brand,
+        'expiry': currentItem.expiry,
+        'no_expiry': currentItem.noExpiry,
+        'archived': false,
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      final response = await supabase
+          .from('supplies')
+          .insert(newSupplyData)
+          .select()
+          .single();
+
+      // Navigate to the new supply item
+      final newItem = InventoryItem(
+        id: response['id'] as String,
+        name: response['name'] ?? '',
+        type: response['type'],
+        imageUrl: response['image_url'] ?? '',
+        category: response['category'] ?? '',
+        cost: (response['cost'] ?? 0).toDouble(),
+        stock: (response['stock'] ?? 0).toInt(),
+        unit: response['unit'] ?? '',
+        packagingUnit: response['packaging_unit'],
+        packagingContent: response['packaging_content'],
+        packagingQuantity: response['packaging_quantity'],
+        packagingContentQuantity: response['packaging_content_quantity'],
+        supplier: response['supplier'] ?? '',
+        brand: response['brand'] ?? '',
+        expiry: response['expiry'],
+        noExpiry: response['no_expiry'] ?? false,
+        archived: response['archived'] ?? false,
+      );
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => InventoryViewSupplyPage(
+            item: newItem,
+            skipAutoRedirect: widget.skipAutoRedirect,
+            hideOtherExpirySection: widget.hideOtherExpirySection,
+          ),
+        ),
+      );
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('New type "$newType" added successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error creating new type: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to add new type: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }
 
