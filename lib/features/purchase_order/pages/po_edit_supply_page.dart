@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditSupplyPOPage extends StatefulWidget {
   final Map<String, dynamic> supply;
@@ -25,6 +26,27 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   String _selectedUnit = 'Box';
   final List<String> _availableUnits = ['Box', 'Piece', 'Pack'];
 
+  // Packaging fields
+  String _selectedPackagingUnit = 'Box';
+  String _selectedPackagingContent = 'Pieces';
+  int _packagingQuantity = 1;
+  int _packagingContentQuantity = 1;
+
+  // Type detection state
+  bool _isTypeDetecting = true;
+  String? _detectedType;
+
+  final List<String> _packagingUnits = [
+    'Pack',
+    'Box',
+    'Bottle',
+    'Jug',
+    'Pad',
+    'Piece',
+    'Spool',
+    'Tub'
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +55,16 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     costController.text = (widget.supply['cost'] ?? 0.0).toString();
     _selectedUnit =
         widget.supply['unit'] ?? 'Box'; // Initialize unit from existing data
+
+    // Initialize packaging fields
+    _selectedPackagingUnit = widget.supply['packagingUnit'] ?? 'Box';
+    _selectedPackagingContent = widget.supply['packagingContent'] ?? 'Pieces';
+    _packagingQuantity = widget.supply['packagingQuantity'] ?? 1;
+    _packagingContentQuantity = widget.supply['packagingContentQuantity'] ?? 1;
+
+    // Initialize the correct type if not already set
+    _initializeCorrectType();
+
     // Initialize batches from existing data if present
     final List<dynamic>? existingBatches =
         widget.supply['expiryBatches'] as List<dynamic>?;
@@ -158,17 +190,116 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                             size: 60, color: Colors.grey),
                   ),
                 ),
-                SizedBox(height: 10),
+                SizedBox(height: 14),
 
-                // Supply Name (simple text display)
-                Center(
-                  child: Text(
-                    widget.supply['supplyName'] ?? 'Unknown Supply',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: theme.textTheme.bodyMedium?.color,
-                    ),
+                // Supply Name with Type Name dropdown
+                Container(
+                  height: 60, // Give the Stack a fixed height to prevent cutoff
+                  child: Stack(
+                    children: [
+                      // Centered Supply Name
+                      Center(
+                        child: Text(
+                          widget.supply['supplyName'] ?? 'Unknown Supply',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      // Type Name dropdown positioned on the right
+                      Positioned(
+                        right: 0,
+                        child: Container(
+                          width: 120,
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: theme.dividerColor,
+                              width: 1,
+                            ),
+                          ),
+                          child: FutureBuilder<List<String>>(
+                            future: _getAvailableTypes(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return Center(
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                );
+                              }
+
+                              final availableTypes = snapshot.data ?? [];
+
+                              if (_isTypeDetecting) {
+                                return Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              if (availableTypes.isEmpty) {
+                                return Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  child: Text(
+                                    'No types',
+                                    style: TextStyle(
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.5),
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              return DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _getValidTypeValue(availableTypes),
+                                  isExpanded: true,
+                                  items: availableTypes.map((String type) {
+                                    return DropdownMenuItem<String>(
+                                      value: type,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 12),
+                                        child: Text(type),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      setState(() {
+                                        widget.supply['type'] = newValue;
+                                        _detectedType =
+                                            newValue; // Update detected type when manually changed
+                                        // Update image and other details based on type
+                                        _updateSupplyForType(newValue);
+                                      });
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 SizedBox(height: 26),
@@ -355,6 +486,220 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                   });
                                 }
                               },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+
+                // Quantity + Packaging Unit
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildFieldSection(
+                        title: "Quantity",
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                onPressed: () {
+                                  if (_packagingQuantity > 1) {
+                                    setState(() {
+                                      _packagingQuantity--;
+                                    });
+                                  }
+                                },
+                                icon: Icon(Icons.remove,
+                                    color: theme.textTheme.bodyMedium?.color),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  _packagingQuantity.toString(),
+                                  textAlign: TextAlign.center,
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _packagingQuantity++;
+                                  });
+                                },
+                                icon: Icon(Icons.add,
+                                    color: theme.textTheme.bodyMedium?.color),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: _buildFieldSection(
+                        title: "Packaging Unit",
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedPackagingUnit,
+                              isExpanded: true,
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                              items: _packagingUnits.map((String unit) {
+                                return DropdownMenuItem<String>(
+                                  value: unit,
+                                  child: Padding(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 16),
+                                    child: Text(
+                                      unit,
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 16,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _selectedPackagingUnit = newValue;
+                                    // Reset packaging content when unit changes
+                                    _selectedPackagingContent =
+                                        _getValidPackagingContentValue();
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+
+                // Quantity + Packaging Content
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildFieldSection(
+                        title: "Quantity",
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                onPressed: _isPackagingContentDisabled()
+                                    ? null
+                                    : () {
+                                        if (_packagingContentQuantity > 1) {
+                                          setState(() {
+                                            _packagingContentQuantity--;
+                                          });
+                                        }
+                                      },
+                                icon: Icon(Icons.remove,
+                                    color: _isPackagingContentDisabled()
+                                        ? theme.textTheme.bodyMedium?.color
+                                            ?.withOpacity(0.3)
+                                        : theme.textTheme.bodyMedium?.color),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  _packagingContentQuantity.toString(),
+                                  textAlign: TextAlign.center,
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _isPackagingContentDisabled()
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _packagingContentQuantity++;
+                                        });
+                                      },
+                                icon: Icon(Icons.add,
+                                    color: _isPackagingContentDisabled()
+                                        ? theme.textTheme.bodyMedium?.color
+                                            ?.withOpacity(0.3)
+                                        : theme.textTheme.bodyMedium?.color),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: _buildFieldSection(
+                        title: "Packaging Content",
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _getValidPackagingContentValue(),
+                              isExpanded: true,
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                              items: _getPackagingContentOptions()
+                                  .map((String content) {
+                                return DropdownMenuItem<String>(
+                                  value: content,
+                                  child: Padding(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 16),
+                                    child: Text(
+                                      content,
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 16,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: _isPackagingContentDisabled()
+                                  ? null
+                                  : (String? newValue) {
+                                      if (newValue != null) {
+                                        setState(() {
+                                          _selectedPackagingContent = newValue;
+                                        });
+                                      }
+                                    },
                             ),
                           ),
                         ),
@@ -731,11 +1076,18 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     final updatedSupplyData = {
       'supplyId': widget.supply['supplyId'],
       'supplyName': widget.supply['supplyName'],
+      'type': widget.supply['type'] ?? '',
       'brandName': brandController.text.trim(),
       'supplierName': supplierController.text.trim(),
       'quantity': totalQuantity,
       'cost': cost,
       'unit': _selectedUnit, // Add inventory units
+      'packagingUnit': _selectedPackagingUnit,
+      'packagingQuantity': _packagingQuantity,
+      'packagingContent':
+          _isPackagingContentDisabled() ? '' : _selectedPackagingContent,
+      'packagingContentQuantity':
+          _isPackagingContentDisabled() ? 1 : _packagingContentQuantity,
       'imageUrl': widget.supply['imageUrl'],
       'status': 'Pending', // Initialize as pending
       // Keep first expiry for backward compatibility
@@ -945,5 +1297,334 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
         );
       },
     );
+  }
+
+  // Get available types for the supply name from database
+  Future<List<String>> _getAvailableTypes() async {
+    try {
+      final supplyName = widget.supply['supplyName'] ?? '';
+      if (supplyName.isEmpty) return [];
+
+      // Query database for existing types of this supply
+      final response = await Supabase.instance.client
+          .from('supplies')
+          .select('type')
+          .eq('name', supplyName)
+          .not('type', 'is', null)
+          .not('type', 'eq', '');
+
+      // Extract unique types and filter out null/empty values
+      final types = response
+          .map((row) => row['type'] as String?)
+          .where((type) => type != null && type.isNotEmpty)
+          .cast<String>()
+          .toSet()
+          .toList();
+
+      return types;
+    } catch (e) {
+      print('Error fetching available types: $e');
+      return [];
+    }
+  }
+
+  // Get valid type value for dropdown
+  String _getValidTypeValue(List<String> availableTypes) {
+    // If we're still detecting type, don't show anything yet
+    if (_isTypeDetecting) {
+      return '';
+    }
+
+    // Use detected type if available
+    if (_detectedType != null && availableTypes.contains(_detectedType!)) {
+      return _detectedType!;
+    }
+
+    final currentType = widget.supply['type'] ?? '';
+    print('Current type in widget.supply: $currentType');
+    print('Available types: $availableTypes');
+
+    if (availableTypes.contains(currentType)) {
+      print('Using current type: $currentType');
+      return currentType;
+    }
+
+    // If current type is empty, try to detect from image URL or other data
+    if (currentType.isEmpty) {
+      final detectedType = _detectTypeFromSupplyData(availableTypes);
+      if (detectedType.isNotEmpty) {
+        print('Detected type from supply data: $detectedType');
+        return detectedType;
+      }
+    }
+
+    // If current type is not in available types, return the first available type
+    final fallbackType = availableTypes.isNotEmpty ? availableTypes.first : '';
+    print('Using fallback type: $fallbackType');
+    return fallbackType;
+  }
+
+  // Detect type from supply data (image URL, brand, etc.)
+  String _detectTypeFromSupplyData(List<String> availableTypes) {
+    print('=== Type Detection Debug ===');
+    print('Available types: $availableTypes');
+
+    // Try to detect from image URL
+    final imageUrl = widget.supply['imageUrl']?.toString() ?? '';
+    print('Image URL: $imageUrl');
+    if (imageUrl.isNotEmpty) {
+      for (final type in availableTypes) {
+        if (imageUrl.toLowerCase().contains(type.toLowerCase())) {
+          print('Found type "$type" in image URL');
+          return type;
+        }
+      }
+    }
+
+    // Try to detect from brand or supplier
+    final brand = widget.supply['brand']?.toString() ?? '';
+    final supplier = widget.supply['supplier']?.toString() ?? '';
+    print('Brand: $brand, Supplier: $supplier');
+
+    for (final type in availableTypes) {
+      if (brand.toLowerCase().contains(type.toLowerCase()) ||
+          supplier.toLowerCase().contains(type.toLowerCase())) {
+        print('Found type "$type" in brand/supplier');
+        return type;
+      }
+    }
+
+    // Try to detect from supply name
+    final supplyName = widget.supply['supplyName']?.toString() ?? '';
+    print('Supply name: $supplyName');
+    for (final type in availableTypes) {
+      if (supplyName.toLowerCase().contains(type.toLowerCase())) {
+        print('Found type "$type" in supply name');
+        return type;
+      }
+    }
+
+    // Try to detect from cost or other unique identifiers
+    final cost = widget.supply['cost']?.toString() ?? '';
+    print('Cost: $cost');
+
+    // If we have specific cost values for different types, we could use those
+    // For now, let's try a different approach - query the database to find which type matches this supply's data
+
+    print('No type detected from supply data');
+    return '';
+  }
+
+  // Initialize the correct type when page loads
+  Future<void> _initializeCorrectType() async {
+    try {
+      final supplyName = widget.supply['supplyName'] ?? '';
+      if (supplyName.isEmpty) return;
+
+      // Get available types
+      final availableTypes = await _getAvailableTypes();
+      if (availableTypes.isEmpty) return;
+
+      // If type is already set and valid, keep it
+      final currentType = widget.supply['type'] ?? '';
+      if (availableTypes.contains(currentType)) {
+        print('Type already correctly set: $currentType');
+        setState(() {
+          _detectedType = currentType;
+          _isTypeDetecting = false;
+        });
+        return;
+      }
+
+      // Try to find the correct type by matching current supply data with database records
+      final correctType =
+          await _findCorrectTypeFromDatabase(supplyName, availableTypes);
+      if (correctType.isNotEmpty) {
+        print('Found correct type from database: $correctType');
+        setState(() {
+          widget.supply['type'] = correctType;
+          _detectedType = correctType;
+          _isTypeDetecting = false;
+        });
+        return;
+      }
+
+      // Try to detect the correct type
+      final detectedType = _detectTypeFromSupplyData(availableTypes);
+      if (detectedType.isNotEmpty) {
+        print('Detected correct type on initialization: $detectedType');
+        setState(() {
+          widget.supply['type'] = detectedType;
+          _detectedType = detectedType;
+          _isTypeDetecting = false;
+        });
+      } else {
+        print(
+            'Could not detect type, using first available: ${availableTypes.first}');
+        setState(() {
+          widget.supply['type'] = availableTypes.first;
+          _detectedType = availableTypes.first;
+          _isTypeDetecting = false;
+        });
+      }
+    } catch (e) {
+      print('Error initializing correct type: $e');
+    }
+  }
+
+  // Find the correct type by matching current supply data with database records
+  Future<String> _findCorrectTypeFromDatabase(
+      String supplyName, List<String> availableTypes) async {
+    try {
+      // Get current supply data to match against
+      final currentImageUrl = widget.supply['imageUrl']?.toString() ?? '';
+      final currentBrand = widget.supply['brand']?.toString() ?? '';
+      final currentSupplier = widget.supply['supplier']?.toString() ?? '';
+      final currentCost = widget.supply['cost']?.toString() ?? '';
+
+      print(
+          'Matching against: imageUrl=$currentImageUrl, brand=$currentBrand, supplier=$currentSupplier, cost=$currentCost');
+
+      // Query all supplies with the same name
+      final response = await Supabase.instance.client
+          .from('supplies')
+          .select('*')
+          .eq('name', supplyName);
+
+      print('Found ${response.length} supplies with name "$supplyName"');
+
+      // Find the best match
+      for (final supply in response) {
+        final supplyType = supply['type']?.toString() ?? '';
+        if (availableTypes.contains(supplyType)) {
+          // Check if this supply matches our current data
+          final supplyImageUrl = supply['image_url']?.toString() ?? '';
+          final supplyBrand = supply['brand']?.toString() ?? '';
+          final supplySupplier = supply['supplier']?.toString() ?? '';
+          final supplyCost = supply['cost']?.toString() ?? '';
+
+          print(
+              'Checking supply type "$supplyType": imageUrl=$supplyImageUrl, brand=$supplyBrand, supplier=$supplySupplier, cost=$supplyCost');
+
+          // Match by image URL first (most reliable)
+          if (currentImageUrl.isNotEmpty &&
+              supplyImageUrl.isNotEmpty &&
+              currentImageUrl == supplyImageUrl) {
+            print('Matched by image URL: $supplyType');
+            return supplyType;
+          }
+
+          // Match by brand and supplier
+          if (currentBrand.isNotEmpty &&
+              currentSupplier.isNotEmpty &&
+              currentBrand == supplyBrand &&
+              currentSupplier == supplySupplier) {
+            print('Matched by brand and supplier: $supplyType');
+            return supplyType;
+          }
+
+          // Match by cost
+          if (currentCost.isNotEmpty &&
+              supplyCost.isNotEmpty &&
+              currentCost == supplyCost) {
+            print('Matched by cost: $supplyType');
+            return supplyType;
+          }
+        }
+      }
+
+      print('No matching supply found in database');
+      return '';
+    } catch (e) {
+      print('Error finding correct type from database: $e');
+      return '';
+    }
+  }
+
+  // Update supply details when type changes
+  Future<void> _updateSupplyForType(String newType) async {
+    try {
+      final supplyName = widget.supply['supplyName'] ?? '';
+      print('Updating supply for type: $newType, supply: $supplyName');
+
+      // Query database for supply with the same name and new type
+      final response = await Supabase.instance.client
+          .from('supplies')
+          .select('*')
+          .eq('name', supplyName)
+          .eq('type', newType)
+          .maybeSingle(); // Use maybeSingle() instead of single() to handle null cases
+
+      print('Database response: $response');
+
+      if (response != null) {
+        setState(() {
+          // Update all supply details with the new type's data
+          widget.supply['type'] = newType;
+          widget.supply['imageUrl'] = response['image_url'] ?? '';
+          widget.supply['brand'] = response['brand'] ?? '';
+          widget.supply['supplier'] = response['supplier'] ?? '';
+          widget.supply['cost'] = response['cost'] ?? 0.0;
+          widget.supply['packagingUnit'] = response['packaging_unit'] ?? 'Box';
+          widget.supply['packagingQuantity'] =
+              response['packaging_quantity'] ?? 1;
+          widget.supply['packagingContent'] =
+              response['packaging_content'] ?? 'Pieces';
+          widget.supply['packagingContentQuantity'] =
+              response['packaging_content_quantity'] ?? 1;
+
+          // Update controllers with new values
+          brandController.text = response['brand']?.toString() ?? '';
+          supplierController.text = response['supplier']?.toString() ?? '';
+          costController.text = response['cost']?.toString() ?? '';
+          _selectedPackagingUnit =
+              response['packaging_unit']?.toString() ?? 'Box';
+          _packagingQuantity = response['packaging_quantity'] ?? 1;
+          _selectedPackagingContent =
+              response['packaging_content']?.toString() ?? 'Pieces';
+          _packagingContentQuantity =
+              response['packaging_content_quantity'] ?? 1;
+        });
+        print('Successfully updated supply for type: $newType');
+      } else {
+        print('No supply found for type: $newType');
+      }
+    } catch (e) {
+      print('Error updating supply for type: $e');
+    }
+  }
+
+  // Get packaging content options based on selected packaging unit
+  List<String> _getPackagingContentOptions() {
+    switch (_selectedPackagingUnit) {
+      case 'Pack':
+      case 'Box':
+        return ['Pieces'];
+      case 'Bottle':
+      case 'Jug':
+        return ['mL', 'L'];
+      case 'Pad':
+        return ['Cartridge'];
+      case 'Piece':
+      case 'Spool':
+      case 'Tub':
+        return ['Pieces']; // These don't need packaging content
+      default:
+        return ['Pieces'];
+    }
+  }
+
+  // Check if packaging content should be disabled
+  bool _isPackagingContentDisabled() {
+    return ['Piece', 'Spool', 'Tub'].contains(_selectedPackagingUnit);
+  }
+
+  // Get valid packaging content value
+  String _getValidPackagingContentValue() {
+    final options = _getPackagingContentOptions();
+    if (options.contains(_selectedPackagingContent)) {
+      return _selectedPackagingContent;
+    }
+    return options.isNotEmpty ? options.first : 'Pieces';
   }
 }

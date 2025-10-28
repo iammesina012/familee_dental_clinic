@@ -105,7 +105,8 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
               .from('supplies')
               .select('*')
               .eq('name', updatedItem.name)
-              .eq('brand', updatedItem.brand),
+              .eq('brand', updatedItem.brand)
+              .eq('type', updatedItem.type ?? ''),
           builder: (context, batchSnap) {
             if (batchSnap.hasData) {
               final rows = batchSnap.data!;
@@ -451,121 +452,124 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          // Dropdown positioned on the right
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            bottom: 0,
-                            child: FutureBuilder<List<String>>(
-                              key:
-                                  _dropdownKey, // Force refresh when data changes
-                              future: _getSupplyTypes(updatedItem.name),
-                              builder: (context, snapshot) {
-                                final existingTypes = snapshot.data ?? [];
+                          // Dropdown positioned on the right (only for non-archived items)
+                          if (!updatedItem.archived)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              bottom: 0,
+                              child: FutureBuilder<List<String>>(
+                                key:
+                                    _dropdownKey, // Force refresh when data changes
+                                future: _getSupplyTypes(updatedItem.name),
+                                builder: (context, snapshot) {
+                                  final existingTypes = snapshot.data ?? [];
 
-                                // If no type exists, show "Add type" button
-                                if (updatedItem.type == null ||
-                                    updatedItem.type!.isEmpty) {
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Theme.of(context).dividerColor,
-                                        width: 1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap: () =>
-                                            _showAddTypeDialog(updatedItem),
+                                  // If no type exists, show "Add type" button
+                                  if (updatedItem.type == null ||
+                                      updatedItem.type!.isEmpty) {
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: Theme.of(context).dividerColor,
+                                          width: 1,
+                                        ),
                                         borderRadius: BorderRadius.circular(4),
-                                        child: Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 3,
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                Icons.add,
-                                                size: 16,
-                                                color: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium
-                                                    ?.color,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Add type',
-                                                style: TextStyle(
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () =>
+                                              _showAddTypeDialog(updatedItem),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 3,
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.add,
+                                                  size: 16,
                                                   color: Theme.of(context)
                                                       .textTheme
                                                       .bodyMedium
                                                       ?.color,
                                                 ),
-                                              ),
-                                            ],
+                                                SizedBox(width: 8),
+                                                Text(
+                                                  'Add type',
+                                                  style: TextStyle(
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
+                                    );
+                                  }
+
+                                  // If type exists, show dropdown
+                                  return DropdownButton<String>(
+                                    value: updatedItem.type!,
+                                    items: [
+                                      // Current type
+                                      DropdownMenuItem<String>(
+                                        value: updatedItem.type!,
+                                        child: Text(updatedItem.type!),
+                                      ),
+                                      // Other existing types
+                                      ...existingTypes
+                                          .where((type) =>
+                                              type != updatedItem.type)
+                                          .map((type) =>
+                                              DropdownMenuItem<String>(
+                                                value: type,
+                                                child: Text(type),
+                                              )),
+                                      // Add new type option
+                                      DropdownMenuItem<String>(
+                                        value: 'ADD_NEW_TYPE',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.add, size: 16),
+                                            SizedBox(width: 4),
+                                            Text('Add type'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (String? newType) {
+                                      if (newType == 'ADD_NEW_TYPE') {
+                                        _showAddTypeDialog(updatedItem);
+                                      } else if (newType != null &&
+                                          newType != updatedItem.type) {
+                                        _navigateToSupplyType(
+                                            updatedItem.name, newType);
+                                      }
+                                    },
+                                    underline: Container(),
+                                    icon: Icon(
+                                      Icons.arrow_drop_down,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color,
                                     ),
                                   );
-                                }
-
-                                // If type exists, show dropdown
-                                return DropdownButton<String>(
-                                  value: updatedItem.type!,
-                                  items: [
-                                    // Current type
-                                    DropdownMenuItem<String>(
-                                      value: updatedItem.type!,
-                                      child: Text(updatedItem.type!),
-                                    ),
-                                    // Other existing types
-                                    ...existingTypes
-                                        .where(
-                                            (type) => type != updatedItem.type)
-                                        .map((type) => DropdownMenuItem<String>(
-                                              value: type,
-                                              child: Text(type),
-                                            )),
-                                    // Add new type option
-                                    DropdownMenuItem<String>(
-                                      value: 'ADD_NEW_TYPE',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.add, size: 16),
-                                          SizedBox(width: 4),
-                                          Text('Add type'),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                  onChanged: (String? newType) {
-                                    if (newType == 'ADD_NEW_TYPE') {
-                                      _showAddTypeDialog(updatedItem);
-                                    } else if (newType != null &&
-                                        newType != updatedItem.type) {
-                                      _navigateToSupplyType(
-                                          updatedItem.name, newType);
-                                    }
-                                  },
-                                  underline: Container(),
-                                  icon: Icon(
-                                    Icons.arrow_drop_down,
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.color,
-                                  ),
-                                );
-                              },
+                                },
+                              ),
                             ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 2),
@@ -1170,44 +1174,167 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
   // Show dialog to add new type
   void _showAddTypeDialog(InventoryItem currentItem) {
     final typeController = TextEditingController();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Add New Type'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Add a new type for "${currentItem.name}"'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: typeController,
-                decoration: InputDecoration(
-                  labelText: 'Type Name',
-                  border: OutlineInputBorder(),
-                  hintText: 'e.g., Blue, White, Large',
-                ),
-                autofocus: true,
+        return Scaffold(
+          resizeToAvoidBottomInset: false,
+          backgroundColor: Colors.transparent,
+          body: Center(
+            child: Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-            ],
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        color: Colors.green,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Add New Type',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      'Add a new type for "${currentItem.name}"',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // TextField
+                    TextField(
+                      controller: typeController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText: 'Type Name',
+                        hintText: 'e.g., Color, Size, Type, etc.',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Colors.green, width: 2),
+                        ),
+                        labelStyle: TextStyle(
+                          fontFamily: 'SF Pro',
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
+                        hintStyle: TextStyle(
+                          fontFamily: 'SF Pro',
+                          color: theme.textTheme.bodySmall?.color,
+                        ),
+                      ),
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Cancel first, then Add Type - matching logout dialog pattern)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: const BorderSide(
+                                    color: Colors.grey, width: 1),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final newType = typeController.text.trim();
+                              if (newType.isNotEmpty) {
+                                Navigator.of(context).pop();
+                                await _createNewType(currentItem, newType);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              'Add Type',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final newType = typeController.text.trim();
-                if (newType.isNotEmpty) {
-                  Navigator.of(context).pop();
-                  await _createNewType(currentItem, newType);
-                }
-              },
-              child: Text('Add Type'),
-            ),
-          ],
         );
       },
     );

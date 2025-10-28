@@ -54,7 +54,11 @@ class _SupabaseOtherSupplyBatchesState
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: Supabase.instance.client
           .from('supplies')
-          .stream(primaryKey: ['id']).eq('name', widget.item.name),
+          .stream(primaryKey: ['id']).map((data) => data
+              .where((row) =>
+                  row['name'] == widget.item.name &&
+                  row['type'] == widget.item.type)
+              .toList()),
       builder: (context, snapshot) {
         // Show skeleton only on first load when there's no data
         if (_isFirstLoad && !snapshot.hasData) {

@@ -222,12 +222,14 @@ class _ExpiredViewSupplyPageState extends State<ExpiredViewSupplyPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text("Unit",
+                                Text("Packaging Unit",
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15)),
                                 const SizedBox(height: 4),
-                                Text(updatedItem.unit,
+                                Text(
+                                    updatedItem.packagingUnit ??
+                                        updatedItem.unit,
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.w500,
                                         fontSize: 15),
@@ -240,12 +242,19 @@ class _ExpiredViewSupplyPageState extends State<ExpiredViewSupplyPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text("Cost",
+                                Text("Packaging Content",
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15)),
                                 const SizedBox(height: 4),
-                                Text("₱${updatedItem.cost.toStringAsFixed(2)}",
+                                Text(
+                                    updatedItem.packagingContentQuantity !=
+                                                null &&
+                                            updatedItem
+                                                    .packagingContentQuantity! >
+                                                0
+                                        ? "${updatedItem.packagingContentQuantity} ${updatedItem.packagingContent ?? 'Pieces'}"
+                                        : "N/A",
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.w500,
                                         fontSize: 15),
@@ -426,6 +435,22 @@ class _ExpiredViewSupplyPageState extends State<ExpiredViewSupplyPage> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 18),
+                      // Centered Cost field
+                      Center(
+                        child: Column(
+                          children: [
+                            Text("Cost",
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 4),
+                            Text("₱${updatedItem.cost.toStringAsFixed(2)}",
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w500, fontSize: 15),
+                                textAlign: TextAlign.center),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 24),
                       Divider(
