@@ -392,46 +392,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
   // Expiry helpers removed for this page
 
   void _handleTapItem(InventoryItem item, Set<String> existingIds) async {
-    // Check duplicate first
-    if (existingIds.contains(item.id.toString())) {
-      // Show duplicate dialog and stop
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text(
-              'Already in Restocking List',
-              style: AppFonts.sfProStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            content: Text(
-              '“${item.name}” is already added. Duplicate items are not allowed.',
-              style: AppFonts.sfProStyle(fontSize: 16),
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00D4AA),
-                ),
-                child: Text(
-                  'OK',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-      return;
-    }
-
+    // Allow selecting the same supply again; type differentiation happens in EditSupplyPOPage
     _addItemToPurchaseOrder(item);
   }
 

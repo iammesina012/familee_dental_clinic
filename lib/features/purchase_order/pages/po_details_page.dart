@@ -2723,20 +2723,34 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                               .start,
                                                       children: [
                                                         Text(
-                                                          ((allReceived ||
-                                                                      _purchaseOrder
-                                                                              .status ==
-                                                                          'Approval' ||
-                                                                      _purchaseOrder
-                                                                              .status ==
-                                                                          'Partially Received') &&
-                                                                  supplierDrNo !=
-                                                                      null)
-                                                              ? '${_controller.getSupplyName(items.first)} (${supplierDrNo})'
-                                                              : _controller
-                                                                  .getSupplyName(
-                                                                      items
-                                                                          .first),
+                                                          (() {
+                                                            final baseName =
+                                                                _controller
+                                                                    .getSupplyName(
+                                                                        items
+                                                                            .first);
+                                                            final type = (items
+                                                                            .first[
+                                                                        'type'] ??
+                                                                    '')
+                                                                .toString();
+                                                            final nameWithType =
+                                                                type.isNotEmpty
+                                                                    ? '$baseName ($type)'
+                                                                    : baseName;
+                                                            if ((allReceived ||
+                                                                    _purchaseOrder
+                                                                            .status ==
+                                                                        'Approval' ||
+                                                                    _purchaseOrder
+                                                                            .status ==
+                                                                        'Partially Received') &&
+                                                                supplierDrNo !=
+                                                                    null) {
+                                                              return '$nameWithType (${supplierDrNo})';
+                                                            }
+                                                            return nameWithType;
+                                                          })(),
                                                           style: AppFonts
                                                               .sfProStyle(
                                                             fontSize: 18,

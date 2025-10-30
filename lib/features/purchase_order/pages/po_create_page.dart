@@ -103,12 +103,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
     // Create sets of supply identifiers to compare (ignoring order)
     Set<String> currentSupplyIds = addedSupplies
         .map((supply) =>
-            '${supply['supplyId']}_${supply['supplyName']}_${supply['supplierName']}_${supply['brandName']}_${supply['quantity']}_${supply['cost']}')
+            '${supply['supplyId']}_${supply['supplyName']}_${supply['supplierName']}_${supply['brandName']}_${supply['quantity']}_${supply['cost']}_${supply['packagingUnit'] ?? ''}_${supply['packagingContent'] ?? ''}_${supply['packagingContentQuantity'] ?? ''}_${supply['expiryDate'] ?? ''}')
         .toSet();
 
     Set<String> originalSupplyIds = _originalSupplies
         .map((supply) =>
-            '${supply['supplyId']}_${supply['supplyName']}_${supply['supplierName']}_${supply['brandName']}_${supply['quantity']}_${supply['cost']}')
+            '${supply['supplyId']}_${supply['supplyName']}_${supply['supplierName']}_${supply['brandName']}_${supply['quantity']}_${supply['cost']}_${supply['packagingUnit'] ?? ''}_${supply['packagingContent'] ?? ''}_${supply['packagingContentQuantity'] ?? ''}_${supply['expiryDate'] ?? ''}')
         .toSet();
 
     // Compare the sets (order doesn't matter)
@@ -659,7 +659,9 @@ class _CreatePOPageState extends State<CreatePOPage> {
             final bool alreadyExists = addedSupplies.any(
               (s) =>
                   s['supplyId']?.toString() ==
-                  newSupply['supplyId']?.toString(),
+                      newSupply['supplyId']?.toString() &&
+                  (s['type'] ?? '').toString().toLowerCase() ==
+                      (newSupply['type'] ?? '').toString().toLowerCase(),
             );
 
             if (alreadyExists) {
@@ -677,7 +679,14 @@ class _CreatePOPageState extends State<CreatePOPage> {
                       ),
                     ),
                     content: Text(
-                      '"${newSupply['supplyName'] ?? 'This supply'}" is already added. Duplicate items are not allowed.',
+                      (() {
+                        final name = (newSupply['supplyName'] ?? 'This supply')
+                            .toString();
+                        final type = (newSupply['type'] ?? '').toString();
+                        final display =
+                            type.isNotEmpty ? '$name ($type)' : name;
+                        return '"$display" is already added. Duplicate items are not allowed.';
+                      })(),
                       style: AppFonts.sfProStyle(fontSize: 16),
                     ),
                     actions: [
@@ -1094,7 +1103,13 @@ class _CreatePOPageState extends State<CreatePOPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        supply['supplyName'] ?? 'Unknown Supply',
+                        (() {
+                          final name =
+                              (supply['supplyName'] ?? 'Unknown Supply')
+                                  .toString();
+                          final type = (supply['type'] ?? '').toString();
+                          return type.isNotEmpty ? '$name ($type)' : name;
+                        })(),
                         style: AppFonts.sfProStyle(
                           fontSize: MediaQuery.of(context).size.width < 768
                               ? MediaQuery.of(context).size.width * 0.04
@@ -1213,6 +1228,70 @@ class _CreatePOPageState extends State<CreatePOPage> {
                             ),
                           ),
                           SizedBox(width: 4),
+                          // Packaging content chip (e.g., 50 pieces per box)
+                          if ((supply['packagingContent'] ?? '')
+                              .toString()
+                              .isNotEmpty)
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Color(0xFF00D4AA).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Color(0xFF00D4AA).withOpacity(0.35),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Color(0xFF00D4AA).withOpacity(0.08),
+                                    blurRadius: 6,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.all_inbox,
+                                      size: 12, color: Color(0xFF00D4AA)),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    (() {
+                                      final qty =
+                                          supply['packagingContentQuantity'] ??
+                                              0;
+                                      final content =
+                                          (supply['packagingContent'] ?? '')
+                                              .toString()
+                                              .toLowerCase();
+                                      final unit = (supply['packagingUnit'] ??
+                                              supply['unit'] ??
+                                              '')
+                                          .toString()
+                                          .toLowerCase();
+                                      final contentLabel =
+                                          qty == 1 && content.endsWith('s')
+                                              ? content.substring(
+                                                  0, content.length - 1)
+                                              : content;
+                                      final unitLabel =
+                                          unit.isEmpty ? 'unit' : unit;
+                                      return '$qty $contentLabel per $unitLabel';
+                                    })(),
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF00D4AA),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if ((supply['packagingContent'] ?? '')
+                              .toString()
+                              .isNotEmpty)
+                            SizedBox(width: 4),
                           Container(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 6),
@@ -1299,7 +1378,68 @@ class _CreatePOPageState extends State<CreatePOPage> {
     if (result != null) {
       setState(() {
         addedSupplies[index] = result as Map<String, dynamic>;
+        _mergeDuplicatesByType();
       });
+    }
+  }
+
+  // Merge items with the same supplyId and type into a single entry
+  void _mergeDuplicatesByType() {
+    final Map<String, int> firstIndexByKey = {};
+
+    int i = 0;
+    while (i < addedSupplies.length) {
+      final s = addedSupplies[i];
+      final String id = (s['supplyId'] ?? s['id'] ?? '').toString();
+      final String type = (s['type'] ?? '').toString().toLowerCase();
+      final String key = '${id}_$type';
+
+      if (firstIndexByKey.containsKey(key)) {
+        final int targetIdx = firstIndexByKey[key]!;
+        final target = addedSupplies[targetIdx];
+        final source = s;
+
+        // Merge quantities
+        final int targetQty = int.tryParse('${target['quantity'] ?? 0}') ?? 0;
+        final int sourceQty = int.tryParse('${source['quantity'] ?? 0}') ?? 0;
+        target['quantity'] = targetQty + sourceQty;
+
+        // Merge expiry batches (aggregate by date string)
+        final Map<String, int> aggregated = {};
+        void addBatches(dynamic list) {
+          if (list is List) {
+            for (final b in list) {
+              final String dateKey = (b['expiryDate'] ?? '').toString();
+              final int qty = int.tryParse('${b['quantity'] ?? 0}') ?? 0;
+              aggregated[dateKey] = (aggregated[dateKey] ?? 0) + qty;
+            }
+          }
+        }
+
+        addBatches(target['expiryBatches']);
+        addBatches(source['expiryBatches']);
+        target['expiryBatches'] = [
+          for (final e in aggregated.entries)
+            {'quantity': e.value, 'expiryDate': e.key}
+        ];
+
+        // If target had no explicit single expiryDate, keep first from batches
+        if ((target['expiryDate'] ?? '').toString().isEmpty &&
+            target['expiryBatches'] is List &&
+            (target['expiryBatches'] as List).isNotEmpty) {
+          target['expiryDate'] =
+              (target['expiryBatches'] as List).first['expiryDate'];
+        }
+
+        // Remove the source entry since it has been merged
+        addedSupplies.removeAt(i);
+        // Do not increment i; the next item shifts into current index
+        continue;
+      } else {
+        firstIndexByKey[key] = i;
+      }
+
+      i++;
     }
   }
 

@@ -17,14 +17,18 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   final TextEditingController brandController = TextEditingController();
   final TextEditingController supplierController = TextEditingController();
   final TextEditingController costController = TextEditingController();
+  final TextEditingController _packagingQtyController = TextEditingController();
+  final TextEditingController _packagingContentQtyController =
+      TextEditingController();
+  final FocusNode _packagingQtyFocus = FocusNode();
+  final FocusNode _packagingContentQtyFocus = FocusNode();
   // Multiple expiry batches: each batch has its own qty + expiry
   final List<TextEditingController> _batchQtyControllers = [];
   final List<DateTime?> _batchExpiries = [];
   final List<bool> _batchNoExpirySelected = [];
 
-  // Inventory units dropdown
+  // Inventory unit (kept for saving; no longer editable in UI)
   String _selectedUnit = 'Box';
-  final List<String> _availableUnits = ['Box', 'Piece', 'Pack'];
 
   // Packaging fields
   String _selectedPackagingUnit = 'Box';
@@ -36,16 +40,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   bool _isTypeDetecting = true;
   String? _detectedType;
 
-  final List<String> _packagingUnits = [
-    'Pack',
-    'Box',
-    'Bottle',
-    'Jug',
-    'Pad',
-    'Piece',
-    'Spool',
-    'Tub'
-  ];
+  // No packaging unit dropdown; unit comes from inventory data
 
   @override
   void initState() {
@@ -61,6 +56,39 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     _selectedPackagingContent = widget.supply['packagingContent'] ?? 'Pieces';
     _packagingQuantity = widget.supply['packagingQuantity'] ?? 1;
     _packagingContentQuantity = widget.supply['packagingContentQuantity'] ?? 1;
+
+    // Initialize controllers and focus behavior for quantity inputs
+    _packagingQtyController.text = _packagingQuantity.toString();
+    _packagingContentQtyController.text = _packagingContentQuantity.toString();
+
+    _packagingQtyFocus.addListener(() {
+      if (!_packagingQtyFocus.hasFocus) {
+        final v = int.tryParse(_packagingQtyController.text) ?? 1;
+        final clamped = v < 1 ? 1 : (v > 99 ? 99 : v);
+        if (clamped != _packagingQuantity) {
+          setState(() {
+            _packagingQuantity = clamped;
+          });
+        } else {
+          // still update text to clamped to remove empty value
+          _packagingQtyController.text = clamped.toString();
+        }
+      }
+    });
+
+    _packagingContentQtyFocus.addListener(() {
+      if (!_packagingContentQtyFocus.hasFocus) {
+        final v = int.tryParse(_packagingContentQtyController.text) ?? 1;
+        final clamped = v < 1 ? 1 : (v > 999 ? 999 : v);
+        if (clamped != _packagingContentQuantity) {
+          setState(() {
+            _packagingContentQuantity = clamped;
+          });
+        } else {
+          _packagingContentQtyController.text = clamped.toString();
+        }
+      }
+    });
 
     // Initialize the correct type if not already set
     _initializeCorrectType();
@@ -117,6 +145,10 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     brandController.dispose();
     supplierController.dispose();
     costController.dispose();
+    _packagingQtyController.dispose();
+    _packagingContentQtyController.dispose();
+    _packagingQtyFocus.dispose();
+    _packagingContentQtyFocus.dispose();
     for (final c in _batchQtyControllers) {
       c.dispose();
     }
@@ -239,7 +271,8 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
 
                               final availableTypes = snapshot.data ?? [];
 
-                              if (_isTypeDetecting) {
+                              if (_isTypeDetecting &&
+                                  availableTypes.isNotEmpty) {
                                 return Container(
                                   padding: EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 8),
@@ -255,6 +288,19 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                               }
 
                               if (availableTypes.isEmpty) {
+                                // Ensure we exit detection state if nothing to detect
+                                if (_isTypeDetecting) {
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (mounted) {
+                                      setState(() {
+                                        _isTypeDetecting = false;
+                                        _detectedType = '';
+                                      });
+                                    }
+                                  });
+                                }
+                                // Show a static disabled state when no types exist
                                 return Container(
                                   padding: EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 8),
@@ -392,7 +438,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                 ),
                 SizedBox(height: 16),
 
-                // Cost and Inventory Units (horizontal layout)
+                // Cost (full width)
                 Row(
                   children: [
                     Expanded(
@@ -445,156 +491,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                         ),
                       ),
                     ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: _buildFieldSection(
-                        title: "Unit",
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: scheme.surface,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedUnit,
-                              isExpanded: true,
-                              style: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                color: theme.textTheme.bodyMedium?.color,
-                              ),
-                              items: _availableUnits.map((String unit) {
-                                return DropdownMenuItem<String>(
-                                  value: unit,
-                                  child: Padding(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 16),
-                                    child: Text(
-                                      unit,
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 16,
-                                        color:
-                                            theme.textTheme.bodyMedium?.color,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (String? newValue) {
-                                if (newValue != null) {
-                                  setState(() {
-                                    _selectedUnit = newValue;
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-                SizedBox(height: 16),
-
-                // Quantity + Packaging Unit
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildFieldSection(
-                        title: "Quantity",
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: scheme.surface,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                onPressed: () {
-                                  if (_packagingQuantity > 1) {
-                                    setState(() {
-                                      _packagingQuantity--;
-                                    });
-                                  }
-                                },
-                                icon: Icon(Icons.remove,
-                                    color: theme.textTheme.bodyMedium?.color),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  _packagingQuantity.toString(),
-                                  textAlign: TextAlign.center,
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _packagingQuantity++;
-                                  });
-                                },
-                                icon: Icon(Icons.add,
-                                    color: theme.textTheme.bodyMedium?.color),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: _buildFieldSection(
-                        title: "Packaging Unit",
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: scheme.surface,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedPackagingUnit,
-                              isExpanded: true,
-                              style: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                color: theme.textTheme.bodyMedium?.color,
-                              ),
-                              items: _packagingUnits.map((String unit) {
-                                return DropdownMenuItem<String>(
-                                  value: unit,
-                                  child: Padding(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 16),
-                                    child: Text(
-                                      unit,
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 16,
-                                        color:
-                                            theme.textTheme.bodyMedium?.color,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (String? newValue) {
-                                if (newValue != null) {
-                                  setState(() {
-                                    _selectedPackagingUnit = newValue;
-                                    // Reset packaging content when unit changes
-                                    _selectedPackagingContent =
-                                        _getValidPackagingContentValue();
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                // Removed Quantity + Packaging Unit (handled in Quantity & Expiry)
                 SizedBox(height: 16),
 
                 // Quantity + Packaging Content
@@ -617,6 +516,10 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         if (_packagingContentQuantity > 1) {
                                           setState(() {
                                             _packagingContentQuantity--;
+                                            _packagingContentQtyController
+                                                    .text =
+                                                _packagingContentQuantity
+                                                    .toString();
                                           });
                                         }
                                       },
@@ -627,14 +530,56 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         : theme.textTheme.bodyMedium?.color),
                               ),
                               Expanded(
-                                child: Text(
-                                  _packagingContentQuantity.toString(),
+                                child: TextField(
+                                  enabled: !_isPackagingContentDisabled(),
                                   textAlign: TextAlign.center,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(3),
+                                  ],
+                                  controller: _packagingContentQtyController,
+                                  focusNode: _packagingContentQtyFocus,
                                   style: AppFonts.sfProStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: theme.textTheme.bodyMedium?.color,
                                   ),
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (val) {
+                                    if (val.isEmpty) {
+                                      setState(
+                                          () => _packagingContentQuantity = 0);
+                                      return;
+                                    }
+                                    if (RegExp(r'^0+$').hasMatch(val)) {
+                                      _packagingContentQtyController.text = '';
+                                      _packagingContentQtyController.selection =
+                                          TextSelection.collapsed(offset: 0);
+                                      setState(
+                                          () => _packagingContentQuantity = 0);
+                                      return;
+                                    }
+                                    final normalized =
+                                        val.replaceFirst(RegExp(r'^0+'), '');
+                                    if (normalized != val) {
+                                      _packagingContentQtyController.text =
+                                          normalized;
+                                      _packagingContentQtyController.selection =
+                                          TextSelection.collapsed(
+                                              offset: normalized.length);
+                                    }
+                                    final parsed =
+                                        int.tryParse(normalized) ?? 0;
+                                    setState(() {
+                                      int clamped = parsed;
+                                      if (clamped > 999) clamped = 999;
+                                      _packagingContentQuantity = clamped;
+                                    });
+                                  },
                                 ),
                               ),
                               IconButton(
@@ -642,7 +587,13 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                     ? null
                                     : () {
                                         setState(() {
-                                          _packagingContentQuantity++;
+                                          final next =
+                                              _packagingContentQuantity + 1;
+                                          _packagingContentQuantity =
+                                              next > 999 ? 999 : next;
+                                          _packagingContentQtyController.text =
+                                              _packagingContentQuantity
+                                                  .toString();
                                         });
                                       },
                                 icon: Icon(Icons.add,
@@ -727,6 +678,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     SizedBox(
                                       width: 40,
@@ -797,6 +749,23 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                       ),
                                     ),
                                   ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Read-only packaging unit beside quantity (match expiry field padding)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 13, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: scheme.surface,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  _selectedPackagingUnit,
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 16,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -1083,7 +1052,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
       'cost': cost,
       'unit': _selectedUnit, // Add inventory units
       'packagingUnit': _selectedPackagingUnit,
-      'packagingQuantity': _packagingQuantity,
+      'packagingQuantity': totalQuantity,
       'packagingContent':
           _isPackagingContentDisabled() ? '' : _selectedPackagingContent,
       'packagingContentQuantity':
@@ -1423,7 +1392,16 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
 
       // Get available types
       final availableTypes = await _getAvailableTypes();
-      if (availableTypes.isEmpty) return;
+      if (availableTypes.isEmpty) {
+        // Nothing to detect; ensure UI stops loading
+        if (mounted) {
+          setState(() {
+            _isTypeDetecting = false;
+            _detectedType = '';
+          });
+        }
+        return;
+      }
 
       // If type is already set and valid, keep it
       final currentType = widget.supply['type'] ?? '';
