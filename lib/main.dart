@@ -72,7 +72,6 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   final isDark = prefs.getBool('settings.dark_mode') ?? false;
   AppTheme.themeMode.value = isDark ? ThemeMode.dark : ThemeMode.light;
-
   runApp(const MainApp());
 }
 

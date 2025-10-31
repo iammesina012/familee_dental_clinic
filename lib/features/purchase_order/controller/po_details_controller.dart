@@ -106,6 +106,10 @@ class PODetailsController {
       final hasPartiallyReceived = freshPO.supplies
           .any((supply) => supply['status'] == 'Partially Received');
 
+      // Check if there are any pending supplies
+      final hasPendingSupplies =
+          freshPO.supplies.any((supply) => supply['status'] == 'Pending');
+
       // Check if all supplies are fully received
       final allSuppliesReceived =
           freshPO.supplies.every((supply) => supply['status'] == 'Received');
@@ -117,11 +121,14 @@ class PODetailsController {
       // Determine the new status based on the supplies' states
       String newStatus;
       if (allSuppliesReceived) {
+        // All supplies fully received -> Closed
         newStatus = 'Closed';
-      } else if (hasPartiallyReceived) {
+      } else if (hasPartiallyReceived || hasPendingSupplies) {
+        // Some supplies partially received or still pending -> Partially Received
         newStatus = 'Partially Received';
       } else {
-        newStatus = 'Closed';
+        // Fallback: should not happen, but set to Partially Received to be safe
+        newStatus = 'Partially Received';
       }
 
       // Only after successful restock, create new PO instance with the updated supplies
@@ -159,35 +166,287 @@ class PODetailsController {
     }
   }
 
-  // Reject a purchase order (move back to Open for editing)
+  // Reject a purchase order (move back to Open or Partially Received)
   Future<PurchaseOrder> rejectPurchaseOrder(PurchaseOrder po) async {
-    // Reset all supplies back to Pending and CLEAR all receipt details AND partial receive quantities
-    final List<Map<String, dynamic>> resetSupplies = po.supplies
-        .map((s) => {
-              ...s,
-              'status': 'Pending',
-              // Clear all receipt-related fields
-              'receivedAt': null,
-              'receiptDrNo': null,
-              'receiptRecipient': null,
-              'receiptRemarks': null,
-              'receiptImagePath': null,
-              'receiptImageUrl': null,
-              'receiptDate': null,
-              'savedAt': null,
-              // Clear all partial receive quantities
-              'receivedQuantities': null,
-            })
-        .toList();
+    // Keep receipt details but subtract the most recent partial receive quantities
+    // Then recalculate status based on remaining partial receives
+    final List<Map<String, dynamic>> resetSupplies = po.supplies.map((s) {
+      final updatedSupply = Map<String, dynamic>.from(s);
+
+      // Keep all receipt-related fields - don't clear them
+      // Subtract the most recent partial receive quantities from receivedQuantities
+      final receivedQuantitiesRaw = updatedSupply['receivedQuantities'];
+      final receivedQuantities =
+          receivedQuantitiesRaw != null && receivedQuantitiesRaw is Map
+              ? Map<String, int>.from(receivedQuantitiesRaw)
+              : <String, int>{};
+
+      // Get the most recent partial receive quantities (lastPartialReceiveQuantities)
+      final lastPartialReceiveQuantitiesRaw =
+          updatedSupply['lastPartialReceiveQuantities'];
+      final lastPartialReceiveQuantities =
+          lastPartialReceiveQuantitiesRaw != null &&
+                  lastPartialReceiveQuantitiesRaw is Map
+              ? Map<String, int>.from(lastPartialReceiveQuantitiesRaw)
+              : <String, int>{};
+
+      // Debug logging
+      final supplyName = getSupplyName(updatedSupply);
+      print('Debug: Rejecting - Supply: $supplyName');
+      print('Debug: receivedQuantities before: $receivedQuantities');
+      print(
+          'Debug: lastPartialReceiveQuantities: $lastPartialReceiveQuantities');
+
+      // Check if this supply has lastPartialReceiveQuantities (indicating it was part of the most recent partial receive)
+      final hasLastPartialReceive = lastPartialReceiveQuantities.isNotEmpty;
+
+      // Subtract the most recent partial receive quantities (only if supply has lastPartialReceiveQuantities)
+      if (hasLastPartialReceive) {
+        // This supply was part of the most recent partial receive - subtract those quantities
+        for (final entry in lastPartialReceiveQuantities.entries) {
+          final expiryDate = entry.key;
+          final qtyToSubtract = entry.value;
+          final currentQty = receivedQuantities[expiryDate] ?? 0;
+          final newQty =
+              (currentQty - qtyToSubtract).clamp(0, double.infinity).toInt();
+
+          if (newQty > 0) {
+            receivedQuantities[expiryDate] = newQty;
+          } else {
+            receivedQuantities.remove(expiryDate);
+          }
+        }
+        updatedSupply['receivedQuantities'] =
+            receivedQuantities.isNotEmpty ? receivedQuantities : null;
+        updatedSupply['lastPartialReceiveQuantities'] =
+            null; // Clear after subtracting
+
+        print(
+            'Debug: receivedQuantities after subtracting: $receivedQuantities');
+
+        // Recalculate status based on remaining receivedQuantities
+        if (receivedQuantities.isNotEmpty) {
+          final totalQuantity =
+              int.tryParse('${updatedSupply['quantity'] ?? 0}') ?? 0;
+          final totalReceived =
+              receivedQuantities.values.fold(0, (sum, qty) => sum + qty);
+
+          print(
+              'Debug: totalQuantity: $totalQuantity, totalReceived: $totalReceived');
+
+          if (totalReceived >= totalQuantity) {
+            updatedSupply['status'] = 'Received';
+            print('Debug: Status set to Received');
+          } else if (totalReceived > 0) {
+            updatedSupply['status'] = 'Partially Received';
+            print('Debug: Status set to Partially Received');
+          } else {
+            // This shouldn't happen if receivedQuantities.isNotEmpty and totalReceived is 0
+            // But just in case, set to Pending
+            updatedSupply['status'] = 'Pending';
+            print('Debug: Status set to Pending (totalReceived is 0)');
+          }
+        } else {
+          // No partial receives after subtracting
+          // Check if this supply was previously 'Received' (fully received after partial receives)
+          // If so, restore it to 'Partially Received' with the quantity before it became fully received
+          final currentStatus = updatedSupply['status']?.toString() ?? '';
+          final totalQuantity =
+              int.tryParse('${updatedSupply['quantity'] ?? 0}') ?? 0;
+
+          if (currentStatus == 'Received' &&
+              lastPartialReceiveQuantities.isNotEmpty) {
+            // This supply was fully 'Received' and we're rejecting the last partial
+            // Restore it to 'Partially Received' by reconstructing the previous partial state
+            // The previous partial state = current receivedQuantities (before subtracting) - lastPartialReceiveQuantities
+            // But since receivedQuantities is now empty after subtracting, we need to reconstruct it
+
+            // Reconstruct receivedQuantities by subtracting lastPartialReceiveQuantities from the expected total
+            // If the supply was fully received (2/2) and we subtract the last partial (1), it should go back to (1/2)
+            final reconstructedReceivedQuantities = <String, int>{};
+            for (final entry in lastPartialReceiveQuantities.entries) {
+              final expiryDate = entry.key;
+              // The quantity before full receipt = totalQuantity - lastPartialReceiveQuantities
+              final previousPartialQty = (totalQuantity - entry.value)
+                  .clamp(0, double.infinity)
+                  .toInt();
+              if (previousPartialQty > 0) {
+                reconstructedReceivedQuantities[expiryDate] =
+                    previousPartialQty;
+              }
+            }
+
+            if (reconstructedReceivedQuantities.isNotEmpty) {
+              updatedSupply['receivedQuantities'] =
+                  reconstructedReceivedQuantities;
+              updatedSupply['status'] = 'Partially Received';
+              print(
+                  'Debug: Restored to Partially Received with quantities: $reconstructedReceivedQuantities');
+            } else {
+              updatedSupply['status'] = 'Pending';
+              print(
+                  'Debug: Status set to Pending (could not reconstruct partial state)');
+            }
+          } else {
+            updatedSupply['status'] = 'Pending';
+            print('Debug: Status set to Pending (receivedQuantities is empty)');
+          }
+        }
+      } else {
+        // Supply doesn't have lastPartialReceiveQuantities
+        // Check if ANY supply in the PO has lastPartialReceiveQuantities to determine if we're rejecting 2nd partial
+        final hasAnyLastPartialReceive = po.supplies.any((s) {
+          final lastPartial = s['lastPartialReceiveQuantities'];
+          return lastPartial != null &&
+              lastPartial is Map &&
+              Map.from(lastPartial).isNotEmpty;
+        });
+
+        if (hasAnyLastPartialReceive) {
+          // We're rejecting 2nd partial - preserve supplies that are already 'Received' and don't have lastPartialReceiveQuantities
+          // (These were received in the 1st partial and restocked to inventory)
+          final currentStatus = updatedSupply['status']?.toString() ?? '';
+          if (currentStatus == 'Received' && receivedQuantities.isEmpty) {
+            // Fully received through 1st partial - preserve status
+            updatedSupply['status'] = 'Received';
+          } else if (receivedQuantities.isNotEmpty) {
+            // Has receivedQuantities but no lastPartialReceiveQuantities - recalculate
+            final totalQuantity =
+                int.tryParse('${updatedSupply['quantity'] ?? 0}') ?? 0;
+            final totalReceived =
+                receivedQuantities.values.fold(0, (sum, qty) => sum + qty);
+
+            if (totalReceived >= totalQuantity) {
+              updatedSupply['status'] = 'Received';
+            } else if (totalReceived > 0) {
+              updatedSupply['status'] = 'Partially Received';
+            } else {
+              updatedSupply['status'] = 'Pending';
+            }
+          } else {
+            // No receivedQuantities and not already received - keep current status
+            // Status should already be correct from the original supply
+          }
+        } else {
+          // We're rejecting 1st partial - reset everything to Pending
+          updatedSupply['status'] = 'Pending';
+          updatedSupply['receivedQuantities'] = null;
+        }
+      }
+
+      return updatedSupply;
+    }).toList();
+
+    // Check if we're rejecting 1st partial (no supplies have lastPartialReceiveQuantities)
+    final isRejectingFirstPartial = !po.supplies.any((s) {
+      final lastPartial = s['lastPartialReceiveQuantities'];
+      return lastPartial != null &&
+          lastPartial is Map &&
+          Map.from(lastPartial).isNotEmpty;
+    });
+
+    // Check if there are any partial receives remaining after subtracting the most recent one
+    final hasRemainingPartialReceives = resetSupplies.any((supply) =>
+        supply['status'] == 'Partially Received' ||
+        supply['status'] == 'Received');
+
+    // If rejecting 1st partial, always go to Open and clear receipt details
+    // If rejecting 2nd partial and there are remaining receives, go to Partially Received and keep receipt details
+    if (isRejectingFirstPartial) {
+      // Rejecting 1st partial - clear receipt details and reset to Open
+      for (int i = 0; i < resetSupplies.length; i++) {
+        resetSupplies[i] = {
+          ...resetSupplies[i],
+          'receivedAt': null,
+          'receiptDrNo': null,
+          'receiptRecipient': null,
+          'receiptRemarks': null,
+          'receiptImagePath': null,
+          'receiptImageUrl': null,
+          'receiptDate': null,
+          'savedAt': null,
+        };
+      }
+      // Always go to Open when rejecting 1st partial
+      final newStatus = 'Open';
+
+      // Calculate received count
+      final newReceivedCount = resetSupplies
+          .where((supply) => supply['status'] == 'Received')
+          .length;
+
+      final updatedPO = PurchaseOrder(
+        id: po.id,
+        code: po.code,
+        name: po.name,
+        createdAt: po.createdAt,
+        status: newStatus,
+        supplies: resetSupplies,
+        receivedCount: newReceivedCount,
+      );
+
+      // Update in Supabase for real-time updates
+      await _poController.updatePOInSupabase(updatedPO);
+
+      // Log the purchase order rejection
+      await PoActivityController().logPurchaseOrderRejected(
+        poCode: updatedPO.code,
+        poName: updatedPO.name,
+        supplies: updatedPO.supplies,
+      );
+
+      // Notify rejection
+      try {
+        await NotificationsController()
+            .createPORejectedNotification(updatedPO.code);
+      } catch (_) {}
+
+      return updatedPO;
+    }
+
+    // We're rejecting 2nd partial
+    // If there are remaining partial receives (rejecting 2nd partial), keep receipt details
+    // If no remaining partial receives, clear receipt details (shouldn't happen for 2nd partial)
+    if (!hasRemainingPartialReceives) {
+      // This shouldn't happen for 2nd partial, but clear receipt details just in case
+      for (int i = 0; i < resetSupplies.length; i++) {
+        resetSupplies[i] = {
+          ...resetSupplies[i],
+          'receivedAt': null,
+          'receiptDrNo': null,
+          'receiptRecipient': null,
+          'receiptRemarks': null,
+          'receiptImagePath': null,
+          'receiptImageUrl': null,
+          'receiptDate': null,
+          'savedAt': null,
+        };
+      }
+    }
+    // If hasRemainingPartialReceives is true, keep receipt details (already in resetSupplies)
+
+    // Determine new status for 2nd partial rejection
+    String newStatus;
+    if (hasRemainingPartialReceives) {
+      // If there are still partial receives, go back to Partially Received
+      newStatus = 'Partially Received';
+    } else {
+      // If no partial receives (shouldn't happen for 2nd partial), go back to Open
+      newStatus = 'Open';
+    }
+
+    // Calculate received count
+    final newReceivedCount =
+        resetSupplies.where((supply) => supply['status'] == 'Received').length;
 
     final updatedPO = PurchaseOrder(
       id: po.id,
       code: po.code,
       name: po.name,
       createdAt: po.createdAt,
-      status: 'Open',
+      status: newStatus,
       supplies: resetSupplies,
-      receivedCount: 0,
+      receivedCount: newReceivedCount,
     );
 
     // Update in Supabase for real-time updates
@@ -627,7 +886,7 @@ class PODetailsController {
   }
 
   // Process multiple partial receives at once
-  Future<void> processMultiplePartialReceives({
+  Future<PurchaseOrder> processMultiplePartialReceives({
     required PurchaseOrder po,
     required Map<String, Map<String, int>> supplyQuantities,
   }) async {
@@ -638,36 +897,98 @@ class PODetailsController {
       // Create a copy of the PO supplies to work with
       final updatedSupplies = List<Map<String, dynamic>>.from(po.supplies);
 
+      // Debug: Print all supplies in PO
+      print('Debug: PO has ${updatedSupplies.length} supplies:');
+      for (int i = 0; i < updatedSupplies.length; i++) {
+        final supply = updatedSupplies[i];
+        final supplyId = supply['supplyId']?.toString() ??
+            supply['id']?.toString() ??
+            supply['name']?.toString() ??
+            'unknown';
+        final supplyType = supply['type']?.toString() ?? '';
+        final supplyName = getSupplyName(supply);
+        print(
+            '  [$i] supplyId: $supplyId, type: $supplyType, name: $supplyName');
+      }
+
       // Process each supply
       for (final supplyEntry in supplyQuantities.entries) {
-        final supplyId = supplyEntry.key;
+        final uniqueKey = supplyEntry.key;
         final expiryQuantities = supplyEntry.value;
 
+        // Parse the unique key to get supplyId and type
+        // Format: "supplyId_type" or just "supplyId" if no type
+        final parts = uniqueKey.split('_');
+        final baseSupplyId = parts.length > 1
+            ? parts.sublist(0, parts.length - 1).join('_')
+            : uniqueKey;
+        final supplyType = parts.length > 1 ? parts.last : '';
+
         print(
-            'Debug: Processing supplyId: $supplyId with quantities: $expiryQuantities');
+            'Debug: Processing supplyId: $baseSupplyId, type: $supplyType, uniqueKey: $uniqueKey with quantities: $expiryQuantities');
 
         // Find the supply in the PO
         int supplyIndex = -1;
 
-        // Strategy 1: Exact match with supplyId
-        supplyIndex = updatedSupplies.indexWhere((supply) {
-          final supplyIdFromSupply = supply['supplyId']?.toString() ??
-              supply['id']?.toString() ??
-              supply['name']?.toString() ??
-              '';
-          return supplyIdFromSupply == supplyId;
-        });
+        // Strategy 1: Match by supplyId/name AND type (if type is provided)
+        if (supplyType.isNotEmpty) {
+          print(
+              'Debug: Trying Strategy 1 - Match by ID and type: baseSupplyId=$baseSupplyId, type=$supplyType');
+          supplyIndex = updatedSupplies.indexWhere((supply) {
+            final supplyIdFromSupply = supply['supplyId']?.toString() ??
+                supply['id']?.toString() ??
+                supply['name']?.toString() ??
+                '';
+            final supplyTypeFromSupply = supply['type']?.toString() ?? '';
+            final matches = supplyIdFromSupply == baseSupplyId &&
+                supplyTypeFromSupply == supplyType;
+            if (matches) {
+              print(
+                  'Debug: Found match in Strategy 1 at index: ${updatedSupplies.indexOf(supply)}');
+            }
+            return matches;
+          });
 
-        // Strategy 2: If not found, try matching by name
+          // If not found with ID, try matching by name and type
+          if (supplyIndex == -1) {
+            print(
+                'Debug: Trying Strategy 1b - Match by name and type: baseSupplyId=$baseSupplyId, type=$supplyType');
+            supplyIndex = updatedSupplies.indexWhere((supply) {
+              final supplyName = getSupplyName(supply);
+              final supplyTypeFromSupply = supply['type']?.toString() ?? '';
+              final matches = supplyName == baseSupplyId &&
+                  supplyTypeFromSupply == supplyType;
+              if (matches) {
+                print(
+                    'Debug: Found match in Strategy 1b at index: ${updatedSupplies.indexOf(supply)}');
+              }
+              return matches;
+            });
+          }
+        }
+
+        // Strategy 2: If no type or not found, try exact match with supplyId (original behavior)
+        if (supplyIndex == -1) {
+          supplyIndex = updatedSupplies.indexWhere((supply) {
+            final supplyIdFromSupply = supply['supplyId']?.toString() ??
+                supply['id']?.toString() ??
+                supply['name']?.toString() ??
+                '';
+            return supplyIdFromSupply == baseSupplyId;
+          });
+        }
+
+        // Strategy 3: If not found, try matching by name
         if (supplyIndex == -1) {
           supplyIndex = updatedSupplies.indexWhere((supply) {
             final supplyName = getSupplyName(supply);
-            return supplyName == supplyId;
+            return supplyName == baseSupplyId;
           });
         }
 
         if (supplyIndex == -1) {
-          print('Debug: Supply not found: $supplyId');
+          print(
+              'Debug: Supply not found: baseSupplyId=$baseSupplyId, type=$supplyType, uniqueKey=$uniqueKey');
           continue;
         }
 
@@ -686,6 +1007,13 @@ class PODetailsController {
         // Update received quantities for all expiry dates
         final receivedQuantities =
             Map<String, int>.from(updatedSupply['receivedQuantities']);
+
+        // Store the quantities from this partial receive so we can subtract them if rejected
+        final lastPartialReceiveQuantities =
+            Map<String, int>.from(expiryQuantities);
+        updatedSupply['lastPartialReceiveQuantities'] =
+            lastPartialReceiveQuantities;
+
         for (final expiryEntry in expiryQuantities.entries) {
           final expiryDate = expiryEntry.key;
           final receivedQty = expiryEntry.value;
@@ -721,8 +1049,26 @@ class PODetailsController {
         // Update the supply in the list
         updatedSupplies[supplyIndex] = updatedSupply;
         print(
-            'Debug: Updated supply $supplyId with status: ${updatedSupply['status']}');
+            'Debug: Updated supply $baseSupplyId (type: $supplyType) with status: ${updatedSupply['status']}');
       }
+
+      // Check if any supplies are received (fully or partially)
+      final hasAnyReceivedSupplies = updatedSupplies.any((supply) =>
+          supply['status'] == 'Received' ||
+          supply['status'] == 'Partially Received');
+
+      // Determine new PO status
+      // If ANY supplies are received (even partially), move to Approval section
+      String newStatus = po.status;
+      if (hasAnyReceivedSupplies && updatedSupplies.isNotEmpty) {
+        newStatus = 'Approval';
+        print('Debug: Some supplies received, updating PO status to Approval');
+      }
+
+      // Calculate new received count
+      final newReceivedCount = updatedSupplies
+          .where((supply) => supply['status'] == 'Received')
+          .length;
 
       // Update the PO in database once with all changes
       final updatedPO = PurchaseOrder(
@@ -730,12 +1076,13 @@ class PODetailsController {
         code: po.code,
         name: po.name,
         supplies: updatedSupplies,
-        status: po.status,
+        status: newStatus,
         createdAt: po.createdAt,
-        receivedCount: po.receivedCount,
+        receivedCount: newReceivedCount,
       );
 
       print('Debug: Saving updated PO to database with all changes...');
+      print('Debug: New PO status: $newStatus');
       await _poController.save(updatedPO);
       print('Debug: PO saved successfully with all partial receives');
 
@@ -753,6 +1100,8 @@ class PODetailsController {
         }
       }
       print('Debug: All activities logged successfully');
+
+      return updatedPO;
     } catch (e) {
       throw Exception('Failed to process multiple partial receives: $e');
     }

@@ -51,7 +51,8 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     _selectedUnit =
         widget.supply['unit'] ?? 'Box'; // Initialize unit from existing data
 
-    // Initialize packaging fields
+    // Initialize packaging fields from widget.supply as fallback
+    // These will be updated from inventory when _initializeCorrectType() runs
     _selectedPackagingUnit = widget.supply['packagingUnit'] ?? 'Box';
     _selectedPackagingContent = widget.supply['packagingContent'] ?? 'Pieces';
     _packagingQuantity = widget.supply['packagingQuantity'] ?? 1;
@@ -335,7 +336,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                         _detectedType =
                                             newValue; // Update detected type when manually changed
                                         // Update image and other details based on type
-                                        _updateSupplyForType(newValue);
+                                        // When manually changing type, load all data from inventory for that type
+                                        _updateSupplyForType(newValue,
+                                            preservePOData: false);
                                       });
                                     }
                                   },
@@ -1393,7 +1396,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
       // Get available types
       final availableTypes = await _getAvailableTypes();
       if (availableTypes.isEmpty) {
-        // Nothing to detect; ensure UI stops loading
+        // No types available, but still try to fetch packaging info from inventory
+        // using the supply name (without type filter)
+        await _fetchPackagingInfoFromInventory(supplyName);
         if (mounted) {
           setState(() {
             _isTypeDetecting = false;
@@ -1403,14 +1408,18 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
         return;
       }
 
-      // If type is already set and valid, keep it
+      // If type is already set and valid, keep it but still fetch packaging info from inventory
       final currentType = widget.supply['type'] ?? '';
       if (availableTypes.contains(currentType)) {
         print('Type already correctly set: $currentType');
-        setState(() {
-          _detectedType = currentType;
-          _isTypeDetecting = false;
-        });
+        // Only fetch packaging unit and content type from inventory, preserve cost and packaging content quantity from PO
+        await _updatePackagingInfoOnly(currentType);
+        if (mounted) {
+          setState(() {
+            _detectedType = currentType;
+            _isTypeDetecting = false;
+          });
+        }
         return;
       }
 
@@ -1419,29 +1428,36 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
           await _findCorrectTypeFromDatabase(supplyName, availableTypes);
       if (correctType.isNotEmpty) {
         print('Found correct type from database: $correctType');
-        setState(() {
-          widget.supply['type'] = correctType;
-          _detectedType = correctType;
-          _isTypeDetecting = false;
-        });
+        // Fetch all supply details including packaging information from inventory
+        await _updateSupplyForType(correctType);
+        if (mounted) {
+          setState(() {
+            widget.supply['type'] = correctType;
+            _detectedType = correctType;
+            _isTypeDetecting = false;
+          });
+        }
         return;
       }
 
       // Try to detect the correct type
       final detectedType = _detectTypeFromSupplyData(availableTypes);
+      String finalType;
       if (detectedType.isNotEmpty) {
         print('Detected correct type on initialization: $detectedType');
-        setState(() {
-          widget.supply['type'] = detectedType;
-          _detectedType = detectedType;
-          _isTypeDetecting = false;
-        });
+        finalType = detectedType;
       } else {
         print(
             'Could not detect type, using first available: ${availableTypes.first}');
+        finalType = availableTypes.first;
+      }
+
+      // Fetch all supply details including packaging information from inventory
+      await _updateSupplyForType(finalType);
+      if (mounted) {
         setState(() {
-          widget.supply['type'] = availableTypes.first;
-          _detectedType = availableTypes.first;
+          widget.supply['type'] = finalType;
+          _detectedType = finalType;
           _isTypeDetecting = false;
         });
       }
@@ -1519,8 +1535,158 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     }
   }
 
+  // Fetch packaging information from inventory by supply name (without type)
+  Future<void> _fetchPackagingInfoFromInventory(String supplyName) async {
+    try {
+      print('Fetching packaging info from inventory for: $supplyName');
+
+      // Query database for supply with the same name (get first match)
+      final response = await Supabase.instance.client
+          .from('supplies')
+          .select('*')
+          .eq('name', supplyName)
+          .limit(1)
+          .maybeSingle();
+
+      print('Packaging info response: $response');
+
+      if (response != null && mounted) {
+        setState(() {
+          // Only update packaging unit and content type from inventory
+          // Preserve packaging content quantity from PO supply
+          _selectedPackagingUnit =
+              response['packaging_          unit']?.toString() ?? 'Box';
+          _selectedPackagingContent =
+              response['packaging_content']?.toString() ?? 'Pieces';
+
+          // Preserve packaging content quantity from PO supply (don't overwrite with inventory)
+          // The value should already be set from widget.supply in initState()
+          // Keep current values in _packagingContentQuantity and controller
+
+          // Also update widget.supply for consistency
+          widget.supply['packagingUnit'] = _selectedPackagingUnit;
+          widget.supply['packagingContent'] = _selectedPackagingContent;
+          // Don't overwrite packagingContentQuantity - preserve from PO
+        });
+        print(
+            'Successfully updated packaging info from inventory (preserved packaging content quantity)');
+      } else {
+        print('No supply found in inventory for: $supplyName');
+      }
+    } catch (e) {
+      print('Error fetching packaging info from inventory: $e');
+    }
+  }
+
+  // Update only packaging unit and content type from inventory, preserve cost and packaging content quantity from PO
+  Future<void> _updatePackagingInfoOnly(String type) async {
+    try {
+      final supplyName = widget.supply['supplyName'] ?? '';
+      print(
+          'Updating packaging info only for type: $type, supply: $supplyName');
+
+      // Query database for supply with the same name and type
+      final response = await Supabase.instance.client
+          .from('supplies')
+          .select('*')
+          .eq('name', supplyName)
+          .eq('type', type)
+          .maybeSingle();
+
+      print('Packaging info response: $response');
+
+      if (response != null && mounted) {
+        setState(() {
+          // Only update packaging unit and content type from inventory
+          // Preserve cost, brand, supplier, and packaging content quantity from PO supply if they exist
+          // Otherwise, load them from inventory for the correct type
+          _selectedPackagingUnit =
+              response['packaging_unit']?.toString() ?? 'Box';
+          widget.supply['packagingUnit'] = _selectedPackagingUnit;
+
+          _selectedPackagingContent =
+              response['packaging_content']?.toString() ?? 'Pieces';
+          widget.supply['packagingContent'] = _selectedPackagingContent;
+
+          // Load cost from inventory if PO supply doesn't have it, otherwise preserve PO cost
+          final poCost = widget.supply['cost'];
+          if (poCost == null || !(poCost is num && poCost > 0)) {
+            // PO supply doesn't have cost, load from inventory for this specific type
+            final invCost = response['cost'] ?? 0.0;
+            widget.supply['cost'] = invCost;
+            costController.text = invCost.toString();
+          }
+          // Otherwise, cost is already set from widget.supply in initState() and preserved
+
+          // Load brand from inventory if PO supply doesn't have it, otherwise preserve PO brand
+          final poBrand = widget.supply['brandName'];
+          if (poBrand == null || poBrand.toString().trim().isEmpty) {
+            final invBrand = response['brand']?.toString() ?? '';
+            widget.supply['brand'] = invBrand;
+            widget.supply['brandName'] = invBrand;
+            brandController.text = invBrand;
+          }
+
+          // Load supplier from inventory if PO supply doesn't have it, otherwise preserve PO supplier
+          final poSupplier = widget.supply['supplierName'];
+          if (poSupplier == null || poSupplier.toString().trim().isEmpty) {
+            final invSupplier = response['supplier']?.toString() ?? '';
+            widget.supply['supplier'] = invSupplier;
+            widget.supply['supplierName'] = invSupplier;
+            supplierController.text = invSupplier;
+          }
+
+          // Preserve packaging content quantity from PO supply (don't overwrite with inventory quantity)
+          // This should already be set from widget.supply in initState()
+        });
+        print(
+            'Successfully updated packaging info only (loaded cost/brand/supplier for correct type if PO supply missing them)');
+      } else {
+        // Fallback: try to fetch packaging info by name only
+        await _fetchPackagingInfoOnly(supplyName);
+      }
+    } catch (e) {
+      print('Error updating packaging info only: $e');
+    }
+  }
+
+  // Fetch only packaging unit and content type by supply name (without type)
+  Future<void> _fetchPackagingInfoOnly(String supplyName) async {
+    try {
+      print('Fetching packaging info only from inventory for: $supplyName');
+
+      // Query database for supply with the same name (get first match)
+      final response = await Supabase.instance.client
+          .from('supplies')
+          .select('*')
+          .eq('name', supplyName)
+          .limit(1)
+          .maybeSingle();
+
+      if (response != null && mounted) {
+        setState(() {
+          // Only update packaging unit and content type from inventory
+          // Preserve cost and packaging content quantity from PO supply
+          _selectedPackagingUnit =
+              response['packaging_unit']?.toString() ?? 'Box';
+          widget.supply['packagingUnit'] = _selectedPackagingUnit;
+
+          _selectedPackagingContent =
+              response['packaging_content']?.toString() ?? 'Pieces';
+          widget.supply['packagingContent'] = _selectedPackagingContent;
+        });
+        print('Successfully updated packaging info only from inventory');
+      }
+    } catch (e) {
+      print('Error fetching packaging info only from inventory: $e');
+    }
+  }
+
   // Update supply details when type changes
-  Future<void> _updateSupplyForType(String newType) async {
+  // preservePOData: If true, preserves cost, brand, supplier from PO supply if they exist
+  //                 If false, loads all data from inventory for the new type (used when manually changing type)
+  Future<void> _updateSupplyForType(String newType,
+      {bool preservePOData = true}) async {
     try {
       final supplyName = widget.supply['supplyName'] ?? '';
       print('Updating supply for type: $newType, supply: $supplyName');
@@ -1537,35 +1703,108 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
 
       if (response != null) {
         setState(() {
+          // Preserve cost, brand, supplier, and packaging content quantity from PO supply BEFORE updating
+          final poCost = widget.supply['cost'];
+          final poBrand = widget.supply['brandName'];
+          final poSupplier = widget.supply['supplierName'];
+          final poPackagingContentQty =
+              widget.supply['packagingContentQuantity'];
+
           // Update all supply details with the new type's data
           widget.supply['type'] = newType;
           widget.supply['imageUrl'] = response['image_url'] ?? '';
-          widget.supply['brand'] = response['brand'] ?? '';
-          widget.supply['supplier'] = response['supplier'] ?? '';
-          widget.supply['cost'] = response['cost'] ?? 0.0;
+
+          // If preservePOData is false (manual type change), load all data from inventory
+          // Otherwise, preserve PO supply data if it exists
+          if (!preservePOData) {
+            // Load all data from inventory for the new type
+            widget.supply['brand'] = response['brand'] ?? '';
+            widget.supply['brandName'] = response['brand'] ?? '';
+            widget.supply['supplier'] = response['supplier'] ?? '';
+            widget.supply['supplierName'] = response['supplier'] ?? '';
+            widget.supply['cost'] = response['cost'] ?? 0.0;
+          } else {
+            // Preserve brand from PO supply if it exists, otherwise use inventory brand
+            if (poBrand != null && poBrand.toString().trim().isNotEmpty) {
+              widget.supply['brand'] = poBrand;
+              widget.supply['brandName'] = poBrand;
+            } else {
+              widget.supply['brand'] = response['brand'] ?? '';
+              widget.supply['brandName'] = response['brand'] ?? '';
+            }
+
+            // Preserve supplier from PO supply if it exists, otherwise use inventory supplier
+            if (poSupplier != null && poSupplier.toString().trim().isNotEmpty) {
+              widget.supply['supplier'] = poSupplier;
+              widget.supply['supplierName'] = poSupplier;
+            } else {
+              widget.supply['supplier'] = response['supplier'] ?? '';
+              widget.supply['supplierName'] = response['supplier'] ?? '';
+            }
+
+            // Preserve cost from PO supply if it exists, otherwise use inventory cost
+            if (poCost != null && poCost is num && poCost > 0) {
+              widget.supply['cost'] = poCost;
+            } else {
+              widget.supply['cost'] = response['cost'] ?? 0.0;
+            }
+          }
+
           widget.supply['packagingUnit'] = response['packaging_unit'] ?? 'Box';
           widget.supply['packagingQuantity'] =
               response['packaging_quantity'] ?? 1;
           widget.supply['packagingContent'] =
               response['packaging_content'] ?? 'Pieces';
-          widget.supply['packagingContentQuantity'] =
-              response['packaging_content_quantity'] ?? 1;
 
-          // Update controllers with new values
-          brandController.text = response['brand']?.toString() ?? '';
-          supplierController.text = response['supplier']?.toString() ?? '';
-          costController.text = response['cost']?.toString() ?? '';
+          // Preserve packaging content quantity from PO supply if it exists
+          if (poPackagingContentQty != null &&
+              poPackagingContentQty is int &&
+              poPackagingContentQty > 0) {
+            widget.supply['packagingContentQuantity'] = poPackagingContentQty;
+          } else {
+            widget.supply['packagingContentQuantity'] =
+                response['packaging_content_quantity'] ?? 1;
+          }
+
+          // Update controllers based on preservePOData flag
+          if (!preservePOData) {
+            // Load all data from inventory for the new type
+            brandController.text = widget.supply['brandName']?.toString() ?? '';
+            supplierController.text =
+                widget.supply['supplierName']?.toString() ?? '';
+            costController.text = (widget.supply['cost'] ?? 0.0).toString();
+          } else {
+            // Preserve PO values if they exist, otherwise use inventory values
+            brandController.text = widget.supply['brandName']?.toString() ?? '';
+            supplierController.text =
+                widget.supply['supplierName']?.toString() ?? '';
+
+            // Preserve cost in controller if PO has it
+            if (poCost != null && poCost is num && poCost > 0) {
+              costController.text = poCost.toString();
+            } else {
+              costController.text = (response['cost'] ?? 0.0).toString();
+            }
+          }
           _selectedPackagingUnit =
               response['packaging_unit']?.toString() ?? 'Box';
           _packagingQuantity = response['packaging_quantity'] ?? 1;
+          _packagingQtyController.text = _packagingQuantity.toString();
           _selectedPackagingContent =
               response['packaging_content']?.toString() ?? 'Pieces';
+
+          // Use the packaging content quantity we preserved above (from PO supply or inventory)
           _packagingContentQuantity =
-              response['packaging_content_quantity'] ?? 1;
+              widget.supply['packagingContentQuantity'] ?? 1;
+          _packagingContentQtyController.text =
+              _packagingContentQuantity.toString();
         });
         print('Successfully updated supply for type: $newType');
       } else {
-        print('No supply found for type: $newType');
+        print(
+            'No supply found for type: $newType, trying fallback by name only');
+        // Fallback: try to fetch packaging info by name only
+        await _fetchPackagingInfoFromInventory(supplyName);
       }
     } catch (e) {
       print('Error updating supply for type: $e');

@@ -523,7 +523,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
   String _getQuantityDisplay(Map<String, dynamic> supply) {
     final totalQuantity = supply['quantity'] ?? 0;
-    final unit = supply['unit'] ?? 'Box';
+    final unit = supply['packagingUnit'] ?? supply['unit'] ?? 'Box';
     final receivedQuantitiesRaw = supply['receivedQuantities'];
 
     // Debug: Print what we're getting
@@ -535,15 +535,32 @@ class _PODetailsPageState extends State<PODetailsPage> {
             ? Map<String, int>.from(receivedQuantitiesRaw)
             : null;
 
+    String base;
     if (receivedQuantities != null && receivedQuantities.isNotEmpty) {
       final totalReceived =
           receivedQuantities.values.fold(0, (sum, qty) => sum + qty);
       print(
           'Debug: Total received: $totalReceived, Total quantity: $totalQuantity');
-      return '$totalReceived/$totalQuantity $unit';
+      base = '$totalReceived/$totalQuantity $unit';
+    } else {
+      base = '$totalQuantity $unit';
     }
 
-    return '$totalQuantity $unit';
+    // Append packaging content details if available
+    final int contentQty =
+        int.tryParse('${supply['packagingContentQuantity'] ?? 0}') ?? 0;
+    final String content = (supply['packagingContent'] ?? '').toString();
+    final String pkgUnit = (supply['packagingUnit'] ?? unit).toString();
+    if (content.isNotEmpty && contentQty > 0) {
+      final contentLower = content.toLowerCase();
+      final contentLabel = contentQty == 1 && contentLower.endsWith('s')
+          ? contentLower.substring(0, contentLower.length - 1)
+          : contentLower;
+      final unitLabel = pkgUnit.toLowerCase();
+      return '$base (${contentQty} $contentLabel per $unitLabel)';
+    }
+
+    return base;
   }
 
   String _getExpiryDisplay(Map<String, dynamic> supply, String expiryText) {
@@ -721,22 +738,56 @@ class _PODetailsPageState extends State<PODetailsPage> {
     final isLastSupply = remainingSupplies.length == 1 &&
         remainingSupplies.first == targetSupply;
 
-    // Only show receipt details dialog if this is the last supply
-    if (!isLastSupply) {
-      // Mark as received without receipt details
+    // Check if receipt details already exist
+    bool hasReceiptDetails = _purchaseOrder.supplies.any((supply) =>
+        supply['receiptDrNo'] != null || supply['receiptImagePath'] != null);
+
+    // If not the last supply, or if receipt details already exist, skip receipt details dialog
+    if (!isLastSupply || hasReceiptDetails) {
+      // Mark as received without showing receipt details dialog
       setState(() => _isLoading = true);
       try {
         final updatedSupplies =
             List<Map<String, dynamic>>.from(_purchaseOrder.supplies);
         final String nowIso = DateTime.now().toIso8601String();
 
-        final idx = updatedSupplies.indexOf(targetSupply);
-        if (idx != -1) {
-          updatedSupplies[idx] = {
-            ...targetSupply,
-            'status': 'Received',
-            'receivedAt': nowIso,
-          };
+        // If this is the last supply and receipt details exist, use existing receipt details
+        if (isLastSupply && hasReceiptDetails) {
+          // Get existing receipt details from any supply that has them
+          Map<String, dynamic>? existingReceiptDetails;
+          for (final supply in _purchaseOrder.supplies) {
+            if (supply['receiptDrNo'] != null ||
+                supply['receiptImagePath'] != null) {
+              existingReceiptDetails = {
+                'receiptDrNo': supply['receiptDrNo'],
+                'receiptRecipient': supply['receiptRecipient'],
+                'receiptRemarks': supply['receiptRemarks'],
+                'receiptImagePath': supply['receiptImagePath'],
+                'receiptDate': supply['receiptDate'],
+              };
+              break;
+            }
+          }
+
+          // Mark ALL supplies as received with existing receipt details
+          for (int i = 0; i < updatedSupplies.length; i++) {
+            updatedSupplies[i] = {
+              ...updatedSupplies[i],
+              'status': 'Received',
+              'receivedAt': nowIso,
+              if (existingReceiptDetails != null) ...existingReceiptDetails,
+            };
+          }
+        } else {
+          // Not the last supply, just mark this one as received
+          final idx = updatedSupplies.indexOf(targetSupply);
+          if (idx != -1) {
+            updatedSupplies[idx] = {
+              ...targetSupply,
+              'status': 'Received',
+              'receivedAt': nowIso,
+            };
+          }
         }
 
         final newReceivedCount =
@@ -791,7 +842,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
       return;
     }
 
-    // Show receipt details dialog only for the last supply
+    // Show receipt details dialog only for the last supply when receipt details don't exist
     final supplierName = targetSupply['supplierName'] ?? 'Unknown Supplier';
     final receiptDetails = await _showReceiptDetailsDialog(supplierName);
     if (receiptDetails == null) return; // user canceled or went back
@@ -981,16 +1032,18 @@ class _PODetailsPageState extends State<PODetailsPage> {
       // Add recipient to suggestions
       await _controller.addRecipientSuggestion(receiptDetails.recipient);
 
-      // Check if all supplies are received to determine new status
-      final allSuppliesReceived =
-          updatedSupplies.every((supply) => supply['status'] == 'Received');
+      // Check if any supplies are received (fully or partially) to determine new status
+      // If ANY supplies are received (even partially), move to Approval section
+      final hasAnyReceivedSupplies = updatedSupplies.any((supply) =>
+          supply['status'] == 'Received' ||
+          supply['status'] == 'Partially Received');
 
       // Update receivedCount like Mark as Received
       final newReceivedCount =
           updatedSupplies.where((s) => s['status'] == 'Received').length;
 
       final newStatus =
-          allSuppliesReceived ? 'Approval' : _purchaseOrder.status;
+          hasAnyReceivedSupplies ? 'Approval' : _purchaseOrder.status;
 
       final updatedPO = PurchaseOrder(
         id: _purchaseOrder.id,
@@ -1054,16 +1107,21 @@ class _PODetailsPageState extends State<PODetailsPage> {
     for (int index = 0; index < supplies.length; index++) {
       final supply = supplies[index];
       final supplyName = _controller.getSupplyName(supply);
+      final supplyType = supply['type'] as String? ?? '';
       final batches = supply['expiryBatches'] as List<dynamic>?;
 
-      // Use the actual supplyId from the supply data
-      final supplyId = supply['supplyId']?.toString() ??
+      // Use the actual supplyId from the supply data, but include type to make it unique
+      final baseSupplyId = supply['supplyId']?.toString() ??
           supply['id']?.toString() ??
           supply['name']?.toString() ??
           'supply_$index';
+      // Include type in supplyId to differentiate supplies with same name but different types
+      final supplyId =
+          supplyType.isNotEmpty ? '${baseSupplyId}_$supplyType' : baseSupplyId;
 
       // Debug: Print supply processing info
       print('Debug: Processing supply: $supplyName');
+      print('Debug: Supply Type: $supplyType');
       print('Debug: Supply ID: $supplyId');
       print('Debug: Supply data: $supply');
       print('Debug: Has expiryBatches: ${batches != null}');
@@ -1099,6 +1157,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
               'id': entryId,
               'supplyId': supplyId,
               'supplyName': supplyName,
+              'supplyType': supplyType,
               'expiryDate': date,
               'maxQuantity': remainingQuantity,
             });
@@ -1126,6 +1185,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
             'id': entryId,
             'supplyId': supplyId,
             'supplyName': supplyName,
+            'supplyType': supplyType,
             'expiryDate': 'No expiry',
             'maxQuantity': remainingQuantity,
           });
@@ -1150,6 +1210,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
           'id': entryId,
           'supplyId': supplyId,
           'supplyName': supplyName,
+          'supplyType': supplyType,
           'expiryDate': 'No expiry',
           'maxQuantity': remainingQuantity,
         });
@@ -1228,6 +1289,15 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               final supplyName = expiryEntries.isNotEmpty
                                   ? expiryEntries.first['supplyName'] as String
                                   : '';
+                              // Get type from the first expiry entry
+                              final supplyType = expiryEntries.isNotEmpty
+                                  ? expiryEntries.first['supplyType'] as String?
+                                  : null;
+                              // Format display name with type if available
+                              final displayName =
+                                  supplyType != null && supplyType.isNotEmpty
+                                      ? '$supplyName ($supplyType)'
+                                      : supplyName;
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 16),
@@ -1248,9 +1318,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Supply name
+                                    // Supply name with type
                                     Text(
-                                      supplyName,
+                                      displayName,
                                       style: AppFonts.sfProStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -1681,11 +1751,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   await _showPartialReceiveConfirmation(
                                       context);
                               if (confirmed == true) {
-                                // Close the quantity dialog first
-                                if (context.mounted) {
-                                  Navigator.of(context).pop();
-                                }
-
                                 // Check if this is the first partial receive (no receipt details yet)
                                 bool hasReceiptDetails = _purchaseOrder.supplies
                                     .any((supply) =>
@@ -1706,32 +1771,61 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                       await _showReceiptDetailsDialog(
                                           supplierName);
 
+                                  print(
+                                      'Debug: receiptDetails != null: ${receiptDetails != null}, mounted: $mounted');
                                   if (receiptDetails != null && mounted) {
                                     // Upload receipt image to cloud storage
                                     String? receiptImageUrl;
                                     if (receiptDetails.image != null) {
-                                      receiptImageUrl = await _receiptStorage
-                                          .uploadReceiptImage(
-                                              receiptDetails.image!);
+                                      print(
+                                          'Debug: Starting receipt image upload...');
+                                      try {
+                                        receiptImageUrl = await _receiptStorage
+                                            .uploadReceiptImage(
+                                                receiptDetails.image!);
+                                        print(
+                                            'Debug: Receipt image upload returned, URL: ${receiptImageUrl != null ? "success" : "null"}');
+                                      } catch (e) {
+                                        print(
+                                            'Debug: Error during receipt upload: $e');
+                                        print(
+                                            'Debug: Stack trace: ${StackTrace.current}');
+                                        receiptImageUrl = null;
+                                      }
+                                      print(
+                                          'Debug: Receipt image upload complete, URL: ${receiptImageUrl != null ? "success" : "null"}');
+                                    } else {
+                                      print(
+                                          'Debug: No receipt image to upload');
                                     }
 
-                                    // Process partial receives
-                                    await _controller
-                                        .processMultiplePartialReceives(
-                                      po: _purchaseOrder,
-                                      supplyQuantities: supplyQuantities,
-                                    );
+                                    // Process partial receives and get updated PO
+                                    PurchaseOrder updatedPO;
+                                    try {
+                                      updatedPO = await _controller
+                                          .processMultiplePartialReceives(
+                                        po: _purchaseOrder,
+                                        supplyQuantities: supplyQuantities,
+                                      );
+                                      print(
+                                          'Debug: Partial receives processed successfully, PO status: ${updatedPO.status}');
+                                    } catch (e) {
+                                      print(
+                                          'Debug: Error processing partial receives: $e');
+                                      print(
+                                          'Debug: Stack trace: ${StackTrace.current}');
+                                      // Close dialog on error
+                                      if (context.mounted) {
+                                        Navigator.of(context).pop();
+                                      }
+                                      rethrow;
+                                    }
 
-                                    // Reload the PO to get updated supplies
-                                    final reloadedPO =
-                                        await _poSupabase.getPOByIdFromSupabase(
-                                            _purchaseOrder.id);
-
-                                    if (reloadedPO != null && mounted) {
+                                    if (mounted) {
                                       // Update all supplies with receipt details
                                       final updatedSupplies =
                                           List<Map<String, dynamic>>.from(
-                                              reloadedPO.supplies);
+                                              updatedPO.supplies);
                                       final String nowIso =
                                           DateTime.now().toIso8601String();
 
@@ -1759,29 +1853,39 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                 receiptDetails.recipient);
                                       }
 
-                                      // Update PO with receipt details and set status to Approval
-                                      final updatedPO = PurchaseOrder(
-                                        id: _purchaseOrder.id,
-                                        code: _purchaseOrder.code,
-                                        name: _purchaseOrder.name,
-                                        createdAt: _purchaseOrder.createdAt,
-                                        status:
-                                            'Approval', // Change status to Approval
+                                      // Update PO with receipt details, keep status from controller (may be Approval if all received)
+                                      final finalPO = PurchaseOrder(
+                                        id: updatedPO.id,
+                                        code: updatedPO.code,
+                                        name: updatedPO.name,
+                                        createdAt: updatedPO.createdAt,
+                                        status: updatedPO
+                                            .status, // Use status from controller
                                         supplies: updatedSupplies,
-                                        receivedCount:
-                                            _purchaseOrder.receivedCount,
+                                        receivedCount: updatedPO.receivedCount,
                                       );
 
                                       await _poSupabase
-                                          .updatePOInSupabase(updatedPO);
+                                          .updatePOInSupabase(finalPO);
 
-                                      if (mounted) {
-                                        setState(() {
-                                          _purchaseOrder = updatedPO;
-                                        });
+                                      // Close the dialog before updating UI
+                                      if (context.mounted) {
+                                        Navigator.of(context).pop();
                                       }
 
                                       if (mounted) {
+                                        print(
+                                            'Debug: Final PO status after partial receive: ${finalPO.status}');
+                                        print(
+                                            'Debug: canApprovePO: ${_controller.canApprovePO(finalPO)}');
+                                        print(
+                                            'Debug: canRejectPO: ${_controller.canRejectPO(finalPO)}');
+                                        setState(() {
+                                          _purchaseOrder = finalPO;
+                                        });
+                                        print(
+                                            'Debug: setState called, UI should rebuild...');
+
                                         final messenger =
                                             ScaffoldMessenger.maybeOf(context);
                                         if (messenger != null) {
@@ -1796,31 +1900,34 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                           );
                                         }
                                       }
-
-                                      // Navigate back to PO list and switch to Approval tab
-                                      Future.delayed(
-                                          const Duration(milliseconds: 300),
-                                          () {
-                                        if (mounted) {
-                                          Navigator.of(context)
-                                              .pop({'switchToApproval': true});
-                                        }
-                                      });
                                     }
                                   } else if (mounted) {
                                     // User canceled receipt details dialog, just process partial receive
-                                    await _controller
-                                        .processMultiplePartialReceives(
-                                      po: _purchaseOrder,
-                                      supplyQuantities: supplyQuantities,
-                                    );
+                                    PurchaseOrder updatedPO;
+                                    try {
+                                      updatedPO = await _controller
+                                          .processMultiplePartialReceives(
+                                        po: _purchaseOrder,
+                                        supplyQuantities: supplyQuantities,
+                                      );
+                                    } catch (e) {
+                                      // Close dialog on error
+                                      if (context.mounted) {
+                                        Navigator.of(context).pop();
+                                      }
+                                      rethrow;
+                                    }
 
-                                    await _reloadPOData();
-                                    if (mounted) {
-                                      setState(() {});
+                                    // Close the dialog before updating UI
+                                    if (context.mounted) {
+                                      Navigator.of(context).pop();
                                     }
 
                                     if (mounted) {
+                                      setState(() {
+                                        _purchaseOrder = updatedPO;
+                                      });
+
                                       final messenger =
                                           ScaffoldMessenger.maybeOf(context);
                                       if (messenger != null) {
@@ -1838,92 +1945,42 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   }
                                 } else {
                                   // Receipt details already exist - skip the dialog, just process partial receive
-                                  // Process partial receive
-                                  await _controller
-                                      .processMultiplePartialReceives(
-                                    po: _purchaseOrder,
-                                    supplyQuantities: supplyQuantities,
-                                  );
+                                  PurchaseOrder updatedPO;
+                                  try {
+                                    updatedPO = await _controller
+                                        .processMultiplePartialReceives(
+                                      po: _purchaseOrder,
+                                      supplyQuantities: supplyQuantities,
+                                    );
+                                  } catch (e) {
+                                    // Close dialog on error
+                                    if (context.mounted) {
+                                      Navigator.of(context).pop();
+                                    }
+                                    rethrow;
+                                  }
 
-                                  // Reload the PO to get updated supplies with new quantities
-                                  final reloadedPO = await _poSupabase
-                                      .getPOByIdFromSupabase(_purchaseOrder.id);
+                                  // Close the dialog before updating UI
+                                  if (context.mounted) {
+                                    Navigator.of(context).pop();
+                                  }
 
-                                  if (reloadedPO != null && mounted) {
-                                    // Check if all supplies are now fully received
-                                    final allSuppliesReceived =
-                                        reloadedPO.supplies.every((supply) =>
-                                            supply['status'] == 'Received');
+                                  if (mounted) {
+                                    setState(() {
+                                      _purchaseOrder = updatedPO;
+                                    });
 
-                                    if (allSuppliesReceived) {
-                                      // All supplies received, move to Approval
-                                      final updatedPO = PurchaseOrder(
-                                        id: reloadedPO.id,
-                                        code: reloadedPO.code,
-                                        name: reloadedPO.name,
-                                        createdAt: reloadedPO.createdAt,
-                                        status: 'Approval',
-                                        supplies: reloadedPO.supplies,
-                                        receivedCount: reloadedPO.receivedCount,
+                                    final messenger =
+                                        ScaffoldMessenger.maybeOf(context);
+                                    if (messenger != null) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Partial receive completed successfully!'),
+                                          backgroundColor: Colors.green,
+                                          duration: const Duration(seconds: 2),
+                                        ),
                                       );
-
-                                      await _poSupabase
-                                          .updatePOInSupabase(updatedPO);
-
-                                      if (mounted) {
-                                        setState(() {
-                                          _purchaseOrder = updatedPO;
-                                        });
-                                      }
-
-                                      if (mounted) {
-                                        final messenger =
-                                            ScaffoldMessenger.maybeOf(context);
-                                        if (messenger != null) {
-                                          messenger.showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                  'All supplies received! Moving to Approval.'),
-                                              backgroundColor: Colors.green,
-                                              duration:
-                                                  const Duration(seconds: 3),
-                                            ),
-                                          );
-                                        }
-                                      }
-
-                                      // Navigate back to PO list and switch to Approval tab
-                                      Future.delayed(
-                                          const Duration(milliseconds: 300),
-                                          () {
-                                        if (mounted) {
-                                          Navigator.of(context)
-                                              .pop({'switchToApproval': true});
-                                        }
-                                      });
-                                    } else {
-                                      // Still partially received, stay in Partial section
-                                      if (mounted) {
-                                        final messenger =
-                                            ScaffoldMessenger.maybeOf(context);
-                                        if (messenger != null) {
-                                          messenger.showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                  'Partial receive completed successfully!'),
-                                              backgroundColor: Colors.green,
-                                              duration:
-                                                  const Duration(seconds: 2),
-                                            ),
-                                          );
-                                        }
-                                      }
-
-                                      // Reload PO data and refresh the page
-                                      await _reloadPOData();
-                                      if (mounted) {
-                                        setState(() {});
-                                      }
                                     }
                                   }
                                 }
@@ -2279,21 +2336,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
         shadowColor: theme.appBarTheme.shadowColor ??
             theme.shadowColor.withOpacity(0.12),
         actions: [
-          // Temporary reset button for testing
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.orange, size: 24),
-            tooltip: 'Reset Received Quantities',
-            onPressed: () async {
-              await _clearReceivedQuantities();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Received quantities cleared!'),
-                  backgroundColor: Colors.orange,
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-          ),
           Padding(
             padding: const EdgeInsets.only(right: 5.0),
             child: IconButton(
@@ -2356,10 +2398,11 @@ class _PODetailsPageState extends State<PODetailsPage> {
                       const Spacer(),
                       // Show Partial Receive and Save buttons only for Open status or POs with partial receives (not Approval)
                       if (_purchaseOrder.status == 'Open' ||
+                          _purchaseOrder.status == 'Partially Received' ||
                           (_purchaseOrder.status != 'Approval' &&
                               _purchaseOrder.supplies.any((supply) =>
-                                  supply['status'] ==
-                                  'Partially Received'))) ...[
+                                  supply['status'] == 'Partially Received' ||
+                                  supply['status'] == 'Pending'))) ...[
                         // Partial Receive button
                         Container(
                           width: 100,

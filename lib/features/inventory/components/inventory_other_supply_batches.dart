@@ -54,11 +54,20 @@ class _SupabaseOtherSupplyBatchesState
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: Supabase.instance.client
           .from('supplies')
-          .stream(primaryKey: ['id']).map((data) => data
-              .where((row) =>
-                  row['name'] == widget.item.name &&
-                  row['type'] == widget.item.type)
-              .toList()),
+          .stream(primaryKey: ['id']).map((data) {
+        // Normalize type comparison: handle null, empty, and case-insensitive
+        final normalizedItemType =
+            (widget.item.type ?? '').toString().trim().toLowerCase();
+        return data.where((row) {
+          final rowName = row['name'].toString().trim();
+          final itemName = widget.item.name.toString().trim();
+          if (rowName != itemName) return false;
+
+          // Normalize type comparison
+          final rowType = (row['type'] ?? '').toString().trim().toLowerCase();
+          return rowType == normalizedItemType;
+        }).toList();
+      }),
       builder: (context, snapshot) {
         // Show skeleton only on first load when there's no data
         if (_isFirstLoad && !snapshot.hasData) {
@@ -126,6 +135,8 @@ class _SupabaseOtherSupplyBatchesState
           if (batchCat != currentCat) return false;
 
           // Exclude the item we are viewing
+          // All other batches with same name, type, and category should show,
+          // regardless of brand, supplier, cost, expiry, stock, etc.
           if (batch.id == widget.item.id) return false;
 
           // Filter out expired batches ONLY for non-archived view and ONLY for items WITH expiry dates.
