@@ -328,32 +328,72 @@ class NotificationsController {
         return;
       }
 
-      // Check for low stock (from >2 to 1-2 total stock)
-      if (totalCurrentStock <= 2 &&
-          totalCurrentStock > 0 &&
-          totalPreviousStock > 2) {
+      // Check for low stock using dynamic 20% critical level
+      // Critical level is 20% of the stock quantity (dynamically recalculated)
+      // Low stock = current stock is at or below 20% of the current stock quantity
+      final currentCriticalLevel =
+          totalCurrentStock > 0 ? (totalCurrentStock * 0.2).round() : 0;
+      final previousCriticalLevel =
+          totalPreviousStock > 0 ? (totalPreviousStock * 0.2).round() : 0;
+
+      // Check if current stock is low based on dynamic 20% critical level
+      // If current stock is 4 and critical level is 1 (20% of 4), then 4 <= 1 is false
+      // But we want to trigger when stock crosses the threshold based on previous stock
+      // OR when stock becomes equal to or below the critical level based on current stock
+
+      // For example: Stock 20 -> 4 after deduction
+      // Previous critical = 20% of 20 = 4
+      // Current critical = 20% of 4 = 1 (rounded from 0.8)
+      // Trigger if: current stock (4) <= previous critical (4) AND stock decreased
+      final triggerBasedOnPrevious = totalCurrentStock > 0 &&
+          totalCurrentStock <= previousCriticalLevel &&
+          previousCriticalLevel > 0 &&
+          totalPreviousStock > previousCriticalLevel &&
+          totalCurrentStock < totalPreviousStock;
+
+      // Also check if current stock is exactly at or below its own critical level
+      // This handles cases where stock goes directly to the threshold
+      final triggerBasedOnCurrent = totalCurrentStock > 0 &&
+          currentCriticalLevel > 0 &&
+          totalCurrentStock <= currentCriticalLevel &&
+          totalCurrentStock < totalPreviousStock;
+
+      if (triggerBasedOnPrevious || triggerBasedOnCurrent) {
+        print(
+            'Low Stock Notification - Item: $supplyName, Current: $totalCurrentStock, '
+            'Current Critical: $currentCriticalLevel, Previous: $totalPreviousStock, '
+            'Previous Critical: $previousCriticalLevel');
         await createLowStockNotification(supplyName, totalCurrentStock);
         return;
       }
 
-      // Check for back to normal stock (from 1-2 to 3+ total stock)
-      if (totalCurrentStock >= 3 &&
-          totalPreviousStock <= 2 &&
+      // Check for back to normal stock using dynamic 20% critical level
+      // Back to normal: from at/below critical level to above critical level
+      if (totalCurrentStock > currentCriticalLevel &&
+          totalPreviousStock <= previousCriticalLevel &&
           totalPreviousStock > 0) {
         await createInStockNotification(supplyName, totalCurrentStock);
         return;
       }
     } catch (e) {
       print('Error checking stock level notification: $e');
-      // Fallback to original logic if database query fails
+      // Fallback to dynamic 20% critical level logic if database query fails
       if (newStock == 0 && previousStock > 0) {
         await createOutOfStockNotification(supplyName);
       } else if (newStock > 0 && previousStock == 0) {
         await createInStockNotification(supplyName, newStock);
-      } else if (newStock <= 2 && newStock > 0 && previousStock > 2) {
-        await createLowStockNotification(supplyName, newStock);
-      } else if (newStock >= 3 && previousStock <= 2 && previousStock > 0) {
-        await createInStockNotification(supplyName, newStock);
+      } else {
+        final newCriticalLevel = (newStock * 0.2).round();
+        final previousCriticalLevel = (previousStock * 0.2).round();
+        if (newStock > 0 &&
+            newStock <= newCriticalLevel &&
+            previousStock > previousCriticalLevel) {
+          await createLowStockNotification(supplyName, newStock);
+        } else if (newStock > newCriticalLevel &&
+            previousStock <= previousCriticalLevel &&
+            previousStock > 0) {
+          await createInStockNotification(supplyName, newStock);
+        }
       }
     }
   }

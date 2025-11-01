@@ -95,13 +95,16 @@ class InventoryAnalyticsService {
           }
         }
 
-        // Determine status based on total stock
+        // Determine status based on total stock with dynamic 20% critical level
         if (totalStock == 0) {
           outOfStock++;
-        } else if (totalStock <= 2) {
-          lowStock++;
         } else {
-          inStock++;
+          final criticalLevel = (totalStock * 0.2).round();
+          if (totalStock <= criticalLevel) {
+            lowStock++;
+          } else {
+            inStock++;
+          }
         }
       }
 
@@ -224,13 +227,16 @@ class InventoryAnalyticsService {
           }
         }
 
-        // Determine status based on total stock
+        // Determine status based on total stock with dynamic 20% critical level
         if (totalStock == 0) {
           outOfStock++;
-        } else if (totalStock <= 2) {
-          lowStock++;
         } else {
-          inStock++;
+          final criticalLevel = (totalStock * 0.2).round();
+          if (totalStock <= criticalLevel) {
+            lowStock++;
+          } else {
+            inStock++;
+          }
         }
       }
 
@@ -354,17 +360,21 @@ class InventoryAnalyticsService {
       }).toList();
 
       // Count individual supplies by status (across all batches)
-      int totalInStock = 0; // stock > 2
-      int totalLowStock = 0; // stock 1-2
+      // Using dynamic 20% critical level
+      int totalInStock = 0;
+      int totalLowStock = 0;
       int totalOutOfStock = 0; // stock = 0
 
       for (final supply in supplies) {
         if (supply.stock == 0) {
           totalOutOfStock++;
-        } else if (supply.stock <= 2) {
-          totalLowStock++;
         } else {
-          totalInStock++;
+          final criticalLevel = (supply.stock * 0.2).round();
+          if (supply.stock <= criticalLevel) {
+            totalLowStock++;
+          } else {
+            totalInStock++;
+          }
         }
       }
 
@@ -491,14 +501,17 @@ class InventoryAnalyticsService {
           }
         }
 
-        // Determine stock status (if not expired/expiring)
+        // Determine stock status (if not expired/expiring) using dynamic 20% critical level
         if (!isExpired && !isExpiring) {
           if (stock == 0) {
             status = 'Out of Stock';
-          } else if (stock <= 2) {
-            status = 'Low Stock';
           } else {
-            status = 'In Stock';
+            final criticalLevel = (stock * 0.2).round();
+            if (stock <= criticalLevel) {
+              status = 'Low Stock';
+            } else {
+              status = 'In Stock';
+            }
           }
         }
 

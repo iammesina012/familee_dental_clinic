@@ -403,8 +403,10 @@ class InventoryController {
       }
     }
 
-    // Priority 3: Low Stock (stock <= 2)
-    if (item.stock <= 2) return 2;
+    // Priority 3: Low Stock (using dynamic 20% critical level)
+    final criticalLevel =
+        GroupedInventoryItem.calculateCriticalLevel(item.stock);
+    if (item.stock <= criticalLevel && item.stock > 0) return 2;
 
     // Priority 4: In Stock (lowest priority)
     return 3;
@@ -441,7 +443,9 @@ class InventoryController {
 
     // Priority 3: Items with no expiry - sort by stock status
     // Low Stock items should come before In Stock items
-    if (item.stock <= 2) {
+    final criticalLevel =
+        GroupedInventoryItem.calculateCriticalLevel(item.stock);
+    if (item.stock <= criticalLevel && item.stock > 0) {
       return 999999999998; // Low stock with no expiry
     }
 
@@ -454,9 +458,28 @@ class InventoryController {
     // Note: Expired status is now handled by the dedicated Expired Supply page
     // Main inventory system no longer shows expired status
 
-    // Check stock status only
+    // Check stock status only using dynamic 20% critical level with tiered thresholds
     if (item.stock == 0) return "Out of Stock";
-    if (item.stock <= 2) return "Low Stock";
+
+    // Calculate critical level dynamically
+    final criticalLevel =
+        GroupedInventoryItem.calculateCriticalLevel(item.stock);
+
+    // Primary check: If current stock is at or below its own 20% critical level
+    if (criticalLevel > 0 && item.stock <= criticalLevel) {
+      return "Low Stock";
+    }
+
+    // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
+    if (item.stock <= 5) {
+      return "Low Stock";
+    }
+
+    // For stocks > 5, use dynamic calculation
+    if (item.stock > 5 && item.stock <= criticalLevel) {
+      return "Low Stock";
+    }
+
     return "In Stock";
   }
 

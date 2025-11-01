@@ -148,75 +148,59 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   Future<void> _save() async {
     if (_deductions.isEmpty) return;
 
-    // Show confirmation dialog
-    final shouldDeduct = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Confirm Deduction',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            'Are you sure you want to deduct ${_deductions.length} ${_deductions.length == 1 ? 'supply' : 'supplies'}?',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Cancel',
-                style:
-                    AppFonts.sfProStyle(fontSize: 16, color: Colors.grey[700]),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00D4AA)),
-              child: Text(
-                'Deduct',
-                style: AppFonts.sfProStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    // Show Purpose selection modal first
+    final purposeResult = await _showPurposeModal();
+    if (purposeResult == null) return;
 
-    if (shouldDeduct != true) return;
-
-    // Store the deductions for potential undo
-    final deductionsToApply = List<Map<String, dynamic>>.from(_deductions);
+    final purpose = purposeResult['purpose'] as String;
+    final remarks = purposeResult['remarks'] as String?;
 
     try {
-      await _controller.applyDeductions(deductionsToApply);
-      if (!mounted) return;
+      // Apply stock deductions to inventory
+      await _controller.applyDeductions(_deductions);
 
-      _showUndoBanner(deductionsToApply);
+      // Save a copy of deductions before clearing
+      final savedDeductions = List<Map<String, dynamic>>.from(_deductions);
 
+      // Clear the deductions list since they've been successfully applied
       setState(() {
         _deductions.clear();
       });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to deduct stock: $e',
-            style: AppFonts.sfProStyle(
-                fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
+
+      // Navigate to Deduction Logs page with purpose and supplies
+      await Navigator.of(context).pushNamed(
+        '/stock-deduction/deduction-logs',
+        arguments: {
+          'purpose': purpose,
+          'remarks': remarks ?? '',
+          'supplies': savedDeductions,
+        },
       );
+    } catch (e) {
+      // Show error message if deduction fails
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to apply deductions: $e',
+              style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
+  }
+
+  Future<Map<String, dynamic>?> _showPurposeModal() async {
+    return await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return const _PurposeSelectionDialog();
+      },
+    );
   }
 
   Future<void> _undoDeductions(
@@ -394,12 +378,26 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   }
 
   void _createPreset() async {
-    final result =
-        await Navigator.of(context).pushNamed('/stock-deduction/presets');
-    if (result is Map<String, dynamic> && result['action'] == 'use_preset') {
-      final preset = result['preset'] as Map<String, dynamic>;
-      await _loadPresetIntoDeductions(preset);
+    // Navigate to Service Management page
+    final result = await Navigator.of(context)
+        .pushNamed('/stock-deduction/service-management');
+
+    // Handle the preset that was selected
+    if (result != null && result is Map<String, dynamic>) {
+      if (result['action'] == 'use_preset' && result['preset'] != null) {
+        await _loadPresetIntoDeductions(result['preset']);
+      }
     }
+  }
+
+  void _openDeductionLogs() async {
+    // Navigate to Deduction Logs page
+    await Navigator.of(context).pushNamed('/stock-deduction/deduction-logs');
+  }
+
+  void _openApproval() async {
+    // Navigate to Approval page
+    await Navigator.of(context).pushNamed('/stock-deduction/approval');
   }
 
   Future<void> _loadPresetIntoDeductions(Map<String, dynamic> preset) async {
@@ -506,6 +504,14 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                 if (validBatches.isNotEmpty) {
                   final primaryBatch = validBatches.first;
 
+                  // Use preset quantity if available, otherwise default to 1
+                  final int presetQuantity = (supply['quantity'] ?? 1) as int;
+                  final int defaultQty =
+                      primaryBatch.stock > 0 ? presetQuantity : 0;
+                  final int deductQty = defaultQty > primaryBatch.stock
+                      ? primaryBatch.stock
+                      : defaultQty;
+
                   _deductions.add({
                     'docId': primaryBatch.id,
                     'name': primaryBatch.name,
@@ -514,7 +520,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                     'expiry': primaryBatch.expiry,
                     'noExpiry': primaryBatch.noExpiry,
                     'stock': primaryBatch.stock,
-                    'deductQty': primaryBatch.stock > 0 ? 1 : 0,
+                    'deductQty': deductQty,
                     'allBatches': validBatches
                         .map((batch) => {
                               'docId': batch.id,
@@ -794,31 +800,9 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           return false; // Prevent default back behavior
         },
         child: Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          appBar: AppBar(
-            automaticallyImplyLeading: MediaQuery.of(context).size.width >= 900
-                ? false
-                : true, // Remove back button on desktop
-            title: Text(
-              'Quick Deduction',
-              style: AppFonts.sfProStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).appBarTheme.titleTextStyle?.color ??
-                    Theme.of(context).textTheme.titleLarge?.color,
-              ),
-            ),
-            centerTitle: true,
-            backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-            toolbarHeight: 70,
-            iconTheme: Theme.of(context).appBarTheme.iconTheme,
-            elevation: Theme.of(context).appBarTheme.elevation ?? 5,
-            shadowColor: Theme.of(context).appBarTheme.shadowColor ??
-                Theme.of(context).shadowColor,
-            actions: [
-              const NotificationBadgeButton(),
-            ],
-          ),
+          backgroundColor: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF3A3A3A)
+              : const Color(0xFFF5F5F5),
           drawer: MediaQuery.of(context).size.width >= 900
               ? null
               : MyDrawer(
@@ -847,11 +831,34 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                         vertical: 12.0,
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // Custom Header with title and notification icon
+                          _buildHeader(Theme.of(context)),
+                          const SizedBox(height: 16),
                           // Top bar for in-page actions
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
+                              ElevatedButton(
+                                onPressed: _openDeductionLogs,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00D4AA),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: Text(
+                                  'Deduction Logs',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               ElevatedButton(
                                 onPressed: _createPreset,
                                 style: ElevatedButton.styleFrom(
@@ -862,7 +869,26 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                                       borderRadius: BorderRadius.circular(8)),
                                 ),
                                 child: Text(
-                                  'Presets',
+                                  'Service',
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: _openApproval,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00D4AA),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: Text(
+                                  'Approval',
                                   style: AppFonts.sfProStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
@@ -1156,134 +1182,241 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
 
   Widget _buildWithNavigationRail() {
     final theme = Theme.of(context);
+
+    // Main destinations (top section)
+    final List<_RailDestination> mainDestinations = [
+      _RailDestination(
+          icon: Icons.dashboard, label: 'Dashboard', route: '/dashboard'),
+      _RailDestination(
+          icon: Icons.inventory, label: 'Inventory', route: '/inventory'),
+      _RailDestination(
+          icon: Icons.shopping_cart,
+          label: 'Purchase Order',
+          route: '/purchase-order'),
+      _RailDestination(
+          icon: Icons.playlist_remove,
+          label: 'Stock Deduction',
+          route: '/stock-deduction'),
+    ];
+
+    // Use the same role logic as drawer for conditional Activity Log
     final userRoleProvider = UserRoleProvider();
     final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
 
+    // Bottom destinations (Settings and Logout)
+    final List<_RailDestination> bottomDestinations = [
+      _RailDestination(
+          icon: Icons.settings, label: 'Settings', route: '/settings'),
+      _RailDestination(icon: Icons.logout, label: 'Logout', route: '/logout'),
+    ];
+
+    // Stock Deduction is selected here (index 3)
+    final int selectedIndex = 3;
+
     return Row(
       children: [
-        NavigationRail(
-          minWidth: 150,
-          selectedIndex: 3, // Stock Deduction is at index 3
-          labelType: NavigationRailLabelType.all,
-          useIndicator: true,
-          backgroundColor: theme.scaffoldBackgroundColor,
-          selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
-          selectedLabelTextStyle: AppFonts.sfProStyle(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.primary,
-          ),
-          unselectedLabelTextStyle: AppFonts.sfProStyle(
-            fontWeight: FontWeight.w500,
-            color: theme.textTheme.bodyMedium?.color,
-          ),
-          leading: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
-                    child: Image.asset(
-                      'assets/images/logo/logo_101.png',
+        Container(
+          width: 220,
+          color: theme.colorScheme.surface,
+          child: Column(
+            children: [
+              // Logo and brand
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16.0, 35.0, 16.0, 16.0),
+                child: Row(
+                  children: [
+                    Container(
                       width: 60,
                       height: 60,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(30),
+                        child: Image.asset(
+                          'assets/images/logo/logo_101.png',
                           width: 60,
                           height: 60,
-                          color: Colors.blue,
-                          child: const Icon(
-                            Icons.medical_services,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        );
-                      },
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 60,
+                              height: 60,
+                              color: Colors.blue,
+                              child: const Icon(
+                                Icons.medical_services,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 15),
+                    Flexible(
+                      child: Transform.translate(
+                        offset: const Offset(0, 8),
+                        child: Transform.scale(
+                          scale: 2.9,
+                          child: theme.brightness == Brightness.dark
+                              ? ColorFiltered(
+                                  colorFilter: const ColorFilter.matrix([
+                                    1.5, 0, 0, 0, 0, // Red channel - brighten
+                                    0, 1.5, 0, 0, 0, // Green channel - brighten
+                                    0, 0, 1.5, 0, 0, // Blue channel - brighten
+                                    0, 0, 0, 1, 0, // Alpha channel - unchanged
+                                  ]),
+                                  child: Image.asset(
+                                    'assets/images/logo/tita_doc_2.png',
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Text(
+                                        'FamiLee Dental',
+                                        style: AppFonts.sfProStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: theme
+                                              .textTheme.titleMedium?.color,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : Image.asset(
+                                  'assets/images/logo/tita_doc_2.png',
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Text(
+                                      'FamiLee Dental',
+                                      style: AppFonts.sfProStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                        color:
+                                            theme.textTheme.titleMedium?.color,
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'FamiLee Dental',
-                  style: AppFonts.sfProStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    color: theme.textTheme.titleMedium?.color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          destinations: [
-            const NavigationRailDestination(
-              icon: Icon(Icons.dashboard),
-              label: Text('Dashboard'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.inventory),
-              label: Text('Inventory'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.shopping_cart),
-              label: Text('Purchase Order'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.playlist_remove),
-              label: Text('Stock Deduction'),
-            ),
-            if (canAccessActivityLog)
-              const NavigationRailDestination(
-                icon: Icon(Icons.history),
-                label: Text('Activity Logs'),
               ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.settings),
-              label: Text('Settings'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.logout),
-              label: Text('Logout'),
-            ),
-          ],
-          onDestinationSelected: (index) async {
-            // Check if there are unsaved deductions before navigation
-            bool canNavigate = true;
-            if (_deductions.isNotEmpty) {
-              canNavigate = await _confirmLeave();
-            }
+              // Navigation items
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    // MENU section header
+                    _buildSectionHeader(theme, 'MENU'),
+                    const SizedBox(height: 8),
+                    // MENU items
+                    for (int i = 0; i < mainDestinations.length; i++)
+                      _buildRailDestinationTile(
+                        context: context,
+                        theme: theme,
+                        destination: mainDestinations[i],
+                        isSelected: i == selectedIndex,
+                        onTap: () async {
+                          final dest = mainDestinations[i];
+                          final currentRoute =
+                              ModalRoute.of(context)?.settings.name;
 
-            if (!canNavigate) return;
+                          // Check if there are unsaved deductions before navigation
+                          bool canNavigate = true;
+                          if (_deductions.isNotEmpty &&
+                              currentRoute != dest.route) {
+                            canNavigate = await _confirmLeave();
+                            if (!canNavigate) return;
+                          }
 
-            if (index == 0) {
-              Navigator.pushNamed(context, '/dashboard');
-            } else if (index == 1) {
-              Navigator.pushNamed(context, '/inventory');
-            } else if (index == 2) {
-              Navigator.pushNamed(context, '/purchase-order');
-            } else if (index == 3) {
-              // Already on Stock Deduction
-            } else if (canAccessActivityLog && index == 4) {
-              Navigator.pushNamed(context, '/activity-log');
-            } else if (index == (canAccessActivityLog ? 5 : 4)) {
-              Navigator.pushNamed(context, '/settings');
-            } else if (index == (canAccessActivityLog ? 6 : 5)) {
-              await _handleLogout();
-            }
-          },
+                          if (currentRoute != dest.route) {
+                            Navigator.pushNamed(context, dest.route);
+                          }
+                        },
+                      ),
+                    // Activity Logs (if accessible) - part of MENU
+                    if (canAccessActivityLog)
+                      _buildRailDestinationTile(
+                        context: context,
+                        theme: theme,
+                        destination: _RailDestination(
+                          icon: Icons.history,
+                          label: 'Activity Logs',
+                          route: '/activity-log',
+                        ),
+                        isSelected: false,
+                        onTap: () async {
+                          final currentRoute =
+                              ModalRoute.of(context)?.settings.name;
+
+                          // Check if there are unsaved deductions before navigation
+                          bool canNavigate = true;
+                          if (_deductions.isNotEmpty &&
+                              currentRoute != '/activity-log') {
+                            canNavigate = await _confirmLeave();
+                            if (!canNavigate) return;
+                          }
+
+                          if (currentRoute != '/activity-log') {
+                            Navigator.pushNamed(context, '/activity-log');
+                          }
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              // GENERAL section at the bottom
+              _buildSectionHeader(theme, 'GENERAL'),
+              const SizedBox(height: 8),
+              // GENERAL items
+              for (int i = 0; i < bottomDestinations.length; i++)
+                _buildRailDestinationTile(
+                  context: context,
+                  theme: theme,
+                  destination: bottomDestinations[i],
+                  isSelected: false,
+                  onTap: () async {
+                    final dest = bottomDestinations[i];
+                    final currentRoute = ModalRoute.of(context)?.settings.name;
+
+                    // Handle logout separately
+                    if (dest.route == '/logout') {
+                      // Check if there are unsaved deductions before logout
+                      bool canNavigate = true;
+                      if (_deductions.isNotEmpty) {
+                        canNavigate = await _confirmLeave();
+                        if (!canNavigate) return;
+                      }
+                      await _handleLogout();
+                      return;
+                    }
+
+                    // Check if there are unsaved deductions before navigation
+                    bool canNavigate = true;
+                    if (_deductions.isNotEmpty && currentRoute != dest.route) {
+                      canNavigate = await _confirmLeave();
+                      if (!canNavigate) return;
+                    }
+
+                    if (currentRoute != dest.route) {
+                      Navigator.pushNamed(context, dest.route);
+                    }
+                  },
+                ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
         const VerticalDivider(width: 1),
         Expanded(
@@ -1305,15 +1438,184 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     );
   }
 
+  Widget _buildSectionHeader(ThemeData theme, String label) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: AppFonts.sfProStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRailDestinationTile({
+    required BuildContext context,
+    required ThemeData theme,
+    required _RailDestination destination,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          // Background with rounded right corners
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? theme.colorScheme.primary.withOpacity(0.12)
+                  : Colors.transparent,
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(20),
+                bottomRight: Radius.circular(20),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    destination.icon,
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.textTheme.bodyMedium?.color,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      destination.label,
+                      style: AppFonts.sfProStyle(
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 14,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Vertical indicator line on the left
+          if (isSelected)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(2),
+                    bottomLeft: Radius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      margin: EdgeInsets.zero,
+      color: theme.colorScheme.surface,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: theme.colorScheme.surface,
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left side - Title and Description
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Quick Deduction',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Efficiently manage and deduct stock quantities with ease.',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color:
+                          isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Right side - Notification icon only
+            const NotificationBadgeButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStockDeductionContent() {
     final theme = Theme.of(context);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Custom Header with title and notification icon
+        _buildHeader(theme),
+        const SizedBox(height: 16),
         // Top bar for in-page actions
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            ElevatedButton(
+              onPressed: _openDeductionLogs,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00D4AA),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                'Deduction Logs',
+                style: AppFonts.sfProStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
             ElevatedButton(
               onPressed: _createPreset,
               style: ElevatedButton.styleFrom(
@@ -1324,7 +1626,26 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                     borderRadius: BorderRadius.circular(8)),
               ),
               child: Text(
-                'Presets',
+                'Service',
+                style: AppFonts.sfProStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _openApproval,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00D4AA),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                'Approval',
                 style: AppFonts.sfProStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -1635,4 +1956,268 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
         ) ??
         false;
   }
+}
+
+class _PurposeSelectionDialog extends StatefulWidget {
+  const _PurposeSelectionDialog();
+
+  @override
+  State<_PurposeSelectionDialog> createState() =>
+      _PurposeSelectionDialogState();
+}
+
+class _PurposeSelectionDialogState extends State<_PurposeSelectionDialog> {
+  String? selectedPurpose;
+  final TextEditingController remarksController = TextEditingController();
+  bool showRemarksField = false;
+
+  @override
+  void dispose() {
+    remarksController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: 500,
+          minWidth: 400,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select Purpose',
+              style: AppFonts.sfProStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.titleLarge?.color,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Scrollable content area
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Radio buttons for purposes
+                    ..._buildPurposeOptions(theme, selectedPurpose, (value) {
+                      setState(() {
+                        selectedPurpose = value;
+                        showRemarksField = value == 'Other';
+                      });
+                    }),
+                    const SizedBox(height: 16),
+                    // Remarks text field (only shown for "Other")
+                    if (showRemarksField) ...[
+                      Text(
+                        'Remarks:',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: remarksController,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText: 'Please specify in remarks',
+                          hintStyle: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            color: theme.textTheme.bodySmall?.color
+                                ?.withOpacity(0.6),
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: theme.dividerColor.withOpacity(0.3),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: theme.dividerColor.withOpacity(0.3),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF00D4AA),
+                              width: 2,
+                            ),
+                          ),
+                          filled: true,
+                          fillColor: isDark
+                              ? theme.colorScheme.surface
+                              : Colors.grey[50],
+                          contentPadding: const EdgeInsets.all(12),
+                        ),
+                        style: AppFonts.sfProStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Buttons (fixed at bottom)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(null),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: isDark
+                            ? Colors.grey.shade600
+                            : Colors.grey.shade300,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    'Cancel',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: selectedPurpose == null ||
+                          (selectedPurpose == 'Other' &&
+                              remarksController.text.trim().isEmpty)
+                      ? null
+                      : () {
+                          Navigator.of(context).pop({
+                            'purpose': selectedPurpose!,
+                            'remarks': selectedPurpose == 'Other'
+                                ? remarksController.text.trim()
+                                : null,
+                          });
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: selectedPurpose == null ||
+                            (selectedPurpose == 'Other' &&
+                                remarksController.text.trim().isEmpty)
+                        ? Colors.grey[400]
+                        : const Color(0xFF00D4AA),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Proceed',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildPurposeOptions(
+    ThemeData theme,
+    String? selectedPurpose,
+    Function(String?) onChanged,
+  ) {
+    final purposes = [
+      'Office Used',
+      'Damaged',
+      'Contaminated',
+      'Lost/Missing',
+      'Stock Correction',
+      'Returned to Supplier',
+      'Other',
+    ];
+
+    return purposes.map((purpose) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: InkWell(
+          onTap: () => onChanged(purpose),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.brightness == Brightness.dark
+                  ? theme.colorScheme.surface
+                  : Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selectedPurpose == purpose
+                    ? const Color(0xFF00D4AA)
+                    : theme.dividerColor.withOpacity(0.3),
+                width: selectedPurpose == purpose ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Radio<String>(
+                  value: purpose,
+                  groupValue: selectedPurpose,
+                  onChanged: onChanged,
+                  activeColor: const Color(0xFF00D4AA),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    purpose,
+                    style: AppFonts.sfProStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
+}
+
+class _RailDestination {
+  final IconData icon;
+  final String label;
+  final String route;
+
+  _RailDestination(
+      {required this.icon, required this.label, required this.route});
 }

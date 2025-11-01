@@ -46,7 +46,10 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
       }
 
       setState(() {
-        _presetSupplies.add(result);
+        _presetSupplies.add({
+          ...result,
+          'quantity': 1, // Initialize quantity to 1
+        });
       });
     } else if (result is List) {
       // Check for duplicates within current preset
@@ -62,7 +65,12 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
       // If no duplicates found, add all items
       setState(() {
         final validSupplies = _controller.processSuppliesResult(result);
-        _presetSupplies.addAll(validSupplies);
+        for (final supply in validSupplies) {
+          _presetSupplies.add({
+            ...supply,
+            'quantity': 1, // Initialize quantity to 1
+          });
+        }
       });
     }
   }
@@ -70,6 +78,25 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
   void _removeSupplyAt(int index) {
     setState(() {
       _presetSupplies.removeAt(index);
+    });
+  }
+
+  void _incrementQty(int index) {
+    setState(() {
+      final int current = (_presetSupplies[index]['quantity'] ?? 1) as int;
+      // No stock limit for presets - presets are templates
+      final int next = current + 1;
+      // Only limit to 999 for practicality
+      _presetSupplies[index]['quantity'] = next > 999 ? 999 : next;
+    });
+  }
+
+  void _decrementQty(int index) {
+    setState(() {
+      final current = (_presetSupplies[index]['quantity'] ?? 1) as int;
+      if (current > 1) {
+        _presetSupplies[index]['quantity'] = current - 1;
+      }
     });
   }
 
@@ -113,27 +140,6 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
         SnackBar(
           content: Text(
             'Error checking preset name: $e',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Check if exact supply set already exists
-    try {
-      final exactSetExists =
-          await _controller.isExactSupplySetExists(_presetSupplies);
-      if (exactSetExists) {
-        await _showDuplicateSupplySetDialog();
-        return; // Stay on this page, don't navigate back
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error checking supply set: $e',
             style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
           ),
           backgroundColor: Colors.red,
@@ -196,34 +202,6 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
     return shouldLeave ?? false;
   }
 
-  Future<void> _showOutOfStockDialog(String supplyName) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Out of stock',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            '"$supplyName" has no available stock to add to preset.',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'OK',
-                style: AppFonts.sfProStyle(fontSize: 16),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Future<void> _showDuplicateNameDialog(String presetName) async {
     await showDialog<void>(
       context: context,
@@ -264,34 +242,6 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
           ),
           content: Text(
             '"$supplyName" is already in your preset list.',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'OK',
-                style: AppFonts.sfProStyle(fontSize: 16),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showDuplicateSupplySetDialog() async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Duplicate preset',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            'A preset with the exact same supplies already exists. Please choose different supplies or a different combination.',
             style: AppFonts.sfProStyle(fontSize: 16),
           ),
           actions: [
@@ -505,13 +455,13 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
                                                 BorderRadius.circular(8),
                                             child: Image.network(
                                               item['imageUrl'] ?? '',
-                                              width: 40,
-                                              height: 40,
+                                              width: 48,
+                                              height: 48,
                                               fit: BoxFit.cover,
                                               errorBuilder: (_, __, ___) =>
                                                   Container(
-                                                width: 40,
-                                                height: 40,
+                                                width: 48,
+                                                height: 48,
                                                 color: Colors.grey[200],
                                                 child: const Icon(
                                                     Icons.inventory,
@@ -520,7 +470,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 12),
+                                          const SizedBox(width: 14),
                                           Expanded(
                                             child: Text(
                                               item['name'] ?? '',
@@ -534,6 +484,46 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
                                             ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                onPressed: () =>
+                                                    _decrementQty(index),
+                                                icon: Icon(
+                                                  Icons.remove_circle_outline,
+                                                  color: Theme.of(context)
+                                                      .iconTheme
+                                                      .color,
+                                                ),
+                                              ),
+                                              Text(
+                                                ((_presetSupplies[index]
+                                                            ['quantity'] ??
+                                                        1) as int)
+                                                    .toString(),
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                onPressed: () =>
+                                                    _incrementQty(index),
+                                                icon: Icon(
+                                                  Icons.add_circle_outline,
+                                                  color: Theme.of(context)
+                                                      .iconTheme
+                                                      .color,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),

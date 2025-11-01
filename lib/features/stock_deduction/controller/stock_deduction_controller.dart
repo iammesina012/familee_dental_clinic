@@ -29,6 +29,10 @@ class StockDeductionController {
         int remainingQty = requestedQty;
         final String itemName = item['name'] ?? 'Unknown Item';
 
+        // Track total previous stock across all batches for notification
+        int totalPreviousStock = 0;
+        int totalDeductedQty = 0;
+
         for (final batch in allBatches) {
           if (remainingQty <= 0) break;
 
@@ -37,9 +41,15 @@ class StockDeductionController {
 
           if (batchStock <= 0) continue;
 
+          // Accumulate previous stock for notification calculation
+          totalPreviousStock += batchStock;
+
           final int deductFromBatch =
               remainingQty > batchStock ? batchStock : remainingQty;
           final int newBatchStock = batchStock - deductFromBatch;
+
+          // Accumulate total deducted quantity
+          totalDeductedQty += deductFromBatch;
 
           // Update this batch
           await _supabase
@@ -49,13 +59,7 @@ class StockDeductionController {
           results[batchDocId] = deductFromBatch;
           remainingQty -= deductFromBatch;
 
-          // Store notification and log data for this batch
-          results['_notificationData_$batchDocId'] = {
-            'itemName': itemName,
-            'newStock': newBatchStock,
-            'previousStock': batchStock,
-          };
-
+          // Store log data for this batch (for activity logging)
           results['_logData_$batchDocId'] = {
             'itemName': itemName,
             'brand': item['brand'] ?? 'Unknown Brand',
@@ -63,6 +67,16 @@ class StockDeductionController {
             'supplier': 'Multiple Batches',
           };
         }
+
+        // Store notification data keyed by item name (once per item, not per batch)
+        // Use the total previous stock and calculate approximate new stock for notification
+        // Note: The notification controller will recalculate total stock from DB anyway
+        results['_notificationDataByName_$itemName'] = {
+          'itemName': itemName,
+          'newStock': totalPreviousStock -
+              totalDeductedQty, // Approximate - notification controller will recalculate
+          'previousStock': totalPreviousStock,
+        };
       } else {
         // Single batch deduction (original logic)
         try {
@@ -120,9 +134,56 @@ class StockDeductionController {
 
     // Log all successful deductions and check for notifications
     final notificationsController = NotificationsController();
+    final Set<String> processedItemNames =
+        {}; // Track items we've already checked for notifications
+
     for (final item in deductionItems) {
       final String? docId = item['docId'] as String?;
-      if (docId != null && results.containsKey(docId)) {
+      final String? itemName = item['name'] as String?;
+
+      // Check if this is a FIFO deduction (has allBatches)
+      final List<dynamic>? allBatches = item['allBatches'] as List<dynamic>?;
+
+      if (allBatches != null && allBatches.isNotEmpty && itemName != null) {
+        // Handle FIFO deductions - check notifications once per item name
+        if (!processedItemNames.contains(itemName)) {
+          processedItemNames.add(itemName);
+
+          // Get notification data stored by item name
+          final notificationData = results['_notificationDataByName_$itemName']
+              as Map<String, dynamic>?;
+
+          if (notificationData != null) {
+            final name = notificationData['itemName'] ?? itemName;
+            final newStock = notificationData['newStock'] ?? 0;
+            final previousStock = notificationData['previousStock'] ?? 0;
+
+            // Check for stock level notifications (will recalculate total stock from DB)
+            await notificationsController.checkStockLevelNotification(
+              name,
+              newStock as int,
+              previousStock as int,
+            );
+          }
+        }
+
+        // Log activity for each batch
+        for (final batch in allBatches) {
+          final String batchDocId = batch['docId'] as String;
+          final logData =
+              results['_logData_$batchDocId'] as Map<String, dynamic>?;
+
+          if (logData != null) {
+            await SdActivityController().logStockDeduction(
+              itemName: logData['itemName'] ?? 'Unknown Item',
+              brand: logData['brand'] ?? 'Unknown Brand',
+              quantity: logData['quantity'] ?? 0,
+              supplier: logData['supplier'] ?? 'Unknown Supplier',
+            );
+          }
+        }
+      } else if (docId != null && results.containsKey(docId)) {
+        // Handle single batch deductions
         final logData = results['_logData_$docId'] as Map<String, dynamic>?;
         final notificationData =
             results['_notificationData_$docId'] as Map<String, dynamic>?;
@@ -138,17 +199,15 @@ class StockDeductionController {
 
         // Check for stock level notifications
         if (notificationData != null) {
-          final itemName = notificationData['itemName'] ?? 'Unknown Item';
+          final name = notificationData['itemName'] ?? 'Unknown Item';
           final newStock = notificationData['newStock'] ?? 0;
           final previousStock = notificationData['previousStock'] ?? 0;
 
           await notificationsController.checkStockLevelNotification(
-            itemName,
+            name,
             newStock as int,
             previousStock as int,
           );
-
-          // summary tally removed
         }
       }
     }
@@ -159,7 +218,8 @@ class StockDeductionController {
     final cleanResults = <String, int>{};
     results.forEach((key, value) {
       if (!key.startsWith('_logData_') &&
-          !key.startsWith('_notificationData_')) {
+          !key.startsWith('_notificationData_') &&
+          !key.startsWith('_notificationDataByName_')) {
         cleanResults[key] = value as int;
       }
     });

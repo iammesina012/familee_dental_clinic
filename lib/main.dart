@@ -18,6 +18,8 @@ import 'package:familee_dental/features/stock_deduction/pages/sd_preset_manageme
 import 'package:familee_dental/features/stock_deduction/pages/sd_create_preset_page.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_edit_preset_page.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_add_supply_preset_page.dart';
+import 'package:familee_dental/features/stock_deduction/pages/sd_deduction_logs_page.dart';
+import 'package:familee_dental/features/stock_deduction/pages/sd_approval_page.dart';
 import 'package:familee_dental/features/activity_log/pages/activity_log_page.dart';
 import 'package:familee_dental/features/notifications/pages/notifications_page.dart';
 import 'package:familee_dental/features/backup_restore/services/automatic_backup_service.dart';
@@ -117,7 +119,12 @@ class MainApp extends StatelessWidget {
             '/stock-deduction/add-supply-for-preset': (context) =>
                 const StockDeductionAddSupplyForPresetPage(),
             '/stock-deduction/presets': (context) =>
-                const PresetManagementPage(),
+                const ServiceManagementPage(),
+            '/stock-deduction/service-management': (context) =>
+                const ServiceManagementPage(),
+            '/stock-deduction/deduction-logs': (context) =>
+                const DeductionLogsPage(),
+            '/stock-deduction/approval': (context) => const ApprovalPage(),
             '/stock-deduction/create-preset': (context) =>
                 const CreatePresetPage(),
             '/stock-deduction/edit-preset': (context) {

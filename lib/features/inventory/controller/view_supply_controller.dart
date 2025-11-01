@@ -46,11 +46,30 @@ class ViewSupplyController {
     // Main inventory system no longer shows expired status
 
     // For view supply page, show stock status when not expired
+    // Using dynamic 20% critical level with tiered thresholds
     if (item.stock == 0) {
       return "Out of Stock";
-    } else if (item.stock <= 2) {
-      return "Low Stock";
     } else {
+      // Calculate critical level dynamically
+      final criticalLevel =
+          GroupedInventoryItem.calculateCriticalLevel(item.stock);
+
+      // Primary check: If current stock is at or below its own 20% critical level
+      if (criticalLevel > 0 && item.stock <= criticalLevel) {
+        return "Low Stock";
+      }
+
+      // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
+      // This ensures that when stock is deducted (e.g., 20 -> 4), it shows as low stock
+      if (item.stock <= 5) {
+        return "Low Stock";
+      }
+
+      // For stocks > 5, use dynamic calculation
+      if (item.stock > 5 && item.stock <= criticalLevel) {
+        return "Low Stock";
+      }
+
       return "In Stock";
     }
   }

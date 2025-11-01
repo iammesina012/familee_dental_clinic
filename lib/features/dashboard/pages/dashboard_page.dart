@@ -15,7 +15,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:platform/platform.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:io';
 import 'dart:async';
 
@@ -42,41 +41,13 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
   String? _userName;
   String? _userRole;
   String _selectedPeriod = 'Quarterly'; // Weekly, Monthly, Quarterly
-  final FlutterLocalNotificationsPlugin _notifications =
-      FlutterLocalNotificationsPlugin();
-  static const int _downloadNotificationId = 1001;
 
   @override
   void initState() {
     super.initState();
     _initializeAnimation();
     _loadUserData();
-    _initializeNotifications();
     // Dashboard access logging removed for now
-  }
-
-  Future<void> _initializeNotifications() async {
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/launcher_icon');
-    const iosSettings = DarwinInitializationSettings();
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
-    await _notifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (details) {},
-    );
-
-    // Request permission for Android 13+
-    const platform = LocalPlatform();
-    if (platform.isAndroid) {
-      final androidImplementation =
-          _notifications.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-      await androidImplementation?.requestNotificationsPermission();
-    }
   }
 
   Future<void> _loadUserData() async {
@@ -2405,165 +2376,53 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         false; // Default to false if dialog is dismissed
   }
 
-  // Show download progress notification
-  Future<void> _showDownloadProgressNotification(
-      String fileName, int progress) async {
-    const androidDetails = AndroidNotificationDetails(
-      'download_channel',
-      'Download Progress',
-      channelDescription: 'Shows download progress for reports',
-      importance: Importance.low,
-      priority: Priority.low,
-      showProgress: true,
-      maxProgress: 100,
-      progress: 0,
-      onlyAlertOnce: true,
-      ongoing: true,
-    );
-
-    const notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      _downloadNotificationId,
-      'Downloading Report',
-      fileName,
-      notificationDetails,
-      payload: 'download',
-    );
-
-    // Update progress
-    if (progress < 100) {
-      await _updateDownloadProgress(fileName, progress);
-    }
-  }
-
-  // Update download progress
-  Future<void> _updateDownloadProgress(String fileName, int progress) async {
-    final androidDetails = AndroidNotificationDetails(
-      'download_channel',
-      'Download Progress',
-      channelDescription: 'Shows download progress for reports',
-      importance: Importance.low,
-      priority: Priority.low,
-      showProgress: true,
-      maxProgress: 100,
-      progress: progress,
-      onlyAlertOnce: true,
-      ongoing: true,
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      _downloadNotificationId,
-      'Downloading Report',
-      '$fileName ($progress%)',
-      notificationDetails,
-      payload: 'download',
-    );
-  }
-
-  // Show download complete notification
-  Future<void> _showDownloadCompleteNotification(
-      String fileName, String message) async {
-    const androidDetails = AndroidNotificationDetails(
-      'download_channel',
-      'Download Progress',
-      channelDescription: 'Shows download progress for reports',
-      importance: Importance.defaultImportance,
-      priority: Priority.defaultPriority,
-      showProgress: false,
-      ongoing: false,
-    );
-
-    const notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      _downloadNotificationId,
-      'Download Complete',
-      message,
-      notificationDetails,
-      payload: 'download_complete',
-    );
-  }
-
   // CSV Export Handler
   Future<void> _handleCSVExport(BuildContext context) async {
-    final platform = const LocalPlatform();
-    final now = DateTime.now();
-    final fileName = 'Report_${_formatFileDateTime(now)}.csv';
-
-    // Show Android notification with progress (if Android)
-    if (platform.isAndroid) {
-      await _showDownloadProgressNotification(fileName, 0);
-    } else {
-      // Show toast notification for other platforms
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Downloading report...',
-            style: AppFonts.sfProStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
+    // Show toast notification
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Downloading report...',
+          style: AppFonts.sfProStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.white,
           ),
-          backgroundColor: Colors.grey[800],
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          duration: const Duration(seconds: 2),
         ),
-      );
-    }
+        backgroundColor: Colors.grey[800],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
 
     try {
-      // Update progress: 20% - Collecting data
-      if (platform.isAndroid) {
-        await _updateDownloadProgress(fileName, 20);
-      }
-
       // Collect all dashboard data
       final reportData = await _collectReportData();
 
-      // Update progress: 50% - Generating file
-      if (platform.isAndroid) {
-        await _updateDownloadProgress(fileName, 50);
-      }
-
       // Generate CSV
       final csvContent = _generateCSV(reportData);
-
-      // Update progress: 80% - Saving file
-      if (platform.isAndroid) {
-        await _updateDownloadProgress(fileName, 80);
-      }
 
       // Save file
       final filePath = await _saveFile(csvContent, 'csv');
       print('CSV file saved to: $filePath'); // Debug print
 
-      // Update progress: 100% - Complete
-      if (platform.isAndroid) {
-        await _updateDownloadProgress(fileName, 100);
-        await Future.delayed(const Duration(milliseconds: 500));
-        final message = 'Report saved to Downloads';
-        await _showDownloadCompleteNotification(fileName, message);
-      }
-
       // Show success message with file path
       if (context.mounted) {
-        final savedMessage = platform.isAndroid
+        final platform = const LocalPlatform();
+        final fileName = filePath.split('/').last.split('\\').last;
+        final message = platform.isAndroid
             ? 'Report saved to Downloads'
             : platform.isIOS
                 ? 'Report saved (check Files app)'
-                : 'Report saved: ${filePath.split('/').last.split('\\').last}';
+                : 'Report saved: $fileName';
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              savedMessage,
+              message,
               style: AppFonts.sfProStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -2582,12 +2441,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
     } catch (e, stackTrace) {
       print('Error saving CSV report: $e'); // Debug print
       print('Stack trace: $stackTrace'); // Debug print
-
-      // Cancel notification on error
-      if (platform.isAndroid) {
-        await _notifications.cancel(_downloadNotificationId);
-      }
-
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2613,81 +2466,51 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
 
   // PDF Export Handler
   Future<void> _handlePDFExport(BuildContext context) async {
-    final platform = const LocalPlatform();
-    final now = DateTime.now();
-    final fileName = 'Report_${_formatFileDateTime(now)}.pdf';
-
-    // Show Android notification with progress (if Android)
-    if (platform.isAndroid) {
-      await _showDownloadProgressNotification(fileName, 0);
-    } else {
-      // Show toast notification for other platforms
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Downloading report...',
-            style: AppFonts.sfProStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
+    // Show toast notification
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Downloading report...',
+          style: AppFonts.sfProStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.white,
           ),
-          backgroundColor: Colors.grey[800],
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          duration: const Duration(seconds: 2),
         ),
-      );
-    }
+        backgroundColor: Colors.grey[800],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
 
     try {
-      // Update progress: 20% - Collecting data
-      if (platform.isAndroid) {
-        await _updateDownloadProgress(fileName, 20);
-      }
-
       // Collect all dashboard data
       final reportData = await _collectReportData();
 
-      // Update progress: 40% - Generating PDF
-      if (platform.isAndroid) {
-        await _updateDownloadProgress(fileName, 40);
-      }
-
       // Generate PDF
       final pdfBytes = await _generatePDF(reportData);
-
-      // Update progress: 80% - Saving file
-      if (platform.isAndroid) {
-        await _updateDownloadProgress(fileName, 80);
-      }
 
       // Save file
       final filePath = await _saveFile(pdfBytes, 'pdf');
       print('PDF file saved to: $filePath'); // Debug print
 
-      // Update progress: 100% - Complete
-      if (platform.isAndroid) {
-        await _updateDownloadProgress(fileName, 100);
-        await Future.delayed(const Duration(milliseconds: 500));
-        final message = 'Report saved to Downloads';
-        await _showDownloadCompleteNotification(fileName, message);
-      }
-
       // Show success message with file path
       if (context.mounted) {
-        final savedMessage = platform.isAndroid
+        final platform = const LocalPlatform();
+        final fileName = filePath.split('/').last.split('\\').last;
+        final message = platform.isAndroid
             ? 'Report saved to Downloads'
             : platform.isIOS
                 ? 'Report saved (check Files app)'
-                : 'Report saved: ${filePath.split('/').last.split('\\').last}';
+                : 'Report saved: $fileName';
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              savedMessage,
+              message,
               style: AppFonts.sfProStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -2706,12 +2529,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
     } catch (e, stackTrace) {
       print('Error saving PDF report: $e'); // Debug print
       print('Stack trace: $stackTrace'); // Debug print
-
-      // Cancel notification on error
-      if (platform.isAndroid) {
-        await _notifications.cancel(_downloadNotificationId);
-      }
-
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

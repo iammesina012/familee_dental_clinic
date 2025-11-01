@@ -23,8 +23,15 @@ class _EditPresetPageState extends State<EditPresetPage> {
   void initState() {
     super.initState();
     _nameController.text = widget.preset['name'] ?? '';
-    _presetSupplies =
+    // Initialize supplies and ensure quantities are set
+    final supplies =
         List<Map<String, dynamic>>.from(widget.preset['supplies'] ?? []);
+    _presetSupplies = supplies.map((supply) {
+      return {
+        ...supply,
+        'quantity': supply['quantity'] ?? 1, // Initialize quantity if missing
+      };
+    }).toList();
   }
 
   @override
@@ -52,11 +59,27 @@ class _EditPresetPageState extends State<EditPresetPage> {
 
       setState(() {
         if (processedResult['supply'] != null) {
-          _presetSupplies = _controller.addSupplyToPreset(
-              _presetSupplies, processedResult['supply']);
+          final supplyData = processedResult['supply'] as Map<String, dynamic>;
+          final supply = {
+            ...supplyData,
+            'quantity': 1, // Initialize quantity to 1
+          };
+          _presetSupplies =
+              _controller.addSupplyToPreset(_presetSupplies, supply);
         } else if (processedResult['supplies'] != null) {
-          _presetSupplies = _controller.addSuppliesToPreset(
-              _presetSupplies, processedResult['supplies']);
+          final suppliesList = processedResult['supplies'] as List;
+          final supplies = suppliesList
+              .map((supply) {
+                final supplyData = supply as Map<String, dynamic>;
+                return {
+                  ...supplyData,
+                  'quantity': 1, // Initialize quantity to 1
+                };
+              })
+              .toList()
+              .cast<Map<String, dynamic>>();
+          _presetSupplies =
+              _controller.addSuppliesToPreset(_presetSupplies, supplies);
         }
       });
     }
@@ -66,6 +89,25 @@ class _EditPresetPageState extends State<EditPresetPage> {
     setState(() {
       _presetSupplies =
           _controller.removeSupplyFromPreset(_presetSupplies, index);
+    });
+  }
+
+  void _incrementQty(int index) {
+    setState(() {
+      final int current = (_presetSupplies[index]['quantity'] ?? 1) as int;
+      // No stock limit for presets - presets are templates
+      final int next = current + 1;
+      // Only limit to 999 for practicality
+      _presetSupplies[index]['quantity'] = next > 999 ? 999 : next;
+    });
+  }
+
+  void _decrementQty(int index) {
+    setState(() {
+      final current = (_presetSupplies[index]['quantity'] ?? 1) as int;
+      if (current > 1) {
+        _presetSupplies[index]['quantity'] = current - 1;
+      }
     });
   }
 
@@ -586,19 +628,19 @@ class _EditPresetPageState extends State<EditPresetPage> {
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
                   item['imageUrl'] ?? '',
-                  width: 40,
-                  height: 40,
+                  width: 48,
+                  height: 48,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    width: 40,
-                    height: 40,
+                    width: 48,
+                    height: 48,
                     color: Colors.grey[200],
                     child: const Icon(Icons.inventory,
                         color: Colors.grey, size: 20),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   item['name'] ?? '',
@@ -609,6 +651,35 @@ class _EditPresetPageState extends State<EditPresetPage> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              const SizedBox(width: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: () => _decrementQty(index),
+                    icon: Icon(
+                      Icons.remove_circle_outline,
+                      color: Theme.of(context).iconTheme.color,
+                    ),
+                  ),
+                  Text(
+                    ((_presetSupplies[index]['quantity'] ?? 1) as int)
+                        .toString(),
+                    style: AppFonts.sfProStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _incrementQty(index),
+                    icon: Icon(
+                      Icons.add_circle_outline,
+                      color: Theme.of(context).iconTheme.color,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

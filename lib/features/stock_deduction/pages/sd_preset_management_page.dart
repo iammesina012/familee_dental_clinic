@@ -3,20 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_preset_management_controller.dart';
+import 'package:familee_dental/features/stock_deduction/controller/sd_approval_controller.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_edit_preset_page.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
 
-class PresetManagementPage extends StatefulWidget {
-  const PresetManagementPage({super.key});
+class ServiceManagementPage extends StatefulWidget {
+  const ServiceManagementPage({super.key});
 
   @override
-  State<PresetManagementPage> createState() => _PresetManagementPageState();
+  State<ServiceManagementPage> createState() => _ServiceManagementPageState();
 }
 
-class _PresetManagementPageState extends State<PresetManagementPage> {
+class _ServiceManagementPageState extends State<ServiceManagementPage> {
   final TextEditingController _searchController = TextEditingController();
   final PresetController _presetController = PresetController();
   final SdActivityController _activityController = SdActivityController();
@@ -24,8 +25,6 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
   List<Map<String, dynamic>> _filteredPresets = [];
   List<Map<String, dynamic>> _lastKnownPresets = []; // Cache last known data
   Timer? _debounceTimer;
-  // Track which preset dropdown is expanded
-  String? _expandedPresetId;
   // Stream key for forcing refresh
   late Stream<List<Map<String, dynamic>>> _presetsStream;
   int _streamKey = 0;
@@ -203,7 +202,7 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          'Preset Management',
+          'Service Management',
           style: AppFonts.sfProStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -426,7 +425,6 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
 
   Widget _buildPresetCard(Map<String, dynamic> preset, int index) {
     final presetId = preset['id'] ?? index.toString();
-    final isExpanded = _expandedPresetId == presetId;
     final supplies = preset['supplies'] as List<dynamic>? ?? [];
 
     return Slidable(
@@ -470,211 +468,70 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
           side: BorderSide(
               color: Theme.of(context).dividerColor.withOpacity(0.2)),
         ),
-        child: Column(
-          children: [
-            // Main preset info with dropdown button
-            InkWell(
-              onTap: () {
-                setState(() {
-                  if (isExpanded) {
-                    _expandedPresetId = null;
-                  } else {
-                    _expandedPresetId = presetId;
-                  }
-                });
-              },
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.bookmark,
-                            color: const Color(0xFF00D4AA),
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  preset['name'] ?? 'Unnamed Preset',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.color,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${supplies.length} supplies',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.color
-                                        ?.withOpacity(0.8),
-                                  ),
-                                ),
-                              ],
+        child: InkWell(
+          onTap: () {
+            _showPresetDetailModal(preset);
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.bookmark,
+                        color: const Color(0xFF00D4AA),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              preset['name'] ?? 'Unnamed Preset',
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      isExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      color:
-                          Theme.of(context).iconTheme.color?.withOpacity(0.8),
-                      size: 24,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Dropdown content
-            if (isExpanded) ...[
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Theme.of(context).colorScheme.surface
-                      : Colors.grey[50],
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    // Supplies list
-                    if (supplies.isNotEmpty) ...[
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 200),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          physics: const ClampingScrollPhysics(),
-                          itemCount: supplies.length,
-                          itemBuilder: (context, supplyIndex) {
-                            final supply =
-                                supplies[supplyIndex] as Map<String, dynamic>;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                            const SizedBox(height: 4),
+                            Text(
+                              '${supplies.length} supplies',
+                              style: AppFonts.sfProStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.color
+                                    ?.withOpacity(0.8),
                               ),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Image.network(
-                                      supply['imageUrl'] ?? '',
-                                      width: 32,
-                                      height: 32,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        width: 32,
-                                        height: 32,
-                                        color: Colors.grey[200],
-                                        child: const Icon(
-                                          Icons.inventory,
-                                          color: Colors.grey,
-                                          size: 16,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      supply['name'] ?? 'Unknown Supply',
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.color,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ] else ...[
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          'No supplies in this preset',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 14,
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.color
-                                ?.withOpacity(0.8),
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                    // Use Preset button
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      child: ElevatedButton(
-                        onPressed: () => _usePreset(preset),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00D4AA),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: Text(
-                          'Use Preset',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          ],
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: Theme.of(context).iconTheme.color?.withOpacity(0.6),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
-  }
-
-  void _usePreset(Map<String, dynamic> preset) {
-    // Navigate back to Quick Deduction with preset data
-    Navigator.of(context).pop({
-      'action': 'use_preset',
-      'preset': preset,
-    });
   }
 
   void _editPreset(Map<String, dynamic> preset) async {
@@ -781,6 +638,742 @@ class _PresetManagementPageState extends State<PresetManagementPage> {
           ],
         );
       },
+    );
+  }
+
+  void _showPresetDetailModal(Map<String, dynamic> preset) {
+    final supplies = List<Map<String, dynamic>>.from(preset['supplies'] ?? []);
+
+    // Create editable copy of supplies with quantities
+    final List<Map<String, dynamic>> editableSupplies = supplies.map((supply) {
+      return {
+        ...supply,
+        'quantity': supply['quantity'] ?? 1,
+      };
+    }).toList();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _PresetDetailModal(
+        preset: preset,
+        supplies: editableSupplies,
+      ),
+    );
+  }
+}
+
+class _PresetDetailModal extends StatefulWidget {
+  final Map<String, dynamic> preset;
+  final List<Map<String, dynamic>> supplies;
+
+  const _PresetDetailModal({
+    required this.preset,
+    required this.supplies,
+  });
+
+  @override
+  State<_PresetDetailModal> createState() => _PresetDetailModalState();
+}
+
+class _PresetDetailModalState extends State<_PresetDetailModal> {
+  late List<Map<String, dynamic>> _editableSupplies;
+  final TextEditingController _patientNameController = TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
+  final TextEditingController _genderController = TextEditingController();
+  final TextEditingController _conditionsController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _editableSupplies = List.from(widget.supplies);
+  }
+
+  @override
+  void dispose() {
+    _patientNameController.dispose();
+    _ageController.dispose();
+    _genderController.dispose();
+    _conditionsController.dispose();
+    super.dispose();
+  }
+
+  void _incrementQty(int index) {
+    setState(() {
+      final int current = (_editableSupplies[index]['quantity'] ?? 1) as int;
+      final int next = current + 1;
+      _editableSupplies[index]['quantity'] = next > 999 ? 999 : next;
+    });
+  }
+
+  void _decrementQty(int index) {
+    setState(() {
+      final current = _editableSupplies[index]['quantity'] as int;
+      if (current > 0) {
+        _editableSupplies[index]['quantity'] = current - 1;
+      }
+    });
+  }
+
+  void _addAdditionalSupply() async {
+    // Use the add supply page for presets
+    final existingDocIds = _editableSupplies
+        .map((e) => (e['docId'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    final result = await Navigator.of(context).pushNamed(
+      '/stock-deduction/add-supply-for-preset',
+      arguments: {'existingDocIds': existingDocIds},
+    );
+
+    if (result != null) {
+      setState(() {
+        if (result is Map<String, dynamic>) {
+          _editableSupplies.add({
+            ...result,
+            'quantity': 1,
+          });
+        } else if (result is List) {
+          for (final supply in result) {
+            if (supply is Map<String, dynamic>) {
+              _editableSupplies.add({
+                ...supply,
+                'quantity': 1,
+              });
+            }
+          }
+        }
+      });
+    }
+  }
+
+  void _removeSupply(int index) {
+    setState(() {
+      _editableSupplies.removeAt(index);
+    });
+  }
+
+  void _saveAndUsePreset() async {
+    // Validate required fields
+    final patientName = _patientNameController.text.trim();
+    final age = _ageController.text.trim();
+    final gender = _genderController.text.trim();
+    final conditions = _conditionsController.text.trim();
+
+    if (patientName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please enter Patient Name',
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (age.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please enter Age',
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (gender.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please enter Gender',
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (conditions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please enter Conditions',
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Save to approval queue
+    try {
+      final approvalController = ApprovalController();
+      final approvalData = {
+        'presetName': widget.preset['name'] ?? 'Unknown Preset',
+        'supplies': _editableSupplies,
+        'patientName': patientName,
+        'age': age,
+        'gender': gender,
+        'conditions': conditions,
+      };
+
+      await approvalController.saveApproval(approvalData);
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop(); // Close modal
+      Navigator.of(context).pop(); // Close Service Management page
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Saved to Approval',
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFF00D4AA),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      // Don't close modal on error - let user see the error and try again
+      String errorMessage = 'Failed to save approval';
+      if (e.toString().contains('404') || e.toString().contains('Not Found')) {
+        errorMessage =
+            'Please create the stock_deduction_approvals table in Supabase. The table is missing.';
+      } else {
+        errorMessage = 'Failed to save approval: ${e.toString()}';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessage,
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 600,
+          maxHeight: 800,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with close button - Fixed at top
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 24, 12, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.preset['name'] ?? 'Unknown Preset',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(
+                      Icons.close,
+                      color: isDark ? Colors.white : Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Scrollable content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Patient Information Fields
+                    Text(
+                      'Patient Information',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Patient Name
+                    TextField(
+                      controller: _patientNameController,
+                      decoration: InputDecoration(
+                        labelText: 'Patient Name *',
+                        labelStyle: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        hintText: 'Required',
+                        hintStyle: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[500] : Colors.grey[400],
+                        ),
+                        filled: true,
+                        fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color:
+                                isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color:
+                                isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF00D4AA),
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                      ),
+                      style: AppFonts.sfProStyle(
+                        fontSize: 16,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Age and Gender Row
+                    Row(
+                      children: [
+                        // Age
+                        Expanded(
+                          child: TextField(
+                            controller: _ageController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'Age *',
+                              labelStyle: AppFonts.sfProStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                              ),
+                              hintText: 'Required',
+                              hintStyle: AppFonts.sfProStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[500]
+                                    : Colors.grey[400],
+                              ),
+                              filled: true,
+                              fillColor:
+                                  isDark ? Colors.grey[800] : Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey[700]!
+                                      : Colors.grey[300]!,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey[700]!
+                                      : Colors.grey[300]!,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF00D4AA),
+                                  width: 2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                            style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1A1A1A),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Gender
+                        Expanded(
+                          child: TextField(
+                            controller: _genderController,
+                            decoration: InputDecoration(
+                              labelText: 'Gender *',
+                              labelStyle: AppFonts.sfProStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                              ),
+                              hintText: 'Required',
+                              hintStyle: AppFonts.sfProStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[500]
+                                    : Colors.grey[400],
+                              ),
+                              filled: true,
+                              fillColor:
+                                  isDark ? Colors.grey[800] : Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey[700]!
+                                      : Colors.grey[300]!,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey[700]!
+                                      : Colors.grey[300]!,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF00D4AA),
+                                  width: 2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                            style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1A1A1A),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Conditions
+                    TextField(
+                      controller: _conditionsController,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: 'Conditions *',
+                        labelStyle: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        hintText: 'Required',
+                        hintStyle: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[500] : Colors.grey[400],
+                        ),
+                        filled: true,
+                        fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color:
+                                isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color:
+                                isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF00D4AA),
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                      ),
+                      style: AppFonts.sfProStyle(
+                        fontSize: 16,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Supplies List
+                    _editableSupplies.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 40),
+                              child: Text(
+                                'No supplies in this preset',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _editableSupplies.length,
+                            itemBuilder: (context, index) {
+                              final supply = _editableSupplies[index];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.grey[800]
+                                      : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.grey[700]!
+                                        : Colors.grey[300]!,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Supply Image
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        supply['imageUrl'] ?? '',
+                                        width: 50,
+                                        height: 50,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          width: 50,
+                                          height: 50,
+                                          color: Colors.grey[300],
+                                          child: const Icon(
+                                            Icons.inventory,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    // Supply Info
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            supply['name'] ?? 'Unknown Supply',
+                                            style: AppFonts.sfProStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : const Color(0xFF1A1A1A),
+                                            ),
+                                          ),
+                                          if (supply['brand'] != null) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              supply['brand'],
+                                              style: AppFonts.sfProStyle(
+                                                fontSize: 14,
+                                                color: isDark
+                                                    ? Colors.grey[400]
+                                                    : Colors.grey[600],
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    // Quantity Controls
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          onPressed: () => _removeSupply(index),
+                                          icon: Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.red[400],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? Colors.grey[700]
+                                                : Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: isDark
+                                                  ? Colors.grey[600]!
+                                                  : Colors.grey[300]!,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            (_editableSupplies[index]
+                                                        ['quantity'] ??
+                                                    1)
+                                                .toString(),
+                                            style: AppFonts.sfProStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : const Color(0xFF1A1A1A),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          onPressed: () => _decrementQty(index),
+                                          icon: Icon(
+                                            Icons.remove_circle_outline,
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.grey[700],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          onPressed: () => _incrementQty(index),
+                                          icon: Icon(
+                                            Icons.add_circle_outline,
+                                            color: const Color(0xFF00D4AA),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                    const SizedBox(height: 16),
+
+                    // Add Additional Supply Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _addAdditionalSupply,
+                        icon: const Icon(Icons.add),
+                        label: Text(
+                          'Add Additional Supply',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: const BorderSide(
+                            color: Color(0xFF00D4AA),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Save Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _saveAndUsePreset,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: Text(
+                          'Save',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
