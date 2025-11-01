@@ -659,7 +659,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text("Packaging Unit",
+                                Text("Packaging Content/Unit",
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -668,8 +668,18 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                                             fontSize: 15)),
                                 const SizedBox(height: 4),
                                 Text(
-                                    updatedItem.packagingUnit ??
-                                        updatedItem.unit,
+                                    updatedItem.packagingContentQuantity !=
+                                                null &&
+                                            updatedItem
+                                                    .packagingContentQuantity! >
+                                                0 &&
+                                            updatedItem.packagingContent !=
+                                                null &&
+                                            updatedItem
+                                                .packagingContent!.isNotEmpty
+                                        ? "${updatedItem.packagingContentQuantity} ${updatedItem.packagingContent} per ${updatedItem.packagingUnit ?? updatedItem.unit}"
+                                        : updatedItem.packagingUnit ??
+                                            updatedItem.unit,
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -685,7 +695,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text("Packaging Content",
+                                Text("Cost",
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -693,14 +703,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                                             fontWeight: FontWeight.bold,
                                             fontSize: 15)),
                                 const SizedBox(height: 4),
-                                Text(
-                                    updatedItem.packagingContentQuantity !=
-                                                null &&
-                                            updatedItem
-                                                    .packagingContentQuantity! >
-                                                0
-                                        ? "${updatedItem.packagingContentQuantity} ${updatedItem.packagingContent ?? 'Pieces'}"
-                                        : "N/A",
+                                Text("₱${updatedItem.cost.toStringAsFixed(2)}",
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -908,31 +911,6 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 18),
-                      // Single Cost field centered
-                      Center(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text("Cost",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
-                            const SizedBox(height: 4),
-                            Text("₱${updatedItem.cost.toStringAsFixed(2)}",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15),
-                                textAlign: TextAlign.center),
-                          ],
-                        ),
                       ),
                       const SizedBox(height: 28),
                       Divider(
@@ -1181,156 +1159,293 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return Scaffold(
-          resizeToAvoidBottomInset: false,
-          backgroundColor: Colors.transparent,
-          body: Center(
-            child: Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 400,
-                  minWidth: 350,
+        int stockQuantity = 0;
+        final stockController = TextEditingController();
+
+        return StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            resizeToAvoidBottomInset: true,
+            backgroundColor: Colors.transparent,
+            body: Center(
+              child: Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Colors.green,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      'Add New Type',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Content
-                    Text(
-                      'Add a new type for "${currentItem.name}"',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // TextField
-                    TextField(
-                      controller: typeController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: 'Type Name',
-                        hintText: 'e.g., Color, Size, Type, etc.',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: Colors.green, width: 2),
-                        ),
-                        labelStyle: TextStyle(
-                          fontFamily: 'SF Pro',
-                          color: theme.textTheme.bodyMedium?.color,
-                        ),
-                        hintStyle: TextStyle(
-                          fontFamily: 'SF Pro',
-                          color: theme.textTheme.bodySmall?.color,
-                        ),
-                      ),
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Buttons (Cancel first, then Add Type - matching logout dialog pattern)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: const BorderSide(
-                                    color: Colors.grey, width: 1),
-                              ),
+                backgroundColor:
+                    isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                insetPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 400,
+                    minWidth: 350,
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Icon
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              shape: BoxShape.circle,
                             ),
-                            child: Text(
-                              'Cancel',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: theme.textTheme.bodyLarge?.color,
-                              ),
+                            child: const Icon(
+                              Icons.add,
+                              color: Colors.green,
+                              size: 32,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              final newType = typeController.text.trim();
-                              if (newType.isNotEmpty) {
-                                Navigator.of(context).pop();
-                                await _createNewType(currentItem, newType);
+                          const SizedBox(height: 16),
+
+                          // Title
+                          Text(
+                            'Add New Type',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.titleLarge?.color,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Content
+                          Text(
+                            'Add a new type for "${currentItem.name}"',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: theme.textTheme.bodyMedium?.color,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+
+                          // TextField
+                          TextField(
+                            controller: typeController,
+                            autofocus: true,
+                            decoration: InputDecoration(
+                              labelText: 'Type Name',
+                              hintText: 'e.g., Color, Size, Type, etc.',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                    color: Colors.green, width: 2),
+                              ),
+                              labelStyle: TextStyle(
+                                fontFamily: 'SF Pro',
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                              hintStyle: TextStyle(
+                                fontFamily: 'SF Pro',
+                                color: theme.textTheme.bodySmall?.color,
+                              ),
+                            ),
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Stock Quantity Selector
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Stock Quantity',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.textTheme.bodyLarge?.color,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: stockController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              hintText: 'Enter quantity',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                    color: Colors.green, width: 2),
+                              ),
+                              hintStyle: TextStyle(
+                                fontFamily: 'SF Pro',
+                                color: theme.textTheme.bodySmall?.color,
+                              ),
+                            ),
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                            onChanged: (value) {
+                              final parsed = int.tryParse(value);
+                              if (parsed != null &&
+                                  parsed >= 0 &&
+                                  parsed <= 99) {
+                                setState(() {
+                                  stockQuantity = parsed;
+                                });
+                              } else if (value.isEmpty) {
+                                setState(() {
+                                  stockQuantity = 0;
+                                });
                               }
                             },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              'Add Type',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 24),
+
+                          // Buttons (Cancel first, then Add Type - matching logout dialog pattern)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: const BorderSide(
+                                          color: Colors.grey, width: 1),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Cancel',
+                                    style: TextStyle(
+                                      fontFamily: 'SF Pro',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: theme.textTheme.bodyLarge?.color,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    final newType = typeController.text.trim();
+                                    if (newType.isNotEmpty) {
+                                      // Show confirmation dialog
+                                      final confirmed = await showDialog<bool>(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (BuildContext context) {
+                                          return AlertDialog(
+                                            backgroundColor: isDark
+                                                ? const Color(0xFF2C2C2C)
+                                                : Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                            ),
+                                            title: Text(
+                                              'Confirm Add Type',
+                                              style: TextStyle(
+                                                fontFamily: 'SF Pro',
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                color: theme.textTheme
+                                                    .titleLarge?.color,
+                                              ),
+                                            ),
+                                            content: Text(
+                                              'Add new type "$newType" with stock quantity $stockQuantity?',
+                                              style: TextStyle(
+                                                fontFamily: 'SF Pro',
+                                                fontSize: 16,
+                                                color: theme
+                                                    .textTheme.bodyLarge?.color,
+                                              ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context)
+                                                        .pop(false),
+                                                child: Text(
+                                                  'Cancel',
+                                                  style: TextStyle(
+                                                    fontFamily: 'SF Pro',
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context)
+                                                        .pop(true),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.green,
+                                                  foregroundColor: Colors.white,
+                                                ),
+                                                child: Text(
+                                                  'Confirm',
+                                                  style: TextStyle(
+                                                    fontFamily: 'SF Pro',
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      );
+
+                                      if (confirmed == true) {
+                                        Navigator.of(context).pop();
+                                        await _createNewType(currentItem,
+                                            newType, stockQuantity);
+                                      }
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: Text(
+                                    'Add Type',
+                                    style: TextStyle(
+                                      fontFamily: 'SF Pro',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1341,27 +1456,62 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
   }
 
   // Create new supply item with same details but new type
-  Future<void> _createNewType(InventoryItem currentItem, String newType) async {
+  Future<void> _createNewType(
+      InventoryItem currentItem, String newType, int stockQuantity) async {
     try {
       final supabase = Supabase.instance.client;
 
+      // Fetch the most recent type added for this supply name
+      final latestSupplyResponse = await supabase
+          .from('supplies')
+          .select()
+          .eq('name', currentItem.name)
+          .eq('archived', false)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      // Use the latest supply if available, otherwise fall back to current item
+      final sourceItem = latestSupplyResponse != null
+          ? InventoryItem(
+              id: latestSupplyResponse['id'] as String,
+              name: latestSupplyResponse['name'] ?? '',
+              type: latestSupplyResponse['type'],
+              imageUrl: latestSupplyResponse['image_url'] ?? '',
+              category: latestSupplyResponse['category'] ?? '',
+              cost: (latestSupplyResponse['cost'] ?? 0).toDouble(),
+              stock: (latestSupplyResponse['stock'] ?? 0).toInt(),
+              unit: latestSupplyResponse['unit'] ?? '',
+              packagingUnit: latestSupplyResponse['packaging_unit'],
+              packagingContent: latestSupplyResponse['packaging_content'],
+              packagingQuantity: latestSupplyResponse['packaging_quantity'],
+              packagingContentQuantity:
+                  latestSupplyResponse['packaging_content_quantity'],
+              supplier: latestSupplyResponse['supplier'] ?? '',
+              brand: latestSupplyResponse['brand'] ?? '',
+              expiry: latestSupplyResponse['expiry'],
+              noExpiry: latestSupplyResponse['no_expiry'] ?? false,
+              archived: latestSupplyResponse['archived'] ?? false,
+            )
+          : currentItem;
+
       // Create new supply item with same details but new type
       final newSupplyData = {
-        'name': currentItem.name,
+        'name': sourceItem.name,
         'type': newType,
-        'image_url': currentItem.imageUrl,
-        'category': currentItem.category,
-        'cost': currentItem.cost,
-        'stock': currentItem.stock,
-        'unit': currentItem.unit,
-        'packaging_unit': currentItem.packagingUnit,
-        'packaging_quantity': currentItem.packagingQuantity,
-        'packaging_content': currentItem.packagingContent,
-        'packaging_content_quantity': currentItem.packagingContentQuantity,
-        'supplier': currentItem.supplier,
-        'brand': currentItem.brand,
-        'expiry': currentItem.expiry,
-        'no_expiry': currentItem.noExpiry,
+        'image_url': sourceItem.imageUrl,
+        'category': sourceItem.category,
+        'cost': sourceItem.cost,
+        'stock': stockQuantity, // Use selected stock quantity
+        'unit': sourceItem.unit,
+        'packaging_unit': sourceItem.packagingUnit,
+        'packaging_quantity': sourceItem.packagingQuantity,
+        'packaging_content': sourceItem.packagingContent,
+        'packaging_content_quantity': sourceItem.packagingContentQuantity,
+        'supplier': sourceItem.supplier,
+        'brand': sourceItem.brand,
+        'expiry': sourceItem.expiry,
+        'no_expiry': sourceItem.noExpiry,
         'archived': false,
         'created_at': DateTime.now().toIso8601String(),
       };

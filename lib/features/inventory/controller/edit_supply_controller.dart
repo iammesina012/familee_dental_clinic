@@ -103,7 +103,7 @@ class EditSupplyController {
     if (raw == null) return null;
     final s = raw.trim().toLowerCase();
     if (s.isEmpty) return null;
-    // Map common variants to our canonical set used in dropdown: Box, Piece, Pack
+    // Map common variants to our canonical set used in dropdown: Box, Pieces, Pack
     if (s == 'box' || s == 'boxes' || s == 'bx') return 'Box';
     if (s == 'pack' || s == 'packs' || s == 'pk') return 'Pack';
     if (s == 'piece' ||
@@ -112,19 +112,19 @@ class EditSupplyController {
         s == 'pcs' ||
         s == 'unit' ||
         s == 'units') {
-      return 'Piece';
+      return 'Pieces';
     }
     // If it already matches one of the allowed labels ignoring case
-    final allowed = ['Box', 'Piece', 'Pack'];
+    final allowed = ['Box', 'Pieces', 'Pack'];
     for (final a in allowed) {
       if (a.toLowerCase() == s) return a;
     }
-    // Fallback to Piece to avoid dropdown mismatch
-    return 'Piece';
+    // Fallback to Pieces to avoid dropdown mismatch
+    return 'Pieces';
   }
 
   bool isPackagingContentDisabled() {
-    return selectedPackagingUnit == 'Piece' ||
+    return selectedPackagingUnit == 'Pieces' ||
         selectedPackagingUnit == 'Spool' ||
         selectedPackagingUnit == 'Tub';
   }
@@ -224,12 +224,13 @@ class EditSupplyController {
       "image_url": imageUrl ?? "", // Make image optional
       "category": selectedCategory ?? "",
       "cost": double.tryParse(costController.text.trim()) ?? 0.0,
-      "stock": packagingQuantity, // Use packagingQuantity for stock
+      "stock": int.tryParse(stockController.text.trim()) ?? 0,
       "unit": selectedUnit ?? "", // Legacy column
       "packaging_unit": selectedPackagingUnit ?? "",
-      "packaging_quantity": packagingQuantity,
-      "packaging_content":
-          isPackagingContentDisabled() ? "" : (selectedPackagingContent ?? ""),
+      "packaging_quantity": 1, // Always 1 (e.g., 1 Box)
+      "packaging_content": isPackagingContentDisabled()
+          ? null
+          : (selectedPackagingContent ?? ""),
       "packaging_content_quantity":
           isPackagingContentDisabled() ? 1 : packagingContent,
       "supplier": supplierController.text.trim().isEmpty

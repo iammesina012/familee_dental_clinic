@@ -584,7 +584,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Quantity',
+                                  Text('Stock Quantity',
                                       style: theme.textTheme.bodyMedium
                                           ?.copyWith(
                                               fontWeight: FontWeight.w500)),
@@ -609,16 +609,13 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                               color: theme.iconTheme.color),
                                           splashRadius: 18,
                                           onPressed: () {
-                                            if (controller.packagingQuantity >
-                                                1) {
+                                            if (controller.stock > 0) {
                                               _markAsChanged();
                                               setState(() {
-                                                controller.packagingQuantity--;
+                                                controller.stock--;
                                                 controller
-                                                        .packagingQuantityController
-                                                        .text =
-                                                    controller.packagingQuantity
-                                                        .toString();
+                                                        .stockController.text =
+                                                    controller.stock.toString();
                                               });
                                             }
                                           },
@@ -631,33 +628,22 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                               FilteringTextInputFormatter
                                                   .digitsOnly,
                                               LengthLimitingTextInputFormatter(
-                                                  2),
+                                                  3),
                                             ],
                                             style: TextStyle(
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.w500,
                                                 color: theme.textTheme
                                                     .bodyMedium?.color),
-                                            controller: controller
-                                                .packagingQuantityController,
+                                            controller:
+                                                controller.stockController,
                                             onChanged: (val) {
                                               _markAsChanged();
                                               setState(() {
                                                 final qty =
-                                                    int.tryParse(val) ?? 1;
-                                                controller.packagingQuantity =
-                                                    qty > 99
-                                                        ? 99
-                                                        : (qty < 1 ? 1 : qty);
-                                                if (qty > 99) {
-                                                  controller
-                                                      .packagingQuantityController
-                                                      .text = '99';
-                                                } else if (qty < 1) {
-                                                  controller
-                                                      .packagingQuantityController
-                                                      .text = '1';
-                                                }
+                                                    int.tryParse(val) ?? 0;
+                                                controller.stock =
+                                                    qty < 0 ? 0 : qty;
                                               });
                                             },
                                             decoration: InputDecoration(
@@ -671,18 +657,12 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                               color: theme.iconTheme.color),
                                           splashRadius: 18,
                                           onPressed: () {
-                                            if (controller.packagingQuantity <
-                                                99) {
-                                              _markAsChanged();
-                                              setState(() {
-                                                controller.packagingQuantity++;
-                                                controller
-                                                        .packagingQuantityController
-                                                        .text =
-                                                    controller.packagingQuantity
-                                                        .toString();
-                                              });
-                                            }
+                                            _markAsChanged();
+                                            setState(() {
+                                              controller.stock++;
+                                              controller.stockController.text =
+                                                  controller.stock.toString();
+                                            });
                                           },
                                         ),
                                       ],
@@ -715,7 +695,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                       'Bottle',
                                       'Jug',
                                       'Pad',
-                                      'Piece',
+                                      'Pieces',
                                       'Spool',
                                       'Tub'
                                     ]
@@ -1294,12 +1274,9 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     }
 
     final currentStock = controller.stock;
-    final currentUnit = controller.selectedUnit ?? '';
-    final currentStockText = '$currentStock $currentUnit';
-    final originalStockText = '$_originalStock $_originalUnit';
-    if (currentStockText != originalStockText) {
-      changes
-          .add(_buildChangeRow('Stock', originalStockText, currentStockText));
+    if (currentStock != _originalStock) {
+      changes.add(_buildChangeRow(
+          'Stock', _originalStock.toString(), currentStock.toString()));
     }
 
     final currentCost = controller.costController.text.trim();
@@ -1326,17 +1303,26 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
 
     // Packaging Content
     final currentPackagingContent = controller.selectedPackagingContent ?? '';
+    final originalContentText =
+        _originalPackagingContent.isEmpty ? 'N/A' : _originalPackagingContent;
+    final currentContentText =
+        currentPackagingContent.isEmpty ? 'N/A' : currentPackagingContent;
     if (currentPackagingContent != _originalPackagingContent) {
-      changes.add(_buildChangeRow('Packaging Content',
-          _originalPackagingContent, currentPackagingContent));
+      changes.add(_buildChangeRow(
+          'Packaging Content', originalContentText, currentContentText));
     }
 
     // Packaging Content Quantity
     if (controller.packagingContent != _originalPackagingContentQuantity) {
+      final originalQtyText =
+          _isPackagingContentDisabled(_originalPackagingUnit)
+              ? 'N/A'
+              : _originalPackagingContentQuantity.toString();
+      final currentQtyText = controller.isPackagingContentDisabled()
+          ? 'N/A'
+          : controller.packagingContent.toString();
       changes.add(_buildChangeRow(
-          'Packaging Content Quantity',
-          _originalPackagingContentQuantity.toString(),
-          controller.packagingContent.toString()));
+          'Packaging Content Quantity', originalQtyText, currentQtyText));
     }
 
     final currentSupplier = controller.supplierController.text.trim();
@@ -1447,7 +1433,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
         return ['mL', 'L'];
       case 'Pad':
         return ['Cartridge'];
-      case 'Piece':
+      case 'Pieces':
       case 'Spool':
       case 'Tub':
         return []; // These don't need packaging content
@@ -1458,7 +1444,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
 
   // Helper method to check if packaging content should be disabled
   bool _isPackagingContentDisabled(String? packagingUnit) {
-    return packagingUnit == 'Piece' ||
+    return packagingUnit == 'Pieces' ||
         packagingUnit == 'Spool' ||
         packagingUnit == 'Tub';
   }

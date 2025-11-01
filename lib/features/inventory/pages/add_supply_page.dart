@@ -87,7 +87,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
         return ['mL', 'L'];
       case 'Pad':
         return ['Cartridge'];
-      case 'Piece':
+      case 'Pieces':
       case 'Spool':
       case 'Tub':
         return []; // These don't need packaging content
@@ -98,7 +98,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
 
   // Helper method to check if packaging content should be disabled
   bool _isPackagingContentDisabled(String? packagingUnit) {
-    return packagingUnit == 'Piece' ||
+    return packagingUnit == 'Pieces' ||
         packagingUnit == 'Spool' ||
         packagingUnit == 'Tub';
   }
@@ -588,7 +588,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Quantity',
+                              Text('Stock Quantity',
                                   style: theme.textTheme.bodyMedium
                                       ?.copyWith(fontWeight: FontWeight.w500)),
                               const SizedBox(height: 6),
@@ -709,7 +709,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                   'Bottle',
                                   'Jug',
                                   'Pad',
-                                  'Piece',
+                                  'Pieces',
                                   'Spool',
                                   'Tub'
                                 ]

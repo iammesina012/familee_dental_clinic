@@ -32,7 +32,7 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
   // Static data lists
   final stockStatuses = ["In Stock", "Low Stock", "Out of Stock"];
   final expiryOptions = ["Expiring", "No Expiry"];
-  final units = ['Box', 'Piece', 'Pack'];
+  final units = ['Box', 'Pieces', 'Pack'];
 
   @override
   void initState() {

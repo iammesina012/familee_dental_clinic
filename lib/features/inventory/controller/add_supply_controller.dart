@@ -94,7 +94,7 @@ class AddSupplyController {
 
     if (selectedPackagingContent == null || selectedPackagingContent!.isEmpty) {
       // Only require packaging content if the unit needs it
-      if (selectedPackagingUnit != 'Piece' &&
+      if (selectedPackagingUnit != 'Pieces' &&
           selectedPackagingUnit != 'Spool' &&
           selectedPackagingUnit != 'Tub') {
         errors['packagingContent'] = 'Please choose packaging content.';
@@ -153,7 +153,7 @@ class AddSupplyController {
   }
 
   bool isPackagingContentDisabled() {
-    return selectedPackagingUnit == 'Piece' ||
+    return selectedPackagingUnit == 'Pieces' ||
         selectedPackagingUnit == 'Spool' ||
         selectedPackagingUnit == 'Tub';
   }
@@ -168,9 +168,10 @@ class AddSupplyController {
       "stock": packagingQuantity, // Stock should be the packaging quantity
       "unit": selectedPackagingUnit ?? "", // Legacy column
       "packaging_unit": selectedPackagingUnit ?? "",
-      "packaging_quantity": packagingQuantity,
-      "packaging_content":
-          isPackagingContentDisabled() ? "" : (selectedPackagingContent ?? ""),
+      "packaging_quantity": 1, // Always 1 (e.g., 1 Box)
+      "packaging_content": isPackagingContentDisabled()
+          ? null
+          : (selectedPackagingContent ?? ""),
       "packaging_content_quantity":
           isPackagingContentDisabled() ? 1 : packagingContent,
       "supplier": supplierController.text.trim().isEmpty

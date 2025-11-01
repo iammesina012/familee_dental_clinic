@@ -490,10 +490,27 @@ class PODetailsController {
         final brandName = supply['brandName'] ?? supply['brand'] ?? 'N/A';
         final supplierName =
             supply['supplierName'] ?? supply['supplier'] ?? 'N/A';
+        final supplyType = supply['type'] ?? ''; // Get type from PO supply
         final int totalQuantity = supply['quantity'] ?? 0;
         final expiryDate = supply['expiryDate'];
         final List<dynamic>? expiryBatches =
             (supply['expiryBatches'] as List<dynamic>?);
+
+        // Extract packaging fields from PO supply (these may have been edited)
+        final packagingUnit =
+            supply['packagingUnit'] ?? supply['unit'] ?? 'Box';
+        final String? packagingContent = supply['packagingContent'] is String &&
+                (supply['packagingContent'] as String).isNotEmpty
+            ? supply['packagingContent'] as String
+            : null;
+        final packagingQuantity = supply['packagingQuantity'] ?? 1;
+        final packagingContentQuantity =
+            supply['packagingContentQuantity'] ?? 1;
+
+        // Extract cost, image URL, category from PO supply (may have been edited)
+        final supplyCost = supply['cost'] ?? 0.0;
+        final supplyImageUrl = supply['imageUrl'] ?? supply['image_url'] ?? '';
+        final supplyCategory = supply['category'] ?? 'Dental Materials';
 
         // Prepare existing items lookup (by name+brand)
         print('Looking up existing supplies for: $supplyName');
@@ -581,31 +598,57 @@ class PODetailsController {
 
           // If no exact batch found, create a new batch
           if (!foundExactBatch) {
-            // Derive canonical metadata from existing docs
-            String category = "Dental Materials";
-            String unit = (supply['unit'] ?? 'pcs').toString();
-            String imageUrl = "";
-            double itemCost = (supply['cost'] ?? 0.0).toDouble();
+            // Use PO supply data first (may have been edited), fallback to existing inventory data
+            String category = supplyCategory;
+            String unit = packagingUnit; // Use packaging unit from PO supply
+            String imageUrl = supplyImageUrl.isNotEmpty ? supplyImageUrl : "";
+            double itemCost = supplyCost;
 
+            // If PO supply doesn't have category/image, try to get from existing inventory
             if (freshDocs.isNotEmpty) {
-              String canonicalCategory = '';
-              String canonicalImageUrl = '';
-              for (final d in freshDocs) {
-                final data = d;
-                final cat = (data['category'] ?? '').toString();
-                if (canonicalCategory.isEmpty &&
-                    cat.isNotEmpty &&
-                    cat != 'Restocked') {
-                  canonicalCategory = cat;
+              if (category.isEmpty || category == 'Dental Materials') {
+                String canonicalCategory = '';
+                for (final d in freshDocs) {
+                  final data = d;
+                  final cat = (data['category'] ?? '').toString();
+                  if (canonicalCategory.isEmpty &&
+                      cat.isNotEmpty &&
+                      cat != 'Restocked') {
+                    canonicalCategory = cat;
+                  }
                 }
-                final img = (data['image_url'] ?? '').toString();
-                if (canonicalImageUrl.isEmpty && img.isNotEmpty) {
-                  canonicalImageUrl = img;
+                if (canonicalCategory.isNotEmpty) {
+                  category = canonicalCategory;
                 }
               }
-              category =
-                  canonicalCategory.isNotEmpty ? canonicalCategory : category;
-              imageUrl = canonicalImageUrl;
+
+              // Use image from PO supply if available, otherwise from existing inventory
+              if (imageUrl.isEmpty) {
+                String canonicalImageUrl = '';
+                for (final d in freshDocs) {
+                  final data = d;
+                  final img = (data['image_url'] ?? '').toString();
+                  if (canonicalImageUrl.isEmpty && img.isNotEmpty) {
+                    canonicalImageUrl = img;
+                  }
+                }
+                if (canonicalImageUrl.isNotEmpty) {
+                  imageUrl = canonicalImageUrl;
+                }
+              }
+            }
+
+            // Get type from PO supply or try to find from existing inventory
+            String? itemType = supplyType.isNotEmpty ? supplyType : null;
+            if (itemType == null && freshDocs.isNotEmpty) {
+              // Try to find type from existing inventory items
+              for (final d in freshDocs) {
+                final existingType = (d['type'] ?? '').toString().trim();
+                if (existingType.isNotEmpty) {
+                  itemType = existingType;
+                  break;
+                }
+              }
             }
 
             final newSupplyData = {
@@ -620,8 +663,16 @@ class PODetailsController {
               "expiry": expNorm,
               "no_expiry": expNorm == null,
               "archived": false,
+              "type": itemType, // Include type from PO supply
+              // Include all packaging fields from PO supply (may have been edited)
+              "packaging_unit": packagingUnit,
+              "packaging_quantity": packagingQuantity,
+              "packaging_content": packagingContent,
+              "packaging_content_quantity": packagingContentQuantity,
               "created_at": DateTime.now().toIso8601String(),
             };
+            print(
+                'Debug: Creating new batch with edited PO details - type: $itemType, cost: $itemCost, packaging: $packagingUnit, $packagingContent ($packagingContentQuantity)');
             await _supabase.from('supplies').insert(newSupplyData);
           }
         }

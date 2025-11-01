@@ -1822,10 +1822,10 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
         return ['mL', 'L'];
       case 'Pad':
         return ['Cartridge'];
-      case 'Piece':
+      case 'Pieces':
       case 'Spool':
       case 'Tub':
-        return ['Pieces']; // These don't need packaging content
+        return []; // These don't need packaging content
       default:
         return ['Pieces'];
     }
@@ -1833,7 +1833,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
 
   // Check if packaging content should be disabled
   bool _isPackagingContentDisabled() {
-    return ['Piece', 'Spool', 'Tub'].contains(_selectedPackagingUnit);
+    return ['Pieces', 'Spool', 'Tub'].contains(_selectedPackagingUnit);
   }
 
   // Get valid packaging content value
