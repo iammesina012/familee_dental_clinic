@@ -14,10 +14,10 @@ class AppTheme {
       seedColor: const Color(0xFF00D4AA),
       brightness: Brightness.light,
     ).copyWith(
-      background: const Color(0xFFF9EFF2),
+      background: const Color(0xFFFFFFFF),
       surface: Colors.white,
     ),
-    scaffoldBackgroundColor: const Color(0xFFF9EFF2),
+    scaffoldBackgroundColor: const Color(0xFFFFFFFF),
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.white,
       foregroundColor: Colors.black,
