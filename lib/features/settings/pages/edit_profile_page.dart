@@ -3,6 +3,7 @@ import 'package:familee_dental/features/settings/controller/edit_profile_control
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/features/settings/controller/edit_user_controller.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
+import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditProfilePage extends StatefulWidget {
@@ -479,184 +480,195 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
               elevation: 8,
               backgroundColor: theme.dialogBackgroundColor,
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color: theme.dialogBackgroundColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.9,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon and Title
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00D4AA).withOpacity(0.1),
-                        shape: BoxShape.circle,
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: theme.dialogBackgroundColor,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
-                      child: const Icon(
-                        Icons.lock,
-                        color: Color(0xFF00D4AA),
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      'Change Password',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Password Fields
-                    Form(
-                      key: _passwordFormKey, // ✅ stable key
-                      child: Column(
-                        children: [
-                          _buildPasswordField(
-                            label: 'Current Password',
-                            controller: _currentPassword,
-                            isVisible: _showCurrent,
-                            onToggle: () => setDialogState(
-                                () => _showCurrent = !_showCurrent),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Enter your current password';
-                              }
-                              if (_currentPasswordError != null) {
-                                return _currentPasswordError;
-                              }
-                              return null;
-                            },
-                            // ✅ clear external error and re-validate without rebuilding dialog
-                            onChanged: (value) {
-                              if (_currentPasswordError != null) {
-                                _currentPasswordError = null;
-                                _passwordFormKey.currentState?.validate();
-                              }
-                            },
-                            theme: theme,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildPasswordField(
-                            label: 'New Password',
-                            controller: _newPassword,
-                            isVisible: _showNew,
-                            onToggle: () =>
-                                setDialogState(() => _showNew = !_showNew),
-                            validator: (value) {
-                              final text = (value ?? '').trim();
-                              if (text.isEmpty) return 'Enter a new password';
-
-                              // Inline validation if new == current
-                              if (text == _currentPassword.text.trim()) {
-                                return 'New password should be different from the old password.';
-                              }
-
-                              return _passwordController.isPasswordValid(text)
-                                  ? null
-                                  : 'Use 8+ chars with letters, numbers, and uppercase';
-                            },
-                            theme: theme,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildPasswordField(
-                            label: 'Confirm Password',
-                            controller: _confirmPassword,
-                            isVisible: _showConfirm,
-                            onToggle: () => setDialogState(
-                                () => _showConfirm = !_showConfirm),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please confirm your new password';
-                              }
-                              if (value != _newPassword.text) {
-                                return 'Passwords do not match';
-                              }
-                              return null;
-                            },
-                            theme: theme,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Buttons
-                    Row(
+                    ],
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(color: theme.dividerColor),
-                              ),
-                            ),
-                            child: Text(
-                              'Cancel',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withOpacity(0.7),
-                                fontSize: 16,
-                              ),
-                            ),
+                        // Icon and Title
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00D4AA).withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.lock,
+                            color: Color(0xFF00D4AA),
+                            size: 32,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              // ✅ validate inside the dialog first
-                              final isValid =
-                                  _passwordFormKey.currentState?.validate() ??
-                                      false;
-                              if (!isValid) return;
+                        const SizedBox(height: 16),
 
-                              await _handlePasswordChange();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: const Text(
-                              'Update Password',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
+                        // Title
+                        Text(
+                          'Change Password',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: theme.textTheme.titleLarge?.color,
                           ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Password Fields
+                        Form(
+                          key: _passwordFormKey, // ✅ stable key
+                          child: Column(
+                            children: [
+                              _buildPasswordField(
+                                label: 'Current Password',
+                                controller: _currentPassword,
+                                isVisible: _showCurrent,
+                                onToggle: () => setDialogState(
+                                    () => _showCurrent = !_showCurrent),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Enter your current password';
+                                  }
+                                  if (_currentPasswordError != null) {
+                                    return _currentPasswordError;
+                                  }
+                                  return null;
+                                },
+                                // ✅ clear external error and re-validate without rebuilding dialog
+                                onChanged: (value) {
+                                  if (_currentPasswordError != null) {
+                                    _currentPasswordError = null;
+                                    _passwordFormKey.currentState?.validate();
+                                  }
+                                },
+                                theme: theme,
+                              ),
+                              const SizedBox(height: 16),
+                              _buildPasswordField(
+                                label: 'New Password',
+                                controller: _newPassword,
+                                isVisible: _showNew,
+                                onToggle: () =>
+                                    setDialogState(() => _showNew = !_showNew),
+                                validator: (value) {
+                                  final text = (value ?? '').trim();
+                                  if (text.isEmpty)
+                                    return 'Enter a new password';
+
+                                  // Inline validation if new == current
+                                  if (text == _currentPassword.text.trim()) {
+                                    return 'New password should be different from the old password.';
+                                  }
+
+                                  return _passwordController
+                                          .isPasswordValid(text)
+                                      ? null
+                                      : 'Use 8+ chars with letters, numbers, and uppercase';
+                                },
+                                theme: theme,
+                              ),
+                              const SizedBox(height: 16),
+                              _buildPasswordField(
+                                label: 'Confirm Password',
+                                controller: _confirmPassword,
+                                isVisible: _showConfirm,
+                                onToggle: () => setDialogState(
+                                    () => _showConfirm = !_showConfirm),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please confirm your new password';
+                                  }
+                                  if (value != _newPassword.text) {
+                                    return 'Passwords do not match';
+                                  }
+                                  return null;
+                                },
+                                theme: theme,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: TextButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: BorderSide(color: theme.dividerColor),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro',
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.textTheme.bodyMedium?.color
+                                        ?.withOpacity(0.7),
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  // ✅ validate inside the dialog first
+                                  final isValid = _passwordFormKey.currentState
+                                          ?.validate() ??
+                                      false;
+                                  if (!isValid) return;
+
+                                  await _handlePasswordChange();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00D4AA),
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  elevation: 2,
+                                ),
+                                child: const Text(
+                                  'Update Password',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro',
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -753,19 +765,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
             userName: _nameController.text.trim(),
           );
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Password updated successfully'),
-              backgroundColor: Color(0xFF00D4AA),
-            ),
-          );
           // Clear password fields
           _currentPassword.clear();
           _newPassword.clear();
           _confirmPassword.clear();
 
-          // ✅ Close dialog only on success
+          // ✅ Close password change dialog
           Navigator.of(context).pop();
+
+          // Show relogin dialog
+          await _showReloginDialog();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -788,6 +797,109 @@ class _EditProfilePageState extends State<EditProfilePage> {
         );
       }
     }
+  }
+
+  Future<void> _showReloginDialog() async {
+    // Logout automatically when dialog is shown
+    final authService = AuthService();
+    await authService.logout();
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_outline,
+                    color: Colors.orange,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Password Changed',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your password has been changed successfully. Please login again with your new password.',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Close the dialog and navigate to login page
+                      Navigator.of(context).pop();
+                      if (context.mounted) {
+                        Navigator.of(context).pushNamedAndRemoveUntil(
+                          '/login',
+                          (route) => false,
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D4AA),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: const Text(
+                      'Go to Login',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _handleSave() async {

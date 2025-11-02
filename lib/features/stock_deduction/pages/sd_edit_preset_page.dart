@@ -23,15 +23,10 @@ class _EditPresetPageState extends State<EditPresetPage> {
   void initState() {
     super.initState();
     _nameController.text = widget.preset['name'] ?? '';
-    // Initialize supplies and ensure quantities are set
+    // Initialize supplies
     final supplies =
         List<Map<String, dynamic>>.from(widget.preset['supplies'] ?? []);
-    _presetSupplies = supplies.map((supply) {
-      return {
-        ...supply,
-        'quantity': supply['quantity'] ?? 1, // Initialize quantity if missing
-      };
-    }).toList();
+    _presetSupplies = supplies;
   }
 
   @override
@@ -60,21 +55,14 @@ class _EditPresetPageState extends State<EditPresetPage> {
       setState(() {
         if (processedResult['supply'] != null) {
           final supplyData = processedResult['supply'] as Map<String, dynamic>;
-          final supply = {
-            ...supplyData,
-            'quantity': 1, // Initialize quantity to 1
-          };
           _presetSupplies =
-              _controller.addSupplyToPreset(_presetSupplies, supply);
+              _controller.addSupplyToPreset(_presetSupplies, supplyData);
         } else if (processedResult['supplies'] != null) {
           final suppliesList = processedResult['supplies'] as List;
           final supplies = suppliesList
               .map((supply) {
                 final supplyData = supply as Map<String, dynamic>;
-                return {
-                  ...supplyData,
-                  'quantity': 1, // Initialize quantity to 1
-                };
+                return supplyData;
               })
               .toList()
               .cast<Map<String, dynamic>>();
@@ -92,23 +80,14 @@ class _EditPresetPageState extends State<EditPresetPage> {
     });
   }
 
-  void _incrementQty(int index) {
-    setState(() {
-      final int current = (_presetSupplies[index]['quantity'] ?? 1) as int;
-      // No stock limit for presets - presets are templates
-      final int next = current + 1;
-      // Only limit to 999 for practicality
-      _presetSupplies[index]['quantity'] = next > 999 ? 999 : next;
-    });
-  }
-
-  void _decrementQty(int index) {
-    setState(() {
-      final current = (_presetSupplies[index]['quantity'] ?? 1) as int;
-      if (current > 1) {
-        _presetSupplies[index]['quantity'] = current - 1;
-      }
-    });
+  String _formatExpiry(dynamic expiry, bool? noExpiry) {
+    if (noExpiry == true) return 'No Expiry';
+    if (expiry == null || expiry.toString().isEmpty) return 'No Expiry';
+    final expiryStr = expiry.toString();
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiryStr)) {
+      return expiryStr.replaceAll('-', '/');
+    }
+    return expiryStr;
   }
 
   Future<void> _savePreset() async {
@@ -149,28 +128,6 @@ class _EditPresetPageState extends State<EditPresetPage> {
         );
         return;
       }
-    }
-
-    // Check if exact supply set already exists (excluding current preset)
-    try {
-      final exactSetExists = await _controller.isExactSupplySetExists(
-          _presetSupplies,
-          excludePresetId: widget.preset['id']);
-      if (exactSetExists) {
-        await _showDuplicateSupplySetDialog();
-        return; // Stay on this page, don't navigate back
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error checking supply set: $e',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
     }
 
     // Update preset data
@@ -254,34 +211,6 @@ class _EditPresetPageState extends State<EditPresetPage> {
           ),
           content: Text(
             '"$supplyName" is already in your preset list.',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'OK',
-                style: AppFonts.sfProStyle(fontSize: 16),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showDuplicateSupplySetDialog() async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Duplicate preset',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            'A preset with the exact same supplies already exists. Please choose different supplies or a different combination.',
             style: AppFonts.sfProStyle(fontSize: 16),
           ),
           actions: [
@@ -642,44 +571,89 @@ class _EditPresetPageState extends State<EditPresetPage> {
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(
-                  item['name'] ?? '',
-                  style: AppFonts.sfProStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Theme.of(context).textTheme.bodyMedium?.color),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Supply name with type
+                    Text(
+                      (item['name'] ?? '') +
+                          (item['type'] != null &&
+                                  item['type'].toString().isNotEmpty
+                              ? '(${item['type']})'
+                              : ''),
+                      style: AppFonts.sfProStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).textTheme.bodyMedium?.color),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    // Packaging info and expiry
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Packaging info (left side)
+                        Builder(
+                          builder: (context) {
+                            final packagingContent = item['packagingContent'] !=
+                                    null &&
+                                item['packagingContent'].toString().isNotEmpty;
+                            final packagingUnit =
+                                item['packagingUnit'] != null &&
+                                    item['packagingUnit'].toString().isNotEmpty;
+
+                            if (packagingContent || packagingUnit) {
+                              String packagingText = '';
+
+                              if (packagingContent && packagingUnit) {
+                                // Format: "10mL per Bottle" when both exist
+                                packagingText =
+                                    '${item['packagingContentQuantity']} ${item['packagingContent']} per ${item['packagingUnit']}';
+                              } else if (packagingContent) {
+                                // Format: "10mL" when only content exists
+                                packagingText =
+                                    '${item['packagingContentQuantity']} ${item['packagingContent']}';
+                              } else if (packagingUnit) {
+                                // Format: "pieces" (just the unit, no quantity) when only unit exists
+                                packagingText = '${item['packagingUnit']}';
+                              }
+
+                              return Flexible(
+                                child: Text(
+                                  packagingText,
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }
+                            return const Spacer();
+                          },
+                        ),
+                        // Expiry (right side)
+                        Text(
+                          _formatExpiry(
+                            item['expiry'],
+                            item['noExpiry'] as bool?,
+                          ),
+                          style: AppFonts.sfProStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: () => _decrementQty(index),
-                    icon: Icon(
-                      Icons.remove_circle_outline,
-                      color: Theme.of(context).iconTheme.color,
-                    ),
-                  ),
-                  Text(
-                    ((_presetSupplies[index]['quantity'] ?? 1) as int)
-                        .toString(),
-                    style: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).textTheme.bodyMedium?.color,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => _incrementQty(index),
-                    icon: Icon(
-                      Icons.add_circle_outline,
-                      color: Theme.of(context).iconTheme.color,
-                    ),
-                  ),
-                ],
               ),
             ],
           ),

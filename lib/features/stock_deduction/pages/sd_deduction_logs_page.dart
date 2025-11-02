@@ -22,8 +22,6 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
   List<Map<String, dynamic>> _filteredPresets = [];
   List<Map<String, dynamic>> _lastKnownPresets = []; // Cache last known data
   Timer? _debounceTimer;
-  // Track which preset dropdown is expanded
-  String? _expandedPresetId;
   // Stream key for forcing refresh
   late Stream<List<Map<String, dynamic>>> _presetsStream;
   int _streamKey = 0;
@@ -46,29 +44,63 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
     final purpose = args?['purpose'] as String?;
     final remarks = args?['remarks'] as String?;
     final supplies = args?['supplies'] as List<dynamic>?;
+    final patientName = args?['patient_name'] as String?;
+    final age = args?['age'] as String?;
+    final gender = args?['gender'] as String?;
+    final conditions = args?['conditions'] as String?;
 
     if (purpose != null && supplies != null && supplies.isNotEmpty) {
       try {
         // Create preset data with purpose as name
+        // Mark it as from deduction log so we can filter it
         final presetData = {
           'name': purpose,
           'supplies': supplies,
+          'from_deduction': true, // Mark as created from approved deduction
         };
         if (remarks != null && remarks.isNotEmpty) {
           presetData['remarks'] = remarks;
         }
+        // Include patient information if available
+        if (patientName != null && patientName.isNotEmpty) {
+          presetData['patient_name'] = patientName;
+        }
+        if (age != null && age.isNotEmpty) {
+          presetData['age'] = age;
+        }
+        if (gender != null && gender.isNotEmpty) {
+          presetData['gender'] = gender;
+        }
+        if (conditions != null && conditions.isNotEmpty) {
+          presetData['conditions'] = conditions;
+        }
 
-        // Save the preset
-        await _presetController.savePreset(presetData);
+        // Check if a deduction log preset with this name already exists
+        // Only update if it's already a deduction log preset (from_deduction == true)
+        // Don't update service management presets - create a new record instead
+        final existingPreset = await _presetController.getPresetByName(purpose);
+        final isExistingDeductionLog = existingPreset != null &&
+            (existingPreset['from_deduction'] == true ||
+                existingPreset['fromDeduction'] == true);
 
-        // Log the preset creation activity
-        final suppliesList = supplies.cast<Map<String, dynamic>>();
-        await _activityController.logPresetCreated(
-          presetName: purpose,
-          supplies: suppliesList,
-        );
+        if (isExistingDeductionLog) {
+          // Update existing deduction log preset instead of creating duplicate
+          await _presetController.updatePreset(
+              existingPreset['id'], presetData);
+        } else {
+          // Always create a new preset for deduction logs
+          // This ensures service management presets are not overwritten
+          await _presetController.savePreset(presetData);
 
-        // Force refresh the stream to show the new preset immediately
+          // Log the preset creation activity (only if newly created)
+          final suppliesList = supplies.cast<Map<String, dynamic>>();
+          await _activityController.logPresetCreated(
+            presetName: purpose,
+            supplies: suppliesList,
+          );
+        }
+
+        // Force refresh the stream to show the updated/new preset immediately
         _refreshPresets();
 
         // Show success message
@@ -101,7 +133,13 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
   }
 
   void _initializeStream() {
-    _presetsStream = PresetController().getPresetsStream();
+    // Only show presets that were created from approved deductions
+    _presetsStream = PresetController().getPresetsStream().map((presets) =>
+        presets
+            .where((preset) =>
+                preset['from_deduction'] == true ||
+                preset['fromDeduction'] == true)
+            .toList());
   }
 
   @override
@@ -437,8 +475,6 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
   }
 
   Widget _buildPresetCard(Map<String, dynamic> preset, int index) {
-    final presetId = preset['id'] ?? index.toString();
-    final isExpanded = _expandedPresetId == presetId;
     final supplies = preset['supplies'] as List<dynamic>? ?? [];
 
     return Card(
@@ -451,175 +487,512 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
         side:
             BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2)),
       ),
-      child: Column(
-        children: [
-          // Main preset info with dropdown button
-          InkWell(
-            onTap: () {
-              setState(() {
-                if (isExpanded) {
-                  _expandedPresetId = null;
-                } else {
-                  _expandedPresetId = presetId;
-                }
-              });
-            },
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(12),
-              topRight: Radius.circular(12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+      child: InkWell(
+        onTap: () {
+          _showPresetDetailModal(preset);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.history,
+                      color: const Color(0xFF00D4AA),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            preset['name'] ?? 'Unnamed Deduction',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  Theme.of(context).textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${supplies.length} ${supplies.length == 1 ? 'supply' : 'supplies'}',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.color
+                                  ?.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).iconTheme.color?.withOpacity(0.8),
+                size: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPresetDetailModal(Map<String, dynamic> preset) {
+    showDialog(
+      context: context,
+      builder: (context) => _PresetDetailModal(preset: preset),
+    );
+  }
+}
+
+class _PresetDetailModal extends StatelessWidget {
+  final Map<String, dynamic> preset;
+
+  const _PresetDetailModal({required this.preset});
+
+  String _formatExpiry(dynamic expiry, bool? noExpiry) {
+    if (noExpiry == true) return 'No Expiry';
+    if (expiry == null || expiry.toString().isEmpty) return 'No Expiry';
+    final expiryStr = expiry.toString();
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiryStr)) {
+      return expiryStr.replaceAll('-', '/');
+    }
+    return expiryStr;
+  }
+
+  String _buildPackagingString(Map<String, dynamic> supply) {
+    final packagingContentQuantity = supply['packagingContentQuantity'];
+    final packagingContent = supply['packagingContent'];
+    final packagingUnit = supply['packagingUnit'];
+
+    if (packagingContent != null &&
+        packagingContent.toString().isNotEmpty &&
+        packagingUnit != null &&
+        packagingUnit.toString().isNotEmpty) {
+      // Format: "10mL per Bottle"
+      return '${packagingContentQuantity ?? ''} ${packagingContent} per $packagingUnit';
+    } else if (packagingUnit != null && packagingUnit.toString().isNotEmpty) {
+      // Format: "pieces" (just the unit)
+      return packagingUnit.toString();
+    }
+    return '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final supplies = preset['supplies'] as List<dynamic>? ?? [];
+    final patientName = preset['patient_name']?.toString() ?? '';
+    final age = preset['age']?.toString() ?? '';
+    final gender = preset['gender']?.toString() ?? '';
+    final conditions = preset['conditions']?.toString() ?? '';
+    final hasPatientInfo = patientName.isNotEmpty ||
+        age.isNotEmpty ||
+        gender.isNotEmpty ||
+        conditions.isNotEmpty;
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with service name and icon
+            Padding(
+              padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D4AA).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF00D4AA).withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.bookmark_rounded,
+                      color: Color(0xFF00D4AA),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Text(
+                      preset['name'] ?? 'Deduction Details',
+                      style: AppFonts.sfProStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            // Content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Patient Information Section
+                    if (hasPatientInfo) ...[
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_outline_rounded,
+                            size: 18,
+                            color: const Color(0xFF00D4AA),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Patient Information',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  Theme.of(context).textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[800]!.withOpacity(0.5)
+                              : const Color(0xFF00D4AA).withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[700]!.withOpacity(0.3)
+                                    : const Color(0xFF00D4AA).withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            // Row 1: Patient Name | Gender
+                            Row(
+                              children: [
+                                if (patientName.isNotEmpty)
+                                  Expanded(
+                                    child: _buildModernInfoRow(
+                                      context,
+                                      Icons.badge_outlined,
+                                      'Patient Name',
+                                      patientName,
+                                    ),
+                                  ),
+                                if (patientName.isNotEmpty && gender.isNotEmpty)
+                                  const SizedBox(width: 16),
+                                if (gender.isNotEmpty)
+                                  Expanded(
+                                    child: _buildModernInfoRow(
+                                      context,
+                                      Icons.people_outline_rounded,
+                                      'Sex',
+                                      gender,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            // Row 2: Age | Conditions
+                            if ((age.isNotEmpty || conditions.isNotEmpty) &&
+                                (patientName.isNotEmpty || gender.isNotEmpty))
+                              const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                if (age.isNotEmpty)
+                                  Expanded(
+                                    child: _buildModernInfoRow(
+                                      context,
+                                      Icons.calendar_today_outlined,
+                                      'Age',
+                                      age,
+                                    ),
+                                  ),
+                                if (age.isNotEmpty && conditions.isNotEmpty)
+                                  const SizedBox(width: 16),
+                                if (conditions.isNotEmpty)
+                                  Expanded(
+                                    child: _buildModernInfoRow(
+                                      context,
+                                      Icons.medical_information_outlined,
+                                      'Conditions',
+                                      conditions,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    // Supplies Section
+                    Row(
                       children: [
                         Icon(
-                          Icons.history,
+                          Icons.inventory_2_outlined,
+                          size: 18,
                           color: const Color(0xFF00D4AA),
-                          size: 20,
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                preset['name'] ?? 'Unnamed Deduction',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.color,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${supplies.length} ${supplies.length == 1 ? 'supply' : 'supplies'}',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.color
-                                      ?.withOpacity(0.8),
-                                ),
-                              ),
-                            ],
+                        Text(
+                          'Supplies Deducted',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  Icon(
-                    isExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    color: Theme.of(context).iconTheme.color?.withOpacity(0.8),
-                    size: 24,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Dropdown content
-          if (isExpanded) ...[
-            Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Theme.of(context).colorScheme.surface
-                    : Colors.grey[50],
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
-                ),
-              ),
-              child: Column(
-                children: [
-                  // Supplies list
-                  if (supplies.isNotEmpty) ...[
-                    Container(
-                      constraints: const BoxConstraints(maxHeight: 200),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        physics: const ClampingScrollPhysics(),
-                        itemCount: supplies.length,
-                        itemBuilder: (context, supplyIndex) {
-                          final supply =
-                              supplies[supplyIndex] as Map<String, dynamic>;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            child: Row(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Image.network(
-                                    supply['imageUrl'] ?? '',
-                                    width: 32,
-                                    height: 32,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      width: 32,
-                                      height: 32,
-                                      color: Colors.grey[200],
-                                      child: const Icon(
-                                        Icons.inventory,
-                                        color: Colors.grey,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    supply['name'] ?? 'Unknown Supply',
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ] else ...[
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        'No supplies in this deduction',
-                        style: AppFonts.sfProStyle(
-                          fontSize: 14,
-                          color: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.color
-                              ?.withOpacity(0.8),
+                    const SizedBox(height: 12),
+                    if (supplies.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Text(
+                          'No supplies in this deduction',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.color
+                                ?.withOpacity(0.8),
+                          ),
                         ),
-                      ),
-                    ),
+                      )
+                    else
+                      ...supplies.asMap().entries.map((entry) {
+                        final supply = entry.value as Map<String, dynamic>;
+                        return _buildSupplyCard(context, supply, entry.key + 1);
+                      }).toList(),
                   ],
-                ],
+                ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernInfoRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: const Color(0xFF00D4AA),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: AppFonts.sfProStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: AppFonts.sfProStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSupplyCard(
+      BuildContext context, Map<String, dynamic> supply, int index) {
+    final theme = Theme.of(context);
+    final deductQty = supply['deductQty'] ?? supply['quantity'] ?? 0;
+    final imageUrl = supply['imageUrl']?.toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.brightness == Brightness.dark
+            ? const Color(0xFF1A1A1A)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.brightness == Brightness.dark
+              ? Colors.grey[700]!
+              : Colors.grey[200]!,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Supply Image
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: imageUrl != null && imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 56,
+                        height: 56,
+                        color: Colors.grey[300],
+                        child: const Icon(
+                          Icons.inventory_2_outlined,
+                          color: Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      width: 56,
+                      height: 56,
+                      color: Colors.grey[300],
+                      child: const Icon(
+                        Icons.inventory_2_outlined,
+                        color: Colors.grey,
+                        size: 24,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          // Supply Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Supply name with type in parentheses beside it
+                Text(
+                  (supply['name'] ?? 'Unknown Supply') +
+                      (supply['type'] != null &&
+                              supply['type'].toString().isNotEmpty
+                          ? ' (${supply['type']})'
+                          : ''),
+                  style: AppFonts.sfProStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                // Packaging content/unit below supply name
+                Text(
+                  _buildPackagingString(supply),
+                  style: AppFonts.sfProStyle(
+                    fontSize: 12,
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Expiry and Quantity Badge
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Expiry on the left
+              Text(
+                _formatExpiry(supply['expiry'], supply['noExpiry'] == true),
+                style: AppFonts.sfProStyle(
+                  fontSize: 12,
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Quantity Badge
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF00D4AA).withOpacity(0.15),
+                      const Color(0xFF00D4AA).withOpacity(0.1),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFF00D4AA).withOpacity(0.4),
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  'x${deductQty.toString()}',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF00D4AA),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -10,6 +10,7 @@ import 'package:familee_dental/features/stock_deduction/pages/sd_approval_card_w
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ApprovalPage extends StatefulWidget {
   const ApprovalPage({super.key});
@@ -30,15 +31,70 @@ class _ApprovalPageState extends State<ApprovalPage> {
   int _streamKey = 0;
   bool _isFirstLoad = true;
   final Set<String> _expandedCardIds = {};
+  // Blacklist of rejected/approved approval IDs - never show these even if they appear in stream
+  final Set<String> _rejectedApprovalIds = <String>{};
+  // Track processing approvals to prevent double submissions
+  final Set<String> _processingApprovalIds = <String>{};
 
   @override
   void initState() {
     super.initState();
+    // Initialize stream first (will show loading)
     _initializeStream();
+    // Load rejected approvals and rebuild when done
+    _loadRejectedApprovals();
   }
 
   void _initializeStream() {
     _approvalsStream = ApprovalController().getApprovalsStream();
+  }
+
+  // Load already rejected/approved IDs on init to prevent them from appearing
+  // This runs every time the page is initialized (including when navigating back)
+  Future<void> _loadRejectedApprovals() async {
+    try {
+      // Query database directly to get all rejected/approved IDs
+      // This ensures we blacklist them even if they somehow appear in the stream
+      final supabase = Supabase.instance.client;
+
+      // Query for rejected IDs
+      final rejectedIds = await supabase
+          .from('stock_deduction_approvals')
+          .select('id')
+          .eq('status', 'rejected')
+          .limit(1000);
+
+      // Query for approved IDs
+      final approvedIds = await supabase
+          .from('stock_deduction_approvals')
+          .select('id')
+          .eq('status', 'approved')
+          .limit(1000);
+
+      // Combine both results - Supabase always returns a List
+      _rejectedApprovalIds.clear(); // Clear first, then add fresh data
+
+      for (final row in rejectedIds) {
+        final id = row['id']?.toString();
+        if (id != null) {
+          _rejectedApprovalIds.add(id);
+        }
+      }
+
+      for (final row in approvedIds) {
+        final id = row['id']?.toString();
+        if (id != null) {
+          _rejectedApprovalIds.add(id);
+        }
+      }
+
+      // Trigger a rebuild if needed to apply blacklist
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error loading rejected approvals: $e');
+    }
   }
 
   // Pull-to-refresh method
@@ -146,23 +202,36 @@ class _ApprovalPageState extends State<ApprovalPage> {
             }
 
             // Filter to show only pending approvals
-            List<Map<String, dynamic>> allData = [];
-            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-              allData = snapshot.data!;
-            } else if (!snapshot.hasData && _lastKnownApprovals.isNotEmpty) {
-              allData = _lastKnownApprovals;
-            } else {
-              allData = snapshot.data ?? [];
-            }
+            // CRITICAL: Blacklist check MUST happen FIRST before any processing
+            List<Map<String, dynamic>> allData = snapshot.data ?? [];
 
-            // Filter out approved and rejected approvals - only show pending
+            // Triple-layer protection: blacklist → status check → stream filter
             _allApprovals = allData.where((approval) {
-              final status = approval['status'] ?? 'pending';
-              return status == 'pending';
+              final approvalId = approval['id']?.toString();
+              final status = approval['status'] as String?;
+
+              // LAYER 1: Blacklist check FIRST - absolutely prevent these IDs
+              if (approvalId != null &&
+                  _rejectedApprovalIds.contains(approvalId)) {
+                return false; // Blacklisted - NEVER show
+              }
+
+              // LAYER 2: Status check - exclude rejected/approved and add to blacklist
+              if (status == 'rejected' || status == 'approved') {
+                // Immediately add to blacklist for future protection
+                if (approvalId != null) {
+                  _rejectedApprovalIds.add(approvalId);
+                }
+                return false; // Rejected/approved - NEVER show
+              }
+
+              // LAYER 3: Only show pending or null status
+              return status == 'pending' || status == null;
             }).toList();
 
-            // Update last known approvals to filtered list
-            _lastKnownApprovals = List.from(_allApprovals);
+            // Update last known approvals to filtered list (only pending)
+            // This is used only when snapshot has no data (loading state)
+            _lastKnownApprovals = _allApprovals.toList();
 
             return ResponsiveContainer(
               maxWidth: 1100,
@@ -196,26 +265,28 @@ class _ApprovalPageState extends State<ApprovalPage> {
                                   itemCount: _allApprovals.length,
                                   itemBuilder: (context, index) {
                                     final approval = _allApprovals[index];
+                                    final approvalId =
+                                        approval['id']?.toString();
                                     return ApprovalCard(
                                       approval: approval,
                                       index: index,
-                                      isExpanded: _expandedCardIds
-                                          .contains(approval['id']?.toString()),
+                                      isExpanded:
+                                          _expandedCardIds.contains(approvalId),
+                                      isProcessing: _processingApprovalIds
+                                          .contains(approvalId),
                                       onToggle: () {
                                         setState(() {
-                                          final cardId =
-                                              approval['id']?.toString();
-                                          if (cardId != null) {
+                                          if (approvalId != null) {
                                             if (_expandedCardIds
-                                                .contains(cardId)) {
-                                              _expandedCardIds.remove(cardId);
+                                                .contains(approvalId)) {
+                                              _expandedCardIds
+                                                  .remove(approvalId);
                                             } else {
-                                              _expandedCardIds.add(cardId);
+                                              _expandedCardIds.add(approvalId);
                                             }
                                           }
                                         });
                                       },
-                                      onDelete: () => _deleteApproval(approval),
                                       onApprove: () =>
                                           _approveApproval(approval),
                                       onReject: () => _rejectApproval(approval),
@@ -282,38 +353,15 @@ class _ApprovalPageState extends State<ApprovalPage> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    // Ensure we compare in UTC to avoid timezone issues
-    final dateUtc = date.toUtc();
-    final nowUtc = now.toUtc();
-
-    // Calculate difference - if negative, it means date is in the future (likely timezone issue)
-    var difference = nowUtc.difference(dateUtc);
-
-    // If difference is negative (date in future), treat as just now
-    if (difference.isNegative) {
-      return 'Just now';
-    }
-
-    if (difference.inDays == 0) {
-      if (difference.inHours == 0) {
-        if (difference.inMinutes == 0) {
-          return 'Just now';
-        }
-        return '${difference.inMinutes} ${difference.inMinutes == 1 ? 'minute' : 'minutes'} ago';
-      }
-      return '${difference.inHours} ${difference.inHours == 1 ? 'hour' : 'hours'} ago';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} ${difference.inDays == 1 ? 'day' : 'days'} ago';
-    } else {
-      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-    }
-  }
-
   Future<void> _approveApproval(Map<String, dynamic> approval) async {
+    final approvalId = approval['id']?.toString();
+
+    // Check if already processing
+    if (approvalId != null && _processingApprovalIds.contains(approvalId)) {
+      return;
+    }
+
+    // Check if already approved/rejected
     final status = approval['status'] ?? 'pending';
     if (status != 'pending') {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -329,11 +377,19 @@ class _ApprovalPageState extends State<ApprovalPage> {
       return;
     }
 
-    // Use preset name as purpose (from approval)
+    // Mark as processing
+    if (approvalId != null) {
+      _processingApprovalIds.add(approvalId);
+      setState(() {});
+    }
+
+    // Use purpose if available (for direct deductions), otherwise use preset name
     final presetName =
         approval['presetName'] ?? approval['name'] ?? 'Unknown Preset';
-    final purpose = presetName;
-    final remarks = '';
+    final purpose = approval['purpose']?.toString().isNotEmpty == true
+        ? approval['purpose'].toString()
+        : presetName;
+    final remarks = approval['remarks']?.toString() ?? '';
 
     try {
       // Get current inventory data to match supplies with docIds
@@ -351,78 +407,125 @@ class _ApprovalPageState extends State<ApprovalPage> {
       List<Map<String, dynamic>> deductionsToApply = [];
       for (final supply in supplies) {
         if (supply is Map<String, dynamic>) {
+          final supplyDocId = supply['docId']?.toString();
           final supplyName = supply['name']?.toString() ?? '';
           final supplyBrand = supply['brand']?.toString() ?? '';
           final quantity = supply['quantity'] ?? 0;
 
           if (supplyName.isEmpty || quantity <= 0) continue;
 
-          // Find current inventory data for this supply by name and brand
-          GroupedInventoryItem? currentItem;
-          try {
-            currentItem = currentInventory.firstWhere(
-              (item) =>
-                  item.mainItem.name == supplyName &&
-                  item.mainItem.brand == supplyBrand,
-            );
-          } catch (e) {
-            currentItem = null;
+          InventoryItem? targetBatch;
+
+          // Try to find exact batch by docId first (most accurate)
+          if (supplyDocId != null && supplyDocId.isNotEmpty) {
+            for (final item in currentInventory) {
+              // Check main item
+              if (item.mainItem.id == supplyDocId && item.mainItem.stock > 0) {
+                // Block expired items from deduction
+                if (!item.mainItem.noExpiry && item.mainItem.expiry != null) {
+                  final expiryDate = DateTime.tryParse(
+                      item.mainItem.expiry!.replaceAll('/', '-'));
+                  if (expiryDate != null &&
+                      expiryDate.isBefore(DateTime.now())) {
+                    continue; // Skip expired
+                  }
+                }
+                targetBatch = item.mainItem;
+                break;
+              }
+              // Check variants
+              for (final variant in item.variants) {
+                if (variant.id == supplyDocId && variant.stock > 0) {
+                  // Block expired items from deduction
+                  if (!variant.noExpiry && variant.expiry != null) {
+                    final expiryDate =
+                        DateTime.tryParse(variant.expiry!.replaceAll('/', '-'));
+                    if (expiryDate != null &&
+                        expiryDate.isBefore(DateTime.now())) {
+                      continue; // Skip expired
+                    }
+                  }
+                  targetBatch = variant;
+                  break;
+                }
+              }
+              if (targetBatch != null) break;
+            }
           }
 
-          if (currentItem != null) {
-            // Block expired items from deduction
-            if (currentItem.getStatus() == 'Expired') {
-              continue; // Skip expired items
+          // If docId match failed or not available, fall back to name/brand matching
+          if (targetBatch == null) {
+            GroupedInventoryItem? currentItem;
+            try {
+              currentItem = currentInventory.firstWhere(
+                (item) =>
+                    item.mainItem.name == supplyName &&
+                    item.mainItem.brand == supplyBrand,
+              );
+            } catch (e) {
+              currentItem = null;
             }
 
-            // Get all batches (earliest expiry first)
-            final allBatches = [currentItem.mainItem, ...currentItem.variants];
-            final validBatches =
-                allBatches.where((batch) => batch.stock > 0).toList();
+            if (currentItem != null) {
+              // Block expired items from deduction
+              if (currentItem.getStatus() == 'Expired') {
+                continue; // Skip expired items
+              }
 
-            // Sort by expiry (earliest first, no expiry last)
-            validBatches.sort((a, b) {
-              if (a.noExpiry && b.noExpiry) return 0;
-              if (a.noExpiry) return 1;
-              if (b.noExpiry) return -1;
+              // Get all batches (earliest expiry first)
+              final allBatches = [
+                currentItem.mainItem,
+                ...currentItem.variants
+              ];
+              final validBatches =
+                  allBatches.where((batch) => batch.stock > 0).toList();
 
-              final aExpiry = a.expiry != null
-                  ? DateTime.tryParse(a.expiry!.replaceAll('/', '-'))
-                  : null;
-              final bExpiry = b.expiry != null
-                  ? DateTime.tryParse(b.expiry!.replaceAll('/', '-'))
-                  : null;
+              // Sort by expiry (earliest first, no expiry last)
+              validBatches.sort((a, b) {
+                if (a.noExpiry && b.noExpiry) return 0;
+                if (a.noExpiry) return 1;
+                if (b.noExpiry) return -1;
 
-              if (aExpiry == null && bExpiry == null) return 0;
-              if (aExpiry == null) return 1;
-              if (bExpiry == null) return -1;
-              return aExpiry.compareTo(bExpiry);
-            });
+                final aExpiry = a.expiry != null
+                    ? DateTime.tryParse(a.expiry!.replaceAll('/', '-'))
+                    : null;
+                final bExpiry = b.expiry != null
+                    ? DateTime.tryParse(b.expiry!.replaceAll('/', '-'))
+                    : null;
 
-            // Add the earliest expiry batch with stock as the main deduction item
-            if (validBatches.isNotEmpty) {
-              final primaryBatch = validBatches.first;
-              final int deductQty =
-                  quantity > primaryBatch.stock ? primaryBatch.stock : quantity;
-
-              deductionsToApply.add({
-                'docId': primaryBatch.id,
-                'name': primaryBatch.name,
-                'brand': primaryBatch.brand,
-                'imageUrl': primaryBatch.imageUrl,
-                'expiry': primaryBatch.expiry,
-                'noExpiry': primaryBatch.noExpiry,
-                'stock': primaryBatch.stock,
-                'deductQty': deductQty,
-                'allBatches': validBatches
-                    .map((batch) => {
-                          'docId': batch.id,
-                          'stock': batch.stock,
-                          'expiry': batch.expiry,
-                        })
-                    .toList(),
+                if (aExpiry == null && bExpiry == null) return 0;
+                if (aExpiry == null) return 1;
+                if (bExpiry == null) return -1;
+                return aExpiry.compareTo(bExpiry);
               });
+
+              // Use the earliest expiry batch if docId match failed
+              if (validBatches.isNotEmpty) {
+                targetBatch = validBatches.first;
+              }
             }
+          }
+
+          // If we found a target batch, add it to deductions
+          if (targetBatch != null) {
+            final int deductQty =
+                quantity > targetBatch.stock ? targetBatch.stock : quantity;
+
+            deductionsToApply.add({
+              'docId': targetBatch.id,
+              'name': targetBatch.name,
+              'brand': targetBatch.brand,
+              'imageUrl': targetBatch.imageUrl,
+              'expiry': targetBatch.expiry,
+              'noExpiry': targetBatch.noExpiry,
+              'stock': targetBatch.stock,
+              'deductQty': deductQty,
+              // Preserve type and packaging info from original approval supply
+              'type': supply['type'],
+              'packagingContent': supply['packagingContent'],
+              'packagingContentQuantity': supply['packagingContentQuantity'],
+              'packagingUnit': supply['packagingUnit'],
+            });
           }
         }
       }
@@ -447,6 +550,43 @@ class _ApprovalPageState extends State<ApprovalPage> {
       // Update approval status to approved
       await _approvalController.approveApproval(approval['id']);
 
+      // Reset the preset in Service Management: clear patient info and reset supply quantities to 0
+      try {
+        if (presetName != null && presetName.isNotEmpty) {
+          // Find the preset by name
+          final preset = await _presetController.getPresetByName(presetName);
+          if (preset != null) {
+            // Get the current supplies and reset all quantities to 0
+            final currentSupplies =
+                List<Map<String, dynamic>>.from(preset['supplies'] ?? []);
+            final resetSupplies = currentSupplies.map((supply) {
+              return {
+                ...supply,
+                'quantity': 0, // Reset quantity to 0
+              };
+            }).toList();
+
+            // Update the preset: clear patient info and reset supply quantities
+            await _presetController.updatePreset(preset['id'], {
+              'supplies': resetSupplies,
+              'patient_name': '',
+              'age': '',
+              'gender': '',
+              'conditions': '',
+            });
+          }
+        }
+      } catch (e) {
+        // Log error but don't fail the approval
+        print('Error resetting preset: $e');
+      }
+
+      // Add to blacklist immediately to prevent it from ever appearing again
+      final approvalId = approval['id']?.toString();
+      if (approvalId != null) {
+        _rejectedApprovalIds.add(approvalId);
+      }
+
       // Immediately remove from local list (optimistic update) so it disappears instantly
       if (mounted) {
         setState(() {
@@ -459,6 +599,13 @@ class _ApprovalPageState extends State<ApprovalPage> {
       final savedDeductions =
           List<Map<String, dynamic>>.from(deductionsToApply);
 
+      // Get patient information from approval before we reset it
+      final patientName = approval['patientName']?.toString() ?? '';
+      final age = approval['age']?.toString() ?? '';
+      final gender =
+          approval['gender']?.toString() ?? approval['sex']?.toString() ?? '';
+      final conditions = approval['conditions']?.toString() ?? '';
+
       if (!mounted) return;
 
       // Navigate to Deduction Logs
@@ -468,6 +615,10 @@ class _ApprovalPageState extends State<ApprovalPage> {
           'purpose': purpose,
           'remarks': remarks,
           'supplies': savedDeductions,
+          'patient_name': patientName,
+          'age': age,
+          'gender': gender,
+          'conditions': conditions,
         },
       );
 
@@ -500,10 +651,24 @@ class _ApprovalPageState extends State<ApprovalPage> {
           duration: const Duration(seconds: 3),
         ),
       );
+    } finally {
+      // Remove from processing set
+      if (approvalId != null && mounted) {
+        _processingApprovalIds.remove(approvalId);
+        setState(() {});
+      }
     }
   }
 
   Future<void> _rejectApproval(Map<String, dynamic> approval) async {
+    final approvalId = approval['id']?.toString();
+
+    // Check if already processing
+    if (approvalId != null && _processingApprovalIds.contains(approvalId)) {
+      return;
+    }
+
+    // Check if already approved/rejected
     final status = approval['status'] ?? 'pending';
     if (status != 'pending') {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -559,8 +724,54 @@ class _ApprovalPageState extends State<ApprovalPage> {
 
     if (confirmed != true) return;
 
+    // Mark as processing
+    if (approvalId != null) {
+      _processingApprovalIds.add(approvalId);
+      setState(() {});
+    }
+
     try {
       await _approvalController.rejectApproval(approval['id']);
+
+      // Save patient information back to the preset in Service Management
+      try {
+        final presetName = approval['presetName']?.toString();
+        if (presetName != null && presetName.isNotEmpty) {
+          // Find the preset by name
+          final preset = await _presetController.getPresetByName(presetName);
+          if (preset != null) {
+            // Get patient information
+            final patientName = approval['patientName']?.toString() ?? '';
+            final age = approval['age']?.toString() ?? '';
+            final gender = approval['gender']?.toString() ??
+                approval['sex']?.toString() ??
+                '';
+            final conditions = approval['conditions']?.toString() ?? '';
+
+            // Get supplies with quantities from approval
+            final supplies =
+                List<Map<String, dynamic>>.from(approval['supplies'] ?? []);
+
+            // Update the preset with patient information AND supplies with quantities
+            await _presetController.updatePreset(preset['id'], {
+              'patient_name': patientName,
+              'age': age,
+              'gender': gender,
+              'conditions': conditions,
+              'supplies': supplies,
+            });
+          }
+        }
+      } catch (e) {
+        // Log error but don't fail the rejection
+        print('Error saving patient info to preset: $e');
+      }
+
+      // Add to blacklist immediately to prevent it from ever appearing again
+      final approvalId = approval['id']?.toString();
+      if (approvalId != null) {
+        _rejectedApprovalIds.add(approvalId);
+      }
 
       // Immediately remove from local list (optimistic update) so it disappears right away
       if (mounted) {
@@ -570,8 +781,9 @@ class _ApprovalPageState extends State<ApprovalPage> {
         });
       }
 
-      // Refresh the stream to sync with database
-      _refreshApprovals();
+      // Don't reinitialize the stream - let Supabase real-time handle it automatically
+      // The stream will receive the update with status='rejected' and the Dart filter will exclude it
+      // The blacklist ensures it never reappears even if there's a delay in the update
 
       if (!mounted) return;
 
@@ -597,6 +809,12 @@ class _ApprovalPageState extends State<ApprovalPage> {
           duration: const Duration(seconds: 3),
         ),
       );
+    } finally {
+      // Remove from processing set
+      if (approvalId != null && mounted) {
+        _processingApprovalIds.remove(approvalId);
+        setState(() {});
+      }
     }
   }
 

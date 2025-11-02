@@ -16,11 +16,11 @@ import 'package:familee_dental/features/inventory/controller/categories_controll
 import 'package:familee_dental/features/inventory/controller/expired_supply_controller.dart';
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/shared/themes/font.dart';
-import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class Inventory extends StatefulWidget {
   const Inventory({super.key});
@@ -35,6 +35,9 @@ class _InventoryState extends State<Inventory> {
   bool _deepLinkHandled = false;
   bool _expiringFilterApplied = false;
   // summary filter removed
+
+  String? _userName;
+  String? _userRole;
 
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
@@ -161,6 +164,8 @@ class _InventoryState extends State<Inventory> {
     super.initState();
     // Initialize default categories and migrate existing data
     _initializeData();
+    // Load user data for appbar
+    _loadUserData();
     // Best-effort cleanup of zero-stock duplicates when there are stocked batches
     controller.cleanupZeroStockDuplicates();
     // Convert expired supplies to placeholders
@@ -170,6 +175,50 @@ class _InventoryState extends State<Inventory> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleRouteArguments();
     });
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+
+      if (currentUser != null) {
+        // Try to get user data from user_roles table (same approach as Dashboard)
+        final response = await supabase
+            .from('user_roles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .limit(1)
+            .maybeSingle();
+
+        if (mounted) {
+          setState(() {
+            if (response != null &&
+                response['name'] != null &&
+                response['name'].toString().trim().isNotEmpty) {
+              // Use data from user_roles table
+              _userName = response['name'].toString().trim();
+              _userRole = response['role']?.toString().trim() ?? 'Admin';
+            } else {
+              // Fallback to auth user data
+              final displayName =
+                  currentUser.userMetadata?['display_name']?.toString().trim();
+              final emailName = currentUser.email?.split('@')[0].trim();
+              _userName = displayName ?? emailName ?? 'User';
+              _userRole = 'Admin';
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading user data: $e');
+      if (mounted) {
+        setState(() {
+          _userName = 'User';
+          _userRole = 'Admin';
+        });
+      }
+    }
   }
 
   @override
@@ -236,7 +285,6 @@ class _InventoryState extends State<Inventory> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     return WillPopScope(
       onWillPop: () async {
         // Navigate back to Dashboard when back button is pressed
@@ -246,559 +294,15 @@ class _InventoryState extends State<Inventory> {
         return false; // Prevent default back behavior
       },
       child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        appBar: AppBar(
-          automaticallyImplyLeading: MediaQuery.of(context).size.width >= 900
-              ? false
-              : true, // Remove back button on desktop
-          title: Text(
-            "Inventory",
-            style:
-                AppFonts.sfProStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          centerTitle: true,
-          backgroundColor: theme.appBarTheme.backgroundColor,
-          toolbarHeight: 70,
-          iconTheme: theme.appBarTheme.iconTheme,
-          elevation: theme.appBarTheme.elevation,
-          shadowColor: theme.appBarTheme.shadowColor,
-          actions: [
-            const NotificationBadgeButton(),
-          ],
-        ),
+        resizeToAvoidBottomInset: false,
+        backgroundColor: theme.brightness == Brightness.dark
+            ? const Color(0xFF3A3A3A)
+            : const Color(0xFFF5F5F5),
         drawer:
             MediaQuery.of(context).size.width >= 900 ? null : const MyDrawer(),
         body: MediaQuery.of(context).size.width >= 900
-            ? _buildWithNavigationRail(theme, scheme)
-            : SafeArea(
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    // Refresh the streams to reload data from Supabase
-                    _refreshAllStreams();
-                    // Convert expired supplies to placeholders
-                    _convertExpiredToPlaceholders();
-                    // Wait for the inventory stream to emit at least one event
-                    // This ensures the RefreshIndicator shows its animation
-                    await controller
-                        .getGroupedSuppliesStream(archived: false)
-                        .first;
-                  },
-                  child: ResponsiveContainer(
-                    maxWidth: 1200,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: MediaQuery.of(context).size.width < 768
-                            ? 1.0
-                            : 16.0, // Reduce horizontal
-                        vertical: 12.0, // Keep vertical as needed
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Search Bar + filter/sort
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: searchController,
-                                  decoration: InputDecoration(
-                                    hintText: 'Search...',
-                                    hintStyle: AppFonts.sfProStyle(
-                                      fontSize: 16,
-                                      color: theme.textTheme.bodyMedium?.color
-                                          ?.withOpacity(0.6),
-                                    ),
-                                    prefixIcon: Icon(Icons.search,
-                                        color: theme.iconTheme.color),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    contentPadding: EdgeInsets.symmetric(
-                                        vertical: 0, horizontal: 16),
-                                    filled: true,
-                                    fillColor: scheme.surface,
-                                  ),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      searchText = value;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              SizedBox(
-                                height: 48,
-                                width: 48,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    backgroundColor: currentFilters.isNotEmpty
-                                        ? const Color(0xFF4E38D4)
-                                        : scheme.surface,
-                                    foregroundColor: currentFilters.isNotEmpty
-                                        ? Colors.white
-                                        : theme.textTheme.bodyMedium?.color,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 1,
-                                  ),
-                                  onPressed: () => _showFilterModal(context),
-                                  child: Icon(Icons.filter_alt_outlined),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              SizedBox(
-                                height: 48,
-                                width: 48,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    backgroundColor: scheme.surface,
-                                    foregroundColor:
-                                        theme.textTheme.bodyMedium?.color,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 1,
-                                  ),
-                                  onPressed: () => _showSortModal(context),
-                                  child: Icon(Icons.sort_by_alpha),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          StreamBuilder<List<String>>(
-                            key: _categoriesStreamKey,
-                            stream: categoriesController.getCategoriesStream(),
-                            builder: (context, snapshot) {
-                              final currentCategories = snapshot.data ?? [];
-                              final List<String> categoriesWithAll = [
-                                'All Supplies',
-                                ...currentCategories
-                              ];
-
-                              // Show skeleton loader for categories
-                              if (snapshot.connectionState ==
-                                      ConnectionState.waiting &&
-                                  currentCategories.isEmpty) {
-                                final isDark = Theme.of(context).brightness ==
-                                    Brightness.dark;
-                                final baseColor = isDark
-                                    ? Colors.grey[800]!
-                                    : Colors.grey[300]!;
-                                final highlightColor = isDark
-                                    ? Colors.grey[700]!
-                                    : Colors.grey[100]!;
-
-                                return SizedBox(
-                                  height: 50,
-                                  child: ListView.separated(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: 5,
-                                    separatorBuilder: (_, __) =>
-                                        SizedBox(width: 8),
-                                    itemBuilder: (_, __) => Shimmer.fromColors(
-                                      baseColor: baseColor,
-                                      highlightColor: highlightColor,
-                                      child: Container(
-                                        width: 120,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              // Show last known data even if there's an error
-                              if (snapshot.hasError &&
-                                  currentCategories.isEmpty) {
-                                return SizedBox(
-                                  height: 50,
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: Row(
-                                      children: [
-                                        ChoiceChip(
-                                          label: Text('All Supplies'),
-                                          selected: selectedCategory == 0,
-                                          showCheckmark: false,
-                                          selectedColor:
-                                              const Color(0xFF4E38D4),
-                                          backgroundColor: scheme.surface,
-                                          labelStyle: TextStyle(
-                                            color: selectedCategory == 0
-                                                ? Colors.white
-                                                : theme.textTheme.bodyMedium
-                                                    ?.color,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          shape: StadiumBorder(
-                                            side: BorderSide(
-                                              color: selectedCategory == 0
-                                                  ? const Color(0xFF4E38D4)
-                                                  : theme.dividerColor,
-                                            ),
-                                          ),
-                                          onSelected: (_) {
-                                            setState(() {
-                                              selectedCategory = 0;
-                                            });
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              // Auto-scroll to selected chip when categories are loaded
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (selectedCategory <
-                                        categoriesWithAll.length &&
-                                    _chipsScrollController.hasClients) {
-                                  _scrollToSelectedChip(
-                                      selectedCategory, categoriesWithAll);
-                                }
-                              });
-
-                              // Clear old keys if categories changed
-                              if (_chipKeys.length !=
-                                  categoriesWithAll.length) {
-                                _chipKeys.clear();
-                              }
-
-                              return SingleChildScrollView(
-                                controller: _chipsScrollController,
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: List.generate(
-                                      categoriesWithAll.length, (index) {
-                                    final isSelected =
-                                        selectedCategory == index;
-                                    // Ensure we have a GlobalKey for this index
-                                    if (!_chipKeys.containsKey(index)) {
-                                      _chipKeys[index] = GlobalKey();
-                                    }
-                                    return Padding(
-                                      padding:
-                                          const EdgeInsets.only(right: 8.0),
-                                      child: ChoiceChip(
-                                        key: _chipKeys[index],
-                                        label: Text(categoriesWithAll[index]),
-                                        selected: isSelected,
-                                        showCheckmark: false,
-                                        selectedColor: const Color(0xFF4E38D4),
-                                        backgroundColor: scheme.surface,
-                                        labelStyle: TextStyle(
-                                          color: isSelected
-                                              ? Colors.white
-                                              : theme
-                                                  .textTheme.bodyMedium?.color,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        shape: StadiumBorder(
-                                          side: BorderSide(
-                                            color: isSelected
-                                                ? const Color(0xFF4E38D4)
-                                                : theme.dividerColor,
-                                          ),
-                                        ),
-                                        onSelected: (selected) {
-                                          setState(() {
-                                            selectedCategory = index;
-                                          });
-                                          // Scroll to the selected chip
-                                          _scrollToSelectedChip(
-                                              index, categoriesWithAll);
-                                        },
-                                      ),
-                                    );
-                                  }),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Supabase-powered, category-filtered, search-filtered, responsive grid
-                          Expanded(
-                            child: StreamBuilder<List<String>>(
-                              key: _categoriesStreamKey,
-                              stream:
-                                  categoriesController.getCategoriesStream(),
-                              builder: (context, categorySnapshot) {
-                                final currentCategories =
-                                    categorySnapshot.data ?? [];
-                                final categoriesWithAll = [
-                                  'All Supplies',
-                                  ...currentCategories
-                                ];
-                                final selectedCategoryName = (selectedCategory ==
-                                        0)
-                                    ? "" // empty means no category filter -> show all
-                                    : (selectedCategory <
-                                            categoriesWithAll.length
-                                        ? categoriesWithAll[selectedCategory]
-                                        : "");
-
-                                return StreamBuilder<
-                                    List<GroupedInventoryItem>>(
-                                  key: _inventoryStreamKey,
-                                  stream: controller.getGroupedSuppliesStream(
-                                      archived: false),
-                                  builder: (context, snapshot) {
-                                    final hasData = snapshot.hasData &&
-                                        snapshot.data!.isNotEmpty;
-
-                                    // Show skeleton loader only on first load
-                                    if (snapshot.connectionState ==
-                                            ConnectionState.waiting &&
-                                        !hasData) {
-                                      final isDark =
-                                          Theme.of(context).brightness ==
-                                              Brightness.dark;
-                                      final baseColor = isDark
-                                          ? Colors.grey[800]!
-                                          : Colors.grey[300]!;
-                                      final highlightColor = isDark
-                                          ? Colors.grey[700]!
-                                          : Colors.grey[100]!;
-
-                                      return LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          return GridView.builder(
-                                            physics:
-                                                NeverScrollableScrollPhysics(),
-                                            gridDelegate:
-                                                SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: constraints
-                                                          .maxWidth >
-                                                      800
-                                                  ? 4
-                                                  : constraints.maxWidth > 600
-                                                      ? 3
-                                                      : 2,
-                                              mainAxisSpacing: 8,
-                                              crossAxisSpacing: 8,
-                                              childAspectRatio:
-                                                  constraints.maxWidth < 400
-                                                      ? 0.7
-                                                      : 0.85,
-                                            ),
-                                            itemCount: 8,
-                                            itemBuilder: (context, index) {
-                                              return Shimmer.fromColors(
-                                                baseColor: baseColor,
-                                                highlightColor: highlightColor,
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          );
-                                        },
-                                      );
-                                    }
-
-                                    // Show subtle error banner but keep showing data if available
-                                    if (snapshot.hasError) {
-                                      // If we have data, show it with error banner
-                                      // If no data, show empty state with retry option
-                                      if (!hasData) {
-                                        return Center(
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons.cloud_off_outlined,
-                                                  size: 64, color: Colors.grey),
-                                              SizedBox(height: 16),
-                                              Text(
-                                                'Connection Issue',
-                                                style: TextStyle(
-                                                  color: theme.textTheme
-                                                      .bodyMedium?.color,
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              SizedBox(height: 8),
-                                              Text(
-                                                'Pull down to refresh',
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }
-                                    }
-
-                                    if (!snapshot.hasData ||
-                                        snapshot.data!.isEmpty) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.inventory_2_outlined,
-                                                size: 64, color: Colors.grey),
-                                            SizedBox(height: 16),
-                                            Text(
-                                              'No supplies found',
-                                              style: TextStyle(
-                                                color: Colors.grey[600],
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            SizedBox(height: 8),
-                                            Text(
-                                              'Add your first supply using the + button',
-                                              style: TextStyle(
-                                                color: Colors.grey[500],
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-
-                                    // Use controller to filter and sort grouped items
-                                    final sortedItems =
-                                        controller.filterAndSortGroupedItems(
-                                      items: snapshot.data!,
-                                      selectedCategory: selectedCategoryName,
-                                      searchText: searchText,
-                                      selectedSort: selectedSort,
-                                      filters: currentFilters,
-                                    );
-
-                                    // Filter out expired items from main inventory - they should only appear in Expired Supply page
-                                    // But keep non-expired batches even if other batches of the same product are expired
-                                    final visibleItems =
-                                        sortedItems.where((item) {
-                                      return item.getStatus() != "Expired";
-                                    }).toList();
-
-                                    // Handle deep-link to specific supply once, after frame
-                                    if (!_deepLinkHandled &&
-                                        _highlightSupplyName != null &&
-                                        _highlightSupplyName!.isNotEmpty) {
-                                      GroupedInventoryItem? target;
-                                      for (final g in sortedItems) {
-                                        if (g.mainItem.name.toLowerCase() ==
-                                            _highlightSupplyName!
-                                                .toLowerCase()) {
-                                          target = g;
-                                          break;
-                                        }
-                                      }
-                                      if (target != null) {
-                                        _deepLinkHandled = true;
-                                        final t = target;
-                                        WidgetsBinding.instance
-                                            .addPostFrameCallback((_) {
-                                          // Allow access to all items, including out-of-stock placeholders
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  InventoryViewSupplyPage(
-                                                      item: t.mainItem),
-                                            ),
-                                          );
-                                        });
-                                      }
-                                    }
-
-                                    return LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        // Since cards now show expiry dates for expiring/expired items regardless of filters,
-                                        // use a more conservative aspect ratio to accommodate the extra height
-                                        double aspectRatio =
-                                            constraints.maxWidth < 400
-                                                ? 0.7
-                                                : 0.85;
-                                        return GridView.builder(
-                                            physics:
-                                                AlwaysScrollableScrollPhysics(),
-                                            gridDelegate:
-                                                SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: constraints
-                                                          .maxWidth >
-                                                      800
-                                                  ? 4
-                                                  : constraints.maxWidth > 600
-                                                      ? 3
-                                                      : 2,
-                                              mainAxisSpacing: 8,
-                                              crossAxisSpacing: 8,
-                                              childAspectRatio: aspectRatio,
-                                            ),
-                                            itemCount: visibleItems.length,
-                                            itemBuilder: (context, index) {
-                                              final groupedItem =
-                                                  visibleItems[index];
-                                              return GestureDetector(
-                                                onTap: () {
-                                                  // Allow navigation for all items, including out-of-stock placeholders
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (context) =>
-                                                          InventoryViewSupplyPage(
-                                                              item: groupedItem
-                                                                  .mainItem),
-                                                    ),
-                                                  );
-                                                },
-                                                child: InventoryItemCard(
-                                                  item: groupedItem.mainItem,
-                                                  status:
-                                                      groupedItem.getStatus(),
-                                                  currentSort: selectedSort,
-                                                  overrideStock:
-                                                      groupedItem.totalStock,
-                                                ),
-                                              );
-                                            });
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            ? _buildRailLayout(context, theme)
+            : _buildInventoryContent(theme),
         floatingActionButton: InventoryFAB(
           onAddSupply: () async {
             final result = await Navigator.push(
@@ -863,170 +367,6 @@ class _InventoryState extends State<Inventory> {
         ),
       ),
     );
-  }
-
-  // Info banner intentionally removed for Inventory
-
-  Widget _buildWithNavigationRail(ThemeData theme, ColorScheme scheme) {
-    final userRoleProvider = UserRoleProvider();
-    final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
-
-    return Row(
-      children: [
-        NavigationRail(
-          minWidth: 150,
-          selectedIndex: 1, // Inventory is at index 1
-          labelType: NavigationRailLabelType.all,
-          useIndicator: true,
-          backgroundColor: theme.scaffoldBackgroundColor,
-          selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
-          selectedLabelTextStyle: AppFonts.sfProStyle(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.primary,
-          ),
-          unselectedLabelTextStyle: AppFonts.sfProStyle(
-            fontWeight: FontWeight.w500,
-            color: theme.textTheme.bodyMedium?.color,
-          ),
-          leading: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
-                    child: Image.asset(
-                      'assets/images/logo/logo_101.png',
-                      width: 60,
-                      height: 60,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.blue,
-                          child: const Icon(
-                            Icons.medical_services,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'FamiLee Dental',
-                  style: AppFonts.sfProStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    color: theme.textTheme.titleMedium?.color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          destinations: [
-            const NavigationRailDestination(
-              icon: Icon(Icons.dashboard),
-              label: Text('Dashboard'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.inventory),
-              label: Text('Inventory'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.shopping_cart),
-              label: Text('Purchase Order'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.playlist_remove),
-              label: Text('Stock Deduction'),
-            ),
-            if (canAccessActivityLog)
-              const NavigationRailDestination(
-                icon: Icon(Icons.history),
-                label: Text('Activity Logs'),
-              ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.settings),
-              label: Text('Settings'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.logout),
-              label: Text('Logout'),
-            ),
-          ],
-          onDestinationSelected: (index) async {
-            if (index == 0) {
-              Navigator.pushNamed(context, '/dashboard');
-            } else if (index == 1) {
-              // Already on Inventory
-            } else if (index == 2) {
-              Navigator.pushNamed(context, '/purchase-order');
-            } else if (index == 3) {
-              Navigator.pushNamed(context, '/stock-deduction');
-            } else if (canAccessActivityLog && index == 4) {
-              Navigator.pushNamed(context, '/activity-log');
-            } else if (index == (canAccessActivityLog ? 5 : 4)) {
-              Navigator.pushNamed(context, '/settings');
-            } else if (index == (canAccessActivityLog ? 6 : 5)) {
-              await _handleLogout();
-            }
-          },
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(
-          child: SafeArea(
-            child: RefreshIndicator(
-              onRefresh: () async {
-                _refreshAllStreams();
-                _convertExpiredToPlaceholders();
-                await controller
-                    .getGroupedSuppliesStream(archived: false)
-                    .first;
-              },
-              child: ResponsiveContainer(
-                maxWidth: 1200,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal:
-                        MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
-                    vertical: 12.0,
-                  ),
-                  child: _buildInventoryContent(theme, scheme),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _handleLogout() async {
-    final shouldLogout = await _showLogoutDialog(context);
-    if (shouldLogout == true) {
-      final authService = AuthService();
-      await authService.logout();
-      if (context.mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    }
   }
 
   Future<bool> _showLogoutDialog(BuildContext context) async {
@@ -1149,7 +489,36 @@ class _InventoryState extends State<Inventory> {
         false;
   }
 
-  Widget _buildInventoryContent(ThemeData theme, ColorScheme scheme) {
+  Widget _buildInventoryContent(ThemeData theme) {
+    return RefreshIndicator(
+      onRefresh: () async {
+        // Refresh the streams to reload data from Supabase
+        _refreshAllStreams();
+        // Convert expired supplies to placeholders
+        _convertExpiredToPlaceholders();
+        // Wait for the inventory stream to emit at least one event
+        // This ensures the RefreshIndicator shows its animation
+        await controller.getGroupedSuppliesStream(archived: false).first;
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Welcome Panel (with notification and account)
+            _buildWelcomePanel(theme),
+            const SizedBox(height: 12),
+            // Inventory content body - Expanded to fill remaining space
+            Expanded(
+              child: _buildInventoryContentBody(theme),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInventoryContentBody(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1181,7 +550,7 @@ class _InventoryState extends State<Inventory> {
                   contentPadding:
                       const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   filled: true,
-                  fillColor: scheme.surface,
+                  fillColor: theme.colorScheme.surface,
                 ),
                 onChanged: (value) {
                   setState(() {
@@ -1199,7 +568,7 @@ class _InventoryState extends State<Inventory> {
                   padding: EdgeInsets.zero,
                   backgroundColor: currentFilters.isNotEmpty
                       ? const Color(0xFF4E38D4)
-                      : scheme.surface,
+                      : theme.colorScheme.surface,
                   foregroundColor: currentFilters.isNotEmpty
                       ? Colors.white
                       : theme.textTheme.bodyMedium?.color,
@@ -1219,7 +588,7 @@ class _InventoryState extends State<Inventory> {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.zero,
-                  backgroundColor: scheme.surface,
+                  backgroundColor: theme.colorScheme.surface,
                   foregroundColor: theme.textTheme.bodyMedium?.color,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -1233,10 +602,12 @@ class _InventoryState extends State<Inventory> {
           ],
         ),
         const SizedBox(height: 16),
-        // Rest of inventory content from original Column continues here unchanged...
-        _buildCategoryChips(theme, scheme),
+        _buildCategoryChips(theme, theme.colorScheme),
         const SizedBox(height: 16),
-        Expanded(child: _buildInventoryGrid(theme, scheme)),
+        // Inventory Grid - Expanded to fill remaining space
+        Expanded(
+          child: _buildInventoryGrid(theme, theme.colorScheme),
+        ),
       ],
     );
   }
@@ -1574,4 +945,476 @@ class _InventoryState extends State<Inventory> {
       },
     );
   }
+
+  Widget _buildWelcomePanel(ThemeData theme) {
+    final userName = _userName ?? 'User';
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      margin: EdgeInsets.zero,
+      color: theme.colorScheme.surface,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: theme.colorScheme.surface,
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top row with greeting on left and account section on right
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left side - Greeting message
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Inventory",
+                        style: AppFonts.sfProStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Manage and track your supplies efficiently.",
+                        style: AppFonts.sfProStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Right side - Notification button and Account section
+                Row(
+                  children: [
+                    // Notification button
+                    const NotificationBadgeButton(),
+                    const SizedBox(width: 8),
+                    // Avatar with first letter
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Name and role
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          userName,
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color:
+                                isDark ? Colors.white : const Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        Text(
+                          _userRole ?? 'Admin',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRailLayout(BuildContext context, ThemeData theme) {
+    // Main destinations (top section)
+    final List<_RailDestination> mainDestinations = [
+      _RailDestination(
+          icon: Icons.dashboard, label: 'Dashboard', route: '/dashboard'),
+      _RailDestination(
+          icon: Icons.inventory, label: 'Inventory', route: '/inventory'),
+      _RailDestination(
+          icon: Icons.shopping_cart,
+          label: 'Purchase Order',
+          route: '/purchase-order'),
+      _RailDestination(
+          icon: Icons.playlist_remove,
+          label: 'Stock Deduction',
+          route: '/stock-deduction'),
+    ];
+
+    // Use the same role logic as drawer for conditional Activity Log
+    final userRoleProvider = UserRoleProvider();
+    final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
+
+    // Bottom destinations (Settings and Logout)
+    final List<_RailDestination> bottomDestinations = [
+      _RailDestination(
+          icon: Icons.settings, label: 'Settings', route: '/settings'),
+      _RailDestination(icon: Icons.logout, label: 'Logout', route: '/logout'),
+    ];
+
+    // Inventory is selected here
+    final int selectedIndex = 1;
+
+    return Row(
+      children: [
+        Container(
+          width: 220,
+          color: theme.colorScheme.surface,
+          child: Column(
+            children: [
+              // Logo and brand
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16.0, 35.0, 16.0, 16.0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(30),
+                        child: Image.asset(
+                          'assets/images/logo/logo_101.png',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 60,
+                              height: 60,
+                              color: Colors.blue,
+                              child: const Icon(
+                                Icons.medical_services,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Flexible(
+                      child: Transform.translate(
+                        offset: const Offset(0, 8),
+                        child: Transform.scale(
+                          scale: 2.9,
+                          child: theme.brightness == Brightness.dark
+                              ? ColorFiltered(
+                                  colorFilter: const ColorFilter.matrix([
+                                    1.5, 0, 0, 0, 0, // Red channel - brighten
+                                    0, 1.5, 0, 0, 0, // Green channel - brighten
+                                    0, 0, 1.5, 0, 0, // Blue channel - brighten
+                                    0, 0, 0, 1, 0, // Alpha channel - unchanged
+                                  ]),
+                                  child: Image.asset(
+                                    'assets/images/logo/tita_doc_2.png',
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Text(
+                                        'FamiLee Dental',
+                                        style: AppFonts.sfProStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: theme
+                                              .textTheme.titleMedium?.color,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : Image.asset(
+                                  'assets/images/logo/tita_doc_2.png',
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Text(
+                                      'FamiLee Dental',
+                                      style: AppFonts.sfProStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                        color:
+                                            theme.textTheme.titleMedium?.color,
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Navigation items
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    // MENU section header
+                    _buildSectionHeader(theme, 'MENU'),
+                    const SizedBox(height: 8),
+                    // MENU items
+                    for (int i = 0; i < mainDestinations.length; i++)
+                      _buildRailDestinationTile(
+                        context: context,
+                        theme: theme,
+                        destination: mainDestinations[i],
+                        isSelected: i == selectedIndex,
+                        onTap: () {
+                          final dest = mainDestinations[i];
+                          final currentRoute =
+                              ModalRoute.of(context)?.settings.name;
+
+                          if (currentRoute != dest.route) {
+                            Navigator.pushNamed(context, dest.route);
+                          }
+                        },
+                      ),
+                    // Activity Logs (if accessible) - part of MENU
+                    if (canAccessActivityLog)
+                      _buildRailDestinationTile(
+                        context: context,
+                        theme: theme,
+                        destination: _RailDestination(
+                          icon: Icons.history,
+                          label: 'Activity Logs',
+                          route: '/activity-log',
+                        ),
+                        isSelected: false,
+                        onTap: () {
+                          final currentRoute =
+                              ModalRoute.of(context)?.settings.name;
+                          if (currentRoute != '/activity-log') {
+                            Navigator.pushNamed(context, '/activity-log');
+                          }
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              // GENERAL section at the bottom
+              _buildSectionHeader(theme, 'GENERAL'),
+              const SizedBox(height: 8),
+              // GENERAL items
+              for (int i = 0; i < bottomDestinations.length; i++)
+                _buildRailDestinationTile(
+                  context: context,
+                  theme: theme,
+                  destination: bottomDestinations[i],
+                  isSelected: false,
+                  onTap: () {
+                    final dest = bottomDestinations[i];
+                    final currentRoute = ModalRoute.of(context)?.settings.name;
+
+                    // Handle logout separately
+                    if (dest.route == '/logout') {
+                      _handleLogout(context);
+                      return;
+                    }
+
+                    if (currentRoute != dest.route) {
+                      Navigator.pushNamed(context, dest.route);
+                    }
+                  },
+                ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+        VerticalDivider(
+          width: 1,
+          thickness: 1,
+          color: theme.brightness == Brightness.dark
+              ? Colors.grey.shade700
+              : Colors.grey.shade200,
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              _refreshAllStreams();
+              _convertExpiredToPlaceholders();
+              await controller.getGroupedSuppliesStream(archived: false).first;
+            },
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Welcome Panel (with notification and account)
+                  _buildWelcomePanel(theme),
+                  const SizedBox(height: 12),
+                  // Inventory content - Expanded to fill remaining space
+                  Expanded(
+                    child: _buildInventoryContentBody(theme),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(ThemeData theme, String label) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: AppFonts.sfProStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRailDestinationTile({
+    required BuildContext context,
+    required ThemeData theme,
+    required _RailDestination destination,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          // Background with rounded right corners
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? theme.colorScheme.primary.withOpacity(0.12)
+                  : Colors.transparent,
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(20),
+                bottomRight: Radius.circular(20),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    destination.icon,
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.textTheme.bodyMedium?.color,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      destination.label,
+                      style: AppFonts.sfProStyle(
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 14,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Vertical indicator line on the left
+          if (isSelected)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(2),
+                    bottomLeft: Radius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    final shouldLogout = await _showLogoutDialog(context);
+    if (shouldLogout == true) {
+      final authService = AuthService();
+      await authService.logout();
+      // ignore: use_build_context_synchronously
+      Navigator.pushReplacementNamed(context, '/login');
+    }
+  }
+}
+
+class _RailDestination {
+  final IconData icon;
+  final String label;
+  final String route;
+
+  _RailDestination(
+      {required this.icon, required this.label, required this.route});
 }

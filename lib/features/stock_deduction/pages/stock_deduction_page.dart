@@ -3,13 +3,14 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/stock_deduction/controller/stock_deduction_controller.dart';
+import 'package:familee_dental/features/stock_deduction/controller/sd_approval_controller.dart';
 import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
-import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class StockDeductionPage extends StatefulWidget {
   const StockDeductionPage({super.key});
@@ -23,15 +24,64 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   final StockDeductionController _controller = StockDeductionController();
   final InventoryController _inventoryController = InventoryController();
   final SdActivityController _activityController = SdActivityController();
+  final ApprovalController _approvalController = ApprovalController();
   OverlayEntry? _undoOverlayEntry;
   Route? _currentRoute;
+
+  String? _userName;
+  String? _userRole;
 
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _currentRoute = ModalRoute.of(context);
     });
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+
+      if (currentUser != null) {
+        // Try to get user data from user_roles table (same approach as Dashboard)
+        final response = await supabase
+            .from('user_roles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .limit(1)
+            .maybeSingle();
+
+        if (mounted) {
+          setState(() {
+            if (response != null &&
+                response['name'] != null &&
+                response['name'].toString().trim().isNotEmpty) {
+              // Use data from user_roles table
+              _userName = response['name'].toString().trim();
+              _userRole = response['role']?.toString().trim() ?? 'Admin';
+            } else {
+              // Fallback to auth user data
+              final displayName =
+                  currentUser.userMetadata?['display_name']?.toString().trim();
+              final emailName = currentUser.email?.split('@')[0].trim();
+              _userName = displayName ?? emailName ?? 'User';
+              _userRole = 'Admin';
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading user data: $e');
+      if (mounted) {
+        setState(() {
+          _userName = 'User';
+          _userRole = 'Admin';
+        });
+      }
+    }
   }
 
   @override
@@ -153,36 +203,69 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     if (purposeResult == null) return;
 
     final purpose = purposeResult['purpose'] as String;
-    final remarks = purposeResult['remarks'] as String?;
 
     try {
-      // Apply stock deductions to inventory
-      await _controller.applyDeductions(_deductions);
+      // Convert deductions to approval format
+      final supplies = _deductions.map((deduction) {
+        return {
+          'docId': deduction['docId'], // Save docId to match exact batch
+          'name': deduction['name'] ?? '',
+          'type': deduction['type'] ?? '',
+          'brand': deduction['brand'] ?? '',
+          'quantity': deduction['deductQty'] ?? 0,
+          'imageUrl': deduction['imageUrl'] ?? '',
+          'packagingContent': deduction['packagingContent'],
+          'packagingContentQuantity': deduction['packagingContentQuantity'],
+          'packagingUnit': deduction['packagingUnit'],
+          'expiry': deduction['expiry'],
+          'noExpiry': deduction['noExpiry'],
+        };
+      }).toList();
+
+      // Create approval instead of immediately deducting
+      await _approvalController.saveApproval({
+        'preset_name':
+            purpose, // Use purpose as preset_name for direct deductions
+        'supplies': supplies,
+        'patient_name': '', // Empty for direct deductions
+        'age': '',
+        'gender': '',
+        'conditions': '',
+        'purpose': purpose,
+        'remarks': '',
+      });
 
       // Save a copy of deductions before clearing
       final savedDeductions = List<Map<String, dynamic>>.from(_deductions);
 
-      // Clear the deductions list since they've been successfully applied
+      // Clear the deductions list since they've been sent for approval
       setState(() {
         _deductions.clear();
       });
 
-      // Navigate to Deduction Logs page with purpose and supplies
-      await Navigator.of(context).pushNamed(
-        '/stock-deduction/deduction-logs',
-        arguments: {
-          'purpose': purpose,
-          'remarks': remarks ?? '',
-          'supplies': savedDeductions,
-        },
-      );
-    } catch (e) {
-      // Show error message if deduction fails
+      // Show success message and navigate to approval page
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Failed to apply deductions: $e',
+              'Stock deduction request sent for approval',
+              style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+            ),
+            backgroundColor: const Color(0xFF00D4AA),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Navigate to approval page to see pending approvals
+        Navigator.of(context).pushNamed('/stock-deduction/approval');
+      }
+    } catch (e) {
+      // Show error message if approval creation fails
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to create approval: $e',
               style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
             ),
             backgroundColor: Colors.red,
@@ -464,6 +547,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                 _deductions.add({
                   'docId': null,
                   'name': currentItem.mainItem.name,
+                  'type': currentItem.mainItem.type,
                   'brand': currentItem.mainItem.brand,
                   'imageUrl': currentItem.mainItem.imageUrl,
                   'expiry': null,
@@ -515,6 +599,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                   _deductions.add({
                     'docId': primaryBatch.id,
                     'name': primaryBatch.name,
+                    'type': primaryBatch.type,
                     'brand': primaryBatch.brand,
                     'imageUrl': primaryBatch.imageUrl,
                     'expiry': primaryBatch.expiry,
@@ -537,6 +622,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
               _deductions.add({
                 'docId': null,
                 'name': supplyName,
+                'type': supply['type'],
                 'brand': supplyBrand,
                 'imageUrl': (supply['imageUrl'] ?? '').toString(),
                 'expiry': null,
@@ -820,309 +906,12 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           ),
           body: MediaQuery.of(context).size.width >= 900
               ? _buildWithNavigationRail()
-              : ResponsiveContainer(
-                  maxWidth: 1200,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: MediaQuery.of(context).size.width < 768
-                            ? 1.0
-                            : 16.0,
-                        vertical: 12.0,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Custom Header with title and notification icon
-                          _buildHeader(Theme.of(context)),
-                          const SizedBox(height: 16),
-                          // Top bar for in-page actions
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              ElevatedButton(
-                                onPressed: _openDeductionLogs,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF00D4AA),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 10),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: Text(
-                                  'Deduction Logs',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                onPressed: _createPreset,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF00D4AA),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 10),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: Text(
-                                  'Service',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                onPressed: _openApproval,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF00D4AA),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 10),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: Text(
-                                  'Approval',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                onPressed: _deductions.isEmpty ? null : _save,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _deductions.isEmpty
-                                      ? Colors.grey[400]
-                                      : const Color(0xFF00D4AA),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 10),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: Text(
-                                  'Deduct',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? Theme.of(context).colorScheme.surface
-                                    : const Color(0xFFE8D5E8),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Theme.of(context)
-                                      .dividerColor
-                                      .withOpacity(0.2),
-                                ),
-                              ),
-                              child: _deductions.isEmpty
-                                  ? _buildEmptyState()
-                                  : ListView.builder(
-                                      padding: const EdgeInsets.all(12),
-                                      itemCount: _deductions.length,
-                                      itemBuilder: (context, index) {
-                                        final item = _deductions[index];
-                                        return Slidable(
-                                            key: ValueKey(
-                                                'deduct-${item['docId'] ?? index}'),
-                                            closeOnScroll: true,
-                                            endActionPane: ActionPane(
-                                              motion: const DrawerMotion(),
-                                              extentRatio: 0.35,
-                                              children: [
-                                                SlidableAction(
-                                                  onPressed: (_) =>
-                                                      _removeDeductionAt(index),
-                                                  backgroundColor: Colors.red,
-                                                  foregroundColor: Colors.white,
-                                                  icon: Icons.delete,
-                                                  label: 'Remove',
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Card(
-                                              margin: const EdgeInsets.only(
-                                                  bottom: 12),
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .surface,
-                                              elevation: 2,
-                                              shadowColor: Theme.of(context)
-                                                  .shadowColor
-                                                  .withOpacity(0.15),
-                                              shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  side: BorderSide(
-                                                    color: Theme.of(context)
-                                                        .dividerColor
-                                                        .withOpacity(0.2),
-                                                    width: 1,
-                                                  )),
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 14,
-                                                        vertical: 16),
-                                                child: ConstrainedBox(
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                          minHeight: 84),
-                                                  child: Row(
-                                                    children: [
-                                                      ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8),
-                                                        child: Image.network(
-                                                          item['imageUrl'] ??
-                                                              '',
-                                                          width: 48,
-                                                          height: 48,
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder:
-                                                              (_, __, ___) =>
-                                                                  Container(
-                                                            width: 48,
-                                                            height: 48,
-                                                            color: Colors
-                                                                .grey[200],
-                                                            child: const Icon(
-                                                                Icons.inventory,
-                                                                color: Colors
-                                                                    .grey),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 14),
-                                                      Expanded(
-                                                        child: Column(
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .start,
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            Text(
-                                                              item['name'] ??
-                                                                  '',
-                                                              style: AppFonts.sfProStyle(
-                                                                  fontSize: 16,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500,
-                                                                  color: Theme.of(
-                                                                          context)
-                                                                      .textTheme
-                                                                      .bodyMedium
-                                                                      ?.color),
-                                                              maxLines: 2,
-                                                              overflow:
-                                                                  TextOverflow
-                                                                      .ellipsis,
-                                                            ),
-                                                            const SizedBox(
-                                                                height: 8),
-                                                            _expiryChip('Expiry: ' +
-                                                                _formatExpiry(
-                                                                    item[
-                                                                        'expiry'],
-                                                                    item['noExpiry']
-                                                                        as bool?)),
-                                                            const SizedBox(
-                                                                height: 6),
-                                                            _stockChip('Stock: ' +
-                                                                ((_deductions[index]
-                                                                            [
-                                                                            'stock'] ??
-                                                                        0) as int)
-                                                                    .toString()),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 12),
-                                                      Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          IconButton(
-                                                            onPressed: () =>
-                                                                _decrementQty(
-                                                                    index),
-                                                            icon: Icon(
-                                                              Icons
-                                                                  .remove_circle_outline,
-                                                              color: Theme.of(
-                                                                      context)
-                                                                  .iconTheme
-                                                                  .color,
-                                                            ),
-                                                          ),
-                                                          Text(
-                                                            (_deductions[index][
-                                                                        'deductQty']
-                                                                    as int)
-                                                                .toString(),
-                                                            style: AppFonts.sfProStyle(
-                                                                fontSize: 16,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                color: Theme.of(
-                                                                        context)
-                                                                    .textTheme
-                                                                    .bodyMedium
-                                                                    ?.color),
-                                                          ),
-                                                          IconButton(
-                                                            onPressed: () =>
-                                                                _incrementQty(
-                                                                    index),
-                                                            icon: Icon(
-                                                              Icons
-                                                                  .add_circle_outline,
-                                                              color: Theme.of(
-                                                                      context)
-                                                                  .iconTheme
-                                                                  .color,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      )
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            ));
-                                      },
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    // Refresh deductions if needed
+                    setState(() {});
+                  },
+                  child: _buildStockDeductionContent(),
                 ),
         ));
   }
@@ -1418,20 +1207,20 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             ],
           ),
         ),
-        const VerticalDivider(width: 1),
+        VerticalDivider(
+          width: 1,
+          thickness: 1,
+          color: theme.brightness == Brightness.dark
+              ? Colors.grey.shade700
+              : Colors.grey.shade200,
+        ),
         Expanded(
-          child: ResponsiveContainer(
-            maxWidth: 1200,
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal:
-                      MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
-                  vertical: 12.0,
-                ),
-                child: _buildStockDeductionContent(),
-              ),
-            ),
+          child: RefreshIndicator(
+            onRefresh: () async {
+              // Refresh deductions if needed
+              setState(() {});
+            },
+            child: _buildStockDeductionContent(),
           ),
         ),
       ],
@@ -1530,7 +1319,8 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
+  Widget _buildWelcomePanel(ThemeData theme) {
+    final userName = _userName ?? 'User';
     final isDark = theme.brightness == Brightness.dark;
 
     return Card(
@@ -1546,38 +1336,102 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           color: theme.colorScheme.surface,
         ),
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Left side - Title and Description
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Quick Deduction',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                    ),
+            // Top row with greeting on left and account section on right
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left side - Greeting message
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Stock Deduction",
+                        style: AppFonts.sfProStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Efficiently manage and deduct stock quantities with ease.",
+                        style: AppFonts.sfProStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Efficiently manage and deduct stock quantities with ease.',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color:
-                          isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+                // Right side - Notification button and Account section
+                Row(
+                  children: [
+                    // Notification button
+                    const NotificationBadgeButton(),
+                    const SizedBox(width: 8),
+                    // Avatar with first letter
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 12),
+                    // Name and role
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          userName,
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color:
+                                isDark ? Colors.white : const Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        Text(
+                          _userRole ?? 'Admin',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
-            // Right side - Notification icon only
-            const NotificationBadgeButton(),
           ],
         ),
       ),
@@ -1587,234 +1441,245 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   Widget _buildStockDeductionContent() {
     final theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Custom Header with title and notification icon
-        _buildHeader(theme),
-        const SizedBox(height: 16),
-        // Top bar for in-page actions
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            ElevatedButton(
-              onPressed: _openDeductionLogs,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00D4AA),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
-                'Deduction Logs',
-                style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Welcome Panel (with notification and account)
+          _buildWelcomePanel(theme),
+          const SizedBox(height: 12),
+          // Top bar for in-page actions
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ElevatedButton(
+                onPressed: _openDeductionLogs,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00D4AA),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  'Deduction Logs',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _createPreset,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00D4AA),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
-                'Service',
-                style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _createPreset,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00D4AA),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  'Service',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _openApproval,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00D4AA),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
-                'Approval',
-                style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _openApproval,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00D4AA),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  'Approval',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _deductions.isEmpty ? null : _save,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _deductions.isEmpty
-                    ? Colors.grey[400]
-                    : const Color(0xFF00D4AA),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
-                'Deduct',
-                style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _deductions.isEmpty ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _deductions.isEmpty
+                      ? Colors.grey[400]
+                      : const Color(0xFF00D4AA),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  'Deduct',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: theme.brightness == Brightness.dark
-                  ? theme.colorScheme.surface
-                  : const Color(0xFFE8D5E8),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: theme.dividerColor.withOpacity(0.2),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.brightness == Brightness.dark
+                    ? theme.colorScheme.surface
+                    : const Color(0xFFE8D5E8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: theme.dividerColor.withOpacity(0.2),
+                ),
               ),
-            ),
-            child: _deductions.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _deductions.length,
-                    itemBuilder: (context, index) {
-                      final item = _deductions[index];
-                      return Slidable(
-                        key: ValueKey('deduct-${item['docId'] ?? index}'),
-                        closeOnScroll: true,
-                        endActionPane: ActionPane(
-                          motion: const DrawerMotion(),
-                          extentRatio: 0.35,
-                          children: [
-                            SlidableAction(
-                              onPressed: (_) => _removeDeductionAt(index),
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              icon: Icons.delete,
-                              label: 'Remove',
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ],
-                        ),
-                        child: Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          color: theme.colorScheme.surface,
-                          elevation: 2,
-                          shadowColor: theme.shadowColor.withOpacity(0.15),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(
-                                color: theme.dividerColor.withOpacity(0.2),
-                                width: 1,
-                              )),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 16),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(minHeight: 84),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      item['imageUrl'] ?? '',
-                                      width: 48,
-                                      height: 48,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
+              child: _deductions.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _deductions.length,
+                      itemBuilder: (context, index) {
+                        final item = _deductions[index];
+                        return Slidable(
+                          key: ValueKey('deduct-${item['docId'] ?? index}'),
+                          closeOnScroll: true,
+                          endActionPane: ActionPane(
+                            motion: const DrawerMotion(),
+                            extentRatio: 0.35,
+                            children: [
+                              SlidableAction(
+                                onPressed: (_) => _removeDeductionAt(index),
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                icon: Icons.delete,
+                                label: 'Remove',
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ],
+                          ),
+                          child: Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            color: theme.colorScheme.surface,
+                            elevation: 2,
+                            shadowColor: theme.shadowColor.withOpacity(0.15),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: theme.dividerColor.withOpacity(0.2),
+                                  width: 1,
+                                )),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 16),
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(minHeight: 84),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        item['imageUrl'] ?? '',
                                         width: 48,
                                         height: 48,
-                                        color: Colors.grey[200],
-                                        child: const Icon(Icons.inventory,
-                                            color: Colors.grey),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          width: 48,
+                                          height: 48,
+                                          color: Colors.grey[200],
+                                          child: const Icon(Icons.inventory,
+                                              color: Colors.grey),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            (item['name'] ?? '') +
+                                                (item['type'] != null &&
+                                                        item['type']
+                                                            .toString()
+                                                            .isNotEmpty
+                                                    ? '(${item['type']})'
+                                                    : ''),
+                                            style: AppFonts.sfProStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w500,
+                                                color: theme.textTheme
+                                                    .bodyMedium?.color),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          _expiryChip('Expiry: ' +
+                                              _formatExpiry(item['expiry'],
+                                                  item['noExpiry'] as bool?)),
+                                          const SizedBox(height: 6),
+                                          _stockChip('Stock: ' +
+                                              ((_deductions[index]['stock'] ??
+                                                      0) as int)
+                                                  .toString()),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
+                                        IconButton(
+                                          onPressed: () => _decrementQty(index),
+                                          icon: Icon(
+                                            Icons.remove_circle_outline,
+                                            color: theme.iconTheme.color,
+                                          ),
+                                        ),
                                         Text(
-                                          item['name'] ?? '',
+                                          (_deductions[index]['deductQty']
+                                                  as int)
+                                              .toString(),
                                           style: AppFonts.sfProStyle(
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w500,
+                                              fontWeight: FontWeight.bold,
                                               color: theme
                                                   .textTheme.bodyMedium?.color),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(height: 8),
-                                        _expiryChip('Expiry: ' +
-                                            _formatExpiry(item['expiry'],
-                                                item['noExpiry'] as bool?)),
-                                        const SizedBox(height: 6),
-                                        _stockChip('Stock: ' +
-                                            ((_deductions[index]['stock'] ?? 0)
-                                                    as int)
-                                                .toString()),
+                                        IconButton(
+                                          onPressed: () => _incrementQty(index),
+                                          icon: Icon(
+                                            Icons.add_circle_outline,
+                                            color: theme.iconTheme.color,
+                                          ),
+                                        ),
                                       ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        onPressed: () => _decrementQty(index),
-                                        icon: Icon(
-                                          Icons.remove_circle_outline,
-                                          color: theme.iconTheme.color,
-                                        ),
-                                      ),
-                                      Text(
-                                        (_deductions[index]['deductQty'] as int)
-                                            .toString(),
-                                        style: AppFonts.sfProStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: theme
-                                                .textTheme.bodyMedium?.color),
-                                      ),
-                                      IconButton(
-                                        onPressed: () => _incrementQty(index),
-                                        icon: Icon(
-                                          Icons.add_circle_outline,
-                                          color: theme.iconTheme.color,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                ],
+                                    )
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -2020,23 +1885,13 @@ class _PurposeSelectionDialogState extends State<_PurposeSelectionDialog> {
                         showRemarksField = value == 'Other';
                       });
                     }),
-                    const SizedBox(height: 16),
-                    // Remarks text field (only shown for "Other")
+                    const SizedBox(height: 4),
+                    // Text field for "Other" option (single line)
                     if (showRemarksField) ...[
-                      Text(
-                        'Remarks:',
-                        style: AppFonts.sfProStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: theme.textTheme.bodyMedium?.color,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                       TextField(
                         controller: remarksController,
-                        maxLines: 3,
                         decoration: InputDecoration(
-                          hintText: 'Please specify in remarks',
+                          hintText: 'Please specify',
                           hintStyle: AppFonts.sfProStyle(
                             fontSize: 14,
                             color: theme.textTheme.bodySmall?.color
@@ -2112,11 +1967,13 @@ class _PurposeSelectionDialogState extends State<_PurposeSelectionDialog> {
                               remarksController.text.trim().isEmpty)
                       ? null
                       : () {
+                          // If "Other" is selected, use the input text as the purpose
+                          final purpose = selectedPurpose == 'Other'
+                              ? remarksController.text.trim()
+                              : selectedPurpose!;
                           Navigator.of(context).pop({
-                            'purpose': selectedPurpose!,
-                            'remarks': selectedPurpose == 'Other'
-                                ? remarksController.text.trim()
-                                : null,
+                            'purpose': purpose,
+                            'remarks': null,
                           });
                         },
                   style: ElevatedButton.styleFrom(

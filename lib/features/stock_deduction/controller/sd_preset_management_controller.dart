@@ -55,6 +55,21 @@ class PresetController {
     }
   }
 
+  // Get a specific preset by name (case-insensitive)
+  Future<Map<String, dynamic>?> getPresetByName(String presetName) async {
+    try {
+      final response = await _supabase
+          .from(_table)
+          .select('*')
+          .ilike('name', presetName.trim())
+          .limit(1)
+          .maybeSingle();
+      return response;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // Update a preset
   Future<void> updatePreset(
       String presetId, Map<String, dynamic> presetData) async {

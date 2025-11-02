@@ -9,6 +9,7 @@ import 'package:familee_dental/features/activity_log/controller/sd_activity_cont
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ServiceManagementPage extends StatefulWidget {
   const ServiceManagementPage({super.key});
@@ -38,7 +39,14 @@ class _ServiceManagementPageState extends State<ServiceManagementPage> {
   }
 
   void _initializeStream() {
-    _presetsStream = PresetController().getPresetsStream();
+    // Show only user-created presets in Service Management
+    // Exclude deduction log presets (from_deduction: true) - those belong in Deduction Logs only
+    _presetsStream = PresetController().getPresetsStream().map((presets) =>
+        presets
+            .where((preset) =>
+                preset['from_deduction'] != true &&
+                preset['fromDeduction'] != true)
+            .toList());
   }
 
   @override
@@ -310,7 +318,7 @@ class _ServiceManagementPageState extends State<ServiceManagementPage> {
                         child: TextField(
                           controller: _searchController,
                           decoration: InputDecoration(
-                            hintText: 'Search presets...',
+                            hintText: 'Search services...',
                             hintStyle: AppFonts.sfProStyle(
                               fontSize: 16,
                               color: Theme.of(context)
@@ -680,35 +688,208 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
   late List<Map<String, dynamic>> _editableSupplies;
   final TextEditingController _patientNameController = TextEditingController();
   final TextEditingController _ageController = TextEditingController();
-  final TextEditingController _genderController = TextEditingController();
   final TextEditingController _conditionsController = TextEditingController();
+  String? _selectedSex; // Changed from Gender to Sex
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Validation error messages
+  String? _patientNameError;
+  String? _ageError;
+  String? _sexError;
+  String? _conditionsError;
+
+  // Map to store inventory stock for each supply
+  Map<String, int> _inventoryStock = {};
 
   @override
   void initState() {
     super.initState();
     _editableSupplies = List.from(widget.supplies);
+    // Ensure all supplies have a quantity field initialized
+    for (var supply in _editableSupplies) {
+      if (supply['quantity'] == null) {
+        supply['quantity'] = 0;
+      }
+    }
+
+    // Load saved patient information from preset
+    final preset = widget.preset;
+    if (preset['patient_name'] != null &&
+        preset['patient_name'].toString().isNotEmpty) {
+      _patientNameController.text = preset['patient_name'].toString();
+    }
+    if (preset['age'] != null && preset['age'].toString().isNotEmpty) {
+      _ageController.text = preset['age'].toString();
+    }
+    if (preset['gender'] != null && preset['gender'].toString().isNotEmpty) {
+      _selectedSex = preset['gender'].toString();
+    }
+    if (preset['conditions'] != null &&
+        preset['conditions'].toString().isNotEmpty) {
+      _conditionsController.text = preset['conditions'].toString();
+    }
+
+    _fetchInventoryStock();
   }
 
   @override
   void dispose() {
     _patientNameController.dispose();
     _ageController.dispose();
-    _genderController.dispose();
     _conditionsController.dispose();
     super.dispose();
   }
 
+  // Fetch inventory stock for all supplies and update the supply directly
+  Future<void> _fetchInventoryStock() async {
+    try {
+      for (final supply in _editableSupplies) {
+        final supplyId = supply['docId'] ?? supply['id'];
+        final supplyName = supply['name'] ?? '';
+        final supplyType = supply['type'] ?? '';
+
+        if (supplyId != null && supplyId.toString().isNotEmpty) {
+          // Query by ID
+          final response = await _supabase
+              .from('supplies')
+              .select('stock')
+              .eq('id', supplyId.toString())
+              .maybeSingle();
+
+          if (response != null) {
+            final stock = (response['stock'] ?? 0) as int;
+            _inventoryStock[supplyId.toString()] = stock;
+            // Also update the supply directly with stock field
+            supply['stock'] = stock;
+          }
+        } else if (supplyName.isNotEmpty) {
+          // Query by name and type
+          var query = _supabase
+              .from('supplies')
+              .select('stock, type')
+              .eq('name', supplyName);
+
+          if (supplyType.isNotEmpty) {
+            query = query.eq('type', supplyType);
+          }
+
+          final response = await query.maybeSingle();
+
+          if (response != null) {
+            final stock = (response['stock'] ?? 0) as int;
+            final key =
+                supplyType.isNotEmpty ? '$supplyName|$supplyType' : supplyName;
+            _inventoryStock[key] = stock;
+            // Also update the supply directly with stock field
+            supply['stock'] = stock;
+          }
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      print('Error fetching inventory stock: $e');
+    }
+  }
+
+  // Get available stock for a supply
+  int _getAvailableStock(Map<String, dynamic> supply) {
+    // First, check if the supply has stock field directly
+    if (supply['stock'] != null) {
+      return (supply['stock'] ?? 0) as int;
+    }
+
+    // Otherwise, check the inventory stock map
+    final supplyId = supply['docId'] ?? supply['id'];
+    final supplyName = supply['name'] ?? '';
+    final supplyType = supply['type'] ?? '';
+
+    if (supplyId != null && supplyId.toString().isNotEmpty) {
+      return _inventoryStock[supplyId.toString()] ?? 0;
+    } else if (supplyName.isNotEmpty) {
+      final key =
+          supplyType.isNotEmpty ? '$supplyName|$supplyType' : supplyName;
+      return _inventoryStock[key] ?? 0;
+    }
+    return 0;
+  }
+
+  // Format expiry date
+  String _formatExpiry(dynamic expiry, bool? noExpiry) {
+    if (noExpiry == true) return 'No Expiry';
+    if (expiry == null || expiry.toString().isEmpty) return 'No Expiry';
+    final expiryStr = expiry.toString();
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiryStr)) {
+      return expiryStr.replaceAll('-', '/');
+    }
+    return expiryStr;
+  }
+
+  // Format packaging info
+  String _formatPackaging(Map<String, dynamic> supply) {
+    final packagingContentQuantity = supply['packagingContentQuantity'];
+    final packagingContent = supply['packagingContent'];
+    final packagingUnit = supply['packagingUnit'];
+
+    if (packagingContent != null &&
+        packagingContent.toString().isNotEmpty &&
+        packagingUnit != null &&
+        packagingUnit.toString().isNotEmpty) {
+      // Format: "10mL per Bottle"
+      return '${packagingContentQuantity ?? ''} ${packagingContent} per $packagingUnit';
+    } else if (packagingUnit != null && packagingUnit.toString().isNotEmpty) {
+      // Format: "pieces" (just the unit)
+      return packagingUnit.toString();
+    }
+    return '';
+  }
+
+  // Get quantity unit label with proper pluralization
+  String _getQuantityUnitLabel(String? unit, int quantity) {
+    if (unit == null || unit.toString().isEmpty) return '';
+    final unitStr = unit.toString().trim();
+
+    // If quantity is 1, return singular form
+    if (quantity == 1) {
+      return unitStr;
+    }
+
+    // If the word already ends with 's' (like "Pieces", "Boxes", etc.), it's already plural
+    // Just return it as is
+    if (unitStr.toLowerCase().endsWith('s')) {
+      return unitStr;
+    }
+
+    // Handle pluralization for words that don't already end with 's'
+    if (unitStr.toLowerCase().endsWith('y')) {
+      return '${unitStr.substring(0, unitStr.length - 1)}ies';
+    } else if (unitStr.toLowerCase().endsWith('x') ||
+        unitStr.toLowerCase().endsWith('ch') ||
+        unitStr.toLowerCase().endsWith('sh')) {
+      return '${unitStr}es';
+    } else {
+      return '${unitStr}s';
+    }
+  }
+
   void _incrementQty(int index) {
     setState(() {
-      final int current = (_editableSupplies[index]['quantity'] ?? 1) as int;
-      final int next = current + 1;
-      _editableSupplies[index]['quantity'] = next > 999 ? 999 : next;
+      final supply = _editableSupplies[index];
+      final int current = (supply['quantity'] ?? 0) as int;
+      final int availableStock = _getAvailableStock(supply);
+
+      // Limit to available stock (exactly like quick deduction does)
+      // Don't allow incrementing beyond available stock
+      if (availableStock > 0 && current < availableStock) {
+        final int next = current + 1;
+        _editableSupplies[index]['quantity'] = next;
+      }
+      // If availableStock is 0 or current >= availableStock, don't increment
     });
   }
 
   void _decrementQty(int index) {
     setState(() {
-      final current = _editableSupplies[index]['quantity'] as int;
+      final current = (_editableSupplies[index]['quantity'] ?? 0) as int;
       if (current > 0) {
         _editableSupplies[index]['quantity'] = current - 1;
       }
@@ -732,19 +913,21 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
         if (result is Map<String, dynamic>) {
           _editableSupplies.add({
             ...result,
-            'quantity': 1,
+            'quantity': 0, // Changed from 1 to 0 to allow setting to 0
           });
         } else if (result is List) {
           for (final supply in result) {
             if (supply is Map<String, dynamic>) {
               _editableSupplies.add({
                 ...supply,
-                'quantity': 1,
+                'quantity': 0, // Changed from 1 to 0 to allow setting to 0
               });
             }
           }
         }
       });
+      // Fetch inventory stock for the newly added supplies
+      await _fetchInventoryStock();
     }
   }
 
@@ -755,65 +938,41 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
   }
 
   void _saveAndUsePreset() async {
-    // Validate required fields
+    // Validate required fields with inline errors
     final patientName = _patientNameController.text.trim();
     final age = _ageController.text.trim();
-    final gender = _genderController.text.trim();
     final conditions = _conditionsController.text.trim();
 
-    if (patientName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please enter Patient Name',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
+    setState(() {
+      // Clear previous errors
+      _patientNameError = null;
+      _ageError = null;
+      _sexError = null;
+      _conditionsError = null;
 
-    if (age.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please enter Age',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
+      // Validate
+      if (patientName.isEmpty) {
+        _patientNameError = 'Please enter Patient Name';
+      }
 
-    if (gender.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please enter Gender',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
+      if (age.isEmpty) {
+        _ageError = 'Please enter Age';
+      }
 
-    if (conditions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please enter Conditions',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      if (_selectedSex == null || _selectedSex!.isEmpty) {
+        _sexError = 'Please select Sex';
+      }
+
+      if (conditions.isEmpty) {
+        _conditionsError = 'Please enter Conditions';
+      }
+    });
+
+    // Return if any validation errors
+    if (_patientNameError != null ||
+        _ageError != null ||
+        _sexError != null ||
+        _conditionsError != null) {
       return;
     }
 
@@ -825,7 +984,8 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
         'supplies': _editableSupplies,
         'patientName': patientName,
         'age': age,
-        'gender': gender,
+        'gender': _selectedSex, // Store as gender for backward compatibility
+        'sex': _selectedSex, // Also store as sex
         'conditions': conditions,
       };
 
@@ -960,14 +1120,33 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                            color:
-                                isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                            color: _patientNameError != null
+                                ? Colors.red
+                                : (isDark
+                                    ? Colors.grey[700]!
+                                    : Colors.grey[300]!),
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _patientNameError != null
+                                ? Colors.red
+                                : const Color(0xFF00D4AA),
+                            width: 2,
+                          ),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                            color: Color(0xFF00D4AA),
+                            color: Colors.red,
+                            width: 2,
+                          ),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.red,
                             width: 2,
                           ),
                         ),
@@ -975,11 +1154,23 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                           horizontal: 16,
                           vertical: 16,
                         ),
+                        errorText: _patientNameError,
+                        errorStyle: AppFonts.sfProStyle(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
                       ),
                       style: AppFonts.sfProStyle(
                         fontSize: 16,
                         color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                       ),
+                      onChanged: (_) {
+                        if (_patientNameError != null) {
+                          setState(() {
+                            _patientNameError = null;
+                          });
+                        }
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -1020,21 +1211,44 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey[700]!
-                                      : Colors.grey[300]!,
+                                  color: _ageError != null
+                                      ? Colors.red
+                                      : (isDark
+                                          ? Colors.grey[700]!
+                                          : Colors.grey[300]!),
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: _ageError != null
+                                      ? Colors.red
+                                      : const Color(0xFF00D4AA),
+                                  width: 2,
+                                ),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
-                                  color: Color(0xFF00D4AA),
+                                  color: Colors.red,
+                                  width: 2,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Colors.red,
                                   width: 2,
                                 ),
                               ),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 16,
+                              ),
+                              errorText: _ageError,
+                              errorStyle: AppFonts.sfProStyle(
+                                fontSize: 12,
+                                color: Colors.red,
                               ),
                             ),
                             style: AppFonts.sfProStyle(
@@ -1043,65 +1257,123 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                                   ? Colors.white
                                   : const Color(0xFF1A1A1A),
                             ),
+                            onChanged: (_) {
+                              if (_ageError != null) {
+                                setState(() {
+                                  _ageError = null;
+                                });
+                              }
+                            },
                           ),
                         ),
                         const SizedBox(width: 16),
-                        // Gender
+                        // Sex (changed from Gender)
                         Expanded(
-                          child: TextField(
-                            controller: _genderController,
-                            decoration: InputDecoration(
-                              labelText: 'Gender *',
-                              labelStyle: AppFonts.sfProStyle(
-                                fontSize: 14,
-                                color: isDark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[600],
-                              ),
-                              hintText: 'Required',
-                              hintStyle: AppFonts.sfProStyle(
-                                fontSize: 14,
-                                color: isDark
-                                    ? Colors.grey[500]
-                                    : Colors.grey[400],
-                              ),
-                              filled: true,
-                              fillColor:
-                                  isDark ? Colors.grey[800] : Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              DropdownButtonFormField<String>(
+                                value: _selectedSex,
+                                decoration: InputDecoration(
+                                  labelText: 'Sex *',
+                                  labelStyle: AppFonts.sfProStyle(
+                                    fontSize: 14,
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
+                                  ),
+                                  filled: true,
+                                  fillColor: isDark
+                                      ? Colors.grey[800]
+                                      : Colors.grey[100],
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: isDark
+                                          ? Colors.grey[700]!
+                                          : Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: _sexError != null
+                                          ? Colors.red
+                                          : (isDark
+                                              ? Colors.grey[700]!
+                                              : Colors.grey[300]!),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: _sexError != null
+                                          ? Colors.red
+                                          : const Color(0xFF00D4AA),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  errorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.red,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  focusedErrorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.red,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 16,
+                                  ),
+                                  errorText: _sexError,
+                                  errorStyle: AppFonts.sfProStyle(
+                                    fontSize: 12,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                                items: ['Male', 'Female'].map((String value) {
+                                  return DropdownMenuItem<String>(
+                                    value: value,
+                                    child: Text(
+                                      value,
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 16,
+                                        color: isDark
+                                            ? Colors.white
+                                            : const Color(0xFF1A1A1A),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (String? newValue) {
+                                  setState(() {
+                                    _selectedSex = newValue;
+                                    if (_sexError != null) {
+                                      _sexError = null;
+                                    }
+                                  });
+                                },
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
                                   color: isDark
-                                      ? Colors.grey[700]!
-                                      : Colors.grey[300]!,
+                                      ? Colors.white
+                                      : const Color(0xFF1A1A1A),
+                                ),
+                                dropdownColor:
+                                    isDark ? Colors.grey[800] : Colors.white,
+                                icon: Icon(
+                                  Icons.arrow_drop_down,
+                                  color:
+                                      isDark ? Colors.white : Colors.grey[700],
                                 ),
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey[700]!
-                                      : Colors.grey[300]!,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF00D4AA),
-                                  width: 2,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                            ),
-                            style: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              color: isDark
-                                  ? Colors.white
-                                  : const Color(0xFF1A1A1A),
-                            ),
+                            ],
                           ),
                         ),
                       ],
@@ -1135,14 +1407,33 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                            color:
-                                isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                            color: _conditionsError != null
+                                ? Colors.red
+                                : (isDark
+                                    ? Colors.grey[700]!
+                                    : Colors.grey[300]!),
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _conditionsError != null
+                                ? Colors.red
+                                : const Color(0xFF00D4AA),
+                            width: 2,
+                          ),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                            color: Color(0xFF00D4AA),
+                            color: Colors.red,
+                            width: 2,
+                          ),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.red,
                             width: 2,
                           ),
                         ),
@@ -1150,11 +1441,23 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                           horizontal: 16,
                           vertical: 16,
                         ),
+                        errorText: _conditionsError,
+                        errorStyle: AppFonts.sfProStyle(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
                       ),
                       style: AppFonts.sfProStyle(
                         fontSize: 16,
                         color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                       ),
+                      onChanged: (_) {
+                        if (_conditionsError != null) {
+                          setState(() {
+                            _conditionsError = null;
+                          });
+                        }
+                      },
                     ),
                     const SizedBox(height: 24),
 
@@ -1223,8 +1526,16 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
+                                          // Supply name with type
                                           Text(
-                                            supply['name'] ?? 'Unknown Supply',
+                                            (supply['name'] ??
+                                                    'Unknown Supply') +
+                                                (supply['type'] != null &&
+                                                        supply['type']
+                                                            .toString()
+                                                            .isNotEmpty
+                                                    ? ' (${supply['type']})'
+                                                    : ''),
                                             style: AppFonts.sfProStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.w500,
@@ -1233,18 +1544,44 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                                                   : const Color(0xFF1A1A1A),
                                             ),
                                           ),
-                                          if (supply['brand'] != null) ...[
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              supply['brand'],
-                                              style: AppFonts.sfProStyle(
-                                                fontSize: 14,
-                                                color: isDark
-                                                    ? Colors.grey[400]
-                                                    : Colors.grey[600],
+                                          const SizedBox(height: 4),
+                                          // Packaging info and expiry
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
+                                            children: [
+                                              // Packaging info (left side)
+                                              Flexible(
+                                                child: Text(
+                                                  _formatPackaging(supply),
+                                                  style: AppFonts.sfProStyle(
+                                                    fontSize: 12,
+                                                    color: isDark
+                                                        ? Colors.grey[400]
+                                                        : Colors.grey[600],
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                              // Expiry (right side)
+                                              Text(
+                                                _formatExpiry(
+                                                  supply['expiry'],
+                                                  supply['noExpiry'] as bool?,
+                                                ),
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 12,
+                                                  color: isDark
+                                                      ? Colors.grey[400]
+                                                      : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -1275,18 +1612,46 @@ class _PresetDetailModalState extends State<_PresetDetailModal> {
                                                   : Colors.grey[300]!,
                                             ),
                                           ),
-                                          child: Text(
-                                            (_editableSupplies[index]
-                                                        ['quantity'] ??
-                                                    1)
-                                                .toString(),
-                                            style: AppFonts.sfProStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: isDark
-                                                  ? Colors.white
-                                                  : const Color(0xFF1A1A1A),
-                                            ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                (_editableSupplies[index]
+                                                            ['quantity'] ??
+                                                        0)
+                                                    .toString(),
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : const Color(0xFF1A1A1A),
+                                                ),
+                                              ),
+                                              if (supply['packagingUnit'] !=
+                                                      null &&
+                                                  supply['packagingUnit']
+                                                      .toString()
+                                                      .isNotEmpty) ...[
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  _getQuantityUnitLabel(
+                                                    supply['packagingUnit'],
+                                                    (_editableSupplies[index]
+                                                            ['quantity'] ??
+                                                        0) as int,
+                                                  ),
+                                                  style: AppFonts.sfProStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : const Color(
+                                                            0xFF1A1A1A),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
                                         ),
                                         const SizedBox(width: 8),

@@ -38,6 +38,12 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
       '/stock-deduction/add-supply-for-preset',
       arguments: {'existingDocIds': existingDocIds},
     );
+
+    // Handle null result (user cancelled)
+    if (result == null) {
+      return;
+    }
+
     if (result is Map<String, dynamic>) {
       // Check if supply is already in current preset
       if (_controller.isSupplyInPreset(result, _presetSupplies)) {
@@ -46,10 +52,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
       }
 
       setState(() {
-        _presetSupplies.add({
-          ...result,
-          'quantity': 1, // Initialize quantity to 1
-        });
+        _presetSupplies.add(result);
       });
     } else if (result is List) {
       // Check for duplicates within current preset
@@ -66,10 +69,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
       setState(() {
         final validSupplies = _controller.processSuppliesResult(result);
         for (final supply in validSupplies) {
-          _presetSupplies.add({
-            ...supply,
-            'quantity': 1, // Initialize quantity to 1
-          });
+          _presetSupplies.add(supply);
         }
       });
     }
@@ -81,23 +81,14 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
     });
   }
 
-  void _incrementQty(int index) {
-    setState(() {
-      final int current = (_presetSupplies[index]['quantity'] ?? 1) as int;
-      // No stock limit for presets - presets are templates
-      final int next = current + 1;
-      // Only limit to 999 for practicality
-      _presetSupplies[index]['quantity'] = next > 999 ? 999 : next;
-    });
-  }
-
-  void _decrementQty(int index) {
-    setState(() {
-      final current = (_presetSupplies[index]['quantity'] ?? 1) as int;
-      if (current > 1) {
-        _presetSupplies[index]['quantity'] = current - 1;
-      }
-    });
+  String _formatExpiry(dynamic expiry, bool? noExpiry) {
+    if (noExpiry == true) return 'No Expiry';
+    if (expiry == null || expiry.toString().isEmpty) return 'No Expiry';
+    final expiryStr = expiry.toString();
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiryStr)) {
+      return expiryStr.replaceAll('-', '/');
+    }
+    return expiryStr;
   }
 
   Future<void> _savePreset() async {
@@ -266,7 +257,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: Text(
-            'Create Preset',
+            'Create Service',
             style: AppFonts.sfProStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -337,7 +328,7 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
                           child: TextField(
                             controller: _presetNameController,
                             decoration: InputDecoration(
-                              hintText: 'Enter preset name...',
+                              hintText: 'Enter service name...',
                               hintStyle: AppFonts.sfProStyle(
                                 fontSize: 16,
                                 color: Theme.of(context)
@@ -472,58 +463,119 @@ class _CreatePresetPageState extends State<CreatePresetPage> {
                                           ),
                                           const SizedBox(width: 14),
                                           Expanded(
-                                            child: Text(
-                                              item['name'] ?? '',
-                                              style: AppFonts.sfProStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.color),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                // Supply name with type
+                                                Text(
+                                                  (item['name'] ?? '') +
+                                                      (item['type'] != null &&
+                                                              item['type']
+                                                                  .toString()
+                                                                  .isNotEmpty
+                                                          ? '(${item['type']})'
+                                                          : ''),
+                                                  style: AppFonts.sfProStyle(
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color),
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 4),
+                                                // Packaging info and expiry
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.center,
+                                                  children: [
+                                                    // Packaging info (left side)
+                                                    Builder(
+                                                      builder: (context) {
+                                                        final packagingContent =
+                                                            item['packagingContent'] !=
+                                                                    null &&
+                                                                item['packagingContent']
+                                                                    .toString()
+                                                                    .isNotEmpty;
+                                                        final packagingUnit =
+                                                            item['packagingUnit'] !=
+                                                                    null &&
+                                                                item['packagingUnit']
+                                                                    .toString()
+                                                                    .isNotEmpty;
+
+                                                        if (packagingContent ||
+                                                            packagingUnit) {
+                                                          String packagingText =
+                                                              '';
+
+                                                          if (packagingContent &&
+                                                              packagingUnit) {
+                                                            // Format: "10mL per Bottle" when both exist
+                                                            packagingText =
+                                                                '${item['packagingContentQuantity']} ${item['packagingContent']} per ${item['packagingUnit']}';
+                                                          } else if (packagingContent) {
+                                                            // Format: "10mL" when only content exists
+                                                            packagingText =
+                                                                '${item['packagingContentQuantity']} ${item['packagingContent']}';
+                                                          } else if (packagingUnit) {
+                                                            // Format: "pieces" (just the unit, no quantity) when only unit exists
+                                                            packagingText =
+                                                                '${item['packagingUnit']}';
+                                                          }
+
+                                                          return Flexible(
+                                                            child: Text(
+                                                              packagingText,
+                                                              style: AppFonts
+                                                                  .sfProStyle(
+                                                                fontSize: 12,
+                                                                color: Theme.of(
+                                                                        context)
+                                                                    .textTheme
+                                                                    .bodySmall
+                                                                    ?.color,
+                                                              ),
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                          );
+                                                        }
+                                                        return const Spacer();
+                                                      },
+                                                    ),
+                                                    // Expiry (right side)
+                                                    Text(
+                                                      _formatExpiry(
+                                                        item['expiry'],
+                                                        item['noExpiry']
+                                                            as bool?,
+                                                      ),
+                                                      style:
+                                                          AppFonts.sfProStyle(
+                                                        fontSize: 11,
+                                                        color: Theme.of(context)
+                                                            .textTheme
+                                                            .bodySmall
+                                                            ?.color,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                             ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              IconButton(
-                                                onPressed: () =>
-                                                    _decrementQty(index),
-                                                icon: Icon(
-                                                  Icons.remove_circle_outline,
-                                                  color: Theme.of(context)
-                                                      .iconTheme
-                                                      .color,
-                                                ),
-                                              ),
-                                              Text(
-                                                ((_presetSupplies[index]
-                                                            ['quantity'] ??
-                                                        1) as int)
-                                                    .toString(),
-                                                style: AppFonts.sfProStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.color,
-                                                ),
-                                              ),
-                                              IconButton(
-                                                onPressed: () =>
-                                                    _incrementQty(index),
-                                                icon: Icon(
-                                                  Icons.add_circle_outline,
-                                                  color: Theme.of(context)
-                                                      .iconTheme
-                                                      .color,
-                                                ),
-                                              ),
-                                            ],
                                           ),
                                         ],
                                       ),

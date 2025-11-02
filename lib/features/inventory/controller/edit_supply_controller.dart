@@ -269,59 +269,147 @@ class EditSupplyController {
       final DateTime? newExpiryDate = parseExpiry(newExpiry);
 
       final String type = (updatedData['type'] ?? '').toString();
-      final existingQuery = await _supabase
-          .from('supplies')
-          .select('*')
-          .eq('name', name)
-          .eq('brand', brand)
-          .eq('type', type);
+      final String supplier = (updatedData['supplier'] ?? '').toString();
+      final double cost = (updatedData['cost'] ?? 0.0) as double;
+      final String? packagingUnit = updatedData['packaging_unit'];
+      final String? updatedPackagingContent = updatedData['packaging_content'];
+      final int? updatedPackagingContentQuantity =
+          updatedData['packaging_content_quantity'] as int?;
 
-      // Find a matching document (excluding current) with the same expiry (null == null allowed)
-      Map<String, dynamic>? mergeTarget;
-      for (final row in existingQuery) {
-        if (row['id'] == docId) continue;
-        final dynamic otherExpiryRaw = row['expiry'];
-        final String? otherExpiry =
-            (otherExpiryRaw == null || otherExpiryRaw.toString().isEmpty)
-                ? null
-                : otherExpiryRaw.toString();
-        final DateTime? otherExpiryDate = parseExpiry(otherExpiry);
-        final bool expiryMatches =
-            (newExpiryDate == null && otherExpiryDate == null) ||
-                (newExpiryDate != null &&
-                    otherExpiryDate != null &&
-                    newExpiryDate.year == otherExpiryDate.year &&
-                    newExpiryDate.month == otherExpiryDate.month &&
-                    newExpiryDate.day == otherExpiryDate.day);
-        if (expiryMatches) {
-          mergeTarget = row;
-          break;
-        }
-      }
+      // Check if only stock is being changed (no other fields changed)
+      final DateTime? originalExpiryDate =
+          (originalExpiry != null && originalExpiry!.isNotEmpty)
+              ? parseExpiry(originalExpiry)
+              : null;
+      final bool expiryMatches = (newExpiryDate == null &&
+              (originalNoExpiry == true || originalExpiryDate == null)) ||
+          (newExpiryDate != null &&
+              originalExpiryDate != null &&
+              newExpiryDate.year == originalExpiryDate.year &&
+              newExpiryDate.month == originalExpiryDate.month &&
+              newExpiryDate.day == originalExpiryDate.day);
 
-      if (mergeTarget != null) {
-        // Merge stock into the target and delete the current document
-        final int targetStock = (mergeTarget['stock'] ?? 0) as int;
-        final int thisStock = (updatedData['stock'] ?? 0) as int;
-        final int mergedStock = targetStock + thisStock;
+      final bool onlyStockChanged = name == (originalName ?? '') &&
+          brand == (originalBrand ?? '') &&
+          type == (originalType ?? '') &&
+          supplier == (originalSupplier ?? '') &&
+          (cost - (originalCost ?? 0.0)).abs() < 0.01 &&
+          packagingUnit == (originalPackagingUnit ?? '') &&
+          updatedPackagingContent == (originalPackagingContent ?? '') &&
+          updatedPackagingContentQuantity ==
+              (originalPackagingContentQuantity ?? 1) &&
+          expiryMatches;
 
-        final Map<String, dynamic> updates = {'stock': mergedStock};
-        // Fill missing fields on target if needed
-        if ((mergeTarget['image_url'] ?? '').toString().isEmpty &&
-            (updatedData['image_url'] ?? '').toString().isNotEmpty) {
-          updates['image_url'] = updatedData['image_url'];
-        }
-        if (mergeTarget['archived'] == null) {
-          updates['archived'] = false;
-        }
-
-        await _supabase
+      // Only attempt merge if fields other than stock were changed
+      // This prevents accidental merging when user just wants to update stock quantity
+      if (!onlyStockChanged) {
+        final existingQuery = await _supabase
             .from('supplies')
-            .update(updates)
-            .eq('id', mergeTarget['id']);
-        await _supabase.from('supplies').delete().eq('id', docId);
+            .select('*')
+            .eq('name', name)
+            .eq('brand', brand)
+            .eq('type', type);
+
+        // Find an EXACT matching batch (excluding current) - must match ALL distinguishing fields
+        Map<String, dynamic>? mergeTarget;
+        for (final row in existingQuery) {
+          if (row['id'] == docId) continue;
+
+          // Check expiry match
+          final dynamic otherExpiryRaw = row['expiry'];
+          final String? otherExpiry =
+              (otherExpiryRaw == null || otherExpiryRaw.toString().isEmpty)
+                  ? null
+                  : otherExpiryRaw.toString();
+          final DateTime? otherExpiryDate = parseExpiry(otherExpiry);
+          final bool expiryMatches =
+              (newExpiryDate == null && otherExpiryDate == null) ||
+                  (newExpiryDate != null &&
+                      otherExpiryDate != null &&
+                      newExpiryDate.year == otherExpiryDate.year &&
+                      newExpiryDate.month == otherExpiryDate.month &&
+                      newExpiryDate.day == otherExpiryDate.day);
+
+          // Check supplier match
+          final String otherSupplier = (row['supplier'] ?? 'N/A').toString();
+          final bool supplierMatches = supplier == 'N/A'
+              ? (otherSupplier == 'N/A' || otherSupplier.isEmpty)
+              : supplier == otherSupplier;
+
+          // Check cost match (within 0.01 tolerance)
+          final double otherCost = (row['cost'] ?? 0.0).toDouble();
+          final bool costMatches = (cost - otherCost).abs() < 0.01;
+
+          // Check packaging unit match
+          final String? otherPackagingUnit = row['packaging_unit'];
+          final bool packagingUnitMatches =
+              (packagingUnit == null || packagingUnit.isEmpty)
+                  ? (otherPackagingUnit == null ||
+                      otherPackagingUnit.toString().isEmpty)
+                  : packagingUnit == (otherPackagingUnit?.toString() ?? '');
+
+          // Check packaging content match
+          final String? otherPackagingContent = row['packaging_content'];
+          final bool packagingContentMatches =
+              (updatedPackagingContent == null ||
+                      updatedPackagingContent.isEmpty)
+                  ? (otherPackagingContent == null ||
+                      otherPackagingContent.toString().isEmpty)
+                  : updatedPackagingContent ==
+                      (otherPackagingContent?.toString() ?? '');
+
+          // Check packaging content quantity match (handle String/int conversion)
+          final dynamic otherPackagingContentQtyRaw =
+              row['packaging_content_quantity'];
+          final int? otherPackagingContentQty =
+              otherPackagingContentQtyRaw == null
+                  ? null
+                  : (otherPackagingContentQtyRaw is int
+                      ? otherPackagingContentQtyRaw
+                      : int.tryParse(otherPackagingContentQtyRaw.toString()));
+          final bool packagingContentQtyMatches =
+              (updatedPackagingContentQuantity ?? 1) ==
+                  (otherPackagingContentQty ?? 1);
+
+          // Only merge if ALL distinguishing fields match exactly
+          if (expiryMatches &&
+              supplierMatches &&
+              costMatches &&
+              packagingUnitMatches &&
+              packagingContentMatches &&
+              packagingContentQtyMatches) {
+            mergeTarget = row;
+            break;
+          }
+        }
+
+        if (mergeTarget != null) {
+          // Merge stock into the target and delete the current document
+          final int targetStock = (mergeTarget['stock'] ?? 0) as int;
+          final int thisStock = (updatedData['stock'] ?? 0) as int;
+          final int mergedStock = targetStock + thisStock;
+
+          final Map<String, dynamic> updates = {'stock': mergedStock};
+          // Fill missing fields on target if needed
+          if ((mergeTarget['image_url'] ?? '').toString().isEmpty &&
+              (updatedData['image_url'] ?? '').toString().isNotEmpty) {
+            updates['image_url'] = updatedData['image_url'];
+          }
+          if (mergeTarget['archived'] == null) {
+            updates['archived'] = false;
+          }
+
+          await _supabase
+              .from('supplies')
+              .update(updates)
+              .eq('id', mergeTarget['id']);
+          await _supabase.from('supplies').delete().eq('id', docId);
+        } else {
+          // No merge target; just update this document normally
+          await _supabase.from('supplies').update(updatedData).eq('id', docId);
+        }
       } else {
-        // No merge target; just update this document normally
+        // Only stock changed - just update this document normally (no merging)
         await _supabase.from('supplies').update(updatedData).eq('id', docId);
       }
 
@@ -403,43 +491,53 @@ class EditSupplyController {
         };
       }
 
-      // Log the edit activity with detailed field changes
-      await InventoryActivityController().logInventorySupplyEdited(
-        itemName: nameController.text.trim(),
-        type: typeController.text.trim(),
-        category: selectedCategory ?? 'Unknown Category',
-        stock: int.tryParse(stockController.text.trim()) ?? 0,
-        unit: selectedUnit ?? 'Unknown Unit',
-        packagingUnit: selectedPackagingUnit ?? 'Unknown Unit',
-        packagingQuantity: packagingQuantity,
-        packagingContent: isPackagingContentDisabled()
-            ? ""
-            : (selectedPackagingContent ?? ""),
-        packagingContentQuantity:
-            isPackagingContentDisabled() ? 1 : packagingContent,
-        cost: double.tryParse(costController.text.trim()),
-        brand: brandController.text.trim(),
-        supplier: supplierController.text.trim(),
-        expiryDate: expiryController.text.trim().isNotEmpty
-            ? expiryController.text.trim()
-            : null,
-        noExpiry: noExpiry,
-        fieldChanges: fieldChanges,
-      );
-
-      // Check for notifications
-      final notificationsController = NotificationsController();
-
-      // Check expiry notifications if expiry changed
-      if ((expiryController.text.trim() != (originalExpiry ?? '')) ||
-          (noExpiry != (originalNoExpiry ?? false))) {
-        await notificationsController.checkExpiryNotification(
-          nameController.text.trim(),
-          expiryController.text.trim().isEmpty
-              ? null
-              : expiryController.text.trim(),
-          noExpiry,
+      // Log the edit activity with detailed field changes (wrap in try-catch to prevent breaking save)
+      try {
+        await InventoryActivityController().logInventorySupplyEdited(
+          itemName: nameController.text.trim(),
+          type: typeController.text.trim(),
+          category: selectedCategory ?? 'Unknown Category',
+          stock: int.tryParse(stockController.text.trim()) ?? 0,
+          unit: selectedUnit ?? 'Unknown Unit',
+          packagingUnit: selectedPackagingUnit ?? 'Unknown Unit',
+          packagingQuantity: packagingQuantity,
+          packagingContent: isPackagingContentDisabled()
+              ? ""
+              : (selectedPackagingContent ?? ""),
+          packagingContentQuantity:
+              isPackagingContentDisabled() ? 1 : packagingContent,
+          cost: double.tryParse(costController.text.trim()),
+          brand: brandController.text.trim(),
+          supplier: supplierController.text.trim(),
+          expiryDate: expiryController.text.trim().isNotEmpty
+              ? expiryController.text.trim()
+              : null,
+          noExpiry: noExpiry,
+          fieldChanges: fieldChanges,
         );
+      } catch (logError) {
+        // Log error but don't fail the save operation
+        print('Failed to log activity: $logError');
+      }
+
+      // Check for notifications (wrap in try-catch to prevent breaking save)
+      try {
+        final notificationsController = NotificationsController();
+
+        // Check expiry notifications if expiry changed
+        if ((expiryController.text.trim() != (originalExpiry ?? '')) ||
+            (noExpiry != (originalNoExpiry ?? false))) {
+          await notificationsController.checkExpiryNotification(
+            nameController.text.trim(),
+            expiryController.text.trim().isEmpty
+                ? null
+                : expiryController.text.trim(),
+            noExpiry,
+          );
+        }
+      } catch (notificationError) {
+        // Log error but don't fail the save operation
+        print('Failed to check notifications: $notificationError');
       }
 
       return null; // Success

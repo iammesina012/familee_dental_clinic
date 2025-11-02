@@ -10,11 +10,15 @@ class SdAddSupplyController {
     return {
       'docId': item.id,
       'name': item.name,
+      'type': item.type,
       'brand': item.brand,
       'imageUrl': item.imageUrl,
       'expiry': item.expiry,
       'noExpiry': item.noExpiry,
       'stock': item.stock,
+      'packagingUnit': item.packagingUnit,
+      'packagingContent': item.packagingContent,
+      'packagingContentQuantity': item.packagingContentQuantity,
     };
   }
 

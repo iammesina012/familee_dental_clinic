@@ -5,9 +5,9 @@ import 'package:familee_dental/features/settings/pages/edit_profile_page.dart';
 import 'package:familee_dental/features/settings/controller/settings_controller.dart';
 import 'package:familee_dental/features/backup_restore/pages/backup_restore_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
-import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
-import 'package:familee_dental/shared/drawer.dart';
+import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -22,10 +22,13 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _inventoryAlerts = true;
   bool _approvalAlerts = true;
   final SettingsController _settingsController = SettingsController();
+  String? _userName;
+  String? _userRole;
 
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     _loadSettings();
   }
 
@@ -42,188 +45,186 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _loadUserData() async {
+    try {
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser != null) {
+        // Try to get name and role from user_roles table
+        final response = await Supabase.instance.client
+            .from('user_roles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+
+        if (response != null) {
+          setState(() {
+            _userName = response['name']?.toString().trim();
+            _userRole = response['role']?.toString().trim();
+          });
+        }
+
+        // Fallback to metadata or email if not found
+        if (_userName == null || _userName!.isEmpty) {
+          final displayName =
+              currentUser.userMetadata?['display_name']?.toString().trim();
+          final emailName = currentUser.email?.split('@')[0].trim();
+          setState(() {
+            _userName = displayName ?? emailName ?? 'User';
+          });
+        }
+
+        if (_userRole == null || _userRole!.isEmpty) {
+          setState(() {
+            _userRole =
+                currentUser.userMetadata?['role']?.toString().trim() ?? 'Admin';
+          });
+        }
+      }
+    } catch (e) {
+      // If error occurs, use fallback
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser != null) {
+        final emailName = currentUser.email?.split('@')[0].trim();
+        setState(() {
+          _userName = emailName ?? 'User';
+          _userRole = 'Admin';
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final userRoleProvider = UserRoleProvider();
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        automaticallyImplyLeading: MediaQuery.of(context).size.width >= 900
-            ? false
-            : true, // Remove back button on desktop
-        leading: MediaQuery.of(context).size.width >= 900
-            ? null
-            : IconButton(
-                icon: Icon(Icons.arrow_back,
-                    color: theme.iconTheme.color, size: 28),
-                onPressed: () {
-                  Navigator.maybePop(context);
-                },
-              ),
-        title: const Text(
-          "Settings",
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'SF Pro',
-            color: null,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        toolbarHeight: 70,
-        iconTheme: theme.appBarTheme.iconTheme,
-        elevation: theme.appBarTheme.elevation,
-        shadowColor: theme.appBarTheme.shadowColor,
-      ),
-      drawer:
-          MediaQuery.of(context).size.width >= 900 ? null : const MyDrawer(),
+      backgroundColor: theme.brightness == Brightness.dark
+          ? const Color(0xFF3A3A3A)
+          : const Color(0xFFF5F5F5),
       body: MediaQuery.of(context).size.width >= 900
-          ? _buildWithNavigationRail(theme, scheme, userRoleProvider)
-          : ListenableBuilder(
-              listenable: userRoleProvider,
-              builder: (context, child) {
-                final isStaff = userRoleProvider.isStaff;
-                final isOwner = userRoleProvider.isOwner;
+          ? _buildWithNavigationRail(theme, userRoleProvider)
+          : _buildSettingsContent(theme, userRoleProvider),
+    );
+  }
 
-                return ResponsiveContainer(
-                  maxWidth: 1100,
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.symmetric(
-                      horizontal:
-                          MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
-                      vertical: 12.0,
+  Widget _buildWelcomePanel(ThemeData theme) {
+    final userName = _userName ?? 'User';
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      margin: EdgeInsets.zero,
+      color: theme.colorScheme.surface,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: theme.colorScheme.surface,
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top row with greeting on left and account section on right
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left side - Greeting message
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Settings",
+                        style: AppFonts.sfProStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Manage your account preferences and system settings.",
+                        style: AppFonts.sfProStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Right side - Notification button and Account section
+                Row(
+                  children: [
+                    // Notification button
+                    const NotificationBadgeButton(),
+                    const SizedBox(width: 8),
+                    // Avatar with first letter
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
                     ),
-                    child: Column(
+                    const SizedBox(width: 12),
+                    // Name and role
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // General Section
-                        _buildSectionHeader("General"),
-                        _buildSettingItem(
-                          icon: Icons.palette_outlined,
-                          title: "Appearance",
-                          subtitle: "Dark Mode",
-                          trailing: Switch(
-                            value: _darkMode,
-                            onChanged: (value) {
-                              setState(() {
-                                _darkMode = value;
-                              });
-                              _settingsController.setDarkMode(value);
-                              AppTheme.themeMode.value =
-                                  value ? ThemeMode.dark : ThemeMode.light;
-                            },
-                            activeColor: scheme.primary,
+                        Text(
+                          userName,
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color:
+                                isDark ? Colors.white : const Color(0xFF1A1A1A),
                           ),
                         ),
-                        _buildNotificationCard(),
-
-                        const SizedBox(height: 24),
-
-                        // Personal Account Section - Available for all users
-                        _buildSectionHeader("Personal Account"),
-
-                        _buildSettingItem(
-                          icon: Icons.person_3_outlined,
-                          title: "Edit Profile",
-                          subtitle: "Update your personal details",
-                          trailing: const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: null,
+                        Text(
+                          _userRole ?? 'Admin',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
                           ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const EditProfilePage(user: null),
-                              ),
-                            );
-                          },
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // User Management Section - Only for Owner and Admin users
-                        if (!isStaff) ...[
-                          _buildSectionHeader("User Management"),
-
-                          _buildSettingItem(
-                            icon: Icons.people_outline,
-                            title: "Employee List",
-                            subtitle: "Manage employees and roles",
-                            trailing: const Icon(
-                              Icons.arrow_forward_ios,
-                              size: 16,
-                              color: null,
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const EmployeeListPage()),
-                              );
-                            },
-                          ),
-
-                          // Change Password (sub-item)
-
-                          const SizedBox(height: 24),
-
-                          // System Section - Only for Owner users
-                          if (isOwner) ...[
-                            _buildSectionHeader("System"),
-                            _buildSettingItem(
-                              icon: Icons.backup_outlined,
-                              title: "Backup & Restore",
-                              subtitle: "Manage data backup and restore",
-                              trailing: const Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                                color: null,
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) =>
-                                          const BackupRestorePage()),
-                                );
-                              },
-                            ),
-                          ],
-                        ],
-
-                        const SizedBox(height: 32),
-
-                        // Standalone Settings
-                        Divider(
-                            height: 1, thickness: 1, color: theme.dividerColor),
-                        const SizedBox(height: 20),
-                        _buildSettingItem(
-                          icon: Icons.help_outline,
-                          title: "App Tutorial",
-                          subtitle: "Learn how to use the app",
-                          trailing: const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: null,
-                          ),
-                          onTap: () {
-                            Navigator.pushNamed(context, '/tutorial');
-                          },
                         ),
                       ],
                     ),
-                  ),
-                );
-              },
+                  ],
+                ),
+              ],
             ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -237,6 +238,24 @@ class _SettingsPageState extends State<SettingsPage> {
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: theme.textTheme.bodyMedium?.color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeaderForRail(ThemeData theme, String label) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: AppFonts.sfProStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          ),
         ),
       ),
     );
@@ -401,269 +420,416 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _buildSettingsContent(
+      ThemeData theme, UserRoleProvider userRoleProvider) {
+    final scheme = theme.colorScheme;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      child: ListenableBuilder(
+        listenable: userRoleProvider,
+        builder: (context, child) {
+          final isStaff = userRoleProvider.isStaff;
+          final isOwner = userRoleProvider.isOwner;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Welcome Panel
+              _buildWelcomePanel(theme),
+              const SizedBox(height: 12),
+              // General Section
+              _buildSectionHeader("General"),
+              _buildSettingItem(
+                icon: Icons.palette_outlined,
+                title: "Appearance",
+                subtitle: "Dark Mode",
+                trailing: Switch(
+                  value: _darkMode,
+                  onChanged: (value) {
+                    setState(() {
+                      _darkMode = value;
+                    });
+                    _settingsController.setDarkMode(value);
+                    AppTheme.themeMode.value =
+                        value ? ThemeMode.dark : ThemeMode.light;
+                  },
+                  activeColor: scheme.primary,
+                ),
+              ),
+              _buildNotificationCard(),
+
+              const SizedBox(height: 24),
+
+              // Personal Account Section - Available for all users
+              _buildSectionHeader("Personal Account"),
+
+              _buildSettingItem(
+                icon: Icons.person_3_outlined,
+                title: "Edit Profile",
+                subtitle: "Update your personal details",
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: null,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const EditProfilePage(user: null),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              // User Management Section - Only for Owner and Admin users
+              if (!isStaff) ...[
+                _buildSectionHeader("User Management"),
+
+                _buildSettingItem(
+                  icon: Icons.people_outline,
+                  title: "Employee List",
+                  subtitle: "Manage employees and roles",
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: null,
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const EmployeeListPage()),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 24),
+
+                // System Section - Only for Owner users
+                if (isOwner) ...[
+                  _buildSectionHeader("System"),
+                  _buildSettingItem(
+                    icon: Icons.backup_outlined,
+                    title: "Backup & Restore",
+                    subtitle: "Manage data backup and restore",
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: null,
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const BackupRestorePage()),
+                      );
+                    },
+                  ),
+                ],
+              ],
+
+              const SizedBox(height: 32),
+
+              // Standalone Settings
+              Divider(height: 1, thickness: 1, color: theme.dividerColor),
+              const SizedBox(height: 20),
+              _buildSettingItem(
+                icon: Icons.help_outline,
+                title: "App Tutorial",
+                subtitle: "Learn how to use the app",
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: null,
+                ),
+                onTap: () {
+                  Navigator.pushNamed(context, '/tutorial');
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRailDestinationTile({
+    required BuildContext context,
+    required ThemeData theme,
+    required _RailDestination destination,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          // Background with rounded right corners
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? theme.colorScheme.primary.withOpacity(0.12)
+                  : Colors.transparent,
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(20),
+                bottomRight: Radius.circular(20),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    destination.icon,
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.textTheme.bodyMedium?.color,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      destination.label,
+                      style: AppFonts.sfProStyle(
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 14,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Vertical indicator line on the left
+          if (isSelected)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(2),
+                    bottomLeft: Radius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWithNavigationRail(
-      ThemeData theme, ColorScheme scheme, UserRoleProvider userRoleProvider) {
+      ThemeData theme, UserRoleProvider userRoleProvider) {
     final canAccessActivityLog = userRoleProvider.canAccessActivityLog();
+
+    // Define navigation destinations
+    final List<_RailDestination> mainDestinations = [
+      _RailDestination(
+          icon: Icons.dashboard, label: 'Dashboard', route: '/dashboard'),
+      _RailDestination(
+          icon: Icons.inventory, label: 'Inventory', route: '/inventory'),
+      _RailDestination(
+          icon: Icons.shopping_cart,
+          label: 'Purchase Order',
+          route: '/purchase-order'),
+      _RailDestination(
+          icon: Icons.playlist_remove,
+          label: 'Stock Deduction',
+          route: '/stock-deduction'),
+    ];
+
+    final List<_RailDestination> bottomDestinations = [
+      _RailDestination(
+          icon: Icons.settings, label: 'Settings', route: '/settings'),
+      _RailDestination(icon: Icons.logout, label: 'Logout', route: '/logout'),
+    ];
 
     return Row(
       children: [
-        NavigationRail(
-          minWidth: 150,
-          selectedIndex: canAccessActivityLog ? 5 : 4, // Settings
-          labelType: NavigationRailLabelType.all,
-          useIndicator: true,
-          backgroundColor: theme.scaffoldBackgroundColor,
-          selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
-          selectedLabelTextStyle: AppFonts.sfProStyle(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.primary,
-          ),
-          unselectedLabelTextStyle: AppFonts.sfProStyle(
-            fontWeight: FontWeight.w500,
-            color: theme.textTheme.bodyMedium?.color,
-          ),
-          leading: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
-                    child: Image.asset(
-                      'assets/images/logo/logo_101.png',
+        Container(
+          width: 220,
+          color: theme.colorScheme.surface,
+          child: Column(
+            children: [
+              // Logo and brand
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16.0, 35.0, 16.0, 16.0),
+                child: Row(
+                  children: [
+                    Container(
                       width: 60,
                       height: 60,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(30),
+                        child: Image.asset(
+                          'assets/images/logo/logo_101.png',
                           width: 60,
                           height: 60,
-                          color: Colors.blue,
-                          child: const Icon(
-                            Icons.medical_services,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'FamiLee Dental',
-                  style: AppFonts.sfProStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    color: theme.textTheme.titleMedium?.color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          destinations: [
-            const NavigationRailDestination(
-              icon: Icon(Icons.dashboard),
-              label: Text('Dashboard'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.inventory),
-              label: Text('Inventory'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.shopping_cart),
-              label: Text('Purchase Order'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.playlist_remove),
-              label: Text('Stock Deduction'),
-            ),
-            if (canAccessActivityLog)
-              const NavigationRailDestination(
-                icon: Icon(Icons.history),
-                label: Text('Activity Logs'),
-              ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.settings),
-              label: Text('Settings'),
-            ),
-            const NavigationRailDestination(
-              icon: Icon(Icons.logout),
-              label: Text('Logout'),
-            ),
-          ],
-          onDestinationSelected: (index) async {
-            if (index == 0) {
-              Navigator.pushNamed(context, '/dashboard');
-            } else if (index == 1) {
-              Navigator.pushNamed(context, '/inventory');
-            } else if (index == 2) {
-              Navigator.pushNamed(context, '/purchase-order');
-            } else if (index == 3) {
-              Navigator.pushNamed(context, '/stock-deduction');
-            } else if (canAccessActivityLog && index == 4) {
-              Navigator.pushNamed(context, '/activity-log');
-            } else if (index == (canAccessActivityLog ? 5 : 4)) {
-              // Already on Settings
-            } else if (index == (canAccessActivityLog ? 6 : 5)) {
-              await _handleLogout();
-            }
-          },
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(
-          child: ListenableBuilder(
-            listenable: userRoleProvider,
-            builder: (context, child) {
-              final isStaff = userRoleProvider.isStaff;
-              final isOwner = userRoleProvider.isOwner;
-
-              return ResponsiveContainer(
-                maxWidth: 1100,
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal:
-                        MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
-                    vertical: 12.0,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // General Section
-                      _buildSectionHeader("General"),
-                      _buildSettingItem(
-                        icon: Icons.palette_outlined,
-                        title: "Appearance",
-                        subtitle: "Dark Mode",
-                        trailing: Switch(
-                          value: _darkMode,
-                          onChanged: (value) {
-                            setState(() {
-                              _darkMode = value;
-                            });
-                            _settingsController.setDarkMode(value);
-                            AppTheme.themeMode.value =
-                                value ? ThemeMode.dark : ThemeMode.light;
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 60,
+                              height: 60,
+                              color: Colors.blue,
+                              child: const Icon(
+                                Icons.medical_services,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                            );
                           },
-                          activeColor: scheme.primary,
                         ),
                       ),
-                      _buildNotificationCard(),
-
-                      const SizedBox(height: 24),
-
-                      // Personal Account Section - Available for all users
-                      _buildSectionHeader("Personal Account"),
-
-                      _buildSettingItem(
-                        icon: Icons.person_3_outlined,
-                        title: "Edit Profile",
-                        subtitle: "Update your personal details",
-                        trailing: const Icon(
-                          Icons.arrow_forward_ios,
-                          size: 16,
-                          color: null,
+                    ),
+                    const SizedBox(width: 15),
+                    Flexible(
+                      child: Transform.translate(
+                        offset: const Offset(0, 8),
+                        child: Transform.scale(
+                          scale: 2.9,
+                          child: theme.brightness == Brightness.dark
+                              ? ColorFiltered(
+                                  colorFilter: const ColorFilter.matrix([
+                                    1.5, 0, 0, 0, 0, // Red channel - brighten
+                                    0, 1.5, 0, 0, 0, // Green channel - brighten
+                                    0, 0, 1.5, 0, 0, // Blue channel - brighten
+                                    0, 0, 0, 1, 0, // Alpha channel - unchanged
+                                  ]),
+                                  child: Image.asset(
+                                    'assets/images/logo/tita_doc_2.png',
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Text(
+                                        'FamiLee Dental',
+                                        style: AppFonts.sfProStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: theme
+                                              .textTheme.titleMedium?.color,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : Image.asset(
+                                  'assets/images/logo/tita_doc_2.png',
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Text(
+                                      'FamiLee Dental',
+                                      style: AppFonts.sfProStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                        color:
+                                            theme.textTheme.titleMedium?.color,
+                                      ),
+                                    );
+                                  },
+                                ),
                         ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Navigation items
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    // MENU section header
+                    _buildSectionHeaderForRail(theme, 'MENU'),
+                    const SizedBox(height: 8),
+                    // MENU items
+                    for (int i = 0; i < mainDestinations.length; i++)
+                      _buildRailDestinationTile(
+                        context: context,
+                        theme: theme,
+                        destination: mainDestinations[i],
+                        isSelected: false,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const EditProfilePage(user: null),
-                            ),
-                          );
+                          Navigator.pushNamed(
+                              context, mainDestinations[i].route);
                         },
                       ),
-
-                      const SizedBox(height: 24),
-
-                      // User Management Section - Only for Owner and Admin users
-                      if (!isStaff) ...[
-                        _buildSectionHeader("User Management"),
-                        _buildSettingItem(
-                          icon: Icons.people_outline,
-                          title: "Employee List",
-                          subtitle: "Manage employees and roles",
-                          trailing: const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: null,
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const EmployeeListPage(),
-                              ),
-                            );
-                          },
+                    // Activity Logs (if accessible) - part of MENU
+                    if (canAccessActivityLog)
+                      _buildRailDestinationTile(
+                        context: context,
+                        theme: theme,
+                        destination: _RailDestination(
+                          icon: Icons.history,
+                          label: 'Activity Logs',
+                          route: '/activity-log',
                         ),
-                      ],
-
-                      const SizedBox(height: 24),
-
-                      // Data Management Section - Only for Owner
-                      if (isOwner) ...[
-                        _buildSectionHeader("Data Management"),
-                        _buildSettingItem(
-                          icon: Icons.backup_outlined,
-                          title: "Backup & Restore",
-                          subtitle: "Backup and restore your data",
-                          trailing: const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: null,
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const BackupRestorePage(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        const SizedBox(height: 32),
-
-                        // Standalone Settings
-                        Divider(
-                            height: 1, thickness: 1, color: theme.dividerColor),
-                        const SizedBox(height: 20),
-                        _buildSettingItem(
-                          icon: Icons.help_outline,
-                          title: "App Tutorial",
-                          subtitle: "Learn how to use the app",
-                          trailing: const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: null,
-                          ),
-                          onTap: () {
-                            Navigator.pushNamed(context, '/tutorial');
-                          },
-                        ),
-                      ],
-
-                      const SizedBox(height: 40),
-                    ],
-                  ),
+                        isSelected: false,
+                        onTap: () {
+                          Navigator.pushNamed(context, '/activity-log');
+                        },
+                      ),
+                  ],
                 ),
-              );
-            },
+              ),
+              // GENERAL section at the bottom
+              _buildSectionHeaderForRail(theme, 'GENERAL'),
+              const SizedBox(height: 8),
+              // GENERAL items
+              for (int i = 0; i < bottomDestinations.length; i++)
+                _buildRailDestinationTile(
+                  context: context,
+                  theme: theme,
+                  destination: bottomDestinations[i],
+                  isSelected: i == 0, // Settings is selected
+                  onTap: () async {
+                    final dest = bottomDestinations[i];
+                    // Handle logout separately
+                    if (dest.route == '/logout') {
+                      await _handleLogout();
+                      return;
+                    }
+                    // Settings - already here, do nothing
+                    if (dest.route == '/settings') {
+                      return;
+                    }
+                    Navigator.pushNamed(context, dest.route);
+                  },
+                ),
+              const SizedBox(height: 16),
+            ],
           ),
+        ),
+        VerticalDivider(
+          width: 1,
+          thickness: 1,
+          color: theme.brightness == Brightness.dark
+              ? Colors.grey.shade700
+              : Colors.grey.shade200,
+        ),
+        Expanded(
+          child: _buildSettingsContent(theme, userRoleProvider),
         ),
       ],
     );
@@ -799,4 +965,13 @@ class _SettingsPageState extends State<SettingsPage> {
         ) ??
         false;
   }
+}
+
+class _RailDestination {
+  final IconData icon;
+  final String label;
+  final String route;
+
+  _RailDestination(
+      {required this.icon, required this.label, required this.route});
 }
