@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 
 class AppNotification {
   final String id;
@@ -282,6 +283,20 @@ class NotificationsController {
     }
   }
 
+  // Helper method to check if stock is low using 20% critical level
+  bool _isLowStock(int stock) {
+    if (stock == 0) return false; // Out of stock, not low stock
+
+    final criticalLevel = GroupedInventoryItem.calculateCriticalLevel(stock);
+
+    // Check if current stock is at or below its own 20% critical level
+    if (criticalLevel > 0 && stock <= criticalLevel) {
+      return true;
+    }
+
+    return false;
+  }
+
   // Helper method to check if stock level triggers a notification
   Future<void> checkStockLevelNotification(
       String supplyName, int newStock, int previousStock) async {
@@ -328,69 +343,41 @@ class NotificationsController {
         return;
       }
 
-      // Check for low stock using dynamic 20% critical level
-      // Critical level is 20% of the stock quantity (dynamically recalculated)
-      // Low stock = current stock is at or below 20% of the current stock quantity
-      final currentCriticalLevel =
-          totalCurrentStock > 0 ? (totalCurrentStock * 0.2).round() : 0;
-      final previousCriticalLevel =
-          totalPreviousStock > 0 ? (totalPreviousStock * 0.2).round() : 0;
+      // Check for low stock using 20% critical level
+      // Use the helper method to determine if stock is low
+      final isCurrentlyLow = _isLowStock(totalCurrentStock);
+      final wasPreviouslyLow = _isLowStock(totalPreviousStock);
 
-      // Check if current stock is low based on dynamic 20% critical level
-      // If current stock is 4 and critical level is 1 (20% of 4), then 4 <= 1 is false
-      // But we want to trigger when stock crosses the threshold based on previous stock
-      // OR when stock becomes equal to or below the critical level based on current stock
-
-      // For example: Stock 20 -> 4 after deduction
-      // Previous critical = 20% of 20 = 4
-      // Current critical = 20% of 4 = 1 (rounded from 0.8)
-      // Trigger if: current stock (4) <= previous critical (4) AND stock decreased
-      final triggerBasedOnPrevious = totalCurrentStock > 0 &&
-          totalCurrentStock <= previousCriticalLevel &&
-          previousCriticalLevel > 0 &&
-          totalPreviousStock > previousCriticalLevel &&
-          totalCurrentStock < totalPreviousStock;
-
-      // Also check if current stock is exactly at or below its own critical level
-      // This handles cases where stock goes directly to the threshold
-      final triggerBasedOnCurrent = totalCurrentStock > 0 &&
-          currentCriticalLevel > 0 &&
-          totalCurrentStock <= currentCriticalLevel &&
-          totalCurrentStock < totalPreviousStock;
-
-      if (triggerBasedOnPrevious || triggerBasedOnCurrent) {
+      // Trigger low stock notification when stock becomes low (crosses the threshold)
+      if (isCurrentlyLow &&
+          !wasPreviouslyLow &&
+          totalCurrentStock < totalPreviousStock) {
         print(
-            'Low Stock Notification - Item: $supplyName, Current: $totalCurrentStock, '
-            'Current Critical: $currentCriticalLevel, Previous: $totalPreviousStock, '
-            'Previous Critical: $previousCriticalLevel');
+            'Low Stock Notification - Item: $supplyName, Current: $totalCurrentStock, Previous: $totalPreviousStock');
         await createLowStockNotification(supplyName, totalCurrentStock);
         return;
       }
 
-      // Check for back to normal stock using dynamic 20% critical level
-      // Back to normal: from at/below critical level to above critical level
-      if (totalCurrentStock > currentCriticalLevel &&
-          totalPreviousStock <= previousCriticalLevel &&
-          totalPreviousStock > 0) {
+      // Check for back to normal stock: from low to above threshold
+      if (!isCurrentlyLow && wasPreviouslyLow && totalPreviousStock > 0) {
         await createInStockNotification(supplyName, totalCurrentStock);
         return;
       }
     } catch (e) {
       print('Error checking stock level notification: $e');
-      // Fallback to dynamic 20% critical level logic if database query fails
+      // Fallback to 20% critical level logic if database query fails
       if (newStock == 0 && previousStock > 0) {
         await createOutOfStockNotification(supplyName);
       } else if (newStock > 0 && previousStock == 0) {
         await createInStockNotification(supplyName, newStock);
       } else {
-        final newCriticalLevel = (newStock * 0.2).round();
-        final previousCriticalLevel = (previousStock * 0.2).round();
-        if (newStock > 0 &&
-            newStock <= newCriticalLevel &&
-            previousStock > previousCriticalLevel) {
+        // Use 20% critical level logic
+        if (_isLowStock(newStock) &&
+            !_isLowStock(previousStock) &&
+            previousStock > 0) {
           await createLowStockNotification(supplyName, newStock);
-        } else if (newStock > newCriticalLevel &&
-            previousStock <= previousCriticalLevel &&
+        } else if (!_isLowStock(newStock) &&
+            _isLowStock(previousStock) &&
             previousStock > 0) {
           await createInStockNotification(supplyName, newStock);
         }

@@ -6,6 +6,7 @@ class ApprovalCard extends StatelessWidget {
   final int index;
   final bool isExpanded;
   final bool isProcessing;
+  final bool canApproveReject;
   final VoidCallback onToggle;
   final VoidCallback onApprove;
   final VoidCallback onReject;
@@ -16,6 +17,7 @@ class ApprovalCard extends StatelessWidget {
     required this.index,
     required this.isExpanded,
     this.isProcessing = false,
+    this.canApproveReject = true,
     required this.onToggle,
     required this.onApprove,
     required this.onReject,
@@ -481,8 +483,8 @@ class ApprovalCard extends StatelessWidget {
                       ),
                     );
                   }),
-                  // Approve/Reject Buttons (only show for pending)
-                  if (isPending) ...[
+                  // Approve/Reject Buttons (only show for pending and if user has permission)
+                  if (isPending && canApproveReject) ...[
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,

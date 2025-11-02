@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/shared/themes/font.dart';
-import 'package:familee_dental/features/stock_deduction/controller/stock_deduction_controller.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_approval_controller.dart';
 import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
@@ -21,7 +20,6 @@ class StockDeductionPage extends StatefulWidget {
 
 class _StockDeductionPageState extends State<StockDeductionPage> {
   final List<Map<String, dynamic>> _deductions = [];
-  final StockDeductionController _controller = StockDeductionController();
   final InventoryController _inventoryController = InventoryController();
   final SdActivityController _activityController = SdActivityController();
   final ApprovalController _approvalController = ApprovalController();
@@ -235,9 +233,6 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
         'remarks': '',
       });
 
-      // Save a copy of deductions before clearing
-      final savedDeductions = List<Map<String, dynamic>>.from(_deductions);
-
       // Clear the deductions list since they've been sent for approval
       setState(() {
         _deductions.clear();
@@ -284,175 +279,6 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
         return const _PurposeSelectionDialog();
       },
     );
-  }
-
-  Future<void> _undoDeductions(
-      List<Map<String, dynamic>> deductionsToUndo) async {
-    try {
-      // Always close the banner immediately, even if we're on a different page
-      _removeUndoOverlay();
-
-      // Revert by increasing stock back using controller's revert method
-      await _controller.revertDeductions(deductionsToUndo);
-
-      // Show success snackbar on this page
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Deduction reverted successfully',
-              style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white),
-            ),
-            backgroundColor: const Color(0xFF00D4AA),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      // Ensure banner is closed even on errors
-      _removeUndoOverlay();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Failed to revert deduction: $e',
-            style: AppFonts.sfProStyle(
-                fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ));
-      }
-    }
-  }
-
-  void _showUndoBanner(List<Map<String, dynamic>> deductionsToApply) {
-    _removeUndoOverlay();
-    final overlay = Overlay.of(context);
-
-    _undoOverlayEntry = OverlayEntry(
-      builder: (ctx) {
-        return Positioned(
-          top: MediaQuery.of(ctx).padding.top + 50,
-          left: 16,
-          right: 16,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              constraints: const BoxConstraints(
-                  maxWidth: 360, minHeight: 60, maxHeight: 90),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF6B6B), Color(0xFFEE5A52)],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF6B6B).withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(Icons.inventory_2_outlined,
-                          color: Colors.white, size: 18),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${deductionsToApply.length} ${deductionsToApply.length == 1 ? 'supply' : 'supplies'} deducted',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppFonts.sfProStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'You can undo this action.',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppFonts.sfProStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () => _undoDeductions(deductionsToApply),
-                      child: Text(
-                        'Undo',
-                        style: AppFonts.sfProStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: _removeUndoOverlay,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-    overlay.insert(_undoOverlayEntry!);
-
-    // Auto-hide after 5 seconds
-    Future.delayed(const Duration(seconds: 5), () {
-      _removeUndoOverlay();
-    });
   }
 
   void _removeUndoOverlay() {
@@ -1453,25 +1279,27 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              ElevatedButton(
-                onPressed: _openDeductionLogs,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00D4AA),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text(
-                  'Deduction Logs',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+              // Deduction Logs button - Only for Owner and Admin
+              if (!UserRoleProvider().isStaff)
+                ElevatedButton(
+                  onPressed: _openDeductionLogs,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00D4AA),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text(
+                    'Deduction Logs',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
+              if (!UserRoleProvider().isStaff) const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: _createPreset,
                 style: ElevatedButton.styleFrom(

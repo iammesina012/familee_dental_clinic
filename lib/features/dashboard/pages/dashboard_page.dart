@@ -269,6 +269,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
   }
 
   Widget _buildDashboardContent(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
     return RefreshIndicator(
       onRefresh: () async {
         // Trigger refresh by rebuilding the widget
@@ -295,11 +296,14 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(10),
               ),
               margin: EdgeInsets.zero,
-              color: theme.colorScheme.surface,
+              color:
+                  isDark ? const Color(0xFF2C2C2C) : theme.colorScheme.surface,
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: theme.colorScheme.surface,
+                  color: isDark
+                      ? const Color(0xFF2C2C2C)
+                      : theme.colorScheme.surface,
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                 child: Column(
@@ -459,8 +463,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                         if (snapshot.connectionState ==
                                 ConnectionState.waiting &&
                             !snapshot.hasData) {
-                          final isDark =
-                              Theme.of(context).brightness == Brightness.dark;
                           final baseColor =
                               isDark ? Colors.grey[800]! : Colors.grey[300]!;
                           final highlightColor =
@@ -929,11 +931,14 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(10),
               ),
               margin: EdgeInsets.zero,
-              color: theme.colorScheme.surface,
+              color:
+                  isDark ? const Color(0xFF2C2C2C) : theme.colorScheme.surface,
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: theme.colorScheme.surface,
+                  color: isDark
+                      ? const Color(0xFF2C2C2C)
+                      : theme.colorScheme.surface,
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                 child: Column(
@@ -1048,11 +1053,14 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(10),
               ),
               margin: EdgeInsets.zero,
-              color: theme.colorScheme.surface,
+              color:
+                  isDark ? const Color(0xFF2C2C2C) : theme.colorScheme.surface,
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: theme.colorScheme.surface,
+                  color: isDark
+                      ? const Color(0xFF2C2C2C)
+                      : theme.colorScheme.surface,
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                 child: Column(
@@ -1201,11 +1209,14 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(10),
               ),
               margin: EdgeInsets.zero,
-              color: theme.colorScheme.surface,
+              color:
+                  isDark ? const Color(0xFF2C2C2C) : theme.colorScheme.surface,
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: theme.colorScheme.surface,
+                  color: isDark
+                      ? const Color(0xFF2C2C2C)
+                      : theme.colorScheme.surface,
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
@@ -1308,8 +1319,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                           if (snapshot.connectionState ==
                                   ConnectionState.waiting &&
                               !snapshot.hasData) {
-                            final isDark =
-                                Theme.of(context).brightness == Brightness.dark;
                             final baseColor =
                                 isDark ? Colors.grey[800]! : Colors.grey[300]!;
                             final highlightColor =
@@ -1409,11 +1418,11 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         borderRadius: BorderRadius.circular(10),
       ),
       margin: EdgeInsets.zero,
-      color: theme.colorScheme.surface,
+      color: isDark ? const Color(0xFF2C2C2C) : theme.colorScheme.surface,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          color: theme.colorScheme.surface,
+          color: isDark ? const Color(0xFF2C2C2C) : theme.colorScheme.surface,
         ),
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
         child: Column(
@@ -1536,7 +1545,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         borderRadius: BorderRadius.circular(10),
       ),
       margin: EdgeInsets.zero,
-      color: theme.colorScheme.surface,
+      color: isDark ? const Color(0xFF3A3A3A) : theme.colorScheme.surface,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
@@ -1547,7 +1556,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-          color: isDark ? theme.colorScheme.surface : null,
+          color: isDark ? const Color(0xFF3A3A3A) : null,
         ),
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -1618,7 +1627,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         borderRadius: BorderRadius.circular(10),
       ),
       margin: EdgeInsets.zero,
-      color: theme.colorScheme.surface,
+      color: isDark ? const Color(0xFF3A3A3A) : theme.colorScheme.surface,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
@@ -1629,7 +1638,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-          color: isDark ? theme.colorScheme.surface : null,
+          color: isDark ? const Color(0xFF3A3A3A) : null,
         ),
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1879,7 +1888,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-          color: isDark ? theme.colorScheme.surface : null,
+          color: isDark ? const Color(0xFF3A3A3A) : null,
         ),
         constraints: BoxConstraints(minHeight: height),
         padding: const EdgeInsets.all(16),
@@ -2606,13 +2615,13 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
       rows.add(['Section: Supply Count - $status']);
       rows.add([
         'Supply Name',
+        'Quantity',
         'Packaging Unit',
         'Packaging Content',
         'Brand Name',
         'Supplier Name',
         'Cost',
         'Expiry Date',
-        'Status'
       ]);
 
       if (supplies.isEmpty) {
@@ -2621,13 +2630,13 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         for (final supply in supplies) {
           rows.add([
             supply['displayName'] ?? supply['name'] ?? '',
+            supply['stock'] ?? 0,
             supply['packagingUnit'] ?? '',
             supply['packagingContent'] ?? '',
             supply['brand'] ?? 'N/A',
             supply['supplier'] ?? 'N/A',
             supply['cost'] ?? 0.0,
             supply['expiryDisplay'] ?? 'No expiry',
-            supply['status'] ?? status,
           ]);
         }
       }
@@ -2652,7 +2661,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         'Receipt Number',
         'Recipient Name',
         'Remarks',
-        'PO Status'
       ]);
 
       if (orders.isEmpty) {
@@ -2669,7 +2677,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
             order['receiptNumber'] ?? 'N/A',
             order['recipientName'] ?? 'N/A',
             order['remarks'] ?? 'N/A',
-            order['status'] ?? status,
           ]);
         }
       }
@@ -2770,13 +2777,13 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                   border: pw.TableBorder.all(),
                   columnWidths: {
                     0: const pw.FlexColumnWidth(2.5),
-                    1: const pw.FlexColumnWidth(1.5),
+                    1: const pw.FlexColumnWidth(0.8),
                     2: const pw.FlexColumnWidth(1.5),
                     3: const pw.FlexColumnWidth(1.5),
                     4: const pw.FlexColumnWidth(1.5),
-                    5: const pw.FlexColumnWidth(1),
-                    6: const pw.FlexColumnWidth(1.5),
-                    7: const pw.FlexColumnWidth(1),
+                    5: const pw.FlexColumnWidth(1.5),
+                    6: const pw.FlexColumnWidth(1),
+                    7: const pw.FlexColumnWidth(1.5),
                   },
                   children: [
                     // Header row
@@ -2785,6 +2792,12 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
                           child: pw.Text('Supply Name',
+                              style: pw.TextStyle(
+                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(6),
+                          child: pw.Text('Quantity',
                               style: pw.TextStyle(
                                   fontSize: 9, fontWeight: pw.FontWeight.bold)),
                         ),
@@ -2824,12 +2837,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                               style: pw.TextStyle(
                                   fontSize: 9, fontWeight: pw.FontWeight.bold)),
                         ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Status',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
                       ],
                     ),
                     // Data rows
@@ -2840,6 +2847,11 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                             padding: const pw.EdgeInsets.all(6),
                             child: pw.Text(
                                 supply['displayName'] ?? supply['name'] ?? '',
+                                style: const pw.TextStyle(fontSize: 8)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('${supply['stock'] ?? 0}',
                                 style: const pw.TextStyle(fontSize: 8)),
                           ),
                           pw.Padding(
@@ -2871,11 +2883,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                             padding: const pw.EdgeInsets.all(6),
                             child: pw.Text(
                                 supply['expiryDisplay'] ?? 'No expiry',
-                                style: const pw.TextStyle(fontSize: 8)),
-                          ),
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(supply['status'] ?? status,
                                 style: const pw.TextStyle(fontSize: 8)),
                           ),
                         ],
@@ -2924,7 +2931,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                     6: const pw.FlexColumnWidth(1),
                     7: const pw.FlexColumnWidth(1.2),
                     8: const pw.FlexColumnWidth(1.5),
-                    9: const pw.FlexColumnWidth(0.8),
                   },
                   children: [
                     // Header row
@@ -2984,12 +2990,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                               style: pw.TextStyle(
                                   fontSize: 9, fontWeight: pw.FontWeight.bold)),
                         ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Status',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
                       ],
                     ),
                     // Data rows
@@ -3039,11 +3039,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
                             child: pw.Text(order['remarks'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
-                          ),
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['status'] ?? status,
                                 style: const pw.TextStyle(fontSize: 8)),
                           ),
                         ],

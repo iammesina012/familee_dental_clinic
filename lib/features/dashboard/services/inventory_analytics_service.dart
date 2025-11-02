@@ -95,14 +95,27 @@ class InventoryAnalyticsService {
           }
         }
 
-        // Determine status based on total stock with dynamic 20% critical level
+        // Determine status based on total stock with dynamic 20% critical level and tiered thresholds
         if (totalStock == 0) {
           outOfStock++;
         } else {
-          final criticalLevel = (totalStock * 0.2).round();
-          if (totalStock <= criticalLevel) {
+          final criticalLevel =
+              GroupedInventoryItem.calculateCriticalLevel(totalStock);
+
+          // Primary check: If current stock is at or below its own 20% critical level
+          if (criticalLevel > 0 && totalStock <= criticalLevel) {
             lowStock++;
-          } else {
+          }
+          // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
+          else if (totalStock <= 5) {
+            lowStock++;
+          }
+          // For stocks > 5, use dynamic calculation
+          else if (totalStock > 5 && totalStock <= criticalLevel) {
+            lowStock++;
+          }
+          // In stock: stock > 5 and stock > critical level
+          else {
             inStock++;
           }
         }
@@ -227,14 +240,27 @@ class InventoryAnalyticsService {
           }
         }
 
-        // Determine status based on total stock with dynamic 20% critical level
+        // Determine status based on total stock with dynamic 20% critical level and tiered thresholds
         if (totalStock == 0) {
           outOfStock++;
         } else {
-          final criticalLevel = (totalStock * 0.2).round();
-          if (totalStock <= criticalLevel) {
+          final criticalLevel =
+              GroupedInventoryItem.calculateCriticalLevel(totalStock);
+
+          // Primary check: If current stock is at or below its own 20% critical level
+          if (criticalLevel > 0 && totalStock <= criticalLevel) {
             lowStock++;
-          } else {
+          }
+          // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
+          else if (totalStock <= 5) {
+            lowStock++;
+          }
+          // For stocks > 5, use dynamic calculation
+          else if (totalStock > 5 && totalStock <= criticalLevel) {
+            lowStock++;
+          }
+          // In stock: stock > 5 and stock > critical level
+          else {
             inStock++;
           }
         }
@@ -360,7 +386,7 @@ class InventoryAnalyticsService {
       }).toList();
 
       // Count individual supplies by status (across all batches)
-      // Using dynamic 20% critical level
+      // Using dynamic 20% critical level and tiered thresholds
       int totalInStock = 0;
       int totalLowStock = 0;
       int totalOutOfStock = 0; // stock = 0
@@ -369,10 +395,23 @@ class InventoryAnalyticsService {
         if (supply.stock == 0) {
           totalOutOfStock++;
         } else {
-          final criticalLevel = (supply.stock * 0.2).round();
-          if (supply.stock <= criticalLevel) {
+          final criticalLevel =
+              GroupedInventoryItem.calculateCriticalLevel(supply.stock);
+
+          // Primary check: If current stock is at or below its own 20% critical level
+          if (criticalLevel > 0 && supply.stock <= criticalLevel) {
             totalLowStock++;
-          } else {
+          }
+          // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
+          else if (supply.stock <= 5) {
+            totalLowStock++;
+          }
+          // For stocks > 5, use dynamic calculation
+          else if (supply.stock > 5 && supply.stock <= criticalLevel) {
+            totalLowStock++;
+          }
+          // In stock: stock > 5 and stock > critical level
+          else {
             totalInStock++;
           }
         }
@@ -434,12 +473,11 @@ class InventoryAnalyticsService {
         final name = row['name'] ?? '';
         final type = row['type'] ?? '';
         final stock = (row['stock'] ?? 0).toInt();
-        // Format supply name with type: "Surgical Mask(Pink)" and add stock quantity
+        // Format supply name with type: "Surgical Mask(Pink)" - separate from quantity
         String displayName = name;
         if (type != null && type.toString().trim().isNotEmpty) {
           displayName = '$name($type)';
         }
-        displayName = '$displayName (Qty: $stock)';
 
         return {
           'id': row['id'] as String,
@@ -501,15 +539,28 @@ class InventoryAnalyticsService {
           }
         }
 
-        // Determine stock status (if not expired/expiring) using dynamic 20% critical level
+        // Determine stock status (if not expired/expiring) using dynamic 20% critical level and tiered thresholds
         if (!isExpired && !isExpiring) {
           if (stock == 0) {
             status = 'Out of Stock';
           } else {
-            final criticalLevel = (stock * 0.2).round();
-            if (stock <= criticalLevel) {
+            final criticalLevel =
+                GroupedInventoryItem.calculateCriticalLevel(stock);
+
+            // Primary check: If current stock is at or below its own 20% critical level
+            if (criticalLevel > 0 && stock <= criticalLevel) {
               status = 'Low Stock';
-            } else {
+            }
+            // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
+            else if (stock <= 5) {
+              status = 'Low Stock';
+            }
+            // For stocks > 5, use dynamic calculation
+            else if (stock > 5 && stock <= criticalLevel) {
+              status = 'Low Stock';
+            }
+            // In stock: stock > 5 and stock > critical level
+            else {
               status = 'In Stock';
             }
           }
@@ -575,24 +626,27 @@ class InventoryAnalyticsService {
             if (expiry != null && expiry.toString().isNotEmpty) {
               expiryDates.add(expiry.toString());
             }
+          }
 
-            // Get receipt details (from first received supply)
-            if (receiptNumber == null || receiptNumber.isEmpty) {
-              receiptNumber = supply['receiptDrNo']?.toString() ?? '';
-            }
-            if (recipientName == null || recipientName.isEmpty) {
-              recipientName = supply['receiptRecipient']?.toString() ?? '';
-            }
-            if (remarks == null || remarks.isEmpty) {
-              remarks = supply['receiptRemarks']?.toString() ?? '';
-            }
+          // Get receipt details from any supply that has them (not just those with receivedQuantities)
+          // Receipt details are saved to all supplies when items are received
+          if (receiptNumber == null || receiptNumber.isEmpty) {
+            receiptNumber = supply['receiptDrNo']?.toString() ?? '';
+          }
+          if (recipientName == null || recipientName.isEmpty) {
+            recipientName = supply['receiptRecipient']?.toString() ?? '';
+          }
+          if (remarks == null || remarks.isEmpty) {
+            remarks = supply['receiptRemarks']?.toString() ?? '';
           }
         }
 
-        // Get supplier name from first supply
+        // Get supplier name from first supply (check both supplierName and supplier for compatibility)
         String supplierName = 'N/A';
         if (supplies.isNotEmpty) {
-          supplierName = supplies.first['supplier']?.toString() ?? 'N/A';
+          supplierName = supplies.first['supplierName']?.toString() ??
+              supplies.first['supplier']?.toString() ??
+              'N/A';
         }
 
         // Get date received from supplies (if available)

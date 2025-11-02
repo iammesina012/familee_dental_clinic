@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_preset_management_controller.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
@@ -26,6 +28,7 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
   late Stream<List<Map<String, dynamic>>> _presetsStream;
   int _streamKey = 0;
   bool _isFirstLoad = true;
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
@@ -160,10 +163,26 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
 
   void _filterPresets() {
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) {
-      _filteredPresets = _allPresets;
-    } else {
-      _filteredPresets = _allPresets.where((preset) {
+    List<Map<String, dynamic>> filtered = List.from(_allPresets);
+
+    // Filter by date first
+    filtered = filtered.where((preset) {
+      final createdAt = preset['created_at']?.toString();
+      if (createdAt == null || createdAt.isEmpty) return false;
+
+      try {
+        final presetDate = DateTime.parse(createdAt);
+        return presetDate.year == _selectedDate.year &&
+            presetDate.month == _selectedDate.month &&
+            presetDate.day == _selectedDate.day;
+      } catch (e) {
+        return false;
+      }
+    }).toList();
+
+    // Then filter by search query
+    if (query.isNotEmpty) {
+      filtered = filtered.where((preset) {
         final presetName = preset['name']?.toString().toLowerCase() ?? '';
 
         // Check if the name starts with the search text
@@ -182,6 +201,27 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
         return false;
       }).toList();
     }
+
+    _filteredPresets = filtered;
+  }
+
+  String _formatDateForDisplay(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    final year = date.year.toString();
+    return '$month/$day/$year';
+  }
+
+  String _formatTimeForDisplay(DateTime date) {
+    final hour = date.hour;
+    final minute = date.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour == 0
+        ? 12
+        : hour > 12
+            ? hour - 12
+            : hour;
+    return '$displayHour:$minute $period';
   }
 
   // Pull-to-refresh method
@@ -386,6 +426,67 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
                           style: AppFonts.sfProStyle(fontSize: 16),
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      // Date picker row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Container(
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Theme.of(context)
+                                    .dividerColor
+                                    .withOpacity(0.2),
+                              ),
+                            ),
+                            child: InkWell(
+                              onTap: () async {
+                                final DateTime? picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (picked != null && mounted) {
+                                  setState(() {
+                                    _selectedDate = picked;
+                                  });
+                                  _filterPresets();
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 16,
+                                      color: Theme.of(context).iconTheme.color,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _formatDateForDisplay(_selectedDate),
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 14,
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 16),
                       Expanded(
                         child: Container(
@@ -476,8 +577,23 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
 
   Widget _buildPresetCard(Map<String, dynamic> preset, int index) {
     final supplies = preset['supplies'] as List<dynamic>? ?? [];
+    final presetId = preset['id']?.toString() ?? '';
+    final isStaff = UserRoleProvider().isStaff;
 
-    return Card(
+    // Parse time from created_at
+    String? timeDisplay;
+    try {
+      final createdAt = preset['created_at']?.toString();
+      if (createdAt != null && createdAt.isNotEmpty) {
+        final date = DateTime.parse(createdAt);
+        timeDisplay = _formatTimeForDisplay(date);
+      }
+    } catch (e) {
+      // If parsing fails, timeDisplay will remain null
+    }
+
+    // Card content
+    final cardContent = Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: Theme.of(context).colorScheme.surface,
       elevation: 2,
@@ -538,6 +654,21 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
                   ],
                 ),
               ),
+              if (timeDisplay != null) ...[
+                Text(
+                  timeDisplay,
+                  style: AppFonts.sfProStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.7),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Icon(
                 Icons.chevron_right,
                 color: Theme.of(context).iconTheme.color?.withOpacity(0.8),
@@ -548,6 +679,129 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
         ),
       ),
     );
+
+    // Return slidable if not staff, otherwise just the card
+    if (isStaff) {
+      return cardContent;
+    }
+
+    return Slidable(
+      key: ValueKey('deduction-log-$presetId-$index'),
+      closeOnScroll: true,
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.28,
+        children: [
+          SlidableAction(
+            onPressed: (_) => _deleteDeductionLog(preset),
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: 'Remove',
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ],
+      ),
+      child: cardContent,
+    );
+  }
+
+  Future<void> _deleteDeductionLog(Map<String, dynamic> preset) async {
+    final presetName = preset['name']?.toString() ?? 'this deduction log';
+    final presetId = preset['id']?.toString();
+
+    if (presetId == null || presetId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Cannot delete: Invalid preset ID',
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            'Remove Deduction Log',
+            style:
+                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Are you sure you want to remove "$presetName"? This action cannot be undone.',
+            style: AppFonts.sfProStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancel',
+                style:
+                    AppFonts.sfProStyle(fontSize: 16, color: Colors.grey[700]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: Text(
+                'Remove',
+                style: AppFonts.sfProStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Delete the preset from database
+      await _presetController.deletePreset(presetId);
+
+      // Log the deletion activity
+      await _activityController.logPresetDeleted(
+        presetName: presetName,
+        supplies: List<Map<String, dynamic>>.from(preset['supplies'] ?? []),
+      );
+
+      if (!mounted) return;
+
+      // Refresh the stream to update the list
+      _refreshPresets();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Deduction log removed successfully',
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFF00D4AA),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to remove deduction log: $e',
+            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   void _showPresetDetailModal(Map<String, dynamic> preset) {

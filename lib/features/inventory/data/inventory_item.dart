@@ -114,15 +114,9 @@ class GroupedInventoryItem {
   }
 
   // Check if stock is low based on dynamic 20% critical level
-  // Note: The critical level is calculated based on the current stock quantity
-  // For display purposes, we check if stock is at or below 20% of itself
-  // This will only be true for very small stock quantities (e.g., stock 1 -> critical 0, stock 2 -> critical 0)
-  // For larger stocks, we need to track previous stock quantity, but that's handled in notification logic
   static bool isLowStock(int currentStock, int totalStockQuantity) {
     if (currentStock == 0) return false; // Out of stock, not low stock
     final criticalLevel = calculateCriticalLevel(totalStockQuantity);
-    // If critical level is 0 (for stock < 5), consider stock as low if stock is <= 1
-    if (criticalLevel == 0 && currentStock <= 1) return true;
     return currentStock <= criticalLevel;
   }
 
@@ -172,37 +166,25 @@ class GroupedInventoryItem {
       }
     }
 
-    // Low stock threshold based on dynamic 20% critical level
-    // We use a tiered approach since we don't have previous stock in display
-    // This ensures items show as "Low Stock" when they're at or below 20% threshold
+    // Low stock threshold based on dynamic 20% critical level with tiered thresholds
     if (totalStock == 0) {
       return "Out of Stock"; // This should already be handled above, but keeping for safety
     }
 
-    // Calculate critical level based on current stock
+    // Calculate critical level based on current stock (20% rounded)
     final criticalLevel = calculateCriticalLevel(totalStock);
 
     // Primary check: If current stock is at or below its own 20% critical level
-    // This works for stocks where 20% is meaningful (e.g., stock 5 -> critical 1, so stock <= 1 is low)
     if (criticalLevel > 0 && totalStock <= criticalLevel) {
       return "Low Stock";
     }
-
-    // Tiered approach for cases where dynamic calculation doesn't work well
-    // When stock is in certain ranges, use fixed thresholds based on typical scenarios
-    // Stock 20 -> 4 (20% = 4): If stock <= 4, consider it low (might be reduced from 20)
-    // Stock 10 -> 2 (20% = 2): If stock <= 2, consider it low (might be reduced from 10)
-    // Stock 5 -> 1 (20% = 1): If stock <= 1, consider it low (might be reduced from 5)
 
     // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
     if (totalStock <= 5) {
       return "Low Stock";
     }
 
-    // For stocks > 5, use dynamic calculation which should work better
-    // Stock 25 -> critical = 5, so stock 5 would be low
-    // Stock 30 -> critical = 6, so stock 6 would be low
-    // But we already covered <= 5 above, so this handles stocks 6-30 range
+    // For stocks > 5, use dynamic calculation
     if (totalStock > 5 && totalStock <= criticalLevel) {
       return "Low Stock";
     }

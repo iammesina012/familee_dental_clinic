@@ -44,6 +44,12 @@ class _StockDeductionAddSupplyForPresetPageState
     final allBatches = [groupedItem.mainItem, ...groupedItem.variants];
     final validBatches = allBatches.where((batch) => batch.stock > 0).toList();
 
+    // Check if item is out of stock
+    if (validBatches.isEmpty) {
+      await _showOutOfStockDialog(groupedItem.mainItem.name);
+      return;
+    }
+
     // Group batches by type (null/empty types are grouped together)
     final Map<String?, List<InventoryItem>> batchesByType = {};
     for (final batch in validBatches) {
@@ -124,6 +130,12 @@ class _StockDeductionAddSupplyForPresetPageState
     final allBatches = [groupedItem.mainItem, ...groupedItem.variants];
     final validBatches = allBatches.where((batch) => batch.stock > 0).toList();
 
+    // Check if item is out of stock
+    if (validBatches.isEmpty) {
+      await _showOutOfStockDialog(groupedItem.mainItem.name);
+      return;
+    }
+
     // Group batches by type (null/empty types are grouped together)
     final Map<String?, List<InventoryItem>> batchesByType = {};
     for (final batch in validBatches) {
@@ -185,6 +197,31 @@ class _StockDeductionAddSupplyForPresetPageState
           ),
           content: Text(
             '"$name" is already in your preset list.',
+            style: AppFonts.sfProStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('OK', style: AppFonts.sfProStyle(fontSize: 16)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showOutOfStockDialog(String name) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            'Out of Stock',
+            style:
+                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            '"$name" is currently out of stock and cannot be added to the preset.',
             style: AppFonts.sfProStyle(fontSize: 16),
           ),
           actions: [

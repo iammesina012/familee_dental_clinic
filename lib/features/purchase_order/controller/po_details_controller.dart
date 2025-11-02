@@ -485,6 +485,9 @@ class PODetailsController {
 
       print('Restocking ${receivedSupplies.length} received supplies');
 
+      // Track supplies for notifications after restocking
+      final Map<String, int> quantitiesRestocked = {};
+
       for (final supply in receivedSupplies) {
         final supplyName = supply['supplyName'] ?? supply['name'] ?? '';
         final brandName = supply['brandName'] ?? supply['brand'] ?? 'N/A';
@@ -495,6 +498,9 @@ class PODetailsController {
         final expiryDate = supply['expiryDate'];
         final List<dynamic>? expiryBatches =
             (supply['expiryBatches'] as List<dynamic>?);
+
+        // Track total quantity being restocked for this supply
+        quantitiesRestocked[supplyName] = 0;
 
         // Extract packaging fields from PO supply (these may have been edited)
         final packagingUnit =
@@ -715,6 +721,10 @@ class PODetailsController {
 
               // Update restockedQuantities to track what we just restocked
               restockedQuantities[expiryKey] = totalReceived;
+
+              // Track total restocked quantity for this supply
+              quantitiesRestocked[supplyName] =
+                  (quantitiesRestocked[supplyName] ?? 0) + quantitiesToRestock;
             }
           }
 
@@ -733,6 +743,10 @@ class PODetailsController {
                 : null;
             if (q > 0) {
               await mergeOneBatch(qty: q, exp: e);
+
+              // Track total restocked quantity for this supply
+              quantitiesRestocked[supplyName] =
+                  (quantitiesRestocked[supplyName] ?? 0) + q;
             }
           }
         } else {
@@ -743,9 +757,34 @@ class PODetailsController {
               : '${expiryDate.year.toString().padLeft(4, '0')}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
           if (singleQty > 0) {
             await mergeOneBatch(qty: singleQty, exp: singleExp);
+
+            // Track total restocked quantity for this supply
+            quantitiesRestocked[supplyName] =
+                (quantitiesRestocked[supplyName] ?? 0) + singleQty;
           }
           // Fully received supply with single batch - mark as fully restocked
           supply['alreadyFullyRestocked'] = true;
+        }
+      }
+
+      // Trigger stock level notifications for all restocked supplies
+      final notificationsController = NotificationsController();
+      for (final entry in quantitiesRestocked.entries) {
+        final supplyName = entry.key;
+        final restockedQty = entry.value;
+        if (restockedQty > 0) {
+          try {
+            // Check for stock level notifications
+            // Pass restockedQty as newStock and 0 as previousStock (like add_supply does for new items)
+            // The function will recalculate total stock from database internally
+            await notificationsController.checkStockLevelNotification(
+              supplyName,
+              restockedQty,
+              0,
+            );
+          } catch (e) {
+            print('Error sending notification for $supplyName: $e');
+          }
         }
       }
 

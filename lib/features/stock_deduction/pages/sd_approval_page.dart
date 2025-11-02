@@ -9,6 +9,7 @@ import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_approval_card_widget.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -267,6 +268,7 @@ class _ApprovalPageState extends State<ApprovalPage> {
                                     final approval = _allApprovals[index];
                                     final approvalId =
                                         approval['id']?.toString();
+                                    final isStaff = UserRoleProvider().isStaff;
                                     return ApprovalCard(
                                       approval: approval,
                                       index: index,
@@ -274,6 +276,7 @@ class _ApprovalPageState extends State<ApprovalPage> {
                                           _expandedCardIds.contains(approvalId),
                                       isProcessing: _processingApprovalIds
                                           .contains(approvalId),
+                                      canApproveReject: !isStaff,
                                       onToggle: () {
                                         setState(() {
                                           if (approvalId != null) {
@@ -816,77 +819,5 @@ class _ApprovalPageState extends State<ApprovalPage> {
         setState(() {});
       }
     }
-  }
-
-  void _deleteApproval(Map<String, dynamic> approval) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Remove Approval',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            'Are you sure you want to remove this approval?',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Cancel',
-                style:
-                    AppFonts.sfProStyle(fontSize: 16, color: Colors.grey[700]),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  await _approvalController.deleteApproval(approval['id']);
-                  if (!mounted) return;
-                  Navigator.of(context).pop();
-
-                  _refreshApprovals();
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Approval removed successfully',
-                        style: AppFonts.sfProStyle(
-                            fontSize: 14, color: Colors.white),
-                      ),
-                      backgroundColor: const Color(0xFF00D4AA),
-                    ),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Failed to remove approval: $e',
-                        style: AppFonts.sfProStyle(
-                            fontSize: 14, color: Colors.white),
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: Text(
-                'Remove',
-                style: AppFonts.sfProStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 }
