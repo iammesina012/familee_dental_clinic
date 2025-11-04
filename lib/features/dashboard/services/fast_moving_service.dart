@@ -4,12 +4,14 @@ class FastMovingItem {
   final String productKey;
   final String name;
   final String brand;
+  final String? type;
   final int timesDeducted;
 
   FastMovingItem({
     required this.productKey,
     required this.name,
     required this.brand,
+    this.type,
     required this.timesDeducted,
   });
 }
@@ -30,7 +32,7 @@ class FastMovingService {
         .stream(primaryKey: ['id'])
         .gte('date', since.toIso8601String())
         .order('date', ascending: false)
-        .map((data) {
+        .asyncMap((data) async {
           final Map<String, FastMovingItem> aggregates = {};
 
           for (final row in data) {
@@ -47,11 +49,34 @@ class FastMovingService {
             final String key =
                 '${name.trim().toLowerCase()}|${brand.trim().toLowerCase()}';
 
+            // Look up type from supplies table
+            String? type;
+            try {
+              final supplyResponse = await _supabase
+                  .from('supplies')
+                  .select('type')
+                  .eq('name', name)
+                  .eq('brand', brand)
+                  .eq('archived', false)
+                  .limit(1)
+                  .maybeSingle();
+              if (supplyResponse != null && supplyResponse['type'] != null) {
+                final typeValue = supplyResponse['type'];
+                if (typeValue != null &&
+                    typeValue.toString().trim().isNotEmpty) {
+                  type = typeValue.toString().trim();
+                }
+              }
+            } catch (e) {
+              // If lookup fails, type remains null
+            }
+
             if (!aggregates.containsKey(key)) {
               aggregates[key] = FastMovingItem(
                 productKey: key,
                 name: name,
                 brand: brand,
+                type: type,
                 timesDeducted: 1,
               );
             } else {
@@ -60,6 +85,7 @@ class FastMovingService {
                 productKey: current.productKey,
                 name: current.name,
                 brand: current.brand,
+                type: current.type ?? type, // Use existing type or new one
                 timesDeducted: current.timesDeducted + 1,
               );
             }

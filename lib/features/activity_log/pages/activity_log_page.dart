@@ -776,7 +776,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
             // Top row with greeting on left and account section on right
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              //rossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Left side - Greeting message
                 Expanded(
@@ -1175,7 +1175,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -125,14 +125,14 @@ class _SettingsPageState extends State<SettingsPage> {
           borderRadius: BorderRadius.circular(10),
           color: theme.colorScheme.surface,
         ),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Top row with greeting on left and account section on right
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              //crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Left side - Greeting message
                 Expanded(
@@ -424,7 +424,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ThemeData theme, UserRoleProvider userRoleProvider) {
     final scheme = theme.colorScheme;
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: ListenableBuilder(
         listenable: userRoleProvider,
         builder: (context, child) {

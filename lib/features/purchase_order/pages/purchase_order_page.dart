@@ -1483,7 +1483,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
             // Top row with greeting on left and account section on right
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              //crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Left side - Greeting message
                 Expanded(
@@ -1797,7 +1797,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
             onRefresh: _load,
             child: Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
