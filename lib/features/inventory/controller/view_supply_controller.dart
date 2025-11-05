@@ -1,39 +1,89 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
 
 class ViewSupplyController {
+  // Singleton pattern to ensure cache persists across widget rebuilds
+  static final ViewSupplyController _instance =
+      ViewSupplyController._internal();
+  factory ViewSupplyController() => _instance;
+  ViewSupplyController._internal();
+
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  // Cache for last known data per supply ID (persists across widget rebuilds)
+  final Map<String, InventoryItem> _cachedSupplies = {};
+
   Stream<InventoryItem?> supplyStream(String id) {
-    return _supabase
-        .from('supplies')
-        .stream(primaryKey: ['id'])
-        .eq('id', id)
-        .map((data) {
-          if (data.isEmpty) return null;
-          final row = data.first;
-          return InventoryItem(
-            id: row['id'] as String,
-            name: row['name'] ?? '',
-            type: row['type'],
-            imageUrl: row['image_url'] ?? '',
-            category: row['category'] ?? '',
-            cost: (row['cost'] ?? 0).toDouble(),
-            stock: (row['stock'] ?? 0).toInt(),
-            unit: row['unit'] ?? '',
-            packagingUnit: row['packaging_unit'],
-            packagingContent: row['packaging_content'],
-            packagingQuantity: row['packaging_quantity'],
-            packagingContentQuantity: row['packaging_content_quantity'],
-            supplier: row['supplier'] ?? '',
-            brand: row['brand'] ?? '',
-            expiry: row['expiry'],
-            noExpiry: row['no_expiry'] ?? false,
-            archived: row['archived'] ?? false,
+    final controller = StreamController<InventoryItem?>.broadcast();
+
+    // Emit cached data immediately if available (no delay - instant feedback)
+    if (_cachedSupplies.containsKey(id)) {
+      controller.add(_cachedSupplies[id]);
+    }
+
+    try {
+      _supabase.from('supplies').stream(primaryKey: ['id']).eq('id', id).listen(
+            (data) {
+              try {
+                if (data.isEmpty) {
+                  controller.add(null);
+                  return;
+                }
+                final row = data.first;
+                final item = InventoryItem(
+                  id: row['id'] as String,
+                  name: row['name'] ?? '',
+                  type: row['type'],
+                  imageUrl: row['image_url'] ?? '',
+                  category: row['category'] ?? '',
+                  cost: (row['cost'] ?? 0).toDouble(),
+                  stock: (row['stock'] ?? 0).toInt(),
+                  unit: row['unit'] ?? '',
+                  packagingUnit: row['packaging_unit'],
+                  packagingContent: row['packaging_content'],
+                  packagingQuantity: row['packaging_quantity'],
+                  packagingContentQuantity: row['packaging_content_quantity'],
+                  supplier: row['supplier'] ?? '',
+                  brand: row['brand'] ?? '',
+                  expiry: row['expiry'],
+                  noExpiry: row['no_expiry'] ?? false,
+                  archived: row['archived'] ?? false,
+                );
+
+                // Cache the result
+                _cachedSupplies[id] = item;
+                controller.add(item);
+              } catch (e) {
+                // On error, emit cached data if available
+                if (_cachedSupplies.containsKey(id)) {
+                  controller.add(_cachedSupplies[id]);
+                } else {
+                  controller.add(null);
+                }
+              }
+            },
+            onError: (error) {
+              // On stream error, emit cached data if available
+              if (_cachedSupplies.containsKey(id)) {
+                controller.add(_cachedSupplies[id]);
+              } else {
+                controller.add(null);
+              }
+            },
           );
-        });
+    } catch (e) {
+      // If stream creation fails, emit cached data if available
+      if (_cachedSupplies.containsKey(id)) {
+        controller.add(_cachedSupplies[id]);
+      } else {
+        controller.add(null);
+      }
+    }
+
+    return controller.stream;
   }
 
   String getStatus(InventoryItem item) {

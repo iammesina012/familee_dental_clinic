@@ -1,22 +1,120 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
 
 class FilterController {
+  // Singleton pattern to ensure cache persists across widget rebuilds
+  static final FilterController _instance = FilterController._internal();
+  factory FilterController() => _instance;
+  FilterController._internal();
+
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Cache for last known data (persists across widget rebuilds)
+  List<Brand>? _cachedBrands;
+  List<Supplier>? _cachedSuppliers;
 
   // Get all brands for filter
   Stream<List<Brand>> getBrandsStream() {
-    return _supabase.from('brands').stream(primaryKey: ['id']).map((data) =>
-        data.map((row) => Brand.fromMap(row['id'] as String, row)).toList()
-          ..sort((a, b) => a.name.compareTo(b.name)));
+    final controller = StreamController<List<Brand>>.broadcast();
+
+    // Emit cached data immediately if available (no delay - instant feedback)
+    if (_cachedBrands != null) {
+      controller.add(_cachedBrands!);
+    }
+
+    try {
+      _supabase.from('brands').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            final brands = data
+                .map((row) => Brand.fromMap(row['id'] as String, row))
+                .toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+
+            // Cache the result
+            _cachedBrands = brands;
+            controller.add(brands);
+          } catch (e) {
+            // On error, emit cached data if available
+            if (_cachedBrands != null) {
+              controller.add(_cachedBrands!);
+            } else {
+              controller.add([]);
+            }
+          }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available
+          if (_cachedBrands != null) {
+            controller.add(_cachedBrands!);
+          } else {
+            controller.add([]);
+          }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available
+      if (_cachedBrands != null) {
+        controller.add(_cachedBrands!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   // Get all suppliers for filter
   Stream<List<Supplier>> getSuppliersStream() {
-    return _supabase.from('suppliers').stream(primaryKey: ['id']).map((data) =>
-        data.map((row) => Supplier.fromMap(row['id'] as String, row)).toList()
-          ..sort((a, b) => a.name.compareTo(b.name)));
+    final controller = StreamController<List<Supplier>>.broadcast();
+
+    // Emit cached data immediately if available (no delay - instant feedback)
+    if (_cachedSuppliers != null) {
+      controller.add(_cachedSuppliers!);
+    }
+
+    try {
+      _supabase.from('suppliers').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            final suppliers = data
+                .map((row) => Supplier.fromMap(row['id'] as String, row))
+                .toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+
+            // Cache the result
+            _cachedSuppliers = suppliers;
+            controller.add(suppliers);
+          } catch (e) {
+            // On error, emit cached data if available
+            if (_cachedSuppliers != null) {
+              controller.add(_cachedSuppliers!);
+            } else {
+              controller.add([]);
+            }
+          }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available
+          if (_cachedSuppliers != null) {
+            controller.add(_cachedSuppliers!);
+          } else {
+            controller.add([]);
+          }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available
+      if (_cachedSuppliers != null) {
+        controller.add(_cachedSuppliers!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   // Check if brand name already exists
@@ -263,16 +361,82 @@ class FilterController {
     );
   }
 
+  // Cache for brand names and supplier names (derived from cached brands/suppliers)
+  List<String>? _cachedBrandNames;
+  List<String>? _cachedSupplierNames;
+
   // Get brand names as list of strings
   Stream<List<String>> getBrandNamesStream() {
-    return getBrandsStream().map((brands) =>
-        brands.map((b) => b.name).where((name) => name != "N/A").toList());
+    final controller = StreamController<List<String>>.broadcast();
+
+    // Emit cached names immediately if available
+    if (_cachedBrandNames != null) {
+      controller.add(_cachedBrandNames!);
+    }
+
+    getBrandsStream().listen(
+      (brands) {
+        try {
+          final brandNames =
+              brands.map((b) => b.name).where((name) => name != "N/A").toList();
+          _cachedBrandNames = brandNames;
+          controller.add(brandNames);
+        } catch (e) {
+          if (_cachedBrandNames != null) {
+            controller.add(_cachedBrandNames!);
+          } else {
+            controller.add([]);
+          }
+        }
+      },
+      onError: (error) {
+        if (_cachedBrandNames != null) {
+          controller.add(_cachedBrandNames!);
+        } else {
+          controller.add([]);
+        }
+      },
+    );
+
+    return controller.stream;
   }
 
   // Get supplier names as list of strings
   Stream<List<String>> getSupplierNamesStream() {
-    return getSuppliersStream().map((suppliers) =>
-        suppliers.map((s) => s.name).where((name) => name != "N/A").toList());
+    final controller = StreamController<List<String>>.broadcast();
+
+    // Emit cached names immediately if available
+    if (_cachedSupplierNames != null) {
+      controller.add(_cachedSupplierNames!);
+    }
+
+    getSuppliersStream().listen(
+      (suppliers) {
+        try {
+          final supplierNames = suppliers
+              .map((s) => s.name)
+              .where((name) => name != "N/A")
+              .toList();
+          _cachedSupplierNames = supplierNames;
+          controller.add(supplierNames);
+        } catch (e) {
+          if (_cachedSupplierNames != null) {
+            controller.add(_cachedSupplierNames!);
+          } else {
+            controller.add([]);
+          }
+        }
+      },
+      onError: (error) {
+        if (_cachedSupplierNames != null) {
+          controller.add(_cachedSupplierNames!);
+        } else {
+          controller.add([]);
+        }
+      },
+    );
+
+    return controller.stream;
   }
 
   // Migration function to extract existing brands and suppliers from supplies

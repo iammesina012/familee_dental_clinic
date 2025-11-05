@@ -1,39 +1,101 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
 
 class ExpiredSupplyController {
+  // Singleton pattern to ensure cache persists across widget rebuilds
+  static final ExpiredSupplyController _instance =
+      ExpiredSupplyController._internal();
+  factory ExpiredSupplyController() => _instance;
+  ExpiredSupplyController._internal();
+
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Cache for last known data (persists across widget rebuilds)
+  List<InventoryItem>? _cachedSupplies;
 
   /// Get stream of supplies from Supabase with database filtering for better realtime performance
   Stream<List<InventoryItem>> getSuppliesStream({bool archived = false}) {
-    return _supabase
-        .from('supplies')
-        .stream(primaryKey: ['id'])
-        .eq('archived', archived)
-        .map((data) {
-          return data.map((row) {
-            return InventoryItem(
-              id: row['id'] as String,
-              name: row['name'] ?? '',
-              type: row['type'],
-              imageUrl: row['image_url'] ?? '',
-              category: row['category'] ?? '',
-              cost: (row['cost'] ?? 0).toDouble(),
-              stock: (row['stock'] ?? 0).toInt(),
-              unit: row['unit'] ?? '',
-              packagingUnit: row['packaging_unit'],
-              packagingContent: row['packaging_content'],
-              packagingQuantity: row['packaging_quantity'],
-              packagingContentQuantity: row['packaging_content_quantity'],
-              supplier: row['supplier'] ?? '',
-              brand: row['brand'] ?? '',
-              expiry: row['expiry'],
-              noExpiry: row['no_expiry'] ?? false,
-              archived: row['archived'] ?? false,
-            );
-          }).toList();
-        });
+    final controller = StreamController<List<InventoryItem>>.broadcast();
+
+    // Emit cached data immediately if available (no delay - instant feedback)
+    if (_cachedSupplies != null) {
+      List<InventoryItem> filtered =
+          _cachedSupplies!.where((item) => item.archived == archived).toList();
+      controller.add(filtered);
+    }
+
+    try {
+      _supabase
+          .from('supplies')
+          .stream(primaryKey: ['id'])
+          .eq('archived', archived)
+          .listen(
+            (data) {
+              try {
+                final items = data.map((row) {
+                  return InventoryItem(
+                    id: row['id'] as String,
+                    name: row['name'] ?? '',
+                    type: row['type'],
+                    imageUrl: row['image_url'] ?? '',
+                    category: row['category'] ?? '',
+                    cost: (row['cost'] ?? 0).toDouble(),
+                    stock: (row['stock'] ?? 0).toInt(),
+                    unit: row['unit'] ?? '',
+                    packagingUnit: row['packaging_unit'],
+                    packagingContent: row['packaging_content'],
+                    packagingQuantity: row['packaging_quantity'],
+                    packagingContentQuantity: row['packaging_content_quantity'],
+                    supplier: row['supplier'] ?? '',
+                    brand: row['brand'] ?? '',
+                    expiry: row['expiry'],
+                    noExpiry: row['no_expiry'] ?? false,
+                    archived: row['archived'] ?? false,
+                  );
+                }).toList();
+
+                // Cache all supplies (before filtering)
+                _cachedSupplies = items;
+                controller.add(items);
+              } catch (e) {
+                // On error, emit cached data if available
+                if (_cachedSupplies != null) {
+                  List<InventoryItem> filtered = _cachedSupplies!
+                      .where((item) => item.archived == archived)
+                      .toList();
+                  controller.add(filtered);
+                } else {
+                  controller.add([]);
+                }
+              }
+            },
+            onError: (error) {
+              // On stream error, emit cached data if available
+              if (_cachedSupplies != null) {
+                List<InventoryItem> filtered = _cachedSupplies!
+                    .where((item) => item.archived == archived)
+                    .toList();
+                controller.add(filtered);
+              } else {
+                controller.add([]);
+              }
+            },
+          );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available
+      if (_cachedSupplies != null) {
+        List<InventoryItem> filtered = _cachedSupplies!
+            .where((item) => item.archived == archived)
+            .toList();
+        controller.add(filtered);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   /// Filter expired items from the supplies stream

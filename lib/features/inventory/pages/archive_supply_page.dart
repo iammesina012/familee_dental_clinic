@@ -160,23 +160,12 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                     child: StreamBuilder<List<InventoryItem>>(
                       stream: controller.getArchivedSupplies(),
                       builder: (context, snapshot) {
-                        // Handle errors
-                        if (snapshot.hasError) {
-                          return Center(
-                            child: Text(
-                              'Error loading archived supplies',
-                              style: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                color: Colors.red,
-                              ),
-                            ),
-                          );
-                        }
-
-                        // Only show loading on first load, not on refresh
+                        // Show skeleton loader only if no data exists (no cached data available)
+                        // If cached data exists, it will show immediately instead
                         if (snapshot.connectionState ==
                                 ConnectionState.waiting &&
-                            !snapshot.hasData) {
+                            !snapshot.hasData &&
+                            !snapshot.hasError) {
                           final isDark =
                               Theme.of(context).brightness == Brightness.dark;
                           final baseColor =

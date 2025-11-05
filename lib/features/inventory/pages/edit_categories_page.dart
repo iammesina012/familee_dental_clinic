@@ -187,22 +187,11 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
         child: StreamBuilder<List<String>>(
           stream: categoriesController.getCategoriesStream(),
           builder: (context, snapshot) {
-            // Handle errors
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  'Error loading categories',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 16,
-                    color: Colors.red,
-                  ),
-                ),
-              );
-            }
-
-            // Show skeleton loader only on first load
+            // Show skeleton loader only if no data exists (no cached data available)
+            // If cached data exists, it will show immediately instead
             if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
+                !snapshot.hasData &&
+                !snapshot.hasError) {
               final isDark = Theme.of(context).brightness == Brightness.dark;
               final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
               final highlightColor =

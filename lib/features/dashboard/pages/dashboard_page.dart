@@ -37,11 +37,22 @@ class _DashboardState extends State<Dashboard> {
 
   String? _userName;
   String? _userRole;
-  String _selectedPeriod = 'Quarterly'; // Weekly, Monthly, Quarterly
+  String _selectedPeriod = 'Daily'; // Daily, Weekly, Monthly
+
+  // Cache for user data to persist when offline
+  static String? _cachedUserName;
+  static String? _cachedUserRole;
 
   @override
   void initState() {
     super.initState();
+    // Load cached data first if available
+    if (_cachedUserName != null) {
+      _userName = _cachedUserName;
+    }
+    if (_cachedUserRole != null) {
+      _userRole = _cachedUserRole;
+    }
     _loadUserData();
     // Dashboard access logging removed for now
   }
@@ -68,6 +79,9 @@ class _DashboardState extends State<Dashboard> {
               // Use data from user_roles table
               _userName = response['name'].toString().trim();
               _userRole = response['role']?.toString().trim() ?? 'Admin';
+              // Cache the successful values
+              _cachedUserName = _userName;
+              _cachedUserRole = _userRole;
             } else {
               // Fallback to auth user data
               final displayName =
@@ -75,6 +89,9 @@ class _DashboardState extends State<Dashboard> {
               final emailName = currentUser.email?.split('@')[0].trim();
               _userName = displayName ?? emailName ?? 'User';
               _userRole = 'Admin';
+              // Cache the successful values
+              _cachedUserName = _userName;
+              _cachedUserRole = _userRole;
             }
           });
         }
@@ -83,8 +100,9 @@ class _DashboardState extends State<Dashboard> {
       print('Error loading user data: $e');
       if (mounted) {
         setState(() {
-          _userName = 'User';
-          _userRole = 'Admin';
+          // Use cached data if available, otherwise use defaults
+          _userName = _cachedUserName ?? 'User';
+          _userRole = _cachedUserRole ?? 'Admin';
         });
       }
     }
@@ -299,7 +317,7 @@ class _DashboardState extends State<Dashboard> {
                             children: [
                               Icon(
                                 Icons.inventory,
-                                color: theme.colorScheme.primary,
+                                color: Colors.green,
                                 size: 24,
                               ),
                               const SizedBox(width: 8),
@@ -401,18 +419,72 @@ class _DashboardState extends State<Dashboard> {
                       StreamBuilder<Map<String, int>>(
                         stream: _analyticsService.getSupplyCountsStream(),
                         builder: (context, snapshot) {
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Text(
-                                'Error loading supply counts',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  color: Colors.red,
+                          // Show skeleton loader only if no data exists (no cached data available)
+                          // If cached data exists, it will show immediately instead
+                          if (snapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              !snapshot.hasData &&
+                              !snapshot.hasError) {
+                            final isDark = theme.brightness == Brightness.dark;
+                            final baseColor =
+                                isDark ? Colors.grey[800]! : Colors.grey[300]!;
+                            final highlightColor =
+                                isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 120,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 120,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 120,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             );
                           }
 
+                          // Use cached data if available, otherwise default to 0
                           final inStock = snapshot.data?['inStock'] ?? 0;
                           final lowStock = snapshot.data?['lowStock'] ?? 0;
                           final outOfStock = snapshot.data?['outOfStock'] ?? 0;
@@ -477,19 +549,56 @@ class _DashboardState extends State<Dashboard> {
                       StreamBuilder<Map<String, int>>(
                         stream: _analyticsService.getExpiryCountsStream(),
                         builder: (context, snapshot) {
-                          // Handle errors
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Text(
-                                'Error loading expiry data',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  color: Colors.red,
+                          // Show skeleton loader only if no data exists (no cached data available)
+                          // If cached data exists, it will show immediately instead
+                          if (snapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              !snapshot.hasData &&
+                              !snapshot.hasError) {
+                            final isDark = theme.brightness == Brightness.dark;
+                            final baseColor =
+                                isDark ? Colors.grey[800]! : Colors.grey[300]!;
+                            final highlightColor =
+                                isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             );
                           }
 
+                          // Use cached data if available, otherwise default to 0
                           final expired = snapshot.data != null
                               ? (snapshot.data!['expired'] ?? 0)
                               : 0;
@@ -571,7 +680,7 @@ class _DashboardState extends State<Dashboard> {
                             children: [
                               Icon(
                                 Icons.description,
-                                color: Colors.green,
+                                color: Colors.blue,
                                 size: 24,
                               ),
                               const SizedBox(width: 8),
@@ -607,19 +716,88 @@ class _DashboardState extends State<Dashboard> {
                         stream:
                             _analyticsService.getPurchaseOrderCountsStream(),
                         builder: (context, snapshot) {
-                          // Handle errors
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Text(
-                                'Error loading purchase order data',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  color: Colors.red,
+                          // Show skeleton loader only if no data exists (no cached data available)
+                          // If cached data exists, it will show immediately instead
+                          if (snapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              !snapshot.hasData &&
+                              !snapshot.hasError) {
+                            final isDark = theme.brightness == Brightness.dark;
+                            final baseColor =
+                                isDark ? Colors.grey[800]! : Colors.grey[300]!;
+                            final highlightColor =
+                                isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Shimmer.fromColors(
+                                    baseColor: baseColor,
+                                    highlightColor: highlightColor,
+                                    child: Container(
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.grey[800]
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             );
                           }
 
+                          // Use cached data if available, otherwise default to 0
                           final open = snapshot.data?['Open'] ?? 0;
                           final partial = snapshot.data?['Partial'] ?? 0;
                           final approval = snapshot.data?['Approval'] ?? 0;
@@ -736,12 +914,12 @@ class _DashboardState extends State<Dashboard> {
                                   children: [
                                     Icon(
                                       Icons.show_chart,
-                                      color: const Color(0xFFFF9800),
+                                      color: Colors.amber,
                                       size: 24,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Fast Moving Supply',
+                                      'Fast Moving Supply (${_getDateRangeForPeriod(_selectedPeriod)})',
                                       style: AppFonts.sfProStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
@@ -767,7 +945,7 @@ class _DashboardState extends State<Dashboard> {
                                     fontWeight: FontWeight.w500,
                                     color: theme.textTheme.bodyMedium?.color,
                                   ),
-                                  items: ['Weekly', 'Monthly', 'Quarterly']
+                                  items: ['Daily', 'Weekly', 'Monthly']
                                       .map((String period) {
                                     return DropdownMenuItem<String>(
                                       value: period,
@@ -809,23 +987,12 @@ class _DashboardState extends State<Dashboard> {
                             window: _getDurationForPeriod(_selectedPeriod),
                           ),
                           builder: (context, snapshot) {
-                            // Handle errors
-                            if (snapshot.hasError) {
-                              return Center(
-                                child: Text(
-                                  'Error loading fast moving items',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                              );
-                            }
-
-                            // Show skeleton loader on first load
+                            // Show skeleton loader only if no data exists (no cached data available)
+                            // If cached data exists, it will show immediately instead
                             if (snapshot.connectionState ==
                                     ConnectionState.waiting &&
-                                !snapshot.hasData) {
+                                !snapshot.hasData &&
+                                !snapshot.hasError) {
                               final baseColor = isDark
                                   ? Colors.grey[800]!
                                   : Colors.grey[300]!;
@@ -838,7 +1005,7 @@ class _DashboardState extends State<Dashboard> {
                                     const EdgeInsets.symmetric(vertical: 12),
                                 child: Column(
                                   children: List.generate(
-                                    3,
+                                    5,
                                     (index) => Padding(
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 6),
@@ -848,7 +1015,9 @@ class _DashboardState extends State<Dashboard> {
                                         child: Container(
                                           height: 48,
                                           decoration: BoxDecoration(
-                                            color: Colors.white,
+                                            color: isDark
+                                                ? Colors.grey[800]
+                                                : Colors.white,
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                           ),
@@ -860,21 +1029,23 @@ class _DashboardState extends State<Dashboard> {
                               );
                             }
 
-                            // Handle error gracefully - show last known data or empty state
+                            // Handle gracefully - show cached data or empty state
                             final items = snapshot.data ?? [];
 
                             if (items.isEmpty) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                child: Text(
-                                  snapshot.hasError
-                                      ? 'Unable to load data. Pull down to refresh.'
-                                      : 'No deductions recorded yet.',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: theme.textTheme.bodyMedium?.color
-                                        ?.withOpacity(0.7),
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 48, horizontal: 24),
+                                  child: Text(
+                                    'No deductions recorded yet.',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7),
+                                    ),
+                                    textAlign: TextAlign.center,
                                   ),
                                 ),
                               );
@@ -909,14 +1080,73 @@ class _DashboardState extends State<Dashboard> {
 
   Duration _getDurationForPeriod(String period) {
     switch (period) {
+      case 'Daily':
+        return const Duration(days: 1);
       case 'Weekly':
         return const Duration(days: 7);
       case 'Monthly':
         return const Duration(days: 30);
-      case 'Quarterly':
-        return const Duration(days: 90);
       default:
-        return const Duration(days: 90);
+        return const Duration(days: 1);
+    }
+  }
+
+  String _getDateRangeForPeriod(String period) {
+    final now = DateTime.now();
+    final duration = _getDurationForPeriod(period);
+    final startDate = now.subtract(duration);
+
+    // Format day without leading zero
+    String formatDay(int day) => day.toString();
+    // Format month as abbreviation
+    String formatMonth(int month) {
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
+      return months[month - 1];
+    }
+
+    switch (period) {
+      case 'Daily':
+        // Show today's date: "Jan 1, 2024"
+        return '${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+      case 'Weekly':
+        // Show date range: "Jan 1 - Jan 7, 2024"
+        if (startDate.year == now.year && startDate.month == now.month) {
+          // Same month and year
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        } else if (startDate.year == now.year) {
+          // Same year, different month
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        } else {
+          // Different year
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        }
+      case 'Monthly':
+        // Show date range: "Dec 1, 2023 - Jan 1, 2024"
+        if (startDate.year == now.year && startDate.month == now.month) {
+          // Same month and year
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatDay(now.day)}, ${now.year}';
+        } else if (startDate.year == now.year) {
+          // Same year, different month
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        } else {
+          // Different year
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        }
+      default:
+        return '${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
     }
   }
 
@@ -1187,65 +1417,24 @@ class _DashboardState extends State<Dashboard> {
     required int maxValue,
   }) {
     final isDark = theme.brightness == Brightness.dark;
-    final chartColor = const Color(0xFFFF9800); // Orange
 
-    // Calculate rounded max for x-axis labels (rounds up to next multiple of 3)
+    // Calculate rounded max for x-axis labels (rounds up to next multiple of 5)
     // This ensures the chart auto-adjusts when values exceed current max
-    // Minimum is 15 to provide space for labels when values are at 12
-    // e.g., if maxValue is 12 → roundedMax = 15, if maxValue is 16 → roundedMax = 18
-    final calculatedMax = maxValue > 0 ? ((maxValue / 3).ceil() * 3) : 3;
-    final roundedMax = calculatedMax < 15 ? 15 : calculatedMax;
+    // Minimum is 5 to provide space for labels when values are small
+    // e.g., if maxValue is 12 → roundedMax = 15, if maxValue is 16 → roundedMax = 20
+    final calculatedMax = maxValue > 0 ? ((maxValue / 5).ceil() * 5) : 5;
+    final roundedMax = calculatedMax < 5 ? 5 : calculatedMax;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Bar chart items
         ...items.map((item) {
-          // Calculate bar width to match evenly spaced labels
-          // Labels are evenly spaced at positions 0%, 20%, 40%, 60%, 80%, 100%
-          final targetLabels = 6;
-          final stepSize = 3;
-          final startValue = roundedMax - (5 * stepSize);
-          final adjustedStart =
-              ((startValue / stepSize).round() * stepSize).clamp(0, roundedMax);
-
-          // Generate label values
-          final labelValues = List.generate(
-            targetLabels,
-            (index) => index == targetLabels - 1
-                ? roundedMax
-                : adjustedStart + (index * stepSize),
-          );
-
-          // Calculate bar position based on which labels the value falls between
-          double barWidth = 0.0;
-          if (item.timesDeducted <= labelValues.first) {
-            barWidth = 0.0;
-          } else if (item.timesDeducted >= labelValues.last) {
-            barWidth = 1.0;
-          } else {
-            // Find which two labels the value falls between
-            for (int i = 0; i < labelValues.length - 1; i++) {
-              if (item.timesDeducted >= labelValues[i] &&
-                  item.timesDeducted <= labelValues[i + 1]) {
-                // Interpolate between the two label positions
-                final lowerValue = labelValues[i].toDouble();
-                final upperValue = labelValues[i + 1].toDouble();
-                final lowerPosition = i / (targetLabels - 1);
-                final upperPosition = (i + 1) / (targetLabels - 1);
-
-                if (upperValue > lowerValue) {
-                  final ratio = (item.timesDeducted - lowerValue) /
-                      (upperValue - lowerValue);
-                  barWidth =
-                      lowerPosition + (ratio * (upperPosition - lowerPosition));
-                } else {
-                  barWidth = upperPosition;
-                }
-                break;
-              }
-            }
-          }
+          // Calculate bar width - labels start from 0 and go up to roundedMax in steps of 5
+          // Bar width is proportional to the value relative to roundedMax
+          final barWidth = roundedMax > 0
+              ? (item.timesDeducted / roundedMax).clamp(0.0, 1.0)
+              : 0.0;
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 24),
@@ -1286,7 +1475,14 @@ class _DashboardState extends State<Dashboard> {
                               child: Container(
                                 height: 32,
                                 decoration: BoxDecoration(
-                                  color: chartColor,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      const Color(0xFFFF9800), // Orange
+                                      const Color(0xFFFF6D00), // Deeper orange
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
@@ -1331,30 +1527,23 @@ class _DashboardState extends State<Dashboard> {
           );
         }).toList(),
         const SizedBox(height: 8),
-        // X-axis labels - evenly spaced with exactly 6 labels
+        // X-axis labels - always start from 0, step by 5, show as many as needed
         Padding(
           padding: const EdgeInsets.only(left: 162),
           child: Builder(
             builder: (context) {
-              // Always show exactly 6 labels with step size of 3
-              // As max increases, remove lower labels (0 → 3 → 6...)
-              final targetLabels = 6;
-              final stepSize = 3; // Always use step of 3
+              // Always start from 0, step by 5
+              final stepSize = 5;
 
-              // Calculate starting value: roundedMax - (5 * stepSize)
-              // This ensures we have exactly 6 labels ending at roundedMax
-              final startValue = roundedMax - (5 * stepSize);
-              // Round start to nearest multiple of 3, clamped to >= 0
-              final adjustedStart = ((startValue / stepSize).round() * stepSize)
-                  .clamp(0, roundedMax);
-
-              // Generate label values
-              final labelValues = List.generate(
-                targetLabels,
-                (index) => index == targetLabels - 1
-                    ? roundedMax
-                    : adjustedStart + (index * stepSize),
-              );
+              // Generate label values: 0, 5, 10, 15, ... up to roundedMax
+              final labelValues = <int>[];
+              for (int value = 0; value <= roundedMax; value += stepSize) {
+                labelValues.add(value);
+              }
+              // Ensure roundedMax is included even if it's not a multiple of 5
+              if (labelValues.isEmpty || labelValues.last < roundedMax) {
+                labelValues.add(roundedMax);
+              }
 
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1920,8 +2109,268 @@ class _DashboardState extends State<Dashboard> {
         false; // Default to false if dialog is dismissed
   }
 
+  // CSV Export Confirmation Dialog
+  Future<bool> _showCSVExportConfirmationDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon and Title
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF107C10).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.insert_drive_file,
+                        color: Color(0xFF107C10),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Export as CSV',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      'Are you sure you want to export the report as CSV?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Yes first, then No)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF107C10),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Yes',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'No',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false; // Default to false if dialog is dismissed
+  }
+
+  // PDF Export Confirmation Dialog
+  Future<bool> _showPDFExportConfirmationDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon and Title
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE53E3E).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.picture_as_pdf,
+                        color: Color(0xFFE53E3E),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Export as PDF',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      'Are you sure you want to export the report as PDF?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Yes first, then No)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE53E3E),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Yes',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'No',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false; // Default to false if dialog is dismissed
+  }
+
   // CSV Export Handler
   Future<void> _handleCSVExport(BuildContext context) async {
+    // Show confirmation dialog first
+    final shouldExport = await _showCSVExportConfirmationDialog(context);
+    if (shouldExport != true) return;
+
     // Show toast notification
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -2010,6 +2459,10 @@ class _DashboardState extends State<Dashboard> {
 
   // PDF Export Handler
   Future<void> _handlePDFExport(BuildContext context) async {
+    // Show confirmation dialog first
+    final shouldExport = await _showPDFExportConfirmationDialog(context);
+    if (shouldExport != true) return;
+
     // Show toast notification
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

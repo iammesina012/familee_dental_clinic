@@ -97,23 +97,12 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                       StreamBuilder<List<Brand>>(
                         stream: filterController.getBrandsStream(),
                         builder: (context, snapshot) {
-                          // Handle errors
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Text(
-                                'Error loading brands',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  color: Colors.red,
-                                ),
-                              ),
-                            );
-                          }
-
-                          // Show skeleton loader on first load only
+                          // Show skeleton loader only if no data exists (no cached data available)
+                          // If cached data exists, it will show immediately instead
                           if (snapshot.connectionState ==
                                   ConnectionState.waiting &&
-                              !snapshot.hasData) {
+                              !snapshot.hasData &&
+                              !snapshot.hasError) {
                             final isDark =
                                 Theme.of(context).brightness == Brightness.dark;
                             final baseColor =
@@ -293,23 +282,12 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                       StreamBuilder<List<Supplier>>(
                         stream: filterController.getSuppliersStream(),
                         builder: (context, snapshot) {
-                          // Handle errors
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Text(
-                                'Error loading suppliers',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  color: Colors.red,
-                                ),
-                              ),
-                            );
-                          }
-
-                          // Show skeleton loader on first load only
+                          // Show skeleton loader only if no data exists (no cached data available)
+                          // If cached data exists, it will show immediately instead
                           if (snapshot.connectionState ==
                                   ConnectionState.waiting &&
-                              !snapshot.hasData) {
+                              !snapshot.hasData &&
+                              !snapshot.hasError) {
                             final isDark =
                                 Theme.of(context).brightness == Brightness.dark;
                             final baseColor =

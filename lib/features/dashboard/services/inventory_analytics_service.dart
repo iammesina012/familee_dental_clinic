@@ -1,185 +1,325 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 
 class InventoryAnalyticsService {
+  // Singleton pattern to ensure cache persists across widget rebuilds
+  static final InventoryAnalyticsService _instance =
+      InventoryAnalyticsService._internal();
+  factory InventoryAnalyticsService() => _instance;
+  InventoryAnalyticsService._internal();
+
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Cache for last known data (persists across widget rebuilds)
+  Map<String, int>? _cachedExpiryCounts;
+  Map<String, int>? _cachedSupplyCounts;
+  Map<String, int>? _cachedPurchaseOrderCounts;
 
   // Stream for expired and expiring counts
   Stream<Map<String, int>> getExpiryCountsStream() {
-    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
-      final allSupplies = data.map((row) {
-        return InventoryItem(
-          id: row['id'] as String,
-          name: row['name'] ?? '',
-          imageUrl: row['image_url'] ?? '',
-          category: row['category'] ?? '',
-          cost: (row['cost'] ?? 0).toDouble(),
-          stock: (row['stock'] ?? 0).toInt(),
-          unit: row['unit'] ?? '',
-          supplier: row['supplier'] ?? '',
-          brand: row['brand'] ?? '',
-          expiry: row['expiry'],
-          noExpiry: row['no_expiry'] ?? false,
-          archived: row['archived'] ?? false,
-        );
-      }).toList();
+    final controller = StreamController<Map<String, int>>.broadcast();
 
-      final supplies = allSupplies
-          .where((supply) => !supply.archived && supply.stock > 0)
-          .toList();
+    // Emit cached data immediately if available (no delay - instant feedback)
+    if (_cachedExpiryCounts != null) {
+      controller.add(_cachedExpiryCounts!);
+    }
 
-      int expired = 0;
-      int expiring = 0;
+    try {
+      _supabase.from('supplies').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            final allSupplies = data.map((row) {
+              return InventoryItem(
+                id: row['id'] as String,
+                name: row['name'] ?? '',
+                imageUrl: row['image_url'] ?? '',
+                category: row['category'] ?? '',
+                cost: (row['cost'] ?? 0).toDouble(),
+                stock: (row['stock'] ?? 0).toInt(),
+                unit: row['unit'] ?? '',
+                supplier: row['supplier'] ?? '',
+                brand: row['brand'] ?? '',
+                expiry: row['expiry'],
+                noExpiry: row['no_expiry'] ?? false,
+                archived: row['archived'] ?? false,
+              );
+            }).toList();
 
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+            final supplies = allSupplies
+                .where((supply) => !supply.archived && supply.stock > 0)
+                .toList();
 
-      for (final s in supplies) {
-        if (s.noExpiry || s.expiry == null || s.expiry!.isEmpty) {
-          continue;
-        }
-        final parsed = DateTime.tryParse(s.expiry!.replaceAll('/', '-'));
-        if (parsed == null) continue;
-        final dateOnly = DateTime(parsed.year, parsed.month, parsed.day);
-        if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
-          expired++;
-        } else {
-          final daysUntil = dateOnly.difference(today).inDays;
-          if (daysUntil <= 30) {
-            expiring++;
+            int expired = 0;
+            int expiring = 0;
+
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+
+            for (final s in supplies) {
+              if (s.noExpiry || s.expiry == null || s.expiry!.isEmpty) {
+                continue;
+              }
+              final parsed = DateTime.tryParse(s.expiry!.replaceAll('/', '-'));
+              if (parsed == null) continue;
+              final dateOnly = DateTime(parsed.year, parsed.month, parsed.day);
+              if (dateOnly.isBefore(today) ||
+                  dateOnly.isAtSameMomentAs(today)) {
+                expired++;
+              } else {
+                final daysUntil = dateOnly.difference(today).inDays;
+                if (daysUntil <= 30) {
+                  expiring++;
+                }
+              }
+            }
+
+            final result = {
+              'expired': expired,
+              'expiring': expiring,
+            };
+
+            // Cache the result
+            _cachedExpiryCounts = result;
+            controller.add(result);
+          } catch (e) {
+            // On error, emit cached data if available, otherwise emit defaults
+            if (_cachedExpiryCounts != null) {
+              controller.add(_cachedExpiryCounts!);
+            } else {
+              controller.add({'expired': 0, 'expiring': 0});
+            }
           }
-        }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available, otherwise emit defaults
+          if (_cachedExpiryCounts != null) {
+            controller.add(_cachedExpiryCounts!);
+          } else {
+            controller.add({'expired': 0, 'expiring': 0});
+          }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available, otherwise emit defaults
+      if (_cachedExpiryCounts != null) {
+        controller.add(_cachedExpiryCounts!);
+      } else {
+        controller.add({'expired': 0, 'expiring': 0});
       }
+    }
 
-      return {
-        'expired': expired,
-        'expiring': expiring,
-      };
-    });
+    return controller.stream;
   }
 
   // Stream for supply counts by status (counts individual supplies, not grouped)
   Stream<Map<String, int>> getSupplyCountsStream() {
-    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
-      final allSupplies = data.map((row) {
-        return InventoryItem(
-          id: row['id'] as String,
-          name: row['name'] ?? '',
-          imageUrl: row['image_url'] ?? '',
-          category: row['category'] ?? '',
-          cost: (row['cost'] ?? 0).toDouble(),
-          stock: (row['stock'] ?? 0).toInt(),
-          unit: row['unit'] ?? '',
-          supplier: row['supplier'] ?? '',
-          brand: row['brand'] ?? '',
-          expiry: row['expiry'],
-          noExpiry: row['no_expiry'] ?? false,
-          archived: row['archived'] ?? false,
-        );
-      }).toList();
+    final controller = StreamController<Map<String, int>>.broadcast();
 
-      // Filter out archived supplies AND expired supplies
-      final supplies = allSupplies.where((supply) {
-        if (supply.archived) return false;
+    // Emit cached data immediately if available (no delay - instant feedback)
+    if (_cachedSupplyCounts != null) {
+      controller.add(_cachedSupplyCounts!);
+    }
 
-        // Filter out expired supplies
-        if (!supply.noExpiry &&
-            supply.expiry != null &&
-            supply.expiry!.isNotEmpty) {
-          final expiryDate =
-              DateTime.tryParse(supply.expiry!.replaceAll('/', '-'));
-          if (expiryDate != null) {
-            final now = DateTime.now();
-            final today = DateTime(now.year, now.month, now.day);
-            final dateOnly =
-                DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+    try {
+      _supabase.from('supplies').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            final allSupplies = data.map((row) {
+              return InventoryItem(
+                id: row['id'] as String,
+                name: row['name'] ?? '',
+                imageUrl: row['image_url'] ?? '',
+                category: row['category'] ?? '',
+                cost: (row['cost'] ?? 0).toDouble(),
+                stock: (row['stock'] ?? 0).toInt(),
+                unit: row['unit'] ?? '',
+                supplier: row['supplier'] ?? '',
+                brand: row['brand'] ?? '',
+                expiry: row['expiry'],
+                noExpiry: row['no_expiry'] ?? false,
+                archived: row['archived'] ?? false,
+              );
+            }).toList();
 
-            if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
-              return false; // Filter out expired items
+            // Filter out archived supplies AND expired supplies
+            final supplies = allSupplies.where((supply) {
+              if (supply.archived) return false;
+
+              // Filter out expired supplies
+              if (!supply.noExpiry &&
+                  supply.expiry != null &&
+                  supply.expiry!.isNotEmpty) {
+                final expiryDate =
+                    DateTime.tryParse(supply.expiry!.replaceAll('/', '-'));
+                if (expiryDate != null) {
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+                  final dateOnly = DateTime(
+                      expiryDate.year, expiryDate.month, expiryDate.day);
+
+                  if (dateOnly.isBefore(today) ||
+                      dateOnly.isAtSameMomentAs(today)) {
+                    return false; // Filter out expired items
+                  }
+                }
+              }
+
+              return true;
+            }).toList();
+
+            // Count individual supplies by status (across all batches)
+            // Using dynamic 20% critical level and tiered thresholds
+            int totalInStock = 0;
+            int totalLowStock = 0;
+            int totalOutOfStock = 0; // stock = 0
+
+            for (final supply in supplies) {
+              if (supply.stock == 0) {
+                totalOutOfStock++;
+              } else {
+                final criticalLevel =
+                    GroupedInventoryItem.calculateCriticalLevel(supply.stock);
+
+                // Primary check: If current stock is at or below its own 20% critical level
+                if (criticalLevel > 0 && supply.stock <= criticalLevel) {
+                  totalLowStock++;
+                }
+                // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
+                else if (supply.stock <= 5) {
+                  totalLowStock++;
+                }
+                // For stocks > 5, use dynamic calculation
+                else if (supply.stock > 5 && supply.stock <= criticalLevel) {
+                  totalLowStock++;
+                }
+                // In stock: stock > 5 and stock > critical level
+                else {
+                  totalInStock++;
+                }
+              }
+            }
+
+            final result = {
+              'inStock': totalInStock,
+              'lowStock': totalLowStock,
+              'outOfStock': totalOutOfStock,
+              'total': supplies.length,
+            };
+
+            // Cache the result
+            _cachedSupplyCounts = result;
+            controller.add(result);
+          } catch (e) {
+            // On error, emit cached data if available, otherwise emit defaults
+            if (_cachedSupplyCounts != null) {
+              controller.add(_cachedSupplyCounts!);
+            } else {
+              controller.add(
+                  {'inStock': 0, 'lowStock': 0, 'outOfStock': 0, 'total': 0});
             }
           }
-        }
-
-        return true;
-      }).toList();
-
-      // Count individual supplies by status (across all batches)
-      // Using dynamic 20% critical level and tiered thresholds
-      int totalInStock = 0;
-      int totalLowStock = 0;
-      int totalOutOfStock = 0; // stock = 0
-
-      for (final supply in supplies) {
-        if (supply.stock == 0) {
-          totalOutOfStock++;
-        } else {
-          final criticalLevel =
-              GroupedInventoryItem.calculateCriticalLevel(supply.stock);
-
-          // Primary check: If current stock is at or below its own 20% critical level
-          if (criticalLevel > 0 && supply.stock <= criticalLevel) {
-            totalLowStock++;
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available, otherwise emit defaults
+          if (_cachedSupplyCounts != null) {
+            controller.add(_cachedSupplyCounts!);
+          } else {
+            controller.add(
+                {'inStock': 0, 'lowStock': 0, 'outOfStock': 0, 'total': 0});
           }
-          // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
-          else if (supply.stock <= 5) {
-            totalLowStock++;
-          }
-          // For stocks > 5, use dynamic calculation
-          else if (supply.stock > 5 && supply.stock <= criticalLevel) {
-            totalLowStock++;
-          }
-          // In stock: stock > 5 and stock > critical level
-          else {
-            totalInStock++;
-          }
-        }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available, otherwise emit defaults
+      if (_cachedSupplyCounts != null) {
+        controller.add(_cachedSupplyCounts!);
+      } else {
+        controller
+            .add({'inStock': 0, 'lowStock': 0, 'outOfStock': 0, 'total': 0});
       }
+    }
 
-      return {
-        'inStock': totalInStock,
-        'lowStock': totalLowStock,
-        'outOfStock': totalOutOfStock,
-        'total': supplies.length,
-      };
-    });
+    return controller.stream;
   }
 
   // Stream for purchase order counts by status
   Stream<Map<String, int>> getPurchaseOrderCountsStream() {
-    return _supabase
-        .from('purchase_orders')
-        .stream(primaryKey: ['id']).map((data) {
-      int open = 0;
-      int partial = 0;
-      int approval = 0;
-      int closed = 0;
+    final controller = StreamController<Map<String, int>>.broadcast();
 
-      for (final row in data) {
-        final status = row['status']?.toString() ?? '';
-        switch (status) {
-          case 'Open':
-            open++;
-            break;
-          case 'Partial':
-          case 'Partially Received':
-            partial++;
-            break;
-          case 'Approval':
-            approval++;
-            break;
-          case 'Closed':
-            closed++;
-            break;
-        }
+    // Emit cached data immediately if available (no delay - instant feedback)
+    if (_cachedPurchaseOrderCounts != null) {
+      controller.add(_cachedPurchaseOrderCounts!);
+    }
+
+    try {
+      _supabase.from('purchase_orders').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            int open = 0;
+            int partial = 0;
+            int approval = 0;
+            int closed = 0;
+
+            for (final row in data) {
+              final status = row['status']?.toString() ?? '';
+              switch (status) {
+                case 'Open':
+                  open++;
+                  break;
+                case 'Partial':
+                case 'Partially Received':
+                  partial++;
+                  break;
+                case 'Approval':
+                  approval++;
+                  break;
+                case 'Closed':
+                  closed++;
+                  break;
+              }
+            }
+
+            final result = {
+              'Open': open,
+              'Partial': partial,
+              'Approval': approval,
+              'Closed': closed,
+            };
+
+            // Cache the result
+            _cachedPurchaseOrderCounts = result;
+            controller.add(result);
+          } catch (e) {
+            // On error, emit cached data if available, otherwise emit defaults
+            if (_cachedPurchaseOrderCounts != null) {
+              controller.add(_cachedPurchaseOrderCounts!);
+            } else {
+              controller
+                  .add({'Open': 0, 'Partial': 0, 'Approval': 0, 'Closed': 0});
+            }
+          }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available, otherwise emit defaults
+          if (_cachedPurchaseOrderCounts != null) {
+            controller.add(_cachedPurchaseOrderCounts!);
+          } else {
+            controller
+                .add({'Open': 0, 'Partial': 0, 'Approval': 0, 'Closed': 0});
+          }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available, otherwise emit defaults
+      if (_cachedPurchaseOrderCounts != null) {
+        controller.add(_cachedPurchaseOrderCounts!);
+      } else {
+        controller.add({'Open': 0, 'Partial': 0, 'Approval': 0, 'Closed': 0});
       }
+    }
 
-      return {
-        'Open': open,
-        'Partial': partial,
-        'Approval': approval,
-        'Closed': closed,
-      };
-    });
+    return controller.stream;
   }
 
   // Get all supplies with details, categorized by status

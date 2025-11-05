@@ -1,13 +1,66 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
 
 class CategoriesController {
+  // Singleton pattern to ensure cache persists across widget rebuilds
+  static final CategoriesController _instance =
+      CategoriesController._internal();
+  factory CategoriesController() => _instance;
+  CategoriesController._internal();
+
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Cache for last known data (persists across widget rebuilds)
+  List<String>? _cachedCategories;
 
   // Get all categories as stream
   Stream<List<String>> getCategoriesStream() {
-    return _supabase.from('categories').stream(primaryKey: ['id']).map(
-        (data) => data.map((row) => row['name'] as String).toList()..sort());
+    final controller = StreamController<List<String>>.broadcast();
+
+    // Emit cached data immediately if available (no delay - instant feedback)
+    if (_cachedCategories != null) {
+      controller.add(_cachedCategories!);
+    }
+
+    try {
+      _supabase.from('categories').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            final categories = data.map((row) => row['name'] as String).toList()
+              ..sort();
+
+            // Cache the result
+            _cachedCategories = categories;
+            controller.add(categories);
+          } catch (e) {
+            // On error, emit cached data if available
+            if (_cachedCategories != null) {
+              controller.add(_cachedCategories!);
+            } else {
+              controller.add([]);
+            }
+          }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available
+          if (_cachedCategories != null) {
+            controller.add(_cachedCategories!);
+          } else {
+            controller.add([]);
+          }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available
+      if (_cachedCategories != null) {
+        controller.add(_cachedCategories!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   // Add new category

@@ -722,10 +722,12 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                         StreamBuilder<List<String>>(
                           stream: filterController.getBrandNamesStream(),
                           builder: (context, snapshot) {
-                            // Only show skeleton on first load, not on every interaction
+                            // Show skeleton loader only if no data exists (no cached data available)
+                            // If cached data exists, it will show immediately instead
                             if (snapshot.connectionState ==
                                     ConnectionState.waiting &&
-                                !snapshot.hasData) {
+                                !snapshot.hasData &&
+                                !snapshot.hasError) {
                               final isDark = Theme.of(context).brightness ==
                                   Brightness.dark;
                               final baseColor = isDark
@@ -773,10 +775,12 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                         StreamBuilder<List<String>>(
                           stream: filterController.getSupplierNamesStream(),
                           builder: (context, snapshot) {
-                            // Only show skeleton on first load, not on every interaction
+                            // Show skeleton loader only if no data exists (no cached data available)
+                            // If cached data exists, it will show immediately instead
                             if (snapshot.connectionState ==
                                     ConnectionState.waiting &&
-                                !snapshot.hasData) {
+                                !snapshot.hasData &&
+                                !snapshot.hasError) {
                               final isDark = Theme.of(context).brightness ==
                                   Brightness.dark;
                               final baseColor = isDark

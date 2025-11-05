@@ -39,6 +39,10 @@ class _InventoryState extends State<Inventory> {
   String? _userName;
   String? _userRole;
 
+  // Static cache for user data (persists across widget rebuilds and navigation)
+  static String? _cachedUserName;
+  static String? _cachedUserRole;
+
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
 
@@ -162,6 +166,14 @@ class _InventoryState extends State<Inventory> {
   @override
   void initState() {
     super.initState();
+    // Use cached user data immediately if available
+    if (_cachedUserName != null || _cachedUserRole != null) {
+      setState(() {
+        _userName = _cachedUserName;
+        _userRole = _cachedUserRole;
+      });
+    }
+
     // Initialize default categories and migrate existing data
     _initializeData();
     // Load user data for appbar
@@ -197,16 +209,38 @@ class _InventoryState extends State<Inventory> {
                 response['name'] != null &&
                 response['name'].toString().trim().isNotEmpty) {
               // Use data from user_roles table
-              _userName = response['name'].toString().trim();
-              _userRole = response['role']?.toString().trim() ?? 'Admin';
+              final name = response['name'].toString().trim();
+              final role = response['role']?.toString().trim() ?? 'Admin';
+
+              // Cache the data
+              _cachedUserName = name;
+              _cachedUserRole = role;
+
+              _userName = name;
+              _userRole = role;
             } else {
               // Fallback to auth user data
               final displayName =
                   currentUser.userMetadata?['display_name']?.toString().trim();
               final emailName = currentUser.email?.split('@')[0].trim();
-              _userName = displayName ?? emailName ?? 'User';
-              _userRole = 'Admin';
+              final name = displayName ?? emailName ?? 'User';
+              final role = 'Admin';
+
+              // Cache the data
+              _cachedUserName = name;
+              _cachedUserRole = role;
+
+              _userName = name;
+              _userRole = role;
             }
+          });
+        }
+      } else {
+        // If no current user, use cached data if available
+        if (mounted) {
+          setState(() {
+            _userName = _cachedUserName ?? 'User';
+            _userRole = _cachedUserRole ?? 'Admin';
           });
         }
       }
@@ -214,8 +248,9 @@ class _InventoryState extends State<Inventory> {
       print('Error loading user data: $e');
       if (mounted) {
         setState(() {
-          _userName = 'User';
-          _userRole = 'Admin';
+          // Use cached data if available, otherwise use defaults
+          _userName = _cachedUserName ?? 'User';
+          _userRole = _cachedUserRole ?? 'Admin';
         });
       }
     }
@@ -764,8 +799,11 @@ class _InventoryState extends State<Inventory> {
           builder: (context, snapshot) {
             final hasData = snapshot.hasData && snapshot.data!.isNotEmpty;
 
+            // Show skeleton loader only if no data exists (no cached data available)
+            // If cached data exists, it will show immediately instead
             if (snapshot.connectionState == ConnectionState.waiting &&
-                !hasData) {
+                !hasData &&
+                !snapshot.hasError) {
               final isDark = Theme.of(context).brightness == Brightness.dark;
               final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
               final highlightColor =
@@ -947,7 +985,7 @@ class _InventoryState extends State<Inventory> {
   }
 
   Widget _buildWelcomePanel(ThemeData theme) {
-    final userName = _userName ?? 'User';
+    final userName = _userName ?? _cachedUserName ?? 'User';
     final isDark = theme.brightness == Brightness.dark;
 
     return Card(
@@ -1044,7 +1082,7 @@ class _InventoryState extends State<Inventory> {
                           ),
                         ),
                         Text(
-                          _userRole ?? 'Admin',
+                          _userRole ?? _cachedUserRole ?? 'Admin',
                           style: AppFonts.sfProStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,

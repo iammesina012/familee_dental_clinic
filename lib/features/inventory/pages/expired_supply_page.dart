@@ -121,23 +121,12 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                     child: StreamBuilder<List<InventoryItem>>(
                       stream: controller.getSuppliesStream(archived: false),
                       builder: (context, snapshot) {
-                        // Handle errors
-                        if (snapshot.hasError) {
-                          return Center(
-                            child: Text(
-                              'Error loading expired supplies',
-                              style: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                color: Colors.red,
-                              ),
-                            ),
-                          );
-                        }
-
-                        // Only show loading on first load, not on refresh
+                        // Show skeleton loader only if no data exists (no cached data available)
+                        // If cached data exists, it will show immediately instead
                         if (snapshot.connectionState ==
                                 ConnectionState.waiting &&
-                            !snapshot.hasData) {
+                            !snapshot.hasData &&
+                            !snapshot.hasError) {
                           final isDark =
                               Theme.of(context).brightness == Brightness.dark;
                           final baseColor =
@@ -176,35 +165,6 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                                 },
                               );
                             },
-                          );
-                        }
-
-                        if (snapshot.hasError) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.error_outline,
-                                    size: 64, color: Colors.red),
-                                SizedBox(height: 16),
-                                Text(
-                                  'Error loading expired supplies',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Please try again later',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
                           );
                         }
 
