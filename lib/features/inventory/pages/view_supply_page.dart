@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/inventory/components/inventory_other_supply_batches.dart';
 import 'package:familee_dental/features/inventory/pages/edit_supply_page.dart';
@@ -8,7 +9,6 @@ import 'package:familee_dental/features/inventory/controller/view_supply_control
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
-import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 
 class InventoryViewSupplyPage extends StatefulWidget {
@@ -43,22 +43,35 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
   @override
   void initState() {
     super.initState();
+    debugPrint(
+        '[VIEW_SUPPLY] initState called for item: ${widget.item.name} (ID: ${widget.item.id})');
+    debugPrint(
+        '[VIEW_SUPPLY] Image URL: ${widget.item.imageUrl.isEmpty ? "EMPTY" : widget.item.imageUrl}');
+    debugPrint('[VIEW_SUPPLY] initState start time: ${DateTime.now()}');
     _refreshStream();
+    debugPrint('[VIEW_SUPPLY] initState completed at: ${DateTime.now()}');
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('[VIEW_SUPPLY] build() called for item: ${widget.item.name}');
     final controller = ViewSupplyController();
 
     return StreamBuilder<InventoryItem?>(
       key: _streamKey,
       stream: controller.supplyStream(widget.item.id),
       builder: (context, snapshot) {
+        debugPrint(
+            '[VIEW_SUPPLY] StreamBuilder snapshot state: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, hasError: ${snapshot.hasError}');
+
         // Always use stream data if available, otherwise use the initial item from widget
         // This ensures we always have data to display and never show loading indicator
         final updatedItem = snapshot.hasData && snapshot.data != null
             ? snapshot.data!
             : widget.item;
+
+        debugPrint(
+            '[VIEW_SUPPLY] Using item: ${updatedItem.name}, Image URL: ${updatedItem.imageUrl.isEmpty ? "EMPTY" : updatedItem.imageUrl}');
 
         // No loading indicator needed since we always have widget.item as fallback
         // If this batch is expired, redirect to Expired View page to keep
@@ -87,14 +100,53 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
           final status = controller.getStatus(updatedItem);
           return _buildScaffold(context, controller, updatedItem, status);
         }
+        debugPrint('[VIEW_SUPPLY] Starting FutureBuilder for batch query');
+        final batchQueryStart = DateTime.now();
         return FutureBuilder<List<Map<String, dynamic>>>(
-          future: Supabase.instance.client
-              .from('supplies')
-              .select('*')
-              .eq('name', updatedItem.name)
-              .eq('brand', updatedItem.brand)
-              .eq('type', updatedItem.type ?? ''),
+          future: () {
+            debugPrint(
+                '[VIEW_SUPPLY] Executing batch query at ${DateTime.now()}');
+            // Add timeout to prevent blocking when offline
+            return Supabase.instance.client
+                .from('supplies')
+                .select('*')
+                .eq('name', updatedItem.name)
+                .eq('brand', updatedItem.brand)
+                .eq('type', updatedItem.type ?? '')
+                .timeout(
+              const Duration(seconds: 2),
+              onTimeout: () {
+                debugPrint('[VIEW_SUPPLY] Batch query TIMEOUT after 2s');
+                return <Map<String, dynamic>>[];
+              },
+            );
+          }(),
           builder: (context, batchSnap) {
+            // Show UI immediately while query is running (non-blocking)
+            if (batchSnap.connectionState == ConnectionState.waiting) {
+              debugPrint(
+                  '[VIEW_SUPPLY] Batch query waiting... (${DateTime.now().difference(batchQueryStart).inMilliseconds}ms)');
+              // Show UI immediately, don't block
+              final status = controller.getStatus(updatedItem);
+              return _buildScaffold(context, controller, updatedItem, status);
+            } else if (batchSnap.hasError) {
+              debugPrint('[VIEW_SUPPLY] Batch query ERROR: ${batchSnap.error}');
+              // On error, show UI immediately (don't block)
+              final status = controller.getStatus(updatedItem);
+              return _buildScaffold(context, controller, updatedItem, status);
+            } else if (batchSnap.hasData) {
+              debugPrint(
+                  '[VIEW_SUPPLY] Batch query completed in ${DateTime.now().difference(batchQueryStart).inMilliseconds}ms');
+            }
+
+            // If query returned empty (timeout or no data), show UI immediately
+            if (batchSnap.hasData && batchSnap.data!.isEmpty) {
+              debugPrint(
+                  '[VIEW_SUPPLY] Batch query returned empty, showing UI');
+              final status = controller.getStatus(updatedItem);
+              return _buildScaffold(context, controller, updatedItem, status);
+            }
+
             if (batchSnap.hasData) {
               final rows = batchSnap.data!;
               DateTime? earliest;
@@ -448,7 +500,8 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                               child: FutureBuilder<List<String>>(
                                 key:
                                     _dropdownKey, // Force refresh when data changes
-                                future: _getSupplyTypes(updatedItem.name),
+                                future:
+                                    controller.getSupplyTypes(updatedItem.name),
                                 builder: (context, snapshot) {
                                   final existingTypes = snapshot.data ?? [];
 
@@ -577,11 +630,43 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: updatedItem.imageUrl.isNotEmpty
-                              ? Image.network(
-                                  updatedItem.imageUrl,
+                              ? CachedNetworkImage(
+                                  imageUrl: updatedItem.imageUrl,
                                   width: 130,
                                   height: 130,
                                   fit: BoxFit.cover,
+                                  placeholder: (context, url) {
+                                    debugPrint(
+                                        '[IMAGE_VIEW] Loading placeholder for ${updatedItem.name} (URL: $url)');
+                                    return Container(
+                                      width: 130,
+                                      height: 130,
+                                      color: Theme.of(context)
+                                          .dividerColor
+                                          .withOpacity(0.15),
+                                      child: const Icon(Icons.image,
+                                          size: 40, color: Colors.grey),
+                                    );
+                                  },
+                                  errorWidget: (context, url, error) {
+                                    debugPrint(
+                                        '[IMAGE_VIEW] ERROR loading ${updatedItem.name} (URL: $url, Error: $error)');
+                                    return Container(
+                                      width: 130,
+                                      height: 130,
+                                      color: Theme.of(context)
+                                          .dividerColor
+                                          .withOpacity(0.15),
+                                      child: const Icon(
+                                          Icons.image_not_supported,
+                                          size: 40,
+                                          color: Colors.grey),
+                                    );
+                                  },
+                                  fadeInDuration:
+                                      const Duration(milliseconds: 200),
+                                  fadeOutDuration:
+                                      const Duration(milliseconds: 100),
                                 )
                               : Container(
                                   width: 130,
@@ -1063,76 +1148,30 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
     );
   }
 
-  // Helper method to get all types for a supply name
-  Future<List<String>> _getSupplyTypes(String supplyName) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final response = await supabase
-          .from('supplies')
-          .select('type')
-          .eq('name', supplyName)
-          .eq('archived', false);
-
-      final types = <String>[];
-      for (final row in response) {
-        final type = row['type'] as String?;
-        if (type != null && type.isNotEmpty && !types.contains(type)) {
-          types.add(type);
-        }
-      }
-      return types;
-    } catch (e) {
-      print('Error getting supply types: $e');
-      return [];
-    }
-  }
-
   // Helper method to navigate to a specific supply type
   void _navigateToSupplyType(String supplyName, String type) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final response = await supabase
-          .from('supplies')
-          .select('*')
-          .eq('name', supplyName)
-          .eq('type', type)
-          .eq('archived', false)
-          .limit(1);
+    debugPrint(
+        '[VIEW_SUPPLY] _navigateToSupplyType called for: $supplyName, type: $type');
+    final viewController = ViewSupplyController();
+    final item = await viewController.getSupplyByNameAndType(supplyName, type);
 
-      if (response.isNotEmpty) {
-        final row = response.first;
-        final item = InventoryItem(
-          id: row['id'] as String,
-          name: row['name'] ?? '',
-          type: row['type'],
-          imageUrl: row['image_url'] ?? '',
-          category: row['category'] ?? '',
-          cost: (row['cost'] ?? 0).toDouble(),
-          stock: (row['stock'] ?? 0).toInt(),
-          unit: row['unit'] ?? '',
-          packagingUnit: row['packaging_unit'],
-          packagingContent: row['packaging_content'],
-          packagingQuantity: row['packaging_quantity'],
-          packagingContentQuantity: row['packaging_content_quantity'],
-          supplier: row['supplier'] ?? '',
-          brand: row['brand'] ?? '',
-          expiry: row['expiry'],
-          noExpiry: row['no_expiry'] ?? false,
-          archived: row['archived'] ?? false,
-        );
-
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => InventoryViewSupplyPage(
-              item: item,
-              skipAutoRedirect: widget.skipAutoRedirect,
-              hideOtherExpirySection: widget.hideOtherExpirySection,
-            ),
+    if (item != null && context.mounted) {
+      debugPrint(
+          '[VIEW_SUPPLY] Navigating to supply: ${item.name} (${item.type})');
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => InventoryViewSupplyPage(
+            item: item,
+            skipAutoRedirect: widget.skipAutoRedirect,
+            hideOtherExpirySection: widget.hideOtherExpirySection,
           ),
-        );
-      }
-    } catch (e) {
-      print('Error navigating to supply type: $e');
+        ),
+      );
+    } else {
+      debugPrint(
+          '[VIEW_SUPPLY] Could not find supply: $supplyName, type: $type');
+      // Silently fail - don't show error message if supply not found
+      // This could happen when offline and supply not in cache
     }
   }
 

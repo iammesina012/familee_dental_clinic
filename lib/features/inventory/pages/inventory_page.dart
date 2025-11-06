@@ -14,6 +14,8 @@ import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart
 import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
 import 'package:familee_dental/features/inventory/controller/expired_supply_controller.dart';
+import 'package:familee_dental/features/inventory/controller/archive_supply_controller.dart';
+import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
@@ -186,6 +188,8 @@ class _InventoryState extends State<Inventory> {
     // Handle route arguments after initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleRouteArguments();
+      // Pre-populate all caches in the background (non-blocking)
+      _prePopulateCaches();
     });
   }
 
@@ -300,6 +304,129 @@ class _InventoryState extends State<Inventory> {
       await expiredController.convertExpiredToPlaceholders();
     } catch (e) {
       // Handle error silently for now
+    }
+  }
+
+  // Pre-populate all caches when inventory page loads (non-blocking)
+  Future<void> _prePopulateCaches() async {
+    try {
+      // Start all streams briefly to populate cache
+      // We use .first to get one emission, which will populate the cache
+
+      // Pre-populate archived supplies cache
+      final archiveController = ArchiveSupplyController();
+      archiveController
+          .getArchivedSupplies()
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <InventoryItem>[],
+          )
+          .catchError((_) => <InventoryItem>[]); // Ignore errors
+
+      // Pre-populate expired supplies cache
+      expiredController
+          .getSuppliesStream(archived: false)
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <InventoryItem>[],
+          )
+          .catchError((_) => <InventoryItem>[]); // Ignore errors
+
+      // Pre-populate brands cache
+      filterController
+          .getBrandsStream()
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <Brand>[],
+          )
+          .catchError((_) => <Brand>[]); // Ignore errors
+
+      // Pre-populate suppliers cache
+      filterController
+          .getSuppliersStream()
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <Supplier>[],
+          )
+          .catchError((_) => <Supplier>[]); // Ignore errors
+
+      // Pre-populate brand names cache
+      filterController
+          .getBrandNamesStream()
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <String>[],
+          )
+          .catchError((_) => <String>[]); // Ignore errors
+
+      // Pre-populate supplier names cache
+      filterController
+          .getSupplierNamesStream()
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <String>[],
+          )
+          .catchError((_) => <String>[]); // Ignore errors
+
+      // Pre-populate categories cache
+      categoriesController
+          .getCategoriesStream()
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <String>[],
+          )
+          .catchError((_) => <String>[]); // Ignore errors
+
+      // Pre-populate supply types cache for all supplies
+      // Wait for inventory stream to emit first, then pre-populate types
+      controller
+          .getSuppliesStream(archived: false)
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <InventoryItem>[],
+          )
+          .then((supplies) async {
+        try {
+          if (supplies.isNotEmpty) {
+            final viewController = ViewSupplyController();
+
+            // Get unique supply names
+            final uniqueSupplyNames =
+                supplies.map((item) => item.name).toSet().toList();
+
+            // Pre-populate types for each unique supply name (in batches to avoid blocking)
+            for (int i = 0; i < uniqueSupplyNames.length; i++) {
+              final supplyName = uniqueSupplyNames[i];
+
+              // Pre-populate types for this supply name (with timeout)
+              viewController
+                  .getSupplyTypes(supplyName)
+                  .timeout(
+                    const Duration(seconds: 2),
+                    onTimeout: () => <String>[],
+                  )
+                  .catchError((_) => <String>[]);
+
+              // Yield to UI thread every 10 supplies to prevent blocking
+              if (i % 10 == 0 && i > 0) {
+                await Future.delayed(const Duration(milliseconds: 50));
+              }
+            }
+          }
+        } catch (e) {
+          // Silently fail - this is best-effort pre-population
+        }
+      }).catchError((_) {}); // Ignore errors
+    } catch (e) {
+      // Silently fail - this is best-effort pre-population
     }
   }
 
@@ -841,35 +968,26 @@ class _InventoryState extends State<Inventory> {
               );
             }
 
-            if (snapshot.hasError) {
-              if (!hasData) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.cloud_off_outlined,
-                          size: 64, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Connection Issue',
-                        style: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+            // On error, if no cached data, show empty state instead of error message
+            if (snapshot.hasError && !hasData) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.inventory_2_outlined,
+                        size: 64, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No supplies found',
+                      style: TextStyle(
+                        color: theme.textTheme.bodyMedium?.color,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Pull down to refresh',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
+                    ),
+                  ],
+                ),
+              );
             }
 
             if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -959,13 +1077,29 @@ class _InventoryState extends State<Inventory> {
                     final groupedItem = visibleItems[index];
                     return GestureDetector(
                       onTap: () {
+                        final item = groupedItem.mainItem;
+                        debugPrint(
+                            '[NAVIGATION] Tapping supply: ${item.name} (ID: ${item.id})');
+                        debugPrint(
+                            '[NAVIGATION] Image URL: ${item.imageUrl.isEmpty ? "EMPTY" : item.imageUrl}');
+                        debugPrint(
+                            '[NAVIGATION] Starting navigation at ${DateTime.now()}');
+
+                        final startTime = DateTime.now();
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => InventoryViewSupplyPage(
-                                item: groupedItem.mainItem),
+                            builder: (context) {
+                              debugPrint(
+                                  '[NAVIGATION] Building ViewSupplyPage for ${item.name} at ${DateTime.now()}');
+                              return InventoryViewSupplyPage(item: item);
+                            },
                           ),
-                        );
+                        ).then((_) {
+                          final duration = DateTime.now().difference(startTime);
+                          debugPrint(
+                              '[NAVIGATION] Returned from ViewSupplyPage after ${duration.inMilliseconds}ms');
+                        });
                       },
                       child: InventoryItemCard(
                         item: groupedItem.mainItem,

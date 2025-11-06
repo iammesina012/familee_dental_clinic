@@ -207,9 +207,28 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                           );
                         }
 
-                        if (snapshot.hasError) {
+                        // On error, show empty state instead of error message
+                        if (snapshot.hasError && !snapshot.hasData) {
                           return Center(
-                            child: Text('Error: ${snapshot.error}'),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.archive_outlined,
+                                    size: 64, color: Colors.grey),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No archived supplies found',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
                           );
                         }
 

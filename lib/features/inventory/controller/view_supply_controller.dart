@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
+import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
 
 class ViewSupplyController {
   // Singleton pattern to ensure cache persists across widget rebuilds
@@ -16,19 +17,33 @@ class ViewSupplyController {
   // Cache for last known data per supply ID (persists across widget rebuilds)
   final Map<String, InventoryItem> _cachedSupplies = {};
 
+  // Cache for supply types per supply name (persists across widget rebuilds)
+  final Map<String, List<String>> _cachedSupplyTypes = {};
+
   Stream<InventoryItem?> supplyStream(String id) {
+    debugPrint('[STREAM_CONTROLLER] Creating supplyStream for ID: $id');
     final controller = StreamController<InventoryItem?>.broadcast();
 
     // Emit cached data immediately if available (no delay - instant feedback)
     if (_cachedSupplies.containsKey(id)) {
+      debugPrint(
+          '[STREAM_CONTROLLER] Emitting cached data for ID: $id (${_cachedSupplies[id]?.name})');
       controller.add(_cachedSupplies[id]);
+    } else {
+      debugPrint('[STREAM_CONTROLLER] No cached data for ID: $id');
     }
 
     try {
+      debugPrint(
+          '[STREAM_CONTROLLER] Setting up Supabase stream listener for ID: $id');
       _supabase.from('supplies').stream(primaryKey: ['id']).eq('id', id).listen(
             (data) {
+              debugPrint(
+                  '[STREAM_CONTROLLER] Stream received data for ID: $id, isEmpty: ${data.isEmpty}');
               try {
                 if (data.isEmpty) {
+                  debugPrint(
+                      '[STREAM_CONTROLLER] Data is empty, emitting null');
                   controller.add(null);
                   return;
                 }
@@ -53,32 +68,51 @@ class ViewSupplyController {
                   archived: row['archived'] ?? false,
                 );
 
+                debugPrint(
+                    '[STREAM_CONTROLLER] Parsed item: ${item.name}, Image URL: ${item.imageUrl.isEmpty ? "EMPTY" : item.imageUrl}');
                 // Cache the result
                 _cachedSupplies[id] = item;
                 controller.add(item);
+                debugPrint('[STREAM_CONTROLLER] Emitted item to stream');
               } catch (e) {
+                debugPrint('[STREAM_CONTROLLER] ERROR parsing data: $e');
                 // On error, emit cached data if available
                 if (_cachedSupplies.containsKey(id)) {
+                  debugPrint(
+                      '[STREAM_CONTROLLER] Emitting cached data on error');
                   controller.add(_cachedSupplies[id]);
                 } else {
+                  debugPrint(
+                      '[STREAM_CONTROLLER] No cached data available, emitting null');
                   controller.add(null);
                 }
               }
             },
             onError: (error) {
+              debugPrint(
+                  '[STREAM_CONTROLLER] Stream error for ID: $id, Error: $error');
               // On stream error, emit cached data if available
               if (_cachedSupplies.containsKey(id)) {
+                debugPrint(
+                    '[STREAM_CONTROLLER] Emitting cached data on stream error');
                 controller.add(_cachedSupplies[id]);
               } else {
+                debugPrint(
+                    '[STREAM_CONTROLLER] No cached data available on stream error, emitting null');
                 controller.add(null);
               }
             },
           );
     } catch (e) {
+      debugPrint('[STREAM_CONTROLLER] ERROR creating stream: $e');
       // If stream creation fails, emit cached data if available
       if (_cachedSupplies.containsKey(id)) {
+        debugPrint(
+            '[STREAM_CONTROLLER] Emitting cached data on stream creation error');
         controller.add(_cachedSupplies[id]);
       } else {
+        debugPrint(
+            '[STREAM_CONTROLLER] No cached data available on stream creation error, emitting null');
         controller.add(null);
       }
     }
@@ -245,5 +279,173 @@ class ViewSupplyController {
       expiryDate: supplyResponse['expiry'],
       noExpiry: supplyResponse['no_expiry'] ?? false,
     );
+  }
+
+  // Get all types for a supply name with caching
+  Future<List<String>> getSupplyTypes(String supplyName) async {
+    debugPrint('[STREAM_CONTROLLER] getSupplyTypes called for: $supplyName');
+
+    // Return cached data immediately if available
+    if (_cachedSupplyTypes.containsKey(supplyName)) {
+      debugPrint(
+          '[STREAM_CONTROLLER] Returning cached types for: $supplyName (${_cachedSupplyTypes[supplyName]!.length} types)');
+      return _cachedSupplyTypes[supplyName]!;
+    }
+
+    try {
+      debugPrint(
+          '[STREAM_CONTROLLER] Fetching types from Supabase for: $supplyName');
+      // Add timeout to prevent blocking when offline
+      List<Map<String, dynamic>> response;
+      try {
+        response = await _supabase
+            .from('supplies')
+            .select('type')
+            .eq('name', supplyName)
+            .eq('archived', false)
+            .timeout(const Duration(seconds: 2));
+      } catch (e) {
+        debugPrint(
+            '[STREAM_CONTROLLER] getSupplyTypes TIMEOUT or ERROR after 2s for: $supplyName');
+        // Return cached data if available, otherwise empty list
+        if (_cachedSupplyTypes.containsKey(supplyName)) {
+          debugPrint(
+              '[STREAM_CONTROLLER] Returning cached types on timeout for: $supplyName');
+          return _cachedSupplyTypes[supplyName]!;
+        }
+        return [];
+      }
+
+      final types = <String>[];
+      for (final row in response) {
+        final type = row['type'] as String?;
+        if (type != null && type.isNotEmpty && !types.contains(type)) {
+          types.add(type);
+        }
+      }
+
+      // Cache the result
+      _cachedSupplyTypes[supplyName] = types;
+      debugPrint(
+          '[STREAM_CONTROLLER] Cached ${types.length} types for: $supplyName');
+      return types;
+    } catch (e) {
+      debugPrint(
+          '[STREAM_CONTROLLER] Error getting supply types for $supplyName: $e');
+      // On error, return cached data if available
+      if (_cachedSupplyTypes.containsKey(supplyName)) {
+        debugPrint(
+            '[STREAM_CONTROLLER] Returning cached types on error for: $supplyName');
+        return _cachedSupplyTypes[supplyName]!;
+      }
+      return [];
+    }
+  }
+
+  // Get a supply by name and type with caching
+  Future<InventoryItem?> getSupplyByNameAndType(
+      String supplyName, String type) async {
+    debugPrint(
+        '[STREAM_CONTROLLER] getSupplyByNameAndType called for: $supplyName, type: $type');
+
+    // First, try to find in cached supplies from InventoryController
+    final inventoryController = InventoryController();
+    final cachedSupplies = inventoryController.getCachedSupplies();
+    if (cachedSupplies != null) {
+      final found = cachedSupplies.firstWhere(
+        (item) =>
+            item.name == supplyName &&
+            item.type == type &&
+            item.archived == false,
+        orElse: () => InventoryItem(
+          id: '',
+          name: '',
+          type: null,
+          imageUrl: '',
+          category: '',
+          cost: 0,
+          stock: 0,
+          unit: '',
+          supplier: '',
+          brand: '',
+          expiry: null,
+          noExpiry: false,
+          archived: false,
+        ),
+      );
+      if (found.id.isNotEmpty) {
+        debugPrint(
+            '[STREAM_CONTROLLER] Found supply in cache: ${found.name} (${found.type})');
+        // Also cache it in our local cache
+        _cachedSupplies[found.id] = found;
+        return found;
+      }
+    }
+
+    // Also check our local cache by searching through cached items
+    for (final item in _cachedSupplies.values) {
+      if (item.name == supplyName &&
+          item.type == type &&
+          item.archived == false) {
+        debugPrint(
+            '[STREAM_CONTROLLER] Found supply in local cache: ${item.name} (${item.type})');
+        return item;
+      }
+    }
+
+    // If not in cache, try to fetch from Supabase with timeout
+    try {
+      debugPrint(
+          '[STREAM_CONTROLLER] Fetching supply from Supabase: $supplyName, type: $type');
+      List<Map<String, dynamic>> response;
+      try {
+        response = await _supabase
+            .from('supplies')
+            .select('*')
+            .eq('name', supplyName)
+            .eq('type', type)
+            .eq('archived', false)
+            .limit(1)
+            .timeout(const Duration(seconds: 2));
+      } catch (e) {
+        debugPrint(
+            '[STREAM_CONTROLLER] getSupplyByNameAndType TIMEOUT or ERROR after 2s');
+        // Return null if not found in cache and query fails
+        return null;
+      }
+
+      if (response.isNotEmpty) {
+        final row = response.first;
+        final item = InventoryItem(
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          type: row['type'],
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: (row['stock'] ?? 0).toInt(),
+          unit: row['unit'] ?? '',
+          packagingUnit: row['packaging_unit'],
+          packagingContent: row['packaging_content'],
+          packagingQuantity: row['packaging_quantity'],
+          packagingContentQuantity: row['packaging_content_quantity'],
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
+        );
+        // Cache the result
+        _cachedSupplies[item.id] = item;
+        debugPrint(
+            '[STREAM_CONTROLLER] Cached supply: ${item.name} (${item.type})');
+        return item;
+      }
+      return null;
+    } catch (e) {
+      debugPrint(
+          '[STREAM_CONTROLLER] Error getting supply by name and type: $e');
+      return null;
+    }
   }
 }

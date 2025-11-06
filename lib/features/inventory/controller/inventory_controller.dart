@@ -14,6 +14,9 @@ class InventoryController {
   List<InventoryItem>? _cachedSupplies;
   List<GroupedInventoryItem>? _cachedGroupedSupplies;
 
+  // Get cached supplies (for searching by name and type)
+  List<InventoryItem>? getCachedSupplies() => _cachedSupplies;
+
   // Stream to get all supplies ordered by name, with optional archived filter
   Stream<List<InventoryItem>> getSuppliesStream({bool? archived}) {
     final controller = StreamController<List<InventoryItem>>.broadcast();

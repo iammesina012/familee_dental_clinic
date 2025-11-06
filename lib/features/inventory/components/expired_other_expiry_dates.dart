@@ -14,8 +14,6 @@ class ExpiredOtherExpiryBatches extends StatefulWidget {
 }
 
 class _ExpiredOtherExpiryBatchesState extends State<ExpiredOtherExpiryBatches> {
-  bool _isFirstLoad = true;
-
   Widget _buildSkeletonLoader(ThemeData theme, ColorScheme scheme) {
     return Shimmer.fromColors(
       baseColor: theme.brightness == Brightness.dark
@@ -77,21 +75,37 @@ class _ExpiredOtherExpiryBatchesState extends State<ExpiredOtherExpiryBatches> {
       stream: controller.getOtherExpiredBatchesStream(
           widget.item.name, widget.item.brand, widget.item.id),
       builder: (context, snapshot) {
-        // Show skeleton only on first load when there's no data
-        if (_isFirstLoad && !snapshot.hasData) {
+        // Show skeleton loader only if no cached data is available
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData &&
+            !snapshot.hasError) {
           return _buildSkeletonLoader(theme, scheme);
         }
 
-        // Mark as loaded once we have data
-        if (snapshot.hasData && _isFirstLoad) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _isFirstLoad = false;
-              });
-            }
-          });
+        // On error, show empty state instead of error message
+        if (snapshot.hasError && !snapshot.hasData) {
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+            ),
+            child: Center(
+              child: Text(
+                "No other expired batches found.",
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 15,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                ),
+              ),
+            ),
+          );
         }
+
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Container(
             width: double.infinity,

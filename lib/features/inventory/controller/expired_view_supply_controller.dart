@@ -16,6 +16,12 @@ class ExpiredViewSupplyController {
   // Cache for last known data per supply ID (persists across widget rebuilds)
   final Map<String, InventoryItem> _cachedSupplies = {};
 
+  // Cache for other expired batches per product (key: "productName_brand_currentItemId")
+  final Map<String, List<InventoryItem>> _cachedOtherExpiredBatches = {};
+
+  // Cache for aggregated expired stock per date (key: "name_brand_expiry")
+  final Map<String, int> _cachedAggregatedStock = {};
+
   /// Get stream of individual supply item from Supabase
   Stream<InventoryItem?> supplyStream(String id) {
     final controller = StreamController<InventoryItem?>.broadcast();
@@ -90,6 +96,16 @@ class ExpiredViewSupplyController {
   /// Stream the total stock for a specific expired date of a product (name + brand)
   Stream<int> aggregatedExpiredStockForDate(
       {required String name, required String brand, required String? expiry}) {
+    final controller = StreamController<int>.broadcast();
+
+    // Create cache key
+    final cacheKey = '${name}_${brand}_${expiry ?? 'null'}';
+
+    // Emit cached data immediately if available
+    if (_cachedAggregatedStock.containsKey(cacheKey)) {
+      controller.add(_cachedAggregatedStock[cacheKey]!);
+    }
+
     DateTime? normalize(String? value) {
       if (value == null || value.isEmpty) return null;
       return DateTime.tryParse(value) ??
@@ -98,114 +114,197 @@ class ExpiredViewSupplyController {
 
     final targetDate = normalize(expiry);
 
-    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
-      // Filter by name and brand on the client side
-      final filteredData = data
-          .where((row) => row['name'] == name && row['brand'] == brand)
-          .toList();
-      final items = filteredData
-          .map((row) {
-            return InventoryItem(
-              id: row['id'] as String,
-              name: row['name'] ?? '',
-              type: row['type'],
-              imageUrl: row['image_url'] ?? '',
-              category: row['category'] ?? '',
-              cost: (row['cost'] ?? 0).toDouble(),
-              stock: (row['stock'] ?? 0).toInt(),
-              unit: row['unit'] ?? '',
-              packagingUnit: row['packaging_unit'],
-              packagingContent: row['packaging_content'],
-              packagingQuantity: row['packaging_quantity'],
-              packagingContentQuantity: row['packaging_content_quantity'],
-              supplier: row['supplier'] ?? '',
-              brand: row['brand'] ?? '',
-              expiry: row['expiry'],
-              noExpiry: row['no_expiry'] ?? false,
-              archived: row['archived'] ?? false,
-            );
-          })
-          .where((it) => it.archived == false)
-          .toList();
+    try {
+      _supabase.from('supplies').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            // Filter by name and brand on the client side
+            final filteredData = data
+                .where((row) => row['name'] == name && row['brand'] == brand)
+                .toList();
+            final items = filteredData
+                .map((row) {
+                  return InventoryItem(
+                    id: row['id'] as String,
+                    name: row['name'] ?? '',
+                    type: row['type'],
+                    imageUrl: row['image_url'] ?? '',
+                    category: row['category'] ?? '',
+                    cost: (row['cost'] ?? 0).toDouble(),
+                    stock: (row['stock'] ?? 0).toInt(),
+                    unit: row['unit'] ?? '',
+                    packagingUnit: row['packaging_unit'],
+                    packagingContent: row['packaging_content'],
+                    packagingQuantity: row['packaging_quantity'],
+                    packagingContentQuantity: row['packaging_content_quantity'],
+                    supplier: row['supplier'] ?? '',
+                    brand: row['brand'] ?? '',
+                    expiry: row['expiry'],
+                    noExpiry: row['no_expiry'] ?? false,
+                    archived: row['archived'] ?? false,
+                  );
+                })
+                .where((it) => it.archived == false)
+                .toList();
 
-      // Sum stock for items that are expired and match the same date
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+            // Sum stock for items that are expired and match the same date
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
 
-      int total = 0;
-      for (final it in items) {
-        if (it.noExpiry || it.expiry == null || it.expiry!.isEmpty) continue;
-        final exp = normalize(it.expiry);
-        if (exp == null) continue;
-        final expOnly = DateTime(exp.year, exp.month, exp.day);
-        final isExpired =
-            expOnly.isBefore(today) || expOnly.isAtSameMomentAs(today);
-        if (!isExpired) continue;
-        if (targetDate == null) continue;
-        final targetOnly =
-            DateTime(targetDate.year, targetDate.month, targetDate.day);
-        if (expOnly == targetOnly) {
-          total += it.stock;
-        }
+            int total = 0;
+            for (final it in items) {
+              if (it.noExpiry || it.expiry == null || it.expiry!.isEmpty)
+                continue;
+              final exp = normalize(it.expiry);
+              if (exp == null) continue;
+              final expOnly = DateTime(exp.year, exp.month, exp.day);
+              final isExpired =
+                  expOnly.isBefore(today) || expOnly.isAtSameMomentAs(today);
+              if (!isExpired) continue;
+              if (targetDate == null) continue;
+              final targetOnly =
+                  DateTime(targetDate.year, targetDate.month, targetDate.day);
+              if (expOnly == targetOnly) {
+                total += it.stock;
+              }
+            }
+
+            // Cache the result
+            _cachedAggregatedStock[cacheKey] = total;
+            controller.add(total);
+          } catch (e) {
+            // On error, emit cached data if available
+            if (_cachedAggregatedStock.containsKey(cacheKey)) {
+              controller.add(_cachedAggregatedStock[cacheKey]!);
+            } else {
+              controller.add(0);
+            }
+          }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available
+          if (_cachedAggregatedStock.containsKey(cacheKey)) {
+            controller.add(_cachedAggregatedStock[cacheKey]!);
+          } else {
+            controller.add(0);
+          }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available
+      if (_cachedAggregatedStock.containsKey(cacheKey)) {
+        controller.add(_cachedAggregatedStock[cacheKey]!);
+      } else {
+        controller.add(0);
       }
-      return total;
-    });
+    }
+
+    return controller.stream;
   }
 
   /// Get stream of other expired batches of the same product (same name + brand)
   Stream<List<InventoryItem>> getOtherExpiredBatchesStream(
       String productName, String brand, String currentItemId) {
-    return _supabase.from('supplies').stream(primaryKey: ['id']).map((data) {
-      // Filter by name and brand on the client side
-      final filteredData = data
-          .where((row) => row['name'] == productName && row['brand'] == brand)
-          .toList();
-      final items = filteredData
-          .map((row) {
-            return InventoryItem(
-              id: row['id'] as String,
-              name: row['name'] ?? '',
-              type: row['type'],
-              imageUrl: row['image_url'] ?? '',
-              category: row['category'] ?? '',
-              cost: (row['cost'] ?? 0).toDouble(),
-              stock: (row['stock'] ?? 0).toInt(),
-              unit: row['unit'] ?? '',
-              packagingUnit: row['packaging_unit'],
-              packagingContent: row['packaging_content'],
-              packagingQuantity: row['packaging_quantity'],
-              packagingContentQuantity: row['packaging_content_quantity'],
-              supplier: row['supplier'] ?? '',
-              brand: row['brand'] ?? '',
-              expiry: row['expiry'],
-              noExpiry: row['no_expiry'] ?? false,
-              archived: row['archived'] ?? false,
-            );
-          })
-          .where((it) => it.archived == false)
-          .toList();
+    final controller = StreamController<List<InventoryItem>>.broadcast();
 
-      // Filter for expired items only and exclude current item
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+    // Create cache key
+    final cacheKey = '${productName}_${brand}_$currentItemId';
 
-      return items.where((item) {
-        // Exclude current item
-        if (item.id == currentItemId) return false;
+    // Emit cached data immediately if available
+    if (_cachedOtherExpiredBatches.containsKey(cacheKey)) {
+      controller.add(_cachedOtherExpiredBatches[cacheKey]!);
+    }
 
-        // Check if item is expired
-        if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
-          return false;
-        }
+    try {
+      _supabase.from('supplies').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            // Filter by name and brand on the client side
+            final filteredData = data
+                .where((row) =>
+                    row['name'] == productName && row['brand'] == brand)
+                .toList();
+            final items = filteredData
+                .map((row) {
+                  return InventoryItem(
+                    id: row['id'] as String,
+                    name: row['name'] ?? '',
+                    type: row['type'],
+                    imageUrl: row['image_url'] ?? '',
+                    category: row['category'] ?? '',
+                    cost: (row['cost'] ?? 0).toDouble(),
+                    stock: (row['stock'] ?? 0).toInt(),
+                    unit: row['unit'] ?? '',
+                    packagingUnit: row['packaging_unit'],
+                    packagingContent: row['packaging_content'],
+                    packagingQuantity: row['packaging_quantity'],
+                    packagingContentQuantity: row['packaging_content_quantity'],
+                    supplier: row['supplier'] ?? '',
+                    brand: row['brand'] ?? '',
+                    expiry: row['expiry'],
+                    noExpiry: row['no_expiry'] ?? false,
+                    archived: row['archived'] ?? false,
+                  );
+                })
+                .where((it) => it.archived == false)
+                .toList();
 
-        final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
-        if (expiryDate == null) return false;
+            // Filter for expired items only and exclude current item
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
 
-        final dateOnly =
-            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
-        return dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today);
-      }).toList();
-    });
+            final result = items.where((item) {
+              // Exclude current item
+              if (item.id == currentItemId) return false;
+
+              // Check if item is expired
+              if (item.noExpiry ||
+                  item.expiry == null ||
+                  item.expiry!.isEmpty) {
+                return false;
+              }
+
+              final expiryDate =
+                  DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+              if (expiryDate == null) return false;
+
+              final dateOnly =
+                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+              return dateOnly.isBefore(today) ||
+                  dateOnly.isAtSameMomentAs(today);
+            }).toList();
+
+            // Cache the result
+            _cachedOtherExpiredBatches[cacheKey] = result;
+            controller.add(result);
+          } catch (e) {
+            // On error, emit cached data if available
+            if (_cachedOtherExpiredBatches.containsKey(cacheKey)) {
+              controller.add(_cachedOtherExpiredBatches[cacheKey]!);
+            } else {
+              controller.add([]);
+            }
+          }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available
+          if (_cachedOtherExpiredBatches.containsKey(cacheKey)) {
+            controller.add(_cachedOtherExpiredBatches[cacheKey]!);
+          } else {
+            controller.add([]);
+          }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available
+      if (_cachedOtherExpiredBatches.containsKey(cacheKey)) {
+        controller.add(_cachedOtherExpiredBatches[cacheKey]!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   /// Delete supply permanently from Supabase

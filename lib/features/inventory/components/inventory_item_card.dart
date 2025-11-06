@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class InventoryItemCard extends StatelessWidget {
   final InventoryItem item;
@@ -145,17 +146,32 @@ class InventoryItemCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Show Supabase image (or placeholder)
+            // Show Supabase image (or placeholder) with caching
             item.imageUrl.isNotEmpty
-                ? Image.network(
-                    item.imageUrl,
+                ? CachedNetworkImage(
+                    imageUrl: item.imageUrl,
                     width: 96,
                     height: 96,
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
+                    placeholder: (context, url) {
+                      debugPrint(
+                          '[IMAGE_CARD] Loading placeholder for ${item.name} (URL: $url)');
+                      return Container(
+                        width: 96,
+                        height: 96,
+                        color: Colors.grey[200],
+                        child: Icon(Icons.image,
+                            size: 48, color: Colors.grey[400]),
+                      );
+                    },
+                    errorWidget: (context, url, error) {
+                      debugPrint(
+                          '[IMAGE_CARD] ERROR loading ${item.name} (URL: $url, Error: $error)');
                       return Icon(Icons.image_not_supported,
                           size: 96, color: Colors.grey);
                     },
+                    fadeInDuration: const Duration(milliseconds: 200),
+                    fadeOutDuration: const Duration(milliseconds: 100),
                   )
                 : Icon(Icons.image_not_supported, size: 96, color: Colors.grey),
             SizedBox(height: 16),

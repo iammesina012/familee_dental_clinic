@@ -47,6 +47,7 @@ dependencies:
   device_info_plus: ^9.1.2
   uuid: ^4.5.1
   shimmer: ^3.0.0
+  cached_network_image: ^3.4.1
   youtube_player_flutter: ^9.0.1
   csv: ^6.0.0
   pdf: ^3.11.1

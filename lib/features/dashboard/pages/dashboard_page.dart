@@ -832,7 +832,7 @@ class _DashboardState extends State<Dashboard> {
                                     Color(0xFFFFE082), // Medium yellow cream
                                   ],
                                   textColor:
-                                      const Color(0xFFFFC107), // Lighter yellow
+                                      const Color(0xFFFFA000), // Darker yellow
                                   iconColor:
                                       const Color(0xFFFFEB3B), // Pure yellow
                                 ),
