@@ -8,7 +8,6 @@ import 'package:familee_dental/features/inventory/controller/inventory_controlle
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_approval_card_widget.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
-import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -168,9 +167,6 @@ class _ApprovalPageState extends State<ApprovalPage> {
         elevation: Theme.of(context).appBarTheme.elevation ?? 5,
         shadowColor: Theme.of(context).appBarTheme.shadowColor ??
             Theme.of(context).shadowColor,
-        actions: [
-          const NotificationBadgeButton(),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshApprovals,

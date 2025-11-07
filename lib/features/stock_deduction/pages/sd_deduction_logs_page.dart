@@ -6,7 +6,6 @@ import 'package:familee_dental/features/stock_deduction/controller/sd_preset_man
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
-import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
 
 class DeductionLogsPage extends StatefulWidget {
@@ -312,9 +311,6 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
         elevation: Theme.of(context).appBarTheme.elevation ?? 5,
         shadowColor: Theme.of(context).appBarTheme.shadowColor ??
             Theme.of(context).shadowColor,
-        actions: [
-          const NotificationBadgeButton(),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshPresets,

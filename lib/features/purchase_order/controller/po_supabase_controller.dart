@@ -1,12 +1,90 @@
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
 
 class POSupabaseController {
+  POSupabaseController._internal();
+
+  static final POSupabaseController _instance =
+      POSupabaseController._internal();
+
+  factory POSupabaseController() => _instance;
+
   static const String _storageKey = 'purchase_orders_v1';
   static const String _sequenceKey = 'purchase_order_sequence_v1';
 
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Cache for last known data (persists across widget rebuilds)
+  List<PurchaseOrder>? _cachedOpenPOs;
+  List<PurchaseOrder>? _cachedPartialPOs;
+  List<PurchaseOrder>? _cachedApprovalPOs;
+  List<PurchaseOrder>? _cachedClosedPOs;
+  List<PurchaseOrder>? _cachedAllPOs;
+
+  PurchaseOrder? _findInCache(String id) {
+    final List<List<PurchaseOrder>?> caches = [
+      _cachedAllPOs,
+      _cachedOpenPOs,
+      _cachedPartialPOs,
+      _cachedApprovalPOs,
+      _cachedClosedPOs,
+    ];
+
+    for (final list in caches) {
+      if (list == null || list.isEmpty) continue;
+      for (final po in list) {
+        if (po.id == id) {
+          return po;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Return a cached purchase order if it already exists in memory.
+  PurchaseOrder? getCachedPOById(String id) {
+    return _findInCache(id);
+  }
+
+  /// Try to resolve a purchase order from cache or local storage without
+  /// requiring a network request. Falls back to Supabase on failure when
+  /// [fallbackToSupabase] is true.
+  Future<PurchaseOrder?> getPOByIdFromCache(String id,
+      {bool fallbackToSupabase = false}) async {
+    final cached = _findInCache(id);
+    if (cached != null) return cached;
+
+    try {
+      final localPOs = await getAll();
+      for (final po in localPOs) {
+        if (po.id == id) {
+          // Update in-memory cache for faster access next time.
+          _cachedAllPOs = localPOs;
+          return po;
+        }
+      }
+    } catch (_) {
+      // Ignore and fallback if requested
+    }
+
+    if (!fallbackToSupabase) {
+      return null;
+    }
+
+    return getPOByIdFromSupabase(id);
+  }
+
+  Future<void> _persistAllPurchaseOrders(List<PurchaseOrder> orders) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = orders.map((po) => po.toJson()).toList(growable: false);
+      await prefs.setStringList(_storageKey, jsonList);
+    } catch (_) {
+      // Ignore persistence errors; cache is just a best-effort fallback.
+    }
+  }
 
   int _extractPoNumber(String code) {
     final String trimmed = code.trim();
@@ -163,91 +241,343 @@ class POSupabaseController {
   }
 
   Stream<List<PurchaseOrder>> getClosedPOsStream() {
-    return _supabase
-        .from('purchase_orders')
-        .stream(primaryKey: ['id'])
-        .eq('status', 'Closed')
-        .map((data) {
-          final list = data.map((row) {
-            return PurchaseOrder.fromMap(row);
-          }).toList();
-          list.sort((a, b) =>
-              _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
-          return list;
-        });
+    final controller = StreamController<List<PurchaseOrder>>.broadcast();
+
+    // Emit cached data immediately if available (prepopulate)
+    if (_cachedClosedPOs != null) {
+      controller.add(_cachedClosedPOs!);
+    }
+
+    try {
+      _supabase
+          .from('purchase_orders')
+          .stream(primaryKey: ['id'])
+          .eq('status', 'Closed')
+          .listen(
+            (data) {
+              try {
+                final list = data.map((row) {
+                  return PurchaseOrder.fromMap(row);
+                }).toList();
+                list.sort((a, b) => _extractPoNumber(a.code)
+                    .compareTo(_extractPoNumber(b.code)));
+
+                // Cache the result
+                _cachedClosedPOs = list;
+                controller.add(list);
+              } catch (e) {
+                // On error, emit cached data if available, otherwise emit empty list
+                if (_cachedClosedPOs != null) {
+                  controller.add(_cachedClosedPOs!);
+                } else {
+                  controller.add([]);
+                }
+              }
+            },
+            onError: (error) {
+              // On stream error, emit cached data if available, otherwise emit empty list
+              if (_cachedClosedPOs != null) {
+                controller.add(_cachedClosedPOs!);
+              } else {
+                controller.add([]);
+              }
+            },
+          );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available, otherwise emit empty list
+      if (_cachedClosedPOs != null) {
+        controller.add(_cachedClosedPOs!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   Stream<List<PurchaseOrder>> getApprovalPOsStream() {
-    return _supabase
-        .from('purchase_orders')
-        .stream(primaryKey: ['id'])
-        .eq('status', 'Approval')
-        .map((data) {
-          final list = data.map((row) {
-            return PurchaseOrder.fromMap(row);
-          }).toList();
-          list.sort((a, b) =>
-              _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
-          return list;
-        });
+    final controller = StreamController<List<PurchaseOrder>>.broadcast();
+
+    // Emit cached data immediately if available (prepopulate)
+    if (_cachedApprovalPOs != null) {
+      controller.add(_cachedApprovalPOs!);
+    }
+
+    try {
+      _supabase
+          .from('purchase_orders')
+          .stream(primaryKey: ['id'])
+          .eq('status', 'Approval')
+          .listen(
+            (data) {
+              try {
+                final list = data.map((row) {
+                  return PurchaseOrder.fromMap(row);
+                }).toList();
+                list.sort((a, b) => _extractPoNumber(a.code)
+                    .compareTo(_extractPoNumber(b.code)));
+
+                // Cache the result
+                _cachedApprovalPOs = list;
+                controller.add(list);
+              } catch (e) {
+                // On error, emit cached data if available, otherwise emit empty list
+                if (_cachedApprovalPOs != null) {
+                  controller.add(_cachedApprovalPOs!);
+                } else {
+                  controller.add([]);
+                }
+              }
+            },
+            onError: (error) {
+              // On stream error, emit cached data if available, otherwise emit empty list
+              if (_cachedApprovalPOs != null) {
+                controller.add(_cachedApprovalPOs!);
+              } else {
+                controller.add([]);
+              }
+            },
+          );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available, otherwise emit empty list
+      if (_cachedApprovalPOs != null) {
+        controller.add(_cachedApprovalPOs!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   Stream<List<PurchaseOrder>> getOpenPOsStream() {
-    return _supabase
-        .from('purchase_orders')
-        .stream(primaryKey: ['id'])
-        .eq('status', 'Open')
-        .map((data) {
-          final list = data.map((row) {
-            return PurchaseOrder.fromMap(row);
-          }).toList();
-          // Filter to only include POs with pending supplies (no partial receives)
-          final filteredList = list.where((po) {
-            return po.supplies.every((supply) => supply['status'] == 'Pending');
-          }).toList();
-          filteredList.sort((a, b) =>
-              _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
-          return filteredList;
-        });
+    final controller = StreamController<List<PurchaseOrder>>.broadcast();
+
+    // Emit cached data immediately if available (prepopulate)
+    if (_cachedOpenPOs != null) {
+      controller.add(_cachedOpenPOs!);
+    }
+
+    try {
+      _supabase
+          .from('purchase_orders')
+          .stream(primaryKey: ['id'])
+          .eq('status', 'Open')
+          .listen(
+            (data) {
+              try {
+                final list = data.map((row) {
+                  return PurchaseOrder.fromMap(row);
+                }).toList();
+                // Filter to only include POs with pending supplies (no partial receives)
+                final filteredList = list.where((po) {
+                  return po.supplies
+                      .every((supply) => supply['status'] == 'Pending');
+                }).toList();
+                filteredList.sort((a, b) => _extractPoNumber(a.code)
+                    .compareTo(_extractPoNumber(b.code)));
+
+                // Cache the result
+                _cachedOpenPOs = filteredList;
+                controller.add(filteredList);
+              } catch (e) {
+                // On error, emit cached data if available, otherwise emit empty list
+                if (_cachedOpenPOs != null) {
+                  controller.add(_cachedOpenPOs!);
+                } else {
+                  controller.add([]);
+                }
+              }
+            },
+            onError: (error) {
+              // On stream error, emit cached data if available, otherwise emit empty list
+              if (_cachedOpenPOs != null) {
+                controller.add(_cachedOpenPOs!);
+              } else {
+                controller.add([]);
+              }
+            },
+          );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available, otherwise emit empty list
+      if (_cachedOpenPOs != null) {
+        controller.add(_cachedOpenPOs!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   Stream<List<PurchaseOrder>> getPartialPOsStream() {
-    return _supabase
-        .from('purchase_orders')
-        .stream(primaryKey: ['id']).map((data) {
-      final list = data.map((row) {
-        return PurchaseOrder.fromMap(row);
-      }).toList();
-      // Filter to include POs with status "Partially Received" OR POs with status "Open" that have partially received supplies
-      final filteredList = list.where((po) {
-        // Include POs with "Partially Received" status
-        if (po.status == 'Partially Received') {
-          return true;
-        }
-        // Include POs with "Open" status that have partially received or received supplies
-        if (po.status == 'Open') {
-          return po.supplies.any((supply) =>
-              supply['status'] == 'Partially Received' ||
-              supply['status'] == 'Received');
-        }
-        return false;
-      }).toList();
-      filteredList.sort((a, b) =>
-          _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
-      return filteredList;
-    });
+    final controller = StreamController<List<PurchaseOrder>>.broadcast();
+
+    // Emit cached data immediately if available (prepopulate)
+    if (_cachedPartialPOs != null) {
+      controller.add(_cachedPartialPOs!);
+    }
+
+    try {
+      _supabase.from('purchase_orders').stream(primaryKey: ['id']).listen(
+        (data) {
+          try {
+            final list = data.map((row) {
+              return PurchaseOrder.fromMap(row);
+            }).toList();
+            // Filter to include POs with status "Partially Received" OR POs with status "Open" that have partially received supplies
+            final filteredList = list.where((po) {
+              // Include POs with "Partially Received" status
+              if (po.status == 'Partially Received') {
+                return true;
+              }
+              // Include POs with "Open" status that have partially received or received supplies
+              if (po.status == 'Open') {
+                return po.supplies.any((supply) =>
+                    supply['status'] == 'Partially Received' ||
+                    supply['status'] == 'Received');
+              }
+              return false;
+            }).toList();
+            filteredList.sort((a, b) =>
+                _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
+
+            // Cache the result
+            _cachedPartialPOs = filteredList;
+            controller.add(filteredList);
+          } catch (e) {
+            // On error, emit cached data if available, otherwise emit empty list
+            if (_cachedPartialPOs != null) {
+              controller.add(_cachedPartialPOs!);
+            } else {
+              controller.add([]);
+            }
+          }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available, otherwise emit empty list
+          if (_cachedPartialPOs != null) {
+            controller.add(_cachedPartialPOs!);
+          } else {
+            controller.add([]);
+          }
+        },
+      );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available, otherwise emit empty list
+      if (_cachedPartialPOs != null) {
+        controller.add(_cachedPartialPOs!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
   }
 
   Stream<List<PurchaseOrder>> getAllPOsStream() {
-    return _supabase
-        .from('purchase_orders')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
-        .map((data) {
-          return data.map((row) {
-            return PurchaseOrder.fromMap(row);
-          }).toList();
-        });
+    final controller = StreamController<List<PurchaseOrder>>.broadcast();
+
+    // Emit cached data immediately if available (prepopulate)
+    if (_cachedAllPOs != null) {
+      controller.add(_cachedAllPOs!);
+    }
+
+    try {
+      _supabase
+          .from('purchase_orders')
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: false)
+          .listen(
+            (data) {
+              try {
+                final list = data.map((row) {
+                  return PurchaseOrder.fromMap(row);
+                }).toList();
+
+                // Cache the result
+                _cachedAllPOs = list;
+                // Keep other cache buckets in sync so offline hydration matches
+                _cachedOpenPOs = list
+                    .where((po) => po.status == 'Open')
+                    .toList(growable: false);
+                _cachedApprovalPOs = list
+                    .where((po) =>
+                        po.status == 'Approval' || po.status == 'For Approval')
+                    .toList(growable: false);
+                _cachedClosedPOs = list
+                    .where((po) => po.status == 'Closed')
+                    .toList(growable: false);
+                _cachedPartialPOs = list
+                    .where((po) =>
+                        po.status == 'Partially Received' ||
+                        (po.status == 'Open' &&
+                            po.supplies.any((supply) =>
+                                supply['status'] == 'Partially Received' ||
+                                supply['status'] == 'Received')))
+                    .toList(growable: false);
+                controller.add(list);
+
+                // Persist the latest server snapshot so offline mode reflects
+                // current Supabase data.
+                unawaited(_persistAllPurchaseOrders(list));
+              } catch (e) {
+                // On error, emit cached data if available, otherwise emit empty list
+                if (_cachedAllPOs != null) {
+                  controller.add(_cachedAllPOs!);
+                } else {
+                  controller.add([]);
+                }
+              }
+            },
+            onError: (error) {
+              // On stream error, emit cached data if available, otherwise emit empty list
+              if (_cachedAllPOs != null) {
+                controller.add(_cachedAllPOs!);
+              } else {
+                controller.add([]);
+              }
+            },
+          );
+    } catch (e) {
+      // If stream creation fails, emit cached data if available, otherwise emit empty list
+      if (_cachedAllPOs != null) {
+        controller.add(_cachedAllPOs!);
+      } else {
+        controller.add([]);
+      }
+    }
+
+    return controller.stream;
+  }
+
+  Future<List<PurchaseOrder>> preloadFromLocalCache() async {
+    try {
+      final localPOs = await getAll();
+      if (localPOs.isNotEmpty) {
+        _cachedAllPOs = localPOs;
+        _cachedOpenPOs =
+            localPOs.where((po) => po.status == 'Open').toList(growable: false);
+        _cachedPartialPOs = localPOs
+            .where((po) =>
+                po.status == 'Partially Received' ||
+                (po.status == 'Open' &&
+                    po.supplies.any((supply) =>
+                        supply['status'] == 'Partially Received' ||
+                        supply['status'] == 'Received')))
+            .toList(growable: false);
+        _cachedApprovalPOs = localPOs
+            .where(
+                (po) => po.status == 'Approval' || po.status == 'For Approval')
+            .toList(growable: false);
+        _cachedClosedPOs = localPOs
+            .where((po) => po.status == 'Closed')
+            .toList(growable: false);
+      }
+      return localPOs;
+    } catch (e) {
+      return _cachedAllPOs ?? <PurchaseOrder>[];
+    }
   }
 
   Future<PurchaseOrder?> getPOByIdFromSupabase(String id) async {

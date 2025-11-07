@@ -6,6 +6,7 @@ import 'package:familee_dental/features/inventory/controller/catalog_controller.
 import 'package:familee_dental/features/purchase_order/pages/po_edit_supply_page.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AddSupplyPage extends StatefulWidget {
   const AddSupplyPage({super.key});
@@ -120,19 +121,6 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
         iconTheme: theme.appBarTheme.iconTheme,
         elevation: 5,
         shadowColor: Colors.black54,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 5.0),
-            child: IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: Colors.red, size: 30),
-              tooltip: 'Notifications',
-              onPressed: () {
-                Navigator.pushNamed(context, '/notifications');
-              },
-            ),
-          ),
-        ],
       ),
       body: ResponsiveContainer(
         maxWidth: 1200,
@@ -320,20 +308,35 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        // Show Supabase image (or placeholder) - NO BACKGROUND
+                                        // Show Supabase image (or placeholder) with caching - NO BACKGROUND
                                         item.imageUrl.isNotEmpty
-                                            ? Image.network(
-                                                item.imageUrl,
+                                            ? CachedNetworkImage(
+                                                imageUrl: item.imageUrl,
                                                 width: 96,
                                                 height: 96,
                                                 fit: BoxFit.contain,
-                                                errorBuilder: (context, error,
-                                                    stackTrace) {
+                                                placeholder: (context, url) {
+                                                  return Container(
+                                                    width: 96,
+                                                    height: 96,
+                                                    color: Colors.grey[200],
+                                                    child: Icon(Icons.image,
+                                                        size: 48,
+                                                        color:
+                                                            Colors.grey[400]),
+                                                  );
+                                                },
+                                                errorWidget:
+                                                    (context, url, error) {
                                                   return Icon(
                                                       Icons.image_not_supported,
                                                       size: 96,
                                                       color: Colors.grey);
                                                 },
+                                                fadeInDuration: const Duration(
+                                                    milliseconds: 200),
+                                                fadeOutDuration: const Duration(
+                                                    milliseconds: 100),
                                               )
                                             : Icon(Icons.image_not_supported,
                                                 size: 96, color: Colors.grey),

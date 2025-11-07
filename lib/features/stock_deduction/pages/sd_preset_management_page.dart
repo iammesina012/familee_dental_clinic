@@ -7,7 +7,6 @@ import 'package:familee_dental/features/stock_deduction/controller/sd_approval_c
 import 'package:familee_dental/features/stock_deduction/pages/sd_edit_preset_page.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
-import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -224,9 +223,6 @@ class _ServiceManagementPageState extends State<ServiceManagementPage> {
         elevation: Theme.of(context).appBarTheme.elevation ?? 5,
         shadowColor: Theme.of(context).appBarTheme.shadowColor ??
             Theme.of(context).shadowColor,
-        actions: [
-          const NotificationBadgeButton(),
-        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _createNewPreset,

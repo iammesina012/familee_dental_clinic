@@ -43,10 +43,8 @@ class FastMovingService {
 
     // Determine period name based on window duration
     // Must match _getDurationForPeriod in dashboard_page.dart
-    String periodKey = 'Daily'; // default
-    if (window.inDays == 1) {
-      periodKey = 'Daily';
-    } else if (window.inDays == 7) {
+    String periodKey = 'Weekly'; // default
+    if (window.inDays == 7) {
       periodKey = 'Weekly';
     } else if (window.inDays == 30) {
       periodKey = 'Monthly';

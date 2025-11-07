@@ -15,6 +15,7 @@ import 'package:familee_dental/features/inventory/controller/categories_controll
 import 'package:familee_dental/features/inventory/controller/expired_supply_controller.dart';
 import 'package:familee_dental/features/inventory/controller/archive_supply_controller.dart';
 import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
+import 'package:familee_dental/features/purchase_order/controller/po_supabase_controller.dart';
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
@@ -424,6 +425,44 @@ class _InventoryState extends State<Inventory> {
           // Silently fail - this is best-effort pre-population
         }
       }).catchError((_) {}); // Ignore errors
+
+      // Pre-populate purchase order caches so Edit PO works offline
+      final poController = POSupabaseController();
+      poController.preloadFromLocalCache().then((purchaseOrders) async {
+        if (purchaseOrders.isEmpty) {
+          return;
+        }
+
+        final viewController = ViewSupplyController();
+        final Set<String> poSupplyNames = {};
+
+        for (final po in purchaseOrders) {
+          for (final supply in po.supplies) {
+            final name = (supply['supplyName'] ?? supply['name'] ?? '')
+                .toString()
+                .trim();
+            if (name.isNotEmpty) {
+              poSupplyNames.add(name);
+            }
+          }
+        }
+
+        var index = 0;
+        for (final name in poSupplyNames) {
+          viewController
+              .getSupplyTypes(name)
+              .timeout(
+                const Duration(seconds: 2),
+                onTimeout: () => <String>[],
+              )
+              .catchError((_) => <String>[]);
+
+          if (index % 10 == 0 && index > 0) {
+            await Future.delayed(const Duration(milliseconds: 50));
+          }
+          index++;
+        }
+      }).catchError((_) {});
     } catch (e) {
       // Silently fail - this is best-effort pre-population
     }

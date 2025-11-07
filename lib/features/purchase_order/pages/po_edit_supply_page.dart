@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class EditSupplyPOPage extends StatefulWidget {
   final Map<String, dynamic> supply;
@@ -26,6 +30,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   final List<TextEditingController> _batchQtyControllers = [];
   final List<DateTime?> _batchExpiries = [];
   final List<bool> _batchNoExpirySelected = [];
+  final ViewSupplyController _viewSupplyController = ViewSupplyController();
 
   // Inventory unit (kept for saving; no longer editable in UI)
   String _selectedUnit = 'Box';
@@ -179,19 +184,6 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
         iconTheme: theme.appBarTheme.iconTheme,
         elevation: theme.appBarTheme.elevation ?? 5,
         shadowColor: theme.appBarTheme.shadowColor ?? theme.shadowColor,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 5.0),
-            child: IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: Colors.red, size: 30),
-              tooltip: 'Notifications',
-              onPressed: () {
-                Navigator.pushNamed(context, '/notifications');
-              },
-            ),
-          ),
-        ],
       ),
       body: ResponsiveContainer(
         maxWidth: 1000,
@@ -211,13 +203,24 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                     height: 120,
                     child: widget.supply['imageUrl'] != null &&
                             widget.supply['imageUrl'].isNotEmpty
-                        ? Image.network(
-                            widget.supply['imageUrl'],
+                        ? CachedNetworkImage(
+                            imageUrl: widget.supply['imageUrl'],
                             fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
+                            placeholder: (context, url) {
+                              return Container(
+                                width: 120,
+                                height: 120,
+                                color: Colors.grey[200],
+                                child: Icon(Icons.image,
+                                    size: 48, color: Colors.grey[400]),
+                              );
+                            },
+                            errorWidget: (context, url, error) {
                               return Icon(Icons.image_not_supported,
                                   size: 60, color: Colors.grey);
                             },
+                            fadeInDuration: const Duration(milliseconds: 200),
+                            fadeOutDuration: const Duration(milliseconds: 100),
                           )
                         : Icon(Icons.image_not_supported,
                             size: 60, color: Colors.grey),
@@ -988,10 +991,16 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     );
   }
 
-  void _saveSupply() {
+  Future<void> _saveSupply() async {
     // Validate fields
     if (brandController.text.trim().isEmpty) {
       _showErrorDialog('Please enter a brand name.');
+      return;
+    }
+
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      await showConnectionErrorDialog(context);
       return;
     }
 
@@ -1277,22 +1286,8 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
       final supplyName = widget.supply['supplyName'] ?? '';
       if (supplyName.isEmpty) return [];
 
-      // Query database for existing types of this supply
-      final response = await Supabase.instance.client
-          .from('supplies')
-          .select('type')
-          .eq('name', supplyName)
-          .not('type', 'is', null)
-          .not('type', 'eq', '');
-
-      // Extract unique types and filter out null/empty values
-      final types = response
-          .map((row) => row['type'] as String?)
-          .where((type) => type != null && type.isNotEmpty)
-          .cast<String>()
-          .toSet()
-          .toList();
-
+      // Use ViewSupplyController to leverage cached types (supports offline usage)
+      final types = await _viewSupplyController.getSupplyTypes(supplyName);
       return types;
     } catch (e) {
       print('Error fetching available types: $e');

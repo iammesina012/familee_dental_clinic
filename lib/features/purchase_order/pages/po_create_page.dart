@@ -4,6 +4,9 @@ import 'package:familee_dental/features/purchase_order/data/purchase_order.dart'
 import 'package:familee_dental/features/purchase_order/controller/po_create_controller.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CreatePOPage extends StatefulWidget {
   const CreatePOPage({super.key});
@@ -181,9 +184,33 @@ class _CreatePOPageState extends State<CreatePOPage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Buttons (Cancel first, then Clear All)
+                    // Buttons (Clear All first, then Cancel)
                     Row(
                       children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Clear All',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
@@ -209,30 +236,6 @@ class _CreatePOPageState extends State<CreatePOPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              'Clear All',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ],
@@ -249,6 +252,12 @@ class _CreatePOPageState extends State<CreatePOPage> {
     if (addedSupplies.isEmpty) {
       _showErrorDialog(
           'Please add at least one supply to the restocking list.');
+      return;
+    }
+
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      await showConnectionErrorDialog(context);
       return;
     }
 
@@ -507,9 +516,33 @@ class _CreatePOPageState extends State<CreatePOPage> {
                     ],
                     const SizedBox(height: 24),
 
-                    // Buttons (Cancel first, then Save - matching exit dialog pattern)
+                    // Buttons (Save/Create first, then Cancel)
                     Row(
                       children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              _isEditing ? 'Update PO' : 'Create PO',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
@@ -530,30 +563,6 @@ class _CreatePOPageState extends State<CreatePOPage> {
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,
                                 color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              _isEditing ? 'Update PO' : 'Create PO',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
                                 fontSize: 16,
                               ),
                             ),
@@ -595,19 +604,6 @@ class _CreatePOPageState extends State<CreatePOPage> {
           icon: Icon(Icons.arrow_back, color: theme.iconTheme.color, size: 30),
           onPressed: () => _handleBackPress(),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 5.0),
-            child: IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: Colors.red, size: 30),
-              tooltip: 'Notifications',
-              onPressed: () {
-                Navigator.pushNamed(context, '/notifications');
-              },
-            ),
-          ),
-        ],
       ),
       body: ResponsiveContainer(
         maxWidth: 1100,
@@ -891,7 +887,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      elevation: 2,
+                      elevation: 1,
                     ),
                   ),
                 ],
@@ -1075,22 +1071,26 @@ class _CreatePOPageState extends State<CreatePOPage> {
                       : 80,
                   child: supply['imageUrl'] != null &&
                           supply['imageUrl'].isNotEmpty
-                      ? Image.network(
-                          supply['imageUrl'],
+                      ? CachedNetworkImage(
+                          imageUrl: supply['imageUrl'],
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(Icons.image_not_supported,
-                                size: MediaQuery.of(context).size.width < 768
-                                    ? MediaQuery.of(context).size.width * 0.08
-                                    : 32,
-                                color: Colors.grey);
-                          },
+                          placeholder: (context, url) =>
+                              const SizedBox.shrink(),
+                          errorWidget: (context, url, error) => Icon(
+                            Icons.image_not_supported,
+                            size: MediaQuery.of(context).size.width < 768
+                                ? MediaQuery.of(context).size.width * 0.08
+                                : 32,
+                            color: Colors.grey,
+                          ),
                         )
-                      : Icon(Icons.image_not_supported,
+                      : Icon(
+                          Icons.image_not_supported,
                           size: MediaQuery.of(context).size.width < 768
                               ? MediaQuery.of(context).size.width * 0.08
                               : 32,
-                          color: Colors.grey),
+                          color: Colors.grey,
+                        ),
                 ),
                 SizedBox(
                     width: MediaQuery.of(context).size.width < 768

@@ -300,19 +300,6 @@ class _EditPresetPageState extends State<EditPresetPage> {
           elevation: Theme.of(context).appBarTheme.elevation ?? 5,
           shadowColor: Theme.of(context).appBarTheme.shadowColor ??
               Theme.of(context).shadowColor,
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 5.0),
-              child: IconButton(
-                icon: const Icon(Icons.notifications_outlined,
-                    color: Colors.red, size: 30),
-                tooltip: 'Notifications',
-                onPressed: () {
-                  Navigator.pushNamed(context, '/notifications');
-                },
-              ),
-            ),
-          ],
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: _openAddSupply,

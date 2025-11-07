@@ -17,6 +17,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:platform/platform.dart';
 import 'dart:io';
 import 'dart:async';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -37,7 +39,12 @@ class _DashboardState extends State<Dashboard> {
 
   String? _userName;
   String? _userRole;
-  String _selectedPeriod = 'Daily'; // Daily, Weekly, Monthly
+  String _selectedPeriod = 'Weekly'; // Weekly, Monthly
+  bool _isPeriodChanging = false; // Track if period is being changed
+  bool?
+      _hasConnection; // Track connectivity status (null = checking, true = online, false = offline)
+  List<FastMovingItem>?
+      _lastFastMovingItems; // Keep last data visible during period change
 
   // Cache for user data to persist when offline
   static String? _cachedUserName;
@@ -46,6 +53,10 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
+    // Ensure _selectedPeriod is valid (handle case where it might be "Daily" from previous session)
+    if (_selectedPeriod != 'Weekly' && _selectedPeriod != 'Monthly') {
+      _selectedPeriod = 'Weekly';
+    }
     // Load cached data first if available
     if (_cachedUserName != null) {
       _userName = _cachedUserName;
@@ -54,7 +65,17 @@ class _DashboardState extends State<Dashboard> {
       _userRole = _cachedUserRole;
     }
     _loadUserData();
+    _checkConnectivity();
     // Dashboard access logging removed for now
+  }
+
+  Future<void> _checkConnectivity() async {
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (mounted) {
+      setState(() {
+        _hasConnection = hasConnection;
+      });
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -931,7 +952,10 @@ class _DashboardState extends State<Dashboard> {
                                 ),
                                 // Period dropdown
                                 DropdownButton<String>(
-                                  value: _selectedPeriod,
+                                  value: (_selectedPeriod == 'Weekly' ||
+                                          _selectedPeriod == 'Monthly')
+                                      ? _selectedPeriod
+                                      : 'Weekly', // Fallback to Weekly if invalid
                                   isDense: true,
                                   underline:
                                       Container(), // Remove default underline
@@ -945,7 +969,7 @@ class _DashboardState extends State<Dashboard> {
                                     fontWeight: FontWeight.w500,
                                     color: theme.textTheme.bodyMedium?.color,
                                   ),
-                                  items: ['Daily', 'Weekly', 'Monthly']
+                                  items: ['Weekly', 'Monthly']
                                       .map((String period) {
                                     return DropdownMenuItem<String>(
                                       value: period,
@@ -953,9 +977,23 @@ class _DashboardState extends State<Dashboard> {
                                     );
                                   }).toList(),
                                   onChanged: (String? newValue) {
-                                    if (newValue != null) {
+                                    if (newValue != null &&
+                                        newValue != _selectedPeriod) {
+                                      // Check connectivity when period changes
+                                      _checkConnectivity();
                                       setState(() {
                                         _selectedPeriod = newValue;
+                                        _isPeriodChanging = true;
+                                      });
+                                      // Reset loading state after a delay to ensure skeleton is visible (only if online)
+                                      Future.delayed(
+                                          const Duration(milliseconds: 500),
+                                          () {
+                                        if (mounted) {
+                                          setState(() {
+                                            _isPeriodChanging = false;
+                                          });
+                                        }
                                       });
                                     }
                                   },
@@ -982,17 +1020,24 @@ class _DashboardState extends State<Dashboard> {
                         ),
                         const SizedBox(height: 16),
                         StreamBuilder<List<FastMovingItem>>(
+                          key: ValueKey(
+                              _selectedPeriod), // Force rebuild on period change
                           stream: _fastMovingService.streamTopFastMovingItems(
                             limit: 5,
                             window: _getDurationForPeriod(_selectedPeriod),
                           ),
                           builder: (context, snapshot) {
-                            // Show skeleton loader only if no data exists (no cached data available)
-                            // If cached data exists, it will show immediately instead
-                            if (snapshot.connectionState ==
-                                    ConnectionState.waiting &&
-                                !snapshot.hasData &&
-                                !snapshot.hasError) {
+                            // Show skeleton loader only when online AND (period is changing OR waiting for data)
+                            // When offline, cached data shows immediately (no skeleton needed)
+                            final shouldShowSkeleton =
+                                (_hasConnection == true) &&
+                                    (_isPeriodChanging ||
+                                        (snapshot.connectionState ==
+                                                ConnectionState.waiting &&
+                                            !snapshot.hasData &&
+                                            !snapshot.hasError));
+
+                            if (shouldShowSkeleton) {
                               final baseColor = isDark
                                   ? Colors.grey[800]!
                                   : Colors.grey[300]!;
@@ -1032,7 +1077,26 @@ class _DashboardState extends State<Dashboard> {
                             // Handle gracefully - show cached data or empty state
                             final items = snapshot.data ?? [];
 
-                            if (items.isEmpty) {
+                            // Update last items if we have data
+                            if (items.isNotEmpty) {
+                              _lastFastMovingItems = items;
+                            }
+
+                            // If period is changing or waiting, use last data if available to prevent flashing
+                            final displayItems = (items.isEmpty &&
+                                    (_isPeriodChanging ||
+                                        snapshot.connectionState ==
+                                            ConnectionState.waiting) &&
+                                    _lastFastMovingItems != null)
+                                ? _lastFastMovingItems!
+                                : items;
+
+                            // Only show empty state if we have confirmed there's no data
+                            // Don't show empty if we're still waiting or have previous data to show
+                            if (displayItems.isEmpty &&
+                                !_isPeriodChanging &&
+                                snapshot.connectionState !=
+                                    ConnectionState.waiting) {
                               return Center(
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -1051,9 +1115,56 @@ class _DashboardState extends State<Dashboard> {
                               );
                             }
 
+                            // If we're waiting for new data but have old data, show old data
+                            // If we're waiting and have no old data, show skeleton (online) or wait (offline)
+                            if (displayItems.isEmpty &&
+                                (_isPeriodChanging ||
+                                    snapshot.connectionState ==
+                                        ConnectionState.waiting)) {
+                              if (_hasConnection == true) {
+                                // Show skeleton when online and waiting
+                                final baseColor = isDark
+                                    ? Colors.grey[800]!
+                                    : Colors.grey[300]!;
+                                final highlightColor = isDark
+                                    ? Colors.grey[700]!
+                                    : Colors.grey[100]!;
+
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  child: Column(
+                                    children: List.generate(
+                                      5,
+                                      (index) => Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 6),
+                                        child: Shimmer.fromColors(
+                                          baseColor: baseColor,
+                                          highlightColor: highlightColor,
+                                          child: Container(
+                                            height: 48,
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? Colors.grey[800]
+                                                  : Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+                              // If offline and no data yet, wait silently for cached data
+                              return const SizedBox.shrink();
+                            }
+
                             // Find max value for scaling
-                            final maxValue = items.isNotEmpty
-                                ? items
+                            final maxValue = displayItems.isNotEmpty
+                                ? displayItems
                                     .map((e) => e.timesDeducted)
                                     .reduce((a, b) => a > b ? a : b)
                                 : 1;
@@ -1061,7 +1172,7 @@ class _DashboardState extends State<Dashboard> {
                             return _buildBarChart(
                               context: context,
                               theme: theme,
-                              items: items,
+                              items: displayItems,
                               maxValue: maxValue,
                             );
                           },
@@ -1080,14 +1191,12 @@ class _DashboardState extends State<Dashboard> {
 
   Duration _getDurationForPeriod(String period) {
     switch (period) {
-      case 'Daily':
-        return const Duration(days: 1);
       case 'Weekly':
         return const Duration(days: 7);
       case 'Monthly':
         return const Duration(days: 30);
       default:
-        return const Duration(days: 1);
+        return const Duration(days: 7); // Default to Weekly
     }
   }
 
@@ -1118,9 +1227,6 @@ class _DashboardState extends State<Dashboard> {
     }
 
     switch (period) {
-      case 'Daily':
-        // Show today's date: "Jan 1, 2024"
-        return '${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
       case 'Weekly':
         // Show date range: "Jan 1 - Jan 7, 2024"
         if (startDate.year == now.year && startDate.month == now.month) {
@@ -1146,7 +1252,14 @@ class _DashboardState extends State<Dashboard> {
           return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
         }
       default:
-        return '${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        // Default to Weekly format
+        if (startDate.year == now.year && startDate.month == now.month) {
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        } else if (startDate.year == now.year) {
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        } else {
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        }
     }
   }
 
@@ -2371,6 +2484,15 @@ class _DashboardState extends State<Dashboard> {
     final shouldExport = await _showCSVExportConfirmationDialog(context);
     if (shouldExport != true) return;
 
+    // Check connectivity before proceeding
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (context.mounted) {
+        await showConnectionErrorDialog(context);
+      }
+      return;
+    }
+
     // Show toast notification
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -2462,6 +2584,15 @@ class _DashboardState extends State<Dashboard> {
     // Show confirmation dialog first
     final shouldExport = await _showPDFExportConfirmationDialog(context);
     if (shouldExport != true) return;
+
+    // Check connectivity before proceeding
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (context.mounted) {
+        await showConnectionErrorDialog(context);
+      }
+      return;
+    }
 
     // Show toast notification
     ScaffoldMessenger.of(context).showSnackBar(
@@ -3233,10 +3364,8 @@ class _DashboardState extends State<Dashboard> {
         return 7;
       case 'Monthly':
         return 30;
-      case 'Quarterly':
-        return 90;
       default:
-        return 90;
+        return 7; // Default to Weekly
     }
   }
 }

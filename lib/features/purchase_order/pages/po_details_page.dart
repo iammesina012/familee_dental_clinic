@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
 import 'package:familee_dental/features/purchase_order/controller/po_details_controller.dart';
@@ -13,6 +14,8 @@ import 'package:familee_dental/features/activity_log/controller/po_activity_cont
 import 'package:familee_dental/features/notifications/controller/notifications_controller.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class PODetailsPage extends StatefulWidget {
   final PurchaseOrder purchaseOrder;
@@ -41,10 +44,12 @@ class _PODetailsPageState extends State<PODetailsPage> {
   final PODetailsController _controller = PODetailsController();
   final POSupabaseController _poSupabase = POSupabaseController();
   final ReceiptStorageService _receiptStorage = ReceiptStorageService();
+  final ConnectivityService _connectivityService = ConnectivityService();
   bool _isLoading = false;
   final Map<String, int> _supplierPageIndex = {};
   final Set<String> _expandedSuppliers = {};
   final Map<String, TextEditingController> _remarksControllers = {};
+  bool _hasPrecachedReceiptImages = false;
 
   // Checklist state for tracking which items are checked
   final Map<String, Set<String>> _checkedItems =
@@ -160,6 +165,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
           // Directly proceed to receipt details for manual checkbox checking
           final receiptDetails = await _showReceiptDetailsDialog(supplierName);
           if (receiptDetails == null) return; // user tapped Back
+
+          if (!await _ensureInternetConnection()) {
+            return;
+          }
 
           setState(() => _isLoading = true);
           try {
@@ -351,6 +360,55 @@ class _PODetailsPageState extends State<PODetailsPage> {
     }
   }
 
+  Future<bool> _ensureInternetConnection() async {
+    final hasConnection = await _connectivityService.hasInternetConnection();
+    if (!hasConnection && mounted) {
+      await showConnectionErrorDialog(context);
+    }
+    return hasConnection;
+  }
+
+  Future<void> _precacheReceiptImages() async {
+    if (_hasPrecachedReceiptImages || !mounted) return;
+
+    final Set<String> urls = {};
+    for (final supply in _purchaseOrder.supplies) {
+      final pathOrUrl =
+          (supply['receiptImagePath'] ?? supply['receiptImageUrl'] ?? '')
+              .toString()
+              .trim();
+      if (pathOrUrl.isEmpty) continue;
+      if (pathOrUrl.startsWith('http')) {
+        urls.add(pathOrUrl);
+      }
+    }
+
+    for (final url in urls) {
+      try {
+        await precacheImage(CachedNetworkImageProvider(url), context);
+      } catch (_) {
+        // Ignore failures, image will attempt to load normally in the UI.
+      }
+    }
+
+    _hasPrecachedReceiptImages = true;
+  }
+
+  Future<void> _prepareInitialData() async {
+    try {
+      await _poSupabase.preloadFromLocalCache();
+    } catch (_) {
+      // Ignore errors; caches are optional.
+    }
+
+    await _precacheReceiptImages();
+  }
+
+  Future<void> _handlePostFrameTasks() async {
+    await _prepareInitialData();
+    if (!mounted) return;
+  }
+
   // Check if remarks can be edited based on user role and PO status
   bool _canEditRemarks() {
     // Only allow editing in Closed status
@@ -436,6 +494,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
         supplies: updatedSupplies,
         receivedCount: _purchaseOrder.receivedCount,
       );
+
+      if (!await _ensureInternetConnection()) {
+        return;
+      }
 
       // Save to Supabase
       await _poSupabase.updatePOInSupabase(updatedPO);
@@ -730,6 +792,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
     if (confirm != true) return;
 
+    if (!await _ensureInternetConnection()) {
+      return;
+    }
+
     // Check if this is the last supply to be marked as received
     final remainingSupplies = _purchaseOrder.supplies
         .where((supply) => !_controller.isSupplyReceived(supply))
@@ -999,6 +1065,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
     final receiptDetails = await _showReceiptDetailsDialog(firstSupplier,
         disableSave: hasReceiptDetails);
     if (receiptDetails == null) return; // user tapped Back
+
+    if (!await _ensureInternetConnection()) {
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -1751,6 +1821,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                   await _showPartialReceiveConfirmation(
                                       context);
                               if (confirmed == true) {
+                                if (!await _ensureInternetConnection()) {
+                                  return;
+                                }
                                 // Check if this is the first partial receive (no receipt details yet)
                                 bool hasReceiptDetails = _purchaseOrder.supplies
                                     .any((supply) =>
@@ -2260,11 +2333,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
       // Load saved checklist state
       _loadChecklistState();
 
-      // Show floating alert for closed POs
+      // Preload caches and show floating alert for closed POs
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_controller.isPOClosed(_purchaseOrder)) {
-          _showClosedAlert();
-        }
+        _handlePostFrameTasks();
       });
     } catch (e) {
       // Error handling
@@ -2335,19 +2406,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
         elevation: theme.appBarTheme.elevation ?? 1,
         shadowColor: theme.appBarTheme.shadowColor ??
             theme.shadowColor.withOpacity(0.12),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 5.0),
-            child: IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: Colors.red, size: 30),
-              tooltip: 'Notifications',
-              onPressed: () {
-                Navigator.pushNamed(context, '/notifications');
-              },
-            ),
-          ),
-        ],
       ),
       body: ResponsiveContainer(
         maxWidth: 1200,
@@ -3443,91 +3501,101 @@ class _PODetailsPageState extends State<PODetailsPage> {
                         Icons.attach_money,
                       ),
 
-                      // Display remarks - only show after receipt details are saved
-                      if (supply['receiptRemarks'] != null &&
-                          supply['receiptRemarks']
-                              .toString()
-                              .trim()
-                              .isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        // Multiline field for both Approval and Closed sections
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Remarks',
-                              style: AppFonts.sfProStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.color
-                                    ?.withOpacity(0.8),
+                      // Display remarks - allow editing in Closed section even when empty
+                      ...(() {
+                        final supplyIndex =
+                            _purchaseOrder.supplies.indexOf(supply);
+                        final remarksController = _getRemarksController(
+                          _controller.getSupplierName(supply),
+                          supplyIndex,
+                          supply['receiptRemarks']?.toString().trim() ?? '',
+                        );
+                        final canEditRemarks =
+                            _purchaseOrder.status == 'Closed' &&
+                                _canEditRemarks();
+                        final hasRemarks =
+                            remarksController.text.trim().isNotEmpty;
+                        final shouldShowRemarks = canEditRemarks || hasRemarks;
+
+                        if (!shouldShowRemarks) {
+                          return <Widget>[];
+                        }
+
+                        return <Widget>[
+                          const SizedBox(height: 12),
+                          // Multiline field for both Approval and Closed sections
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Remarks',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.color
+                                      ?.withOpacity(0.8),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              width: double.infinity,
-                              constraints: const BoxConstraints(
-                                maxWidth: 450,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 0, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surface
-                                    .withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
+                              const SizedBox(height: 4),
+                              Container(
+                                width: double.infinity,
+                                constraints: const BoxConstraints(
+                                  maxWidth: 450,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 0, vertical: 4),
+                                decoration: BoxDecoration(
                                   color: Theme.of(context)
                                       .colorScheme
-                                      .outline
-                                      .withOpacity(0.2),
-                                  width: 1,
+                                      .surface
+                                      .withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .outline
+                                        .withOpacity(0.2),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: TextField(
+                                  controller: remarksController,
+                                  maxLines: 5,
+                                  minLines: 1,
+                                  enabled: canEditRemarks,
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color ??
+                                        Colors.white,
+                                  ),
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                  ),
+                                  onChanged: (value) {
+                                    // Only save if in Closed section and user can edit
+                                    if (canEditRemarks) {
+                                      _saveRemarks(
+                                        _controller.getSupplierName(supply),
+                                        supplyIndex,
+                                        value,
+                                      );
+                                    }
+                                  },
                                 ),
                               ),
-                              child: TextField(
-                                controller: _getRemarksController(
-                                  _controller.getSupplierName(supply),
-                                  _purchaseOrder.supplies.indexOf(supply),
-                                  supply['receiptRemarks'].toString().trim(),
-                                ),
-                                maxLines: 5,
-                                minLines: 1,
-                                enabled: _purchaseOrder.status == 'Closed' &&
-                                    _canEditRemarks(),
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color ??
-                                      Colors.white,
-                                ),
-                                decoration: InputDecoration(
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                ),
-                                onChanged: (value) {
-                                  // Only save if in Closed section and user can edit
-                                  if (_purchaseOrder.status == 'Closed' &&
-                                      _canEditRemarks()) {
-                                    _saveRemarks(
-                                      _controller.getSupplierName(supply),
-                                      _purchaseOrder.supplies.indexOf(supply),
-                                      value,
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ];
+                      })(),
 
                       // Expiry dates moved to right column
                     ],
@@ -3854,9 +3922,33 @@ class _PODetailsPageState extends State<PODetailsPage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Buttons (Cancel first, then Approve - matching exit dialog pattern)
+                    // Buttons (Approve first, then Cancel)
                     Row(
                       children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Approve',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
@@ -3882,30 +3974,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              'Approve',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ],
@@ -3917,6 +3985,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
         false;
 
     if (!confirm) return;
+
+    if (!await _ensureInternetConnection()) {
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -4084,6 +4156,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
     if (!confirm) return;
 
+    if (!await _ensureInternetConnection()) {
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final updated = await _controller.rejectPurchaseOrder(_purchaseOrder);
@@ -4167,6 +4243,10 @@ class _PODetailsPageState extends State<PODetailsPage> {
     // Secondary details dialog
     final receiptDetails = await _showReceiptDetailsDialog(supplierName);
     if (receiptDetails == null) return; // user tapped Back
+
+    if (!await _ensureInternetConnection()) {
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -4816,68 +4896,60 @@ class _PODetailsPageState extends State<PODetailsPage> {
   Widget _buildReceiptImage(String pathOrUrl) {
     // Check if it's a URL (starts with http) or a local file path
     if (pathOrUrl.startsWith('http')) {
-      // Cloud URL - use Image.network
-      return Image.network(
-        pathOrUrl,
+      // Cloud URL - use CachedNetworkImage for offline support
+      return CachedNetworkImage(
+        imageUrl: pathOrUrl,
         fit: BoxFit.contain,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
+        placeholder: (context, url) => Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 8),
+              Text(
+                'Loading receipt...',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
                 ),
-                SizedBox(height: 8),
-                Text(
-                  'Loading receipt...',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+              ),
+            ],
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 48, color: Colors.grey[600]),
+              const SizedBox(height: 8),
+              Text(
+                'Unable to load receipt',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
                 ),
-              ],
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.cloud_off, size: 48, color: Colors.grey[600]),
-                SizedBox(height: 8),
-                Text(
-                  'Unable to load receipt',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Check your internet connection',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 12,
                 ),
-                SizedBox(height: 4),
-                Text(
-                  'Check your internet connection',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+              ),
+            ],
+          ),
+        ),
       );
     } else {
       // Local file path - use Image.file with existence check
@@ -4966,21 +5038,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
     );
   }
 
-  void _showClosedAlert() {
-    // Show the alert as an overlay that doesn't block interactions
-    OverlayEntry? overlayEntry;
-
-    overlayEntry = OverlayEntry(
-      builder: (context) => _AnimatedClosedAlert(
-        onDismiss: () {
-          overlayEntry?.remove();
-        },
-      ),
-    );
-
-    Overlay.of(context).insert(overlayEntry);
-  }
-
   @override
   void dispose() {
     // Dispose all remarks controllers
@@ -4988,203 +5045,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
       controller.dispose();
     }
     super.dispose();
-  }
-}
-
-class _AnimatedClosedAlert extends StatefulWidget {
-  final VoidCallback onDismiss;
-
-  const _AnimatedClosedAlert({
-    required this.onDismiss,
-  });
-
-  @override
-  State<_AnimatedClosedAlert> createState() => _AnimatedClosedAlertState();
-}
-
-class _AnimatedClosedAlertState extends State<_AnimatedClosedAlert>
-    with TickerProviderStateMixin {
-  late AnimationController _slideController;
-  late AnimationController _fadeController;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Slide animation controller
-    _slideController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-
-    // Fade animation controller
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 400),
-      vsync: this,
-    );
-
-    // Slide animation from top
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, -2.0), // Start above the screen
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.bounceOut,
-    ));
-
-    // Fade animation
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeInOut,
-    ));
-
-    // Start animations
-    _slideController.forward();
-    _fadeController.forward();
-
-    // Auto fade out after 4 seconds
-    Future.delayed(const Duration(milliseconds: 4000), () {
-      if (mounted) {
-        _fadeOut();
-      }
-    });
-  }
-
-  void _fadeOut() async {
-    await _fadeController.reverse();
-    if (mounted) {
-      widget.onDismiss();
-    }
-  }
-
-  @override
-  void dispose() {
-    _slideController.dispose();
-    _fadeController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 20,
-      left: 16,
-      right: 16,
-      child: SlideTransition(
-        position: _slideAnimation,
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Container(
-            constraints: const BoxConstraints(
-                maxWidth: 350, minHeight: 80, maxHeight: 120),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF6B6B), Color(0xFFEE5A52)],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFF6B6B).withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: Theme.of(context).shadowColor.withOpacity(0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    // Error Icon
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Icon(
-                        Icons.error_outline,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Text Content
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Purchase Order Closed',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: 'SF Pro Display',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.white,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'This purchase order is already closed and cannot be modified.',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: 'SF Pro Display',
-                              fontWeight: FontWeight.w500,
-                              fontSize: 12,
-                              color: Colors.white,
-                              letterSpacing: -0.2,
-                              height: 1.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Close Button
-                    GestureDetector(
-                      onTap: _fadeOut,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

@@ -11,6 +11,12 @@ import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:familee_dental/features/inventory/controller/catalog_controller.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 
 class PurchaseOrderPage extends StatefulWidget {
   const PurchaseOrderPage({super.key});
@@ -21,6 +27,9 @@ class PurchaseOrderPage extends StatefulWidget {
 
 class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   final POListController _controller = POListController();
+  final ViewSupplyController _viewSupplyController = ViewSupplyController();
+  final Set<String> _prefetchedSupplyNames = {};
+  // ignore: unused_field
   List<PurchaseOrder> _orders = [];
   List<PurchaseOrder> _closedOrders =
       []; // Separate list for closed POs from Supabase
@@ -32,6 +41,10 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
   String? _userName;
   String? _userRole;
+  static String? _cachedUserName;
+  static String? _cachedUserRole;
+  bool?
+      _hasConnection; // Track connectivity status (null = checking, true = online, false = offline)
 
   // Stream subscriptions for proper disposal
   StreamSubscription<List<PurchaseOrder>>? _openSubscription;
@@ -53,6 +66,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
   Future<void> _load() async {
     try {
+      // Check connectivity on refresh
+      _checkConnectivity();
+
       // Load from local storage as backup (kept for potential future use)
       await _controller.getAllPOs();
 
@@ -198,8 +214,16 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   void initState() {
     super.initState();
     try {
+      if (_cachedUserName != null) {
+        _userName = _cachedUserName;
+      }
+      if (_cachedUserRole != null) {
+        _userRole = _cachedUserRole;
+      }
+
       _load();
       _loadUserData();
+      _checkConnectivity();
       searchController.addListener(() {
         setState(() {
           // This will trigger rebuild when search text changes
@@ -207,6 +231,15 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       });
     } catch (e) {
       // Error handling
+    }
+  }
+
+  Future<void> _checkConnectivity() async {
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (mounted) {
+      setState(() {
+        _hasConnection = hasConnection;
+      });
     }
   }
 
@@ -232,6 +265,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
               // Use data from user_roles table
               _userName = response['name'].toString().trim();
               _userRole = response['role']?.toString().trim() ?? 'Admin';
+              _cachedUserName = _userName;
+              _cachedUserRole = _userRole;
             } else {
               // Fallback to auth user data
               final displayName =
@@ -239,6 +274,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
               final emailName = currentUser.email?.split('@')[0].trim();
               _userName = displayName ?? emailName ?? 'User';
               _userRole = 'Admin';
+              _cachedUserName = _userName;
+              _cachedUserRole = _userRole;
             }
           });
         }
@@ -247,8 +284,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       print('Error loading user data: $e');
       if (mounted) {
         setState(() {
-          _userName = 'User';
-          _userRole = 'Admin';
+          _userName = _cachedUserName ?? 'User';
+          _userRole = _cachedUserRole ?? 'Admin';
         });
       }
     }
@@ -287,26 +324,33 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     try {
-      return WillPopScope(
-        onWillPop: () async {
-          // Navigate back to Dashboard when back button is pressed
-          // Use popUntil to go back to existing Dashboard instead of creating a new one
-          Navigator.popUntil(
-              context, (route) => route.settings.name == '/dashboard');
-          return false; // Prevent default back behavior
-        },
-        child: Scaffold(
-          resizeToAvoidBottomInset: false,
-          backgroundColor: theme.brightness == Brightness.dark
-              ? const Color(0xFF3A3A3A)
-              : const Color(0xFFF5F5F5),
-          drawer: MediaQuery.of(context).size.width >= 900
-              ? null
-              : const MyDrawer(),
-          body: MediaQuery.of(context).size.width >= 900
-              ? _buildRailLayout(context, theme)
-              : _buildPurchaseOrderContent(theme),
-        ),
+      return Stack(
+        children: [
+          WillPopScope(
+            onWillPop: () async {
+              // Navigate back to Dashboard when back button is pressed
+              // Use popUntil to go back to existing Dashboard instead of creating a new one
+              Navigator.popUntil(
+                  context, (route) => route.settings.name == '/dashboard');
+              return false; // Prevent default back behavior
+            },
+            child: Scaffold(
+              resizeToAvoidBottomInset: false,
+              backgroundColor: theme.brightness == Brightness.dark
+                  ? const Color(0xFF3A3A3A)
+                  : const Color(0xFFF5F5F5),
+              drawer: MediaQuery.of(context).size.width >= 900
+                  ? null
+                  : const MyDrawer(),
+              body: MediaQuery.of(context).size.width >= 900
+                  ? _buildRailLayout(context, theme)
+                  : _buildPurchaseOrderContent(theme),
+            ),
+          ),
+          // Hidden image cache for Add Supply page (renders off-screen to cache images)
+          // Same approach as inventory - images cached when rendered
+          _buildHiddenImageCache(),
+        ],
       );
     } catch (e) {
       return Scaffold(
@@ -930,6 +974,12 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   }
 
   void _editPO(PurchaseOrder po) async {
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      await showConnectionErrorDialog(context);
+      return;
+    }
+
     // Navigate to Create PO page with existing PO data for editing
     final result = await Navigator.pushNamed(
       context,
@@ -944,6 +994,137 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
     if (result == true) {
       await _load();
     }
+  }
+
+  // Hidden widget to cache catalog images when PO page loads (same approach as inventory)
+  // This ensures images are cached for Add Supply and Edit Supply pages without needing to visit them first
+  Widget _buildHiddenImageCache() {
+    final catalogController = CatalogController();
+
+    // Render catalog items and PO supply images off-screen to cache images automatically
+    // Same approach as inventory page - render items to trigger CachedNetworkImage caching
+    return Positioned(
+      left: -9999,
+      top: -9999,
+      width: 1,
+      height: 1,
+      child: Opacity(
+        opacity: 0,
+        child: Stack(
+          children: [
+            // Cache catalog images (for Add Supply page)
+            StreamBuilder<List<GroupedInventoryItem>>(
+              stream: catalogController.getAllProductsStream(
+                  archived: false, expired: false),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return SizedBox.shrink();
+                }
+
+                final products = snapshot.data!;
+                // Render first 30 items to cache images (enough to cover most common supplies)
+                // This matches inventory behavior where grid items cache images when rendered
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.75,
+                  ),
+                  itemCount: products.length > 30 ? 30 : products.length,
+                  itemBuilder: (context, index) {
+                    final item = products[index].mainItem;
+                    final supplyName = item.name;
+                    if (supplyName.isNotEmpty &&
+                        !_prefetchedSupplyNames.contains(supplyName)) {
+                      _prefetchedSupplyNames.add(supplyName);
+                      // Preload types for this supply name (best-effort)
+                      _viewSupplyController.getSupplyTypes(supplyName);
+                    }
+                    // Use CachedNetworkImage to cache images (same as inventory)
+                    // Images are cached automatically when this widget renders
+                    return item.imageUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: item.imageUrl,
+                            errorWidget: (context, url, error) =>
+                                SizedBox.shrink(),
+                            placeholder: (context, url) => SizedBox.shrink(),
+                          )
+                        : SizedBox.shrink();
+                  },
+                );
+              },
+            ),
+            // Cache images from existing POs (for Edit Supply page)
+            StreamBuilder<List<PurchaseOrder>>(
+              stream: _controller.getAllPOsStream(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return SizedBox.shrink();
+                }
+
+                final pos = snapshot.data!;
+                final imageUrls = <String>{};
+                final receiptUrls = <String>{};
+
+                // Collect unique image URLs from all POs (for Edit Supply caching)
+                for (final po in pos) {
+                  for (final supply in po.supplies) {
+                    final imageUrl = supply['imageUrl']?.toString() ??
+                        supply['image_url']?.toString() ??
+                        '';
+                    final supplyName = supply['supplyName']?.toString() ??
+                        supply['name']?.toString() ??
+                        '';
+                    if (supplyName.isNotEmpty &&
+                        !_prefetchedSupplyNames.contains(supplyName)) {
+                      _prefetchedSupplyNames.add(supplyName);
+                      _viewSupplyController.getSupplyTypes(supplyName);
+                    }
+                    if (imageUrl.isNotEmpty) {
+                      imageUrls.add(imageUrl);
+                    }
+
+                    final receiptUrl = supply['receiptImagePath']?.toString() ??
+                        supply['receiptImageUrl']?.toString() ??
+                        '';
+                    if (receiptUrl.startsWith('http')) {
+                      receiptUrls.add(receiptUrl);
+                    }
+                  }
+                }
+
+                // Cache up to 50 unique images from POs (for Edit Supply page)
+                final supplyImageWidgets = imageUrls.take(50).map((url) {
+                  return CachedNetworkImage(
+                    imageUrl: url,
+                    errorWidget: (context, url, error) => SizedBox.shrink(),
+                    placeholder: (context, url) => SizedBox.shrink(),
+                  );
+                });
+
+                // Cache up to 30 receipt attachments from closed POs
+                final receiptImageWidgets = receiptUrls.take(30).map((url) {
+                  return CachedNetworkImage(
+                    imageUrl: url,
+                    errorWidget: (context, url, error) => SizedBox.shrink(),
+                    placeholder: (context, url) => SizedBox.shrink(),
+                  );
+                });
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...supplyImageWidgets,
+                    ...receiptImageWidgets,
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<bool> _showDeleteConfirmation(PurchaseOrder po) async {
@@ -1010,38 +1191,23 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Buttons (Cancel first, then Delete - matching exit dialog pattern)
+                    // Buttons (Delete first, then Cancel)
                     Row(
                       children: [
                         Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              'Cancel',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
                           child: ElevatedButton(
                             onPressed: () async {
+                              // Check connectivity before proceeding
+                              final hasConnection = await ConnectivityService()
+                                  .hasInternetConnection();
+                              if (!hasConnection) {
+                                if (context.mounted) {
+                                  Navigator.of(context).pop(false);
+                                  await showConnectionErrorDialog(context);
+                                }
+                                return;
+                              }
+
                               try {
                                 // Capture PO for logging before deletion
                                 final capturedPO = po;
@@ -1112,6 +1278,32 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,
                                 color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
                                 fontSize: 16,
                               ),
                             ),
@@ -1294,10 +1486,12 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                 snapshot.data ?? const <PurchaseOrder>[];
                             final displayed = _applySearchFilter(data);
 
-                            // Show skeleton loader on first load
+                            // Show skeleton loader only when online AND waiting for data
+                            // When offline, cached data shows immediately (no skeleton needed)
                             if (snapshot.connectionState ==
                                     ConnectionState.waiting &&
-                                data.isEmpty) {
+                                data.isEmpty &&
+                                (_hasConnection == true)) {
                               final isDark = Theme.of(context).brightness ==
                                   Brightness.dark;
                               final baseColor = isDark
@@ -1965,7 +2159,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                     loading = !_loadedClosed;
                                   }
 
-                                  if (loading) {
+                                  // Show skeleton loader only when online AND loading
+                                  // When offline, cached data shows immediately (no skeleton needed)
+                                  if (loading && (_hasConnection == true)) {
                                     final isDark =
                                         theme.brightness == Brightness.dark;
                                     final baseColor = isDark
