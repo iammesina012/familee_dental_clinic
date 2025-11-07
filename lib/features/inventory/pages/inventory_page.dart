@@ -7,7 +7,6 @@ import 'package:familee_dental/features/inventory/components/inventory_filter.da
 import 'package:familee_dental/features/inventory/components/inventory_sort.dart'; // Your sort modal
 import 'package:familee_dental/features/inventory/pages/add_supply_page.dart';
 import 'package:familee_dental/features/inventory/pages/view_supply_page.dart';
-import 'package:familee_dental/features/inventory/pages/add_category_page.dart';
 import 'package:familee_dental/features/inventory/pages/edit_categories_page.dart';
 import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
 import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart';
@@ -502,27 +501,18 @@ class _InventoryState extends State<Inventory> {
               _refreshInventoryStream();
             }
           },
-          onAddCategory: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AddCategoryPage(),
-              ),
-            );
-            // Refresh categories stream when returning from add page
-            if (result == true || result == 'added') {
-              _refreshCategoriesStream();
-            }
-          },
-          onEditCategory: () async {
+          onManageCategory: () async {
             final result = await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => const EditCategoriesPage(),
               ),
             );
-            // Refresh categories stream when returning from edit page
-            if (result == true || result == 'updated' || result == 'deleted') {
+            // Refresh categories stream when returning from manage category page
+            if (result == true ||
+                result == 'updated' ||
+                result == 'deleted' ||
+                result == 'added') {
               _refreshCategoriesStream();
             }
           },

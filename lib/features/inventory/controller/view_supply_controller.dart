@@ -281,6 +281,12 @@ class ViewSupplyController {
     );
   }
 
+  // Invalidate cache for a specific supply name (useful when new types are added)
+  void invalidateSupplyTypesCache(String supplyName) {
+    debugPrint('[STREAM_CONTROLLER] Invalidating cache for: $supplyName');
+    _cachedSupplyTypes.remove(supplyName);
+  }
+
   // Get all types for a supply name with caching
   Future<List<String>> getSupplyTypes(String supplyName) async {
     debugPrint('[STREAM_CONTROLLER] getSupplyTypes called for: $supplyName');

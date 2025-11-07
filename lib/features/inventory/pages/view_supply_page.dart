@@ -10,6 +10,8 @@ import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class InventoryViewSupplyPage extends StatefulWidget {
   final InventoryItem item;
@@ -357,15 +359,51 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                     ),
                   );
                   if (confirmed == true) {
-                    await controller.archiveSupply(updatedItem.id);
-                    // Refresh the stream to show updated status
-                    _refreshStream();
-                    if (!context.mounted) return;
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => ArchiveSupplyPage(),
-                      ),
-                    );
+                    // Check connectivity before proceeding
+                    final hasConnection =
+                        await ConnectivityService().hasInternetConnection();
+                    if (!hasConnection) {
+                      if (context.mounted) {
+                        await showConnectionErrorDialog(context);
+                      }
+                      return;
+                    }
+
+                    try {
+                      await controller.archiveSupply(updatedItem.id);
+                      // Refresh the stream to show updated status
+                      _refreshStream();
+                      if (!context.mounted) return;
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (context) => ArchiveSupplyPage(),
+                        ),
+                      );
+                    } catch (e) {
+                      // Check if it's a network error
+                      final errorString = e.toString().toLowerCase();
+                      if (errorString.contains('socketexception') ||
+                          errorString.contains('failed host lookup') ||
+                          errorString.contains('no address associated') ||
+                          errorString.contains('network is unreachable') ||
+                          errorString.contains('connection refused') ||
+                          errorString.contains('connection timed out')) {
+                        if (context.mounted) {
+                          await showConnectionErrorDialog(context);
+                        }
+                      } else {
+                        // Other error - show generic error message
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Failed to archive supply: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
                   }
                 },
               ),
@@ -389,12 +427,48 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                     ),
                   );
                   if (confirmed == true) {
-                    await controller.unarchiveSupply(updatedItem.id);
-                    // Refresh the stream to show updated status
-                    _refreshStream();
-                    if (!context.mounted) return;
-                    Navigator.of(context).pop(
-                        'unarchived'); // Go back to archive page with result
+                    // Check connectivity before proceeding
+                    final hasConnection =
+                        await ConnectivityService().hasInternetConnection();
+                    if (!hasConnection) {
+                      if (context.mounted) {
+                        await showConnectionErrorDialog(context);
+                      }
+                      return;
+                    }
+
+                    try {
+                      await controller.unarchiveSupply(updatedItem.id);
+                      // Refresh the stream to show updated status
+                      _refreshStream();
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop(
+                          'unarchived'); // Go back to archive page with result
+                    } catch (e) {
+                      // Check if it's a network error
+                      final errorString = e.toString().toLowerCase();
+                      if (errorString.contains('socketexception') ||
+                          errorString.contains('failed host lookup') ||
+                          errorString.contains('no address associated') ||
+                          errorString.contains('network is unreachable') ||
+                          errorString.contains('connection refused') ||
+                          errorString.contains('connection timed out')) {
+                        if (context.mounted) {
+                          await showConnectionErrorDialog(context);
+                        }
+                      } else {
+                        // Other error - show generic error message
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Failed to unarchive supply: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
                   }
                 },
               ),
@@ -417,6 +491,16 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                     ),
                   );
                   if (confirmed == true) {
+                    // Check connectivity before proceeding
+                    final hasConnection =
+                        await ConnectivityService().hasInternetConnection();
+                    if (!hasConnection) {
+                      if (context.mounted) {
+                        await showConnectionErrorDialog(context);
+                      }
+                      return;
+                    }
+
                     try {
                       await controller.deleteSupply(updatedItem.id);
                       if (!context.mounted) return;
@@ -428,13 +512,29 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                         ),
                       );
                     } catch (e) {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to delete supply: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
+                      // Check if it's a network error
+                      final errorString = e.toString().toLowerCase();
+                      if (errorString.contains('socketexception') ||
+                          errorString.contains('failed host lookup') ||
+                          errorString.contains('no address associated') ||
+                          errorString.contains('network is unreachable') ||
+                          errorString.contains('connection refused') ||
+                          errorString.contains('connection timed out')) {
+                        if (context.mounted) {
+                          await showConnectionErrorDialog(context);
+                        }
+                      } else {
+                        // Other error - show generic error message
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Failed to delete supply: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
                     }
                   }
                 },
@@ -1441,6 +1541,19 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
 
                                       if (confirmed == true) {
                                         Navigator.of(context).pop();
+
+                                        // Check connectivity before proceeding
+                                        final hasConnection =
+                                            await ConnectivityService()
+                                                .hasInternetConnection();
+                                        if (!hasConnection) {
+                                          if (context.mounted) {
+                                            await showConnectionErrorDialog(
+                                                context);
+                                          }
+                                          return;
+                                        }
+
                                         await _createNewType(currentItem,
                                             newType, stockQuantity);
                                       }
@@ -1484,6 +1597,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
   // Create new supply item with same details but new type
   Future<void> _createNewType(
       InventoryItem currentItem, String newType, int stockQuantity) async {
+    if (!context.mounted) return;
     try {
       final supabase = Supabase.instance.client;
 
@@ -1548,6 +1662,10 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
           .select()
           .single();
 
+      // Invalidate the cache for this supply name so the dropdown refreshes
+      final viewController = ViewSupplyController();
+      viewController.invalidateSupplyTypesCache(currentItem.name);
+
       // Navigate to the new supply item
       final newItem = InventoryItem(
         id: response['id'] as String,
@@ -1587,13 +1705,29 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         ),
       );
     } catch (e) {
-      print('Error creating new type: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to add new type: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception')) {
+        if (context.mounted) {
+          await showConnectionErrorDialog(context);
+        }
+      } else {
+        // Other error - show generic error message
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to add new type: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 }

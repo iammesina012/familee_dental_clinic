@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class AddCategoryPage extends StatefulWidget {
   const AddCategoryPage({super.key});
@@ -59,6 +61,15 @@ class _AddCategoryPageState extends State<AddCategoryPage> {
     final confirmed = await _showAddConfirmation();
     if (!confirmed) return;
 
+    // Check connectivity before proceeding
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (mounted) {
+        await showConnectionErrorDialog(context);
+      }
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
@@ -71,10 +82,25 @@ class _AddCategoryPageState extends State<AddCategoryPage> {
         SnackBar(content: Text('Category added successfully!')),
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to add category: $e')),
-      );
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception')) {
+        if (mounted) {
+          await showConnectionErrorDialog(context);
+        }
+      } else {
+        // Other error - show generic error message
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add category: ${e.toString()}')),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {

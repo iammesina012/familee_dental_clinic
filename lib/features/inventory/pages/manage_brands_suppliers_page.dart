@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
-import 'package:familee_dental/shared/themes/font.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class ManageBrandsSuppliersPage extends StatefulWidget {
   const ManageBrandsSuppliersPage({super.key});
@@ -538,28 +539,106 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                         onPressed: () async {
                           if (controller.text.trim().isNotEmpty &&
                               controller.text.trim() != oldName) {
-                            final exists = await filterController
-                                .brandExists(controller.text.trim());
-                            if (exists) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      'Brand "${controller.text.trim()}" already exists!'),
-                                  backgroundColor: Colors.red[600],
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            } else {
-                              // Show confirmation dialog first
-                              final confirmed =
-                                  await _showEditBrandConfirmation(
-                                      oldName, controller.text.trim());
-                              if (confirmed) {
-                                await filterController.updateBrandName(
-                                    oldName, controller.text.trim());
-                                Navigator.pop(context,
-                                    true); // Return true to indicate update was made
+                            // Check connectivity FIRST before any network operations
+                            final hasConnection = await ConnectivityService()
+                                .hasInternetConnection();
+                            if (!hasConnection) {
+                              if (mounted) {
+                                await showConnectionErrorDialog(context);
+                              }
+                              return;
+                            }
+
+                            try {
+                              final exists = await filterController
+                                  .brandExists(controller.text.trim());
+                              if (exists) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Brand "${controller.text.trim()}" already exists!'),
+                                    backgroundColor: Colors.red[600],
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              } else {
+                                // Show confirmation dialog first
+                                final confirmed =
+                                    await _showEditBrandConfirmation(
+                                        oldName, controller.text.trim());
+                                if (confirmed) {
+                                  try {
+                                    await filterController.updateBrandName(
+                                        oldName, controller.text.trim());
+                                    if (mounted) {
+                                      Navigator.pop(context,
+                                          true); // Return true to indicate update was made
+                                    }
+                                  } catch (e) {
+                                    // Check if it's a network error
+                                    final errorString =
+                                        e.toString().toLowerCase();
+                                    if (errorString
+                                            .contains('socketexception') ||
+                                        errorString
+                                            .contains('failed host lookup') ||
+                                        errorString.contains(
+                                            'no address associated') ||
+                                        errorString.contains(
+                                            'network is unreachable') ||
+                                        errorString
+                                            .contains('connection refused') ||
+                                        errorString
+                                            .contains('connection timed out') ||
+                                        errorString
+                                            .contains('clientexception')) {
+                                      if (mounted) {
+                                        await showConnectionErrorDialog(
+                                            context);
+                                      }
+                                    } else {
+                                      // Other error - show generic error message
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                'Failed to update brand: ${e.toString()}'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            } catch (e) {
+                              // Handle errors from brandExists check
+                              final errorString = e.toString().toLowerCase();
+                              if (errorString.contains('socketexception') ||
+                                  errorString.contains('failed host lookup') ||
+                                  errorString
+                                      .contains('no address associated') ||
+                                  errorString
+                                      .contains('network is unreachable') ||
+                                  errorString.contains('connection refused') ||
+                                  errorString
+                                      .contains('connection timed out') ||
+                                  errorString.contains('clientexception')) {
+                                if (mounted) {
+                                  await showConnectionErrorDialog(context);
+                                }
+                              } else {
+                                // Other error - show generic error message
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error: ${e.toString()}'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
                               }
                             }
                           }
@@ -696,28 +775,106 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                         onPressed: () async {
                           if (controller.text.trim().isNotEmpty &&
                               controller.text.trim() != oldName) {
-                            final exists = await filterController
-                                .supplierExists(controller.text.trim());
-                            if (exists) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      'Supplier "${controller.text.trim()}" already exists!'),
-                                  backgroundColor: Colors.red[600],
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            } else {
-                              // Show confirmation dialog first
-                              final confirmed =
-                                  await _showEditSupplierConfirmation(
-                                      oldName, controller.text.trim());
-                              if (confirmed) {
-                                await filterController.updateSupplierName(
-                                    oldName, controller.text.trim());
-                                Navigator.pop(context,
-                                    true); // Return true to indicate update was made
+                            // Check connectivity FIRST before any network operations
+                            final hasConnection = await ConnectivityService()
+                                .hasInternetConnection();
+                            if (!hasConnection) {
+                              if (mounted) {
+                                await showConnectionErrorDialog(context);
+                              }
+                              return;
+                            }
+
+                            try {
+                              final exists = await filterController
+                                  .supplierExists(controller.text.trim());
+                              if (exists) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Supplier "${controller.text.trim()}" already exists!'),
+                                    backgroundColor: Colors.red[600],
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              } else {
+                                // Show confirmation dialog first
+                                final confirmed =
+                                    await _showEditSupplierConfirmation(
+                                        oldName, controller.text.trim());
+                                if (confirmed) {
+                                  try {
+                                    await filterController.updateSupplierName(
+                                        oldName, controller.text.trim());
+                                    if (mounted) {
+                                      Navigator.pop(context,
+                                          true); // Return true to indicate update was made
+                                    }
+                                  } catch (e) {
+                                    // Check if it's a network error
+                                    final errorString =
+                                        e.toString().toLowerCase();
+                                    if (errorString
+                                            .contains('socketexception') ||
+                                        errorString
+                                            .contains('failed host lookup') ||
+                                        errorString.contains(
+                                            'no address associated') ||
+                                        errorString.contains(
+                                            'network is unreachable') ||
+                                        errorString
+                                            .contains('connection refused') ||
+                                        errorString
+                                            .contains('connection timed out') ||
+                                        errorString
+                                            .contains('clientexception')) {
+                                      if (mounted) {
+                                        await showConnectionErrorDialog(
+                                            context);
+                                      }
+                                    } else {
+                                      // Other error - show generic error message
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                'Failed to update supplier: ${e.toString()}'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            } catch (e) {
+                              // Handle errors from supplierExists check
+                              final errorString = e.toString().toLowerCase();
+                              if (errorString.contains('socketexception') ||
+                                  errorString.contains('failed host lookup') ||
+                                  errorString
+                                      .contains('no address associated') ||
+                                  errorString
+                                      .contains('network is unreachable') ||
+                                  errorString.contains('connection refused') ||
+                                  errorString
+                                      .contains('connection timed out') ||
+                                  errorString.contains('clientexception')) {
+                                if (mounted) {
+                                  await showConnectionErrorDialog(context);
+                                }
+                              } else {
+                                // Other error - show generic error message
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error: ${e.toString()}'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
                               }
                             }
                           }
@@ -771,6 +928,16 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
       ),
     ).then((confirmed) async {
       if (confirmed == true) {
+        // Check connectivity before proceeding
+        final hasConnection =
+            await ConnectivityService().hasInternetConnection();
+        if (!hasConnection) {
+          if (mounted) {
+            await showConnectionErrorDialog(context);
+          }
+          return;
+        }
+
         try {
           await filterController.deleteBrand(brandName);
           // Force rebuild to show updated list immediately
@@ -785,14 +952,29 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
             );
           }
         } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error deleting brand: $e'),
-                backgroundColor: Colors.red[600],
-                duration: Duration(seconds: 3),
-              ),
-            );
+          // Check if it's a network error
+          final errorString = e.toString().toLowerCase();
+          if (errorString.contains('socketexception') ||
+              errorString.contains('failed host lookup') ||
+              errorString.contains('no address associated') ||
+              errorString.contains('network is unreachable') ||
+              errorString.contains('connection refused') ||
+              errorString.contains('connection timed out') ||
+              errorString.contains('clientexception')) {
+            if (mounted) {
+              await showConnectionErrorDialog(context);
+            }
+          } else {
+            // Other error - show generic error message
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error deleting brand: ${e.toString()}'),
+                  backgroundColor: Colors.red[600],
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
           }
         }
       }
@@ -813,6 +995,16 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
       ),
     ).then((confirmed) async {
       if (confirmed == true) {
+        // Check connectivity before proceeding
+        final hasConnection =
+            await ConnectivityService().hasInternetConnection();
+        if (!hasConnection) {
+          if (mounted) {
+            await showConnectionErrorDialog(context);
+          }
+          return;
+        }
+
         try {
           await filterController.deleteSupplier(supplierName);
           // Force rebuild to show updated list immediately
@@ -827,14 +1019,29 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
             );
           }
         } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error deleting supplier: $e'),
-                backgroundColor: Colors.red[600],
-                duration: Duration(seconds: 3),
-              ),
-            );
+          // Check if it's a network error
+          final errorString = e.toString().toLowerCase();
+          if (errorString.contains('socketexception') ||
+              errorString.contains('failed host lookup') ||
+              errorString.contains('no address associated') ||
+              errorString.contains('network is unreachable') ||
+              errorString.contains('connection refused') ||
+              errorString.contains('connection timed out') ||
+              errorString.contains('clientexception')) {
+            if (mounted) {
+              await showConnectionErrorDialog(context);
+            }
+          } else {
+            // Other error - show generic error message
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error deleting supplier: ${e.toString()}'),
+                  backgroundColor: Colors.red[600],
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
           }
         }
       }

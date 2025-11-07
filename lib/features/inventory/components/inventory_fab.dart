@@ -6,16 +6,14 @@ class InventoryFAB extends StatelessWidget {
   final Function()? onAddSupply;
   final Function()? onArchivedSupply;
   final Function()? onExpiredSupply;
-  final Function()? onAddCategory;
-  final Function()? onEditCategory;
+  final Function()? onManageCategory;
 
   const InventoryFAB({
     Key? key,
     this.onAddSupply,
     this.onArchivedSupply,
     this.onExpiredSupply,
-    this.onAddCategory,
-    this.onEditCategory,
+    this.onManageCategory,
   }) : super(key: key);
 
   @override
@@ -100,12 +98,12 @@ class InventoryFAB extends StatelessWidget {
                 onTap: onArchivedSupply,
               ),
 
-            // Add Category - Only for Admin users
+            // Manage Category - Only for Admin users
             if (!isStaff)
               SpeedDialChild(
                 child: Icon(Icons.category, color: Colors.white),
                 backgroundColor: Colors.orange,
-                label: 'Add Category',
+                label: 'Manage Category',
                 labelStyle: TextStyle(
                   fontFamily: 'SF Pro',
                   fontWeight: FontWeight.w500,
@@ -114,24 +112,7 @@ class InventoryFAB extends StatelessWidget {
                 ),
                 labelBackgroundColor: labelBg,
                 labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
-                onTap: onAddCategory,
-              ),
-
-            // Edit Category - Only for Admin users
-            if (!isStaff)
-              SpeedDialChild(
-                child: Icon(Icons.edit, color: Colors.white),
-                backgroundColor: Colors.blueGrey,
-                label: 'Edit Category',
-                labelStyle: TextStyle(
-                  fontFamily: 'SF Pro',
-                  fontWeight: FontWeight.w500,
-                  fontSize: 15,
-                  color: labelTextColor,
-                ),
-                labelBackgroundColor: labelBg,
-                labelShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
-                onTap: onEditCategory,
+                onTap: onManageCategory,
               ),
           ],
         );

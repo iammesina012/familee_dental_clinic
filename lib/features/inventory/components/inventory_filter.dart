@@ -3,6 +3,8 @@ import 'package:familee_dental/features/inventory/controller/filter_controller.d
 import 'package:familee_dental/features/inventory/pages/manage_brands_suppliers_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class InventoryFilterModal extends StatefulWidget {
   final void Function(Map<String, dynamic> filters)? onApply;
@@ -423,24 +425,92 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                     onPressed: () async {
                       if (controller.text.trim().isNotEmpty &&
                           controller.text.trim() != oldName) {
-                        // Check if the new name already exists
-                        final exists = await filterController
-                            .brandExists(controller.text.trim());
-                        if (exists) {
-                          // Close dialog first, then show error message
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Brand "${controller.text.trim()}" already exists!'),
-                              backgroundColor: Colors.red[600],
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        } else {
-                          await filterController.updateBrandName(
-                              oldName, controller.text.trim());
-                          Navigator.pop(context);
+                        // Check connectivity FIRST before any network operations
+                        final hasConnection =
+                            await ConnectivityService().hasInternetConnection();
+                        if (!hasConnection) {
+                          if (context.mounted) {
+                            await showConnectionErrorDialog(context);
+                          }
+                          return;
+                        }
+
+                        try {
+                          // Check if the new name already exists
+                          final exists = await filterController
+                              .brandExists(controller.text.trim());
+                          if (exists) {
+                            // Close dialog first, then show error message
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Brand "${controller.text.trim()}" already exists!'),
+                                backgroundColor: Colors.red[600],
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          } else {
+                            try {
+                              await filterController.updateBrandName(
+                                  oldName, controller.text.trim());
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                              }
+                            } catch (e) {
+                              // Check if it's a network error
+                              final errorString = e.toString().toLowerCase();
+                              if (errorString.contains('socketexception') ||
+                                  errorString.contains('failed host lookup') ||
+                                  errorString
+                                      .contains('no address associated') ||
+                                  errorString
+                                      .contains('network is unreachable') ||
+                                  errorString.contains('connection refused') ||
+                                  errorString
+                                      .contains('connection timed out') ||
+                                  errorString.contains('clientexception')) {
+                                if (context.mounted) {
+                                  await showConnectionErrorDialog(context);
+                                }
+                              } else {
+                                // Other error - show generic error message
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Failed to update brand: ${e.toString()}'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          // Handle errors from brandExists check
+                          final errorString = e.toString().toLowerCase();
+                          if (errorString.contains('socketexception') ||
+                              errorString.contains('failed host lookup') ||
+                              errorString.contains('no address associated') ||
+                              errorString.contains('network is unreachable') ||
+                              errorString.contains('connection refused') ||
+                              errorString.contains('connection timed out') ||
+                              errorString.contains('clientexception')) {
+                            if (context.mounted) {
+                              await showConnectionErrorDialog(context);
+                            }
+                          } else {
+                            // Other error - show generic error message
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
                         }
                       }
                     },
@@ -546,24 +616,92 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                     onPressed: () async {
                       if (controller.text.trim().isNotEmpty &&
                           controller.text.trim() != oldName) {
-                        // Check if the new name already exists
-                        final exists = await filterController
-                            .supplierExists(controller.text.trim());
-                        if (exists) {
-                          // Close dialog first, then show error message
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Supplier "${controller.text.trim()}" already exists!'),
-                              backgroundColor: Colors.red[600],
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        } else {
-                          await filterController.updateSupplierName(
-                              oldName, controller.text.trim());
-                          Navigator.pop(context);
+                        // Check connectivity FIRST before any network operations
+                        final hasConnection =
+                            await ConnectivityService().hasInternetConnection();
+                        if (!hasConnection) {
+                          if (context.mounted) {
+                            await showConnectionErrorDialog(context);
+                          }
+                          return;
+                        }
+
+                        try {
+                          // Check if the new name already exists
+                          final exists = await filterController
+                              .supplierExists(controller.text.trim());
+                          if (exists) {
+                            // Close dialog first, then show error message
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Supplier "${controller.text.trim()}" already exists!'),
+                                backgroundColor: Colors.red[600],
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          } else {
+                            try {
+                              await filterController.updateSupplierName(
+                                  oldName, controller.text.trim());
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                              }
+                            } catch (e) {
+                              // Check if it's a network error
+                              final errorString = e.toString().toLowerCase();
+                              if (errorString.contains('socketexception') ||
+                                  errorString.contains('failed host lookup') ||
+                                  errorString
+                                      .contains('no address associated') ||
+                                  errorString
+                                      .contains('network is unreachable') ||
+                                  errorString.contains('connection refused') ||
+                                  errorString
+                                      .contains('connection timed out') ||
+                                  errorString.contains('clientexception')) {
+                                if (context.mounted) {
+                                  await showConnectionErrorDialog(context);
+                                }
+                              } else {
+                                // Other error - show generic error message
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Failed to update supplier: ${e.toString()}'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          // Handle errors from supplierExists check
+                          final errorString = e.toString().toLowerCase();
+                          if (errorString.contains('socketexception') ||
+                              errorString.contains('failed host lookup') ||
+                              errorString.contains('no address associated') ||
+                              errorString.contains('network is unreachable') ||
+                              errorString.contains('connection refused') ||
+                              errorString.contains('connection timed out') ||
+                              errorString.contains('clientexception')) {
+                            if (context.mounted) {
+                              await showConnectionErrorDialog(context);
+                            }
+                          } else {
+                            // Other error - show generic error message
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
                         }
                       }
                     },
@@ -617,8 +755,47 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              await filterController.deleteBrand(brandName);
-              Navigator.pop(context);
+              // Check connectivity before proceeding
+              final hasConnection =
+                  await ConnectivityService().hasInternetConnection();
+              if (!hasConnection) {
+                if (context.mounted) {
+                  await showConnectionErrorDialog(context);
+                }
+                return;
+              }
+
+              try {
+                await filterController.deleteBrand(brandName);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              } catch (e) {
+                // Check if it's a network error
+                final errorString = e.toString().toLowerCase();
+                if (errorString.contains('socketexception') ||
+                    errorString.contains('failed host lookup') ||
+                    errorString.contains('no address associated') ||
+                    errorString.contains('network is unreachable') ||
+                    errorString.contains('connection refused') ||
+                    errorString.contains('connection timed out') ||
+                    errorString.contains('clientexception')) {
+                  if (context.mounted) {
+                    await showConnectionErrorDialog(context);
+                  }
+                } else {
+                  // Other error - show generic error message
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content:
+                            Text('Failed to delete brand: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              }
             },
             child: Text('Delete', style: TextStyle(color: Colors.white)),
           ),
@@ -649,8 +826,47 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              await filterController.deleteSupplier(supplierName);
-              Navigator.pop(context);
+              // Check connectivity before proceeding
+              final hasConnection =
+                  await ConnectivityService().hasInternetConnection();
+              if (!hasConnection) {
+                if (context.mounted) {
+                  await showConnectionErrorDialog(context);
+                }
+                return;
+              }
+
+              try {
+                await filterController.deleteSupplier(supplierName);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              } catch (e) {
+                // Check if it's a network error
+                final errorString = e.toString().toLowerCase();
+                if (errorString.contains('socketexception') ||
+                    errorString.contains('failed host lookup') ||
+                    errorString.contains('no address associated') ||
+                    errorString.contains('network is unreachable') ||
+                    errorString.contains('connection refused') ||
+                    errorString.contains('connection timed out') ||
+                    errorString.contains('clientexception')) {
+                  if (context.mounted) {
+                    await showConnectionErrorDialog(context);
+                  }
+                } else {
+                  // Other error - show generic error message
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content:
+                            Text('Failed to delete supplier: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              }
             },
             child: Text('Delete', style: TextStyle(color: Colors.white)),
           ),

@@ -14,53 +14,162 @@ class CategoriesController {
   // Cache for last known data (persists across widget rebuilds)
   List<String>? _cachedCategories;
 
+  // Stream controller for broadcasting updates
+  StreamController<List<String>>? _streamController;
+
   // Get all categories as stream
   Stream<List<String>> getCategoriesStream() {
-    final controller = StreamController<List<String>>.broadcast();
-
-    // Emit cached data immediately if available (no delay - instant feedback)
-    if (_cachedCategories != null) {
-      controller.add(_cachedCategories!);
+    // If stream controller exists and is still open, reuse it
+    // Otherwise create a new one
+    if (_streamController != null && !_streamController!.isClosed) {
+      // Return existing stream, but ensure we emit current cache
+      if (_cachedCategories != null) {
+        _streamController!.add(_cachedCategories!);
+      }
+      return _streamController!.stream;
     }
 
-    try {
-      _supabase.from('categories').stream(primaryKey: ['id']).listen(
-        (data) {
+    _streamController = StreamController<List<String>>.broadcast();
+
+    // ALWAYS emit something immediately to prevent StreamBuilder from blocking
+    // Emit cached data if available, otherwise empty list
+    if (_cachedCategories != null) {
+      _streamController!.add(_cachedCategories!);
+    } else {
+      // Emit empty list immediately so UI doesn't wait
+      _streamController!.add([]);
+    }
+
+    // Use a one-time query with timeout to avoid blocking when offline
+    // This prevents the app from freezing when trying to establish a stream connection
+    Future<void> fetchCategories() async {
+      try {
+        // Use timeout to prevent hanging when offline
+        try {
+          final data = await _supabase
+              .from('categories')
+              .select('name')
+              .timeout(const Duration(seconds: 2));
+
           try {
             final categories = data.map((row) => row['name'] as String).toList()
               ..sort();
 
             // Cache the result
             _cachedCategories = categories;
-            controller.add(categories);
+            if (_streamController != null && !_streamController!.isClosed) {
+              _streamController!.add(categories);
+            }
           } catch (e) {
             // On error, emit cached data if available
             if (_cachedCategories != null) {
-              controller.add(_cachedCategories!);
+              if (_streamController != null && !_streamController!.isClosed) {
+                _streamController!.add(_cachedCategories!);
+              }
             } else {
-              controller.add([]);
+              if (_streamController != null && !_streamController!.isClosed) {
+                _streamController!.add([]);
+              }
             }
           }
-        },
-        onError: (error) {
-          // On stream error, emit cached data if available
+        } catch (error) {
+          // On query error (network/timeout), emit cached data if available
           if (_cachedCategories != null) {
-            controller.add(_cachedCategories!);
+            if (_streamController != null && !_streamController!.isClosed) {
+              _streamController!.add(_cachedCategories!);
+            }
           } else {
-            controller.add([]);
+            if (_streamController != null && !_streamController!.isClosed) {
+              _streamController!.add([]);
+            }
           }
-        },
-      );
-    } catch (e) {
-      // If stream creation fails, emit cached data if available
-      if (_cachedCategories != null) {
-        controller.add(_cachedCategories!);
-      } else {
-        controller.add([]);
+        }
+
+        // After initial query, set up stream for real-time updates (non-blocking)
+        try {
+          _supabase.from('categories').stream(primaryKey: ['id']).listen(
+            (data) {
+              try {
+                final categories =
+                    data.map((row) => row['name'] as String).toList()..sort();
+
+                // Cache the result
+                _cachedCategories = categories;
+                if (_streamController != null && !_streamController!.isClosed) {
+                  _streamController!.add(categories);
+                }
+              } catch (e) {
+                // On error, emit cached data if available
+                if (_cachedCategories != null) {
+                  if (_streamController != null &&
+                      !_streamController!.isClosed) {
+                    _streamController!.add(_cachedCategories!);
+                  }
+                } else {
+                  if (_streamController != null &&
+                      !_streamController!.isClosed) {
+                    _streamController!.add([]);
+                  }
+                }
+              }
+            },
+            onError: (error) {
+              // On stream error, emit cached data if available (don't block)
+              if (_cachedCategories != null) {
+                if (_streamController != null && !_streamController!.isClosed) {
+                  _streamController!.add(_cachedCategories!);
+                }
+              }
+              // Don't emit empty list on stream errors to avoid overwriting good data
+            },
+            cancelOnError: false, // Continue listening even on errors
+          );
+        } catch (e) {
+          // Stream creation failed, but we already have data from the query
+          // Don't do anything - cached data is already emitted
+        }
+      } catch (e) {
+        // If query fails (timeout/network error), emit cached data if available
+        if (_cachedCategories != null) {
+          if (_streamController != null && !_streamController!.isClosed) {
+            _streamController!.add(_cachedCategories!);
+          }
+        } else {
+          if (_streamController != null && !_streamController!.isClosed) {
+            _streamController!.add([]);
+          }
+        }
       }
     }
 
-    return controller.stream;
+    // Start fetching (non-blocking)
+    fetchCategories();
+
+    return _streamController!.stream;
+  }
+
+  // Refresh categories cache and notify listeners
+  Future<void> refreshCategories() async {
+    try {
+      final data = await _supabase
+          .from('categories')
+          .select('name')
+          .timeout(const Duration(seconds: 2));
+
+      final categories = data.map((row) => row['name'] as String).toList()
+        ..sort();
+
+      // Update cache
+      _cachedCategories = categories;
+
+      // Notify all listeners immediately
+      if (_streamController != null && !_streamController!.isClosed) {
+        _streamController!.add(categories);
+      }
+    } catch (e) {
+      // If refresh fails, keep existing cache
+      // The Supabase stream will eventually update
+    }
   }
 
   // Add new category
@@ -85,6 +194,9 @@ class CategoriesController {
       await InventoryActivityController().logCategoryAdded(
         categoryName: categoryName.trim(),
       );
+
+      // Refresh cache immediately for real-time update
+      await refreshCategories();
     }
   }
 
@@ -114,6 +226,9 @@ class CategoriesController {
       oldCategoryName: oldName.trim(),
       newCategoryName: newName.trim(),
     );
+
+    // Refresh cache immediately for real-time update
+    await refreshCategories();
   }
 
   // Delete category
@@ -149,6 +264,9 @@ class CategoriesController {
       await InventoryActivityController().logCategoryDeleted(
         categoryName: categoryName.trim(),
       );
+
+      // Refresh cache immediately for real-time update
+      await refreshCategories();
     }
   }
 

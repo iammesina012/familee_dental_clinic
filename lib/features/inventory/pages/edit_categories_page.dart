@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
-import 'package:familee_dental/shared/themes/font.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class EditCategoriesPage extends StatefulWidget {
   const EditCategoriesPage({super.key});
@@ -16,10 +17,14 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
   final Map<String, TextEditingController> editControllers = {};
   final Map<String, bool> isEditing = {};
   final Map<String, String?> validationErrors = {};
+  final TextEditingController addCategoryController = TextEditingController();
+  bool isAddingCategory = false;
+  String? addCategoryValidationError;
 
   @override
   void dispose() {
     editControllers.values.forEach((controller) => controller.dispose());
+    addCategoryController.dispose();
     super.dispose();
   }
 
@@ -68,8 +73,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     // Validate alphanumeric input
     if (!_isValidAlphanumeric(newName)) {
       setState(() {
-        validationErrors[oldName] =
-            'Category name must contain letters and cannot be only numbers or special characters.';
+        validationErrors[oldName] = 'Must contain at least one letter';
       });
       return;
     }
@@ -83,15 +87,33 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     final confirmed = await _showEditConfirmation(oldName, newName);
     if (!confirmed) return;
 
+    // Check connectivity before proceeding
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (mounted) {
+        await showConnectionErrorDialog(context);
+      }
+      return;
+    }
+
     try {
       await categoriesController.updateCategory(oldName, newName);
       if (!mounted) return;
-      // Force rebuild to show updated categories (stream updates automatically)
+
+      // Clear editing state for the old name
       setState(() {
         isEditing[oldName] = false;
         editControllers[oldName]?.dispose();
         editControllers.remove(oldName);
+        // Also clear any potential state for new name
+        isEditing[newName] = false;
+        editControllers[newName]?.dispose();
+        editControllers.remove(newName);
       });
+
+      // The stream will automatically update via refreshCategories() in the controller
+      // No need to manually refresh - real-time update is handled
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -102,16 +124,31 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to update category: $e',
-            style: TextStyle(fontFamily: 'SF Pro'),
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception')) {
+        if (mounted) {
+          await showConnectionErrorDialog(context);
+        }
+      } else {
+        // Other error - show generic error message
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to update category: ${e.toString()}',
+              style: TextStyle(fontFamily: 'SF Pro'),
+            ),
+            backgroundColor: Colors.red,
           ),
-          backgroundColor: Colors.red,
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -122,11 +159,29 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     );
 
     if (confirmed == true) {
+      // Check connectivity before proceeding
+      final hasConnection = await ConnectivityService().hasInternetConnection();
+      if (!hasConnection) {
+        if (mounted) {
+          await showConnectionErrorDialog(context);
+        }
+        return;
+      }
+
       try {
         await categoriesController.deleteCategory(categoryName);
         if (!mounted) return;
-        // Force rebuild to show updated categories (stream updates automatically)
-        setState(() {});
+
+        // Clear editing state for the deleted category
+        setState(() {
+          isEditing[categoryName] = false;
+          editControllers[categoryName]?.dispose();
+          editControllers.remove(categoryName);
+        });
+
+        // The stream will automatically update via refreshCategories() in the controller
+        // No need to manually refresh - real-time update is handled
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -137,16 +192,31 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
           ),
         );
       } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to delete category: $e',
-              style: TextStyle(fontFamily: 'SF Pro'),
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception')) {
+          if (mounted) {
+            await showConnectionErrorDialog(context);
+          }
+        } else {
+          // Other error - show generic error message
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to delete category: ${e.toString()}',
+                style: TextStyle(fontFamily: 'SF Pro'),
+              ),
+              backgroundColor: Colors.red,
             ),
-            backgroundColor: Colors.red,
-          ),
-        );
+          );
+        }
       }
     }
   }
@@ -163,7 +233,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          "Edit Categories",
+          "Manage Category",
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
             fontFamily: 'SF Pro',
@@ -275,17 +345,52 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
 
             final categories = snapshot.data!;
             return ResponsiveContainer(
-              maxWidth: 800,
+              maxWidth: 900,
               child: ListView.builder(
                 physics: AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.symmetric(
                   horizontal:
-                      MediaQuery.of(context).size.width < 768 ? 1.0 : 16.0,
+                      MediaQuery.of(context).size.width < 768 ? 1.0 : 20.0,
                   vertical: 12.0,
                 ),
-                itemCount: categories.length,
+                itemCount: categories.length + 1, // +1 for the add button
                 itemBuilder: (context, index) {
-                  final categoryName = categories[index];
+                  // First item is the "Add Category" button
+                  if (index == 0) {
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showAddCategoryDialog(),
+                          icon: Icon(Icons.add, color: Colors.white, size: 18),
+                          label: Text(
+                            'Add Category',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFF00D4AA),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  final categoryName = categories[index - 1];
                   final isCurrentlyEditing = isEditing[categoryName] == true;
 
                   return Container(
@@ -309,12 +414,12 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                           Container(
                             padding: EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Color(0xFF4E38D4).withOpacity(0.1),
+                              color: Color(0xFF00D4AA).withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
                               Icons.category,
-                              color: Color(0xFF4E38D4),
+                              color: Color(0xFF00D4AA),
                               size: 24,
                             ),
                           ),
@@ -352,7 +457,7 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                                                         categoryName] !=
                                                     null
                                                 ? Colors.red[600]!
-                                                : Color(0xFF4E38D4),
+                                                : Color(0xFF00D4AA),
                                             width: 2),
                                       ),
                                       contentPadding: EdgeInsets.symmetric(
@@ -440,12 +545,12 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                             // Edit button
                             Container(
                               decoration: BoxDecoration(
-                                color: Color(0xFF4E38D4).withOpacity(0.1),
+                                color: Color(0xFF00D4AA).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: IconButton(
                                 icon: Icon(Icons.edit,
-                                    color: Color(0xFF4E38D4), size: 20),
+                                    color: Color(0xFF00D4AA), size: 20),
                                 onPressed: () => _startEditing(categoryName),
                                 padding: EdgeInsets.all(8),
                                 constraints:
@@ -709,6 +814,408 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                             ),
                             child: Text(
                               'Update',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+  }
+
+  Future<void> _showAddCategoryDialog() async {
+    addCategoryController.clear();
+    addCategoryValidationError = null;
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 500,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Add Category',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro',
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.titleLarge?.color,
+                            ),
+                          ),
+                          IconButton(
+                            icon:
+                                Icon(Icons.close, color: theme.iconTheme.color),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Text Field
+                      TextField(
+                        controller: addCategoryController,
+                        decoration: InputDecoration(
+                          labelText: 'Category Name *',
+                          hintText: 'e.g., Dental Equipment',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: addCategoryValidationError != null
+                                  ? Colors.red[600]!
+                                  : isDark
+                                      ? Colors.grey[700]!
+                                      : Colors.grey[300]!,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: addCategoryValidationError != null
+                                  ? Colors.red[600]!
+                                  : Color(0xFF00D4AA),
+                              width: 2,
+                            ),
+                          ),
+                          errorText: addCategoryValidationError,
+                          errorStyle: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontSize: 12,
+                            color: Colors.red[600],
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        textCapitalization: TextCapitalization.words,
+                        style: TextStyle(
+                          fontFamily: 'SF Pro',
+                          fontSize: 16,
+                          color: theme.textTheme.bodyLarge?.color,
+                        ),
+                        onChanged: (value) {
+                          if (addCategoryValidationError != null) {
+                            setDialogState(() {
+                              addCategoryValidationError = null;
+                            });
+                          }
+                        },
+                        autofocus: true,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: isAddingCategory
+                                ? null
+                                : () => _addCategory(setDialogState),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: isAddingCategory
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    'Add Category',
+                                    style: TextStyle(
+                                      fontFamily: 'SF Pro',
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _addCategory(StateSetter setDialogState) async {
+    setDialogState(() {
+      addCategoryValidationError = null;
+    });
+
+    final categoryName = addCategoryController.text.trim();
+
+    if (categoryName.isEmpty) {
+      setDialogState(() {
+        addCategoryValidationError = 'Please enter a category name';
+      });
+      return;
+    }
+
+    // Validate alphanumeric input
+    if (!_isValidAlphanumeric(categoryName)) {
+      setDialogState(() {
+        addCategoryValidationError = 'Must contain at least one letter';
+      });
+      return;
+    }
+
+    // Show confirmation dialog first
+    final confirmed = await _showAddConfirmation(categoryName);
+    if (!confirmed) return;
+
+    // Check connectivity before proceeding
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close add dialog
+        await showConnectionErrorDialog(context);
+      }
+      return;
+    }
+
+    setDialogState(() {
+      isAddingCategory = true;
+    });
+
+    try {
+      await categoriesController.addCategory(categoryName);
+      if (!mounted) return;
+
+      Navigator.of(context).pop(); // Close add dialog
+
+      // The stream will automatically update via refreshCategories() in the controller
+      // No need to manually refresh - real-time update is handled
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Category added successfully!',
+            style: TextStyle(fontFamily: 'SF Pro'),
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception')) {
+        if (mounted) {
+          Navigator.of(context).pop(); // Close add dialog
+          await showConnectionErrorDialog(context);
+        }
+      } else {
+        // Other error - show generic error message
+        setDialogState(() {
+          addCategoryValidationError =
+              'Failed to add category: ${e.toString()}';
+          isAddingCategory = false;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setDialogState(() {
+          isAddingCategory = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _showAddConfirmation(String categoryName) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon and Title
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add_circle,
+                        color: Color(0xFF00D4AA),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Add Category',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      'Are you sure you want to add "$categoryName" as a new category?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Cancel first, then Add - matching exit dialog pattern)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Add Category',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,

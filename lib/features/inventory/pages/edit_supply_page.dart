@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:familee_dental/features/inventory/controller/edit_supply_controller.dart';
 import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class EditSupplyPage extends StatefulWidget {
   final InventoryItem item;
@@ -313,11 +316,26 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                     controller.imageUrl!.isNotEmpty)
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(
-                                      controller.imageUrl!,
+                                    child: CachedNetworkImage(
+                                      imageUrl: controller.imageUrl!,
                                       width: 130,
                                       height: 130,
                                       fit: BoxFit.cover,
+                                      placeholder: (context, url) => Container(
+                                        width: 130,
+                                        height: 130,
+                                        color: Colors.grey[300],
+                                        child: Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) =>
+                                          Container(
+                                        width: 130,
+                                        height: 130,
+                                        color: Colors.grey[300],
+                                        child: Icon(Icons.error),
+                                      ),
                                     ),
                                   )
                                 : Container(
@@ -459,14 +477,21 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                 stream:
                                     categoriesController.getCategoriesStream(),
                                 builder: (context, snapshot) {
+                                  // Always show UI immediately, don't wait for data
                                   // Cache categories when available
                                   if (snapshot.hasData &&
                                       snapshot.data != null) {
                                     _cachedCategories = snapshot.data;
                                   }
 
-                                  // Use cached categories if available
-                                  final categories = _cachedCategories ?? [];
+                                  // Use cached categories if available, otherwise empty list
+                                  // This ensures UI is never blocked
+                                  final categories = _cachedCategories ??
+                                      (snapshot.hasData
+                                          ? snapshot.data ?? []
+                                          : []);
+
+                                  // Don't show loading indicator - just show empty/available categories
 
                                   return Column(
                                     crossAxisAlignment:
@@ -1063,6 +1088,21 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                     });
 
                                     try {
+                                      // Check connectivity before proceeding
+                                      final hasConnection =
+                                          await ConnectivityService()
+                                              .hasInternetConnection();
+                                      if (!hasConnection) {
+                                        if (mounted) {
+                                          await showConnectionErrorDialog(
+                                              context);
+                                          setState(() {
+                                            _isSaving = false;
+                                          });
+                                        }
+                                        return;
+                                      }
+
                                       final errors =
                                           controller.validateFields();
                                       if (errors.isNotEmpty) {
@@ -1072,19 +1112,78 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                         });
                                         return;
                                       }
-                                      final result = await controller
-                                          .updateSupply(widget.item.id);
-                                      if (result == null) {
-                                        if (!mounted) return;
-                                        _hasUnsavedChanges =
-                                            false; // Reset flag on successful save
-                                        Navigator.of(context).pop(true);
-                                      } else {
-                                        if (!mounted) return;
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(content: Text(result)),
-                                        );
+
+                                      try {
+                                        final result = await controller
+                                            .updateSupply(widget.item.id);
+                                        if (result == null) {
+                                          if (!mounted) return;
+                                          _hasUnsavedChanges =
+                                              false; // Reset flag on successful save
+                                          Navigator.of(context).pop(true);
+                                        } else {
+                                          // Check if result contains network error
+                                          final errorString =
+                                              result.toLowerCase();
+                                          if (errorString.contains(
+                                                  'socketexception') ||
+                                              errorString.contains(
+                                                  'failed host lookup') ||
+                                              errorString.contains(
+                                                  'no address associated') ||
+                                              errorString.contains(
+                                                  'network is unreachable') ||
+                                              errorString.contains(
+                                                  'connection refused') ||
+                                              errorString.contains(
+                                                  'connection timed out') ||
+                                              errorString.contains(
+                                                  'clientexception')) {
+                                            if (mounted) {
+                                              await showConnectionErrorDialog(
+                                                  context);
+                                            }
+                                          } else {
+                                            // Other error - show generic error message
+                                            if (!mounted) return;
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(content: Text(result)),
+                                            );
+                                          }
+                                        }
+                                      } catch (e) {
+                                        // Catch any exceptions that weren't caught by controller
+                                        final errorString =
+                                            e.toString().toLowerCase();
+                                        if (errorString
+                                                .contains('socketexception') ||
+                                            errorString.contains(
+                                                'failed host lookup') ||
+                                            errorString.contains(
+                                                'no address associated') ||
+                                            errorString.contains(
+                                                'network is unreachable') ||
+                                            errorString.contains(
+                                                'connection refused') ||
+                                            errorString.contains(
+                                                'connection timed out')) {
+                                          if (mounted) {
+                                            await showConnectionErrorDialog(
+                                                context);
+                                          }
+                                        } else {
+                                          // Other error - show generic error message
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'Failed to update supply: ${e.toString()}'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
                                       }
                                     } finally {
                                       if (mounted) {
