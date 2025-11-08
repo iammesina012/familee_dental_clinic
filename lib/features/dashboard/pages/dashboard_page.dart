@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/features/dashboard/services/inventory_analytics_service.dart';
 import 'package:familee_dental/features/dashboard/services/fast_moving_service.dart';
-import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
@@ -75,6 +74,9 @@ class _DashboardState extends State<Dashboard> {
       setState(() {
         _hasConnection = hasConnection;
       });
+      if (hasConnection) {
+        unawaited(_fastMovingService.preloadFastMovingPeriods(limit: 5));
+      }
     }
   }
 
@@ -351,72 +353,76 @@ class _DashboardState extends State<Dashboard> {
                                 ),
                               ),
                               const Spacer(),
-                              // Export buttons (CSV and PDF)
-                              Row(
-                                children: [
-                                  // CSV Export Button
-                                  InkWell(
-                                    onTap: () => _handleCSVExport(context),
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(6),
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            Color(0xFF107C10), // Excel green
-                                            Color(0xFF28A745), // Lighter green
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
+                              // Export buttons (CSV and PDF) visible for Owner only
+                              if ((_userRole ?? '').toLowerCase() == 'owner')
+                                Row(
+                                  children: [
+                                    // CSV Export Button
+                                    InkWell(
+                                      onTap: () => _handleCSVExport(context),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
                                         ),
-                                      ),
-                                      child: Text(
-                                        "Save as .CSV",
-                                        style: AppFonts.sfProStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Color(0xFF107C10), // Excel green
+                                              Color(
+                                                  0xFF28A745), // Lighter green
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // PDF Export Button
-                                  InkWell(
-                                    onTap: () => _handlePDFExport(context),
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(6),
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            Color(0xFFE53E3E), // Adobe red
-                                            Color(0xFFFF6B6B), // Lighter red
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        "Save as PDF",
-                                        style: AppFonts.sfProStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
+                                        child: Text(
+                                          "Save as .CSV",
+                                          style: AppFonts.sfProStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                    const SizedBox(width: 8),
+                                    // PDF Export Button
+                                    InkWell(
+                                      onTap: () => _handlePDFExport(context),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Color(0xFFE53E3E), // Adobe red
+                                              Color(0xFFFF6B6B), // Lighter red
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          "Save as PDF",
+                                          style: AppFonts.sfProStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -1698,85 +1704,67 @@ class _DashboardState extends State<Dashboard> {
             : const Color(0xFFFF8C42)) // Deep orange for expiring
         : accentColor;
 
-    return InkWell(
-      onTap: () {
-        if (label == 'Expired') {
-          // Navigate to expired page
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ExpiredSupplyPage(),
-            ),
-          );
-        } else if (label == 'Expiring') {
-          // Navigate to inventory with expiring filter
-          Navigator.pushNamed(context, '/inventory',
-              arguments: {'filter': 'expiring'});
-        }
-      },
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          gradient: isDark
-              ? null
-              : LinearGradient(
-                  colors: gradientColors,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: isDark
+            ? null
+            : LinearGradient(
+                colors: gradientColors,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        color: isDark ? const Color(0xFF3A3A3A) : null,
+      ),
+      constraints: BoxConstraints(minHeight: height),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: AppFonts.sfProStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: isDark
+                        ? Colors.grey.shade400
+                        : theme.textTheme.bodyMedium?.color,
+                  ),
                 ),
-          color: isDark ? const Color(0xFF3A3A3A) : null,
-        ),
-        constraints: BoxConstraints(minHeight: height),
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    style: AppFonts.sfProStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: isDark
-                          ? Colors.grey.shade400
-                          : theme.textTheme.bodyMedium?.color,
-                    ),
+                const SizedBox(height: 12),
+                Text(
+                  '$count',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: adjustedAccentColor,
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '$count',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: adjustedAccentColor,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? adjustedAccentColor.withOpacity(0.2)
-                    : adjustedAccentColor.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                color: adjustedAccentColor,
-                size: 24,
-              ),
+          ),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? adjustedAccentColor.withOpacity(0.2)
+                  : adjustedAccentColor.withOpacity(0.15),
+              shape: BoxShape.circle,
             ),
-          ],
-        ),
+            child: Icon(
+              icon,
+              color: adjustedAccentColor,
+              size: 24,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2710,7 +2698,7 @@ class _DashboardState extends State<Dashboard> {
 
   // Generate CSV content
   String _generateCSV(Map<String, dynamic> data) {
-    final List<List<dynamic>> rows = [];
+    final rows = <List<dynamic>>[];
 
     // Header
     rows.add(['Dashboard Report']);
@@ -2729,9 +2717,12 @@ class _DashboardState extends State<Dashboard> {
       'Expired'
     ];
 
+    rows.add(['Supply Count']);
+    rows.add([]);
+
     for (final status in statuses) {
       final supplies = suppliesByStatus[status] ?? [];
-      rows.add(['Section: Supply Count - $status']);
+      rows.add([status]);
       rows.add([
         'Supply Name',
         'Quantity',
@@ -2747,6 +2738,13 @@ class _DashboardState extends State<Dashboard> {
         rows.add(['No supplies found']);
       } else {
         for (final supply in supplies) {
+          final costValue = supply['cost'];
+          final formattedCost = costValue is num
+              ? costValue.toStringAsFixed(2)
+              : double.tryParse((costValue ?? '').toString())
+                      ?.toStringAsFixed(2) ??
+                  '0.00';
+
           rows.add([
             supply['displayName'] ?? supply['name'] ?? '',
             supply['stock'] ?? 0,
@@ -2754,7 +2752,7 @@ class _DashboardState extends State<Dashboard> {
             supply['packagingContent'] ?? '',
             supply['brand'] ?? 'N/A',
             supply['supplier'] ?? 'N/A',
-            supply['cost'] ?? 0.0,
+            formattedCost,
             supply['expiryDisplay'] ?? 'No expiry',
           ]);
         }
@@ -2767,9 +2765,12 @@ class _DashboardState extends State<Dashboard> {
         as Map<String, List<Map<String, dynamic>>>;
     final poStatuses = ['Open', 'Partial', 'Approval', 'Closed'];
 
+    rows.add(['Purchase Order Summary']);
+    rows.add([]);
+
     for (final status in poStatuses) {
       final orders = purchaseOrdersByStatus[status] ?? [];
-      rows.add(['Section: Purchase Order Summary - $status']);
+      rows.add([status]);
       rows.add([
         'ID',
         'Supplier Name',
@@ -2786,10 +2787,15 @@ class _DashboardState extends State<Dashboard> {
         rows.add(['No purchase orders found']);
       } else {
         for (final order in orders) {
+          final suppliesCount = order['suppliesCount'];
+          final formattedSuppliesCount = suppliesCount is num
+              ? suppliesCount.toString()
+              : suppliesCount?.toString() ?? '0';
+
           rows.add([
             order['code'] ?? '',
             order['supplierName'] ?? 'N/A',
-            order['suppliesCount'] ?? 0,
+            formattedSuppliesCount,
             order['expiryDates'] ?? 'N/A',
             order['dateCreated'] ?? 'N/A',
             order['dateReceived'] ?? 'N/A',
@@ -2805,15 +2811,20 @@ class _DashboardState extends State<Dashboard> {
     // Fast Moving Supply
     final period = data['selectedPeriod'] as String;
     final periodDays = _getPeriodDays(period);
-    rows.add(['Section: Fast Moving Supply ($period - Last $periodDays days)']);
+    rows.add(['Fast Moving Supply']);
+    rows.add(['Period', '$period (Last $periodDays days)']);
     rows.add(['Supply Name', 'Brand', 'Times Deducted']);
     final fastMovingItems = data['fastMovingItems'] as List<FastMovingItem>;
-    for (final item in fastMovingItems) {
-      rows.add([
-        item.name,
-        item.brand,
-        item.timesDeducted,
-      ]);
+    if (fastMovingItems.isEmpty) {
+      rows.add(['No fast-moving supplies found']);
+    } else {
+      for (final item in fastMovingItems) {
+        rows.add([
+          item.name,
+          item.brand,
+          item.timesDeducted,
+        ]);
+      }
     }
 
     // Convert to CSV string
@@ -2870,30 +2881,43 @@ class _DashboardState extends State<Dashboard> {
             'Expiring',
             'Expired'
           ];
+
+          widgets.add(
+            pw.Text(
+              'Supply Count',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+          );
+          widgets.add(pw.SizedBox(height: 12));
+
           for (final status in statuses) {
             final supplies = suppliesByStatus[status] ?? [];
             widgets.add(
               pw.Text(
-                'Supply Count - $status',
+                status,
                 style: pw.TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
             );
-            widgets.add(pw.SizedBox(height: 10));
+            widgets.add(pw.SizedBox(height: 8));
 
             if (supplies.isEmpty) {
               widgets.add(
                 pw.Padding(
-                  padding: const pw.EdgeInsets.all(8),
-                  child: pw.Text('No supplies found'),
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Text('No supplies found',
+                      style: const pw.TextStyle(fontSize: 10)),
                 ),
               );
             } else {
               widgets.add(
                 pw.Table(
-                  border: pw.TableBorder.all(),
+                  border: pw.TableBorder.all(width: 0.5),
                   columnWidths: {
                     0: const pw.FlexColumnWidth(2.5),
                     1: const pw.FlexColumnWidth(0.8),
@@ -2905,8 +2929,10 @@ class _DashboardState extends State<Dashboard> {
                     7: const pw.FlexColumnWidth(1.5),
                   },
                   children: [
-                    // Header row
                     pw.TableRow(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColor.fromInt(0xFFEFEFEF),
+                      ),
                       children: [
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
@@ -2958,8 +2984,14 @@ class _DashboardState extends State<Dashboard> {
                         ),
                       ],
                     ),
-                    // Data rows
                     ...supplies.map((supply) {
+                      final costValue = supply['cost'];
+                      final formattedCost = costValue is num
+                          ? costValue.toStringAsFixed(2)
+                          : double.tryParse((costValue ?? '').toString())
+                                  ?.toStringAsFixed(2) ??
+                              '0.00';
+
                       return pw.TableRow(
                         children: [
                           pw.Padding(
@@ -2995,7 +3027,7 @@ class _DashboardState extends State<Dashboard> {
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('${supply['cost'] ?? 0.0}',
+                            child: pw.Text(formattedCost,
                                 style: const pw.TextStyle(fontSize: 8)),
                           ),
                           pw.Padding(
@@ -3011,35 +3043,50 @@ class _DashboardState extends State<Dashboard> {
                 ),
               );
             }
-            widgets.add(pw.SizedBox(height: 20));
+            widgets.add(pw.SizedBox(height: 16));
           }
+
+          widgets.add(pw.SizedBox(height: 24));
 
           // Purchase Order Summary by Status - Detailed Tables
           final poStatuses = ['Open', 'Partial', 'Approval', 'Closed'];
+
+          widgets.add(
+            pw.Text(
+              'Purchase Order Summary',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+          );
+          widgets.add(pw.SizedBox(height: 12));
+
           for (final status in poStatuses) {
             final orders = purchaseOrdersByStatus[status] ?? [];
             widgets.add(
               pw.Text(
-                'Purchase Order Summary - $status',
+                status,
                 style: pw.TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
             );
-            widgets.add(pw.SizedBox(height: 10));
+            widgets.add(pw.SizedBox(height: 8));
 
             if (orders.isEmpty) {
               widgets.add(
                 pw.Padding(
-                  padding: const pw.EdgeInsets.all(8),
-                  child: pw.Text('No purchase orders found'),
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Text('No purchase orders found',
+                      style: const pw.TextStyle(fontSize: 10)),
                 ),
               );
             } else {
               widgets.add(
                 pw.Table(
-                  border: pw.TableBorder.all(),
+                  border: pw.TableBorder.all(width: 0.5),
                   columnWidths: {
                     0: const pw.FlexColumnWidth(0.8),
                     1: const pw.FlexColumnWidth(1.5),
@@ -3052,8 +3099,10 @@ class _DashboardState extends State<Dashboard> {
                     8: const pw.FlexColumnWidth(1.5),
                   },
                   children: [
-                    // Header row
                     pw.TableRow(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColor.fromInt(0xFFEFEFEF),
+                      ),
                       children: [
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
@@ -3111,8 +3160,12 @@ class _DashboardState extends State<Dashboard> {
                         ),
                       ],
                     ),
-                    // Data rows
                     ...orders.map((order) {
+                      final suppliesCount = order['suppliesCount'];
+                      final formattedSuppliesCount = suppliesCount is num
+                          ? suppliesCount.toString()
+                          : suppliesCount?.toString() ?? '0';
+
                       return pw.TableRow(
                         children: [
                           pw.Padding(
@@ -3127,7 +3180,7 @@ class _DashboardState extends State<Dashboard> {
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('${order['suppliesCount'] ?? 0}',
+                            child: pw.Text(formattedSuppliesCount,
                                 style: const pw.TextStyle(fontSize: 8)),
                           ),
                           pw.Padding(
@@ -3167,7 +3220,7 @@ class _DashboardState extends State<Dashboard> {
                 ),
               );
             }
-            widgets.add(pw.SizedBox(height: 20));
+            widgets.add(pw.SizedBox(height: 16));
           }
 
           // Fast Moving Supply Table

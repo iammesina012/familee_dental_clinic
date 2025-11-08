@@ -27,6 +27,8 @@ class POBusinessService {
         return 'red';
       case 'Approval':
         return 'orange';
+      case 'Cancelled':
+        return 'red';
       case 'Open':
         return 'green';
       default:
@@ -72,6 +74,8 @@ class POBusinessService {
         return 'Pending Approval';
       case 'Closed':
         return 'Completed';
+      case 'Cancelled':
+        return 'Cancelled';
       default:
         return status;
     }

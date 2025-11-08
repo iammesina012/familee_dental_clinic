@@ -14,10 +14,6 @@ import 'package:familee_dental/features/purchase_order/pages/po_edit_supply_page
 import 'package:familee_dental/features/purchase_order/pages/po_details_page.dart';
 import 'package:familee_dental/features/stock_deduction/pages/stock_deduction_page.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_add_supply_page.dart';
-import 'package:familee_dental/features/stock_deduction/pages/sd_preset_management_page.dart';
-import 'package:familee_dental/features/stock_deduction/pages/sd_create_preset_page.dart';
-import 'package:familee_dental/features/stock_deduction/pages/sd_edit_preset_page.dart';
-import 'package:familee_dental/features/stock_deduction/pages/sd_add_supply_preset_page.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_deduction_logs_page.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_approval_page.dart';
 import 'package:familee_dental/features/activity_log/pages/activity_log_page.dart';
@@ -116,22 +112,9 @@ class MainApp extends StatelessWidget {
             '/stock-deduction': (context) => const StockDeductionPage(),
             '/stock-deduction/add-supply': (context) =>
                 const StockDeductionAddSupplyPage(),
-            '/stock-deduction/add-supply-for-preset': (context) =>
-                const StockDeductionAddSupplyForPresetPage(),
-            '/stock-deduction/presets': (context) =>
-                const ServiceManagementPage(),
-            '/stock-deduction/service-management': (context) =>
-                const ServiceManagementPage(),
             '/stock-deduction/deduction-logs': (context) =>
                 const DeductionLogsPage(),
             '/stock-deduction/approval': (context) => const ApprovalPage(),
-            '/stock-deduction/create-preset': (context) =>
-                const CreatePresetPage(),
-            '/stock-deduction/edit-preset': (context) {
-              final preset = ModalRoute.of(context)!.settings.arguments
-                  as Map<String, dynamic>;
-              return EditPresetPage(preset: preset);
-            },
             '/activity-log': (context) => const ActivityLogPage(),
             '/notifications': (context) => const NotificationsPage(),
             '/settings': (context) => const SettingsPage(),

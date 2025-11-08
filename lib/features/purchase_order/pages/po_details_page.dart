@@ -56,6 +56,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
       {}; // supplierName -> Set of item keys
 
   // Helper methods for checklist management
+// ignore: unused_element
   void _toggleItemCheck(String supplierName, String itemKey) async {
     setState(() {
       _checkedItems[supplierName] ??= <String>{};
@@ -560,6 +561,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
     }
   }
 
+// ignore: unused_element
   bool _isItemChecked(String supplierName, String itemKey) {
     return _checkedItems[supplierName]?.contains(itemKey) ?? false;
   }
@@ -1354,7 +1356,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
                           children: [
                             // Supply cards with multiple expiry entries
                             ...supplyExpiryEntries.entries.map((supplyEntry) {
-                              final supplyId = supplyEntry.key;
                               final expiryEntries = supplyEntry.value;
                               final supplyName = expiryEntries.isNotEmpty
                                   ? expiryEntries.first['supplyName'] as String
@@ -1407,8 +1408,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                               'No expiry';
                                       final maxQuantity =
                                           entry['maxQuantity'] as int;
-                                      final currentQty =
-                                          quantities[entryId] ?? 0;
 
                                       return Container(
                                         margin:
@@ -2139,6 +2138,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
   }
 
   // Reload PO data from database after partial receive
+// ignore: unused_element
   Future<void> _reloadPOData() async {
     try {
       print('Debug: Reloading PO data...');
@@ -2291,6 +2291,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
   }
 
   // Clear received quantities data (for testing/reset purposes)
+// ignore: unused_element
   Future<void> _clearReceivedQuantities() async {
     try {
       final updatedSupplies = <Map<String, dynamic>>[];
@@ -2458,6 +2459,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                       if (_purchaseOrder.status == 'Open' ||
                           _purchaseOrder.status == 'Partially Received' ||
                           (_purchaseOrder.status != 'Approval' &&
+                              _purchaseOrder.status != 'Cancelled' &&
                               _purchaseOrder.supplies.any((supply) =>
                                   supply['status'] == 'Partially Received' ||
                                   supply['status'] == 'Pending'))) ...[
@@ -2897,10 +2899,16 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                                                   Colors.amber,
                                                                                   Colors.amber.shade600
                                                                                 ]
-                                                                              : [
-                                                                                  Colors.orange,
-                                                                                  Colors.orange.shade600
-                                                                                ],
+                                                                              : _purchaseOrder.status ==
+                                                                                      'Cancelled'
+                                                                                  ? [
+                                                                                      Colors.redAccent,
+                                                                                      Colors.red
+                                                                                    ]
+                                                                                  : [
+                                                                                      Colors.orange,
+                                                                                      Colors.orange.shade600
+                                                                                    ],
                                                                 ),
                                                                 borderRadius:
                                                                     BorderRadius
@@ -2918,7 +2926,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                                             .check_circle
                                                                         : _hasPartiallyReceivedItems(items)
                                                                             ? Icons.inventory_2
-                                                                            : Icons.schedule,
+                                                                            : _purchaseOrder.status == 'Cancelled'
+                                                                                ? Icons.cancel
+                                                                                : Icons.schedule,
                                                                     size: 14,
                                                                     color: Colors
                                                                         .white,
@@ -2930,7 +2940,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                                         ? 'Received'
                                                                         : _hasPartiallyReceivedItems(items)
                                                                             ? 'Partially Received'
-                                                                            : 'Pending',
+                                                                            : _purchaseOrder.status == 'Cancelled'
+                                                                                ? 'Cancelled'
+                                                                                : 'Pending',
                                                                     style: AppFonts
                                                                         .sfProStyle(
                                                                       fontSize:
@@ -3036,7 +3048,9 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                 if (!allReceived &&
                                                     _hasPendingItems() &&
                                                     _purchaseOrder.status !=
-                                                        'Approval')
+                                                        'Approval' &&
+                                                    _purchaseOrder.status !=
+                                                        'Cancelled')
                                                   Row(
                                                     mainAxisAlignment:
                                                         MainAxisAlignment.end,
@@ -3127,35 +3141,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                       ),
                                                     ],
                                                   ),
-
-                                                // Dot indicators centered
-                                                Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: List.generate(
-                                                      items.length, (i) {
-                                                    final active =
-                                                        _supplierPageIndex[
-                                                                supplierName] ==
-                                                            i;
-                                                    return Container(
-                                                      width: active ? 10 : 8,
-                                                      height: active ? 10 : 8,
-                                                      margin: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 3),
-                                                      decoration: BoxDecoration(
-                                                        shape: BoxShape.circle,
-                                                        color: active
-                                                            ? theme.colorScheme
-                                                                .primary
-                                                            : theme.dividerColor
-                                                                .withOpacity(
-                                                                    0.6),
-                                                      ),
-                                                    );
-                                                  }),
-                                                ),
 
                                                 if ((allReceived ||
                                                         _purchaseOrder.status ==
@@ -3678,8 +3663,6 @@ class _PODetailsPageState extends State<PODetailsPage> {
                             ...batches.map((b) {
                               final String? date =
                                   _formatExpiry(b['expiryDate']);
-                              final int qty =
-                                  int.tryParse('${b['quantity'] ?? 0}') ?? 0;
                               if (date == null) return const SizedBox.shrink();
 
                               return Padding(
@@ -4203,6 +4186,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
     }
   }
 
+// ignore: unused_element
   Future<void> _confirmMarkAllReceived(
       String supplierName, List<Map<String, dynamic>> items) async {
     final pendingItems =

@@ -31,6 +31,149 @@ class FastMovingService {
 
   // Cache the last selected period to show appropriate data
   String? _lastSelectedPeriod;
+  bool _isPreloading = false;
+
+  Future<void> preloadFastMovingPeriods({int limit = 5}) async {
+    if (_isPreloading) return;
+    _isPreloading = true;
+    try {
+      final Map<String, Duration> periods = {
+        'Weekly': const Duration(days: 7),
+        'Monthly': const Duration(days: 30),
+      };
+
+      for (final entry in periods.entries) {
+        if (_cachedFastMovingItems.containsKey(entry.key)) {
+          continue;
+        }
+        final items = await _fetchFastMovingItemsForPeriod(
+          periodKey: entry.key,
+          limit: limit,
+          window: entry.value,
+        );
+        if (items != null) {
+          _cachedFastMovingItems[entry.key] = items;
+        }
+      }
+    } finally {
+      _isPreloading = false;
+    }
+  }
+
+  Future<List<FastMovingItem>?> _fetchFastMovingItemsForPeriod({
+    required String periodKey,
+    required int limit,
+    required Duration window,
+  }) async {
+    try {
+      final since = DateTime.now().subtract(window);
+      final List<dynamic> data = await _supabase
+          .from('activity_logs')
+          .select('category, action, metadata')
+          .gte('date', since.toIso8601String())
+          .order('date', ascending: false);
+
+      final Map<String, FastMovingItem> aggregates = {};
+      final Set<String> uniqueNames = {};
+
+      for (final row in data) {
+        final String category = (row['category'] ?? '').toString();
+        final String action = (row['action'] ?? '').toString();
+        if (category != 'Stock Deduction' || action != 'stock_deduction') {
+          continue;
+        }
+        final Map<String, dynamic> metadata =
+            (row['metadata'] as Map<String, dynamic>?) ?? {};
+        final String name = (metadata['itemName'] ?? '').toString();
+        final String brand = (metadata['brand'] ?? '').toString();
+        if (name.isEmpty) continue;
+
+        final String tempKey = name.trim().toLowerCase();
+        uniqueNames.add(tempKey);
+
+        if (!aggregates.containsKey(tempKey)) {
+          aggregates[tempKey] = FastMovingItem(
+            productKey: tempKey,
+            name: name,
+            brand: brand,
+            type: null,
+            timesDeducted: 1,
+          );
+        } else {
+          final current = aggregates[tempKey]!;
+          aggregates[tempKey] = FastMovingItem(
+            productKey: current.productKey,
+            name: current.name,
+            brand: current.brand,
+            type: null,
+            timesDeducted: current.timesDeducted + 1,
+          );
+        }
+      }
+
+      final Map<String, String?> typeCache = {};
+      if (uniqueNames.isNotEmpty) {
+        try {
+          final suppliesResponse = await _supabase
+              .from('supplies')
+              .select('name, type')
+              .eq('archived', false);
+
+          for (final supply in suppliesResponse) {
+            final String nameKey =
+                (supply['name'] ?? '').toString().trim().toLowerCase();
+            if (nameKey.isEmpty ||
+                !uniqueNames.contains(nameKey) ||
+                typeCache.containsKey(nameKey)) {
+              continue;
+            }
+
+            final typeValue = supply['type'];
+            if (typeValue != null && typeValue.toString().trim().isNotEmpty) {
+              typeCache[nameKey] = typeValue.toString().trim();
+            }
+          }
+        } catch (_) {
+          // Ignore type lookup failures during preload
+        }
+      }
+
+      final Map<String, FastMovingItem> finalAggregates = {};
+      for (final item in aggregates.values) {
+        final String nameKey = item.name.trim().toLowerCase();
+        final String? type = typeCache[nameKey];
+        final String typeKey =
+            type != null && type.isNotEmpty ? type.trim().toLowerCase() : '';
+        final String key = '$nameKey|$typeKey';
+
+        if (!finalAggregates.containsKey(key)) {
+          finalAggregates[key] = FastMovingItem(
+            productKey: key,
+            name: item.name,
+            brand: item.brand,
+            type: type,
+            timesDeducted: item.timesDeducted,
+          );
+        } else {
+          final current = finalAggregates[key]!;
+          finalAggregates[key] = FastMovingItem(
+            productKey: current.productKey,
+            name: current.name,
+            brand: current.brand,
+            type: current.type ?? type,
+            timesDeducted: current.timesDeducted + item.timesDeducted,
+          );
+        }
+      }
+
+      final List<FastMovingItem> items = finalAggregates.values.toList();
+      items.sort((a, b) => b.timesDeducted.compareTo(a.timesDeducted));
+
+      return items.length > limit ? items.sublist(0, limit) : items;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Stream top fast moving items within [window] duration.
   /// Uses activity_logs documents with category == 'Stock Deduction'.

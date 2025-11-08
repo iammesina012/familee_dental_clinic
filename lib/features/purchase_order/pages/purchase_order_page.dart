@@ -3,6 +3,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/purchase_order/controller/po_list_controller.dart';
+import 'package:familee_dental/features/purchase_order/controller/po_supabase_controller.dart';
 import 'package:familee_dental/features/purchase_order/data/purchase_order.dart';
 import 'dart:async'; // Added for StreamSubscription
 import 'package:familee_dental/features/activity_log/controller/po_activity_controller.dart';
@@ -27,6 +28,7 @@ class PurchaseOrderPage extends StatefulWidget {
 
 class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   final POListController _controller = POListController();
+  final POSupabaseController _poSupabaseController = POSupabaseController();
   final ViewSupplyController _viewSupplyController = ViewSupplyController();
   final Set<String> _prefetchedSupplyNames = {};
   // ignore: unused_field
@@ -659,6 +661,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       case 'Approval':
         statusColor = Colors.orange;
         break;
+      case 'Cancelled':
+        statusColor = Colors.redAccent;
+        break;
       default:
         statusColor = const Color(0xFF00D4AA);
     }
@@ -897,44 +902,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                   },
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
-                  icon: Icons.delete,
-                  label: 'Delete',
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ],
-            ),
-            child: cardContent,
-          ),
-        );
-      }
-    }
-
-    // Add slidable delete for "Closed" POs - Only Owner can delete
-    if (po.status == 'Closed') {
-      final isOwner = userRoleProvider.isOwner;
-
-      if (isOwner) {
-        // For owner users: only left slide (Delete)
-        return ClipRect(
-          child: Slidable(
-            key: Key('slidable-${po.id}'),
-            closeOnScroll: true,
-            endActionPane: ActionPane(
-              motion: const DrawerMotion(),
-              extentRatio: 0.35,
-              children: [
-                // Delete action - Only for Owner users
-                SlidableAction(
-                  onPressed: (_) async {
-                    final confirmed = await _showDeleteConfirmation(po);
-                    if (confirmed) {
-                      // PO will be deleted in the confirmation dialog
-                    }
-                  },
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  icon: Icons.delete,
-                  label: 'Delete',
+                  icon: Icons.cancel,
+                  label: 'Cancel',
                   borderRadius: BorderRadius.circular(12),
                 ),
               ],
@@ -1166,7 +1135,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
                     // Title
                     Text(
-                      'Delete Purchase Order',
+                      'Cancel Purchase Order',
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontSize: 20,
@@ -1179,7 +1148,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
                     // Content
                     Text(
-                      'Are you sure you want to delete "${po.name}"? This action cannot be undone.',
+                      'Are you sure you want to cancel "${po.name}"? This action cannot be undone.',
                       style: TextStyle(
                         fontFamily: 'SF Pro',
                         fontSize: 16,
@@ -1209,18 +1178,36 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                               }
 
                               try {
-                                // Capture PO for logging before deletion
+                                // Capture PO for logging before cancellation
                                 final capturedPO = po;
-                                // Delete the PO
-                                await _controller.deletePO(po.id);
-                                Navigator.of(context).pop(true);
 
-                                // Show success message
+                                // Soft cancel the PO instead of hard delete
+                                final updatedSupplies = capturedPO.supplies
+                                    .map<Map<String, dynamic>>((supply) {
+                                  final updated =
+                                      Map<String, dynamic>.from(supply);
+                                  updated['status'] = 'Cancelled';
+                                  return updated;
+                                }).toList();
+
+                                final updatedPO = PurchaseOrder(
+                                  id: capturedPO.id,
+                                  code: capturedPO.code,
+                                  name: capturedPO.name,
+                                  createdAt: capturedPO.createdAt,
+                                  status: 'Cancelled',
+                                  supplies: updatedSupplies,
+                                  receivedCount: capturedPO.receivedCount,
+                                );
+                                await _poSupabaseController
+                                    .savePOToSupabase(updatedPO);
+
                                 if (mounted) {
+                                  Navigator.of(context).pop(true);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                        'Purchase Order deleted successfully!',
+                                        'Purchase Order cancelled successfully!',
                                         style: AppFonts.sfProStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w500,
@@ -1235,7 +1222,6 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                       ),
                                     ),
                                   );
-                                  // Log activity for removal
                                   await PoActivityController()
                                       .logPurchaseOrderRemoved(
                                     poCode: capturedPO.code,
@@ -1243,6 +1229,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                     supplies: capturedPO.supplies,
                                   );
                                 }
+                                _load();
                               } catch (e) {
                                 Navigator.of(context).pop(false);
                                 if (mounted) {
@@ -1273,7 +1260,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                               elevation: 2,
                             ),
                             child: Text(
-                              'Delete',
+                              'Cancel',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,
@@ -1322,334 +1309,321 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
   Widget _buildPurchaseOrderContent(ThemeData theme) {
     final scheme = theme.colorScheme;
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Welcome Panel (with notification and account)
-            _buildWelcomePanel(theme),
-            const SizedBox(height: 12),
-            // Summary Section
-            Container(
-              padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Welcome Panel (with notification and account)
+          _buildWelcomePanel(theme),
+          const SizedBox(height: 12),
+          // Summary Section
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildSummaryItem("Open", "${_getSummaryCounts()['Open']}"),
+                _buildSummaryItem(
+                    "Partial", "${_getSummaryCounts()['Partial']}"),
+                _buildSummaryItem(
+                    "Approval", "${_getSummaryCounts()['Approval']}"),
+                _buildSummaryItem("Closed", "${_getSummaryCounts()['Closed']}"),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Search and Create PO Section
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: searchController,
+                  onChanged: (value) {
+                    setState(() {
+                      // This will trigger rebuild when search text changes
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search PO...',
+                    hintStyle: AppFonts.sfProStyle(
+                      fontSize: 16,
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                    ),
+                    prefixIcon:
+                        Icon(Icons.search, color: theme.iconTheme.color),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding:
+                        EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    filled: true,
+                    fillColor: scheme.surface,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final result =
+                      await Navigator.pushNamed(context, '/create-po');
+                  if (!mounted) return;
+                  if (result == true) {
+                    await _load();
+                  } else {
+                    await _load();
+                  }
+                },
+                icon: Icon(Icons.add, color: Colors.white),
+                label: Text(
+                  'Create PO',
+                  style: AppFonts.sfProStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF00D4AA),
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Main Content Area - Expanded to fill remaining space
+          Expanded(
+            child: Container(
               decoration: BoxDecoration(
-                color: scheme.surface,
+                color: theme.brightness == Brightness.dark
+                    ? theme.colorScheme.surface
+                    : const Color(0xFFE8D5E8),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+              child: Column(
                 children: [
-                  _buildSummaryItem("Open", "${_getSummaryCounts()['Open']}"),
-                  _buildSummaryItem(
-                      "Partial", "${_getSummaryCounts()['Partial']}"),
-                  _buildSummaryItem(
-                      "Approval", "${_getSummaryCounts()['Approval']}"),
-                  _buildSummaryItem(
-                      "Closed", "${_getSummaryCounts()['Closed']}"),
+                  // Tabs
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildTab("Open", activeTabIndex == 0, () {
+                          setState(() {
+                            activeTabIndex = 0;
+                          });
+                        }),
+                        const SizedBox(width: 12),
+                        _buildTab("Partial", activeTabIndex == 1, () {
+                          setState(() {
+                            activeTabIndex = 1;
+                          });
+                        }),
+                        const SizedBox(width: 12),
+                        _buildTab("Approval", activeTabIndex == 2, () {
+                          setState(() {
+                            activeTabIndex = 2;
+                          });
+                        }),
+                        const SizedBox(width: 12),
+                        _buildTab("Closed", activeTabIndex == 3, () {
+                          setState(() {
+                            activeTabIndex = 3;
+                          });
+                        }),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _load,
+                      child: StreamBuilder<List<PurchaseOrder>>(
+                        stream: activeTabIndex == 0
+                            ? _controller.getOpenPOsStream()
+                            : activeTabIndex == 1
+                                ? _controller.getPartialPOsStream()
+                                : activeTabIndex == 2
+                                    ? _controller.getApprovalPOsStream()
+                                    : _controller.getClosedPOsStream(),
+                        builder: (context, snapshot) {
+                          final data = snapshot.data ?? const <PurchaseOrder>[];
+                          final displayed = _applySearchFilter(data);
+
+                          // Show skeleton loader only when online AND waiting for data
+                          // When offline, cached data shows immediately (no skeleton needed)
+                          if (snapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              data.isEmpty &&
+                              (_hasConnection == true)) {
+                            final isDark =
+                                Theme.of(context).brightness == Brightness.dark;
+                            final baseColor =
+                                isDark ? Colors.grey[800]! : Colors.grey[300]!;
+                            final highlightColor =
+                                isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+                            return ListView.separated(
+                              physics: NeverScrollableScrollPhysics(),
+                              padding: EdgeInsets.all(12),
+                              clipBehavior: Clip.hardEdge,
+                              itemCount: 5,
+                              separatorBuilder: (_, __) => SizedBox(height: 8),
+                              itemBuilder: (_, __) => Shimmer.fromColors(
+                                baseColor: baseColor,
+                                highlightColor: highlightColor,
+                                child: Container(
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          // Handle errors gracefully
+                          if (snapshot.hasError && data.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.cloud_off_outlined,
+                                      size: 64, color: Colors.grey),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    "Connection Issue",
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.textTheme.bodyMedium?.color,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    "Pull down to refresh",
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          if (displayed.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 120,
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      color: theme.brightness == Brightness.dark
+                                          ? theme.colorScheme.surface
+                                          : scheme.surface.withOpacity(0.6),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color:
+                                            theme.brightness == Brightness.dark
+                                                ? theme.dividerColor
+                                                    .withOpacity(0.2)
+                                                : theme.dividerColor
+                                                    .withOpacity(0.3),
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.shopping_cart_outlined,
+                                      size: 60,
+                                      color: theme.brightness == Brightness.dark
+                                          ? Colors.white
+                                          : const Color(0xFF8B5A8B),
+                                    ),
+                                  ),
+                                  SizedBox(height: 24),
+                                  Text(
+                                    "No Purchase Order Yet",
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.brightness == Brightness.dark
+                                          ? Colors.white
+                                          : const Color(0xFF8B5A8B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return ListView.separated(
+                            physics: AlwaysScrollableScrollPhysics(),
+                            padding: EdgeInsets.all(12),
+                            clipBehavior: Clip.hardEdge,
+                            itemCount: displayed.length,
+                            separatorBuilder: (_, __) => SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final po = displayed[index];
+                              // Auto-open specific PO details if requested
+                              if (_openPOCode != null &&
+                                  !_autoOpeningDetails &&
+                                  po.code == _openPOCode) {
+                                _autoOpeningDetails = true;
+                                _openPOCode = null;
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) async {
+                                  final result = await Navigator.pushNamed(
+                                    context,
+                                    '/po-details',
+                                    arguments: {'purchaseOrder': po},
+                                  );
+                                  if (result is Map) {
+                                    if (result['switchToClosed'] == true) {
+                                      setState(() {
+                                        activeTabIndex = 2;
+                                      });
+                                    } else if (result['switchToApproval'] ==
+                                        true) {
+                                      setState(() {
+                                        activeTabIndex = 2;
+                                      });
+                                    }
+                                  }
+                                  _autoOpeningDetails = false;
+                                });
+                              }
+                              return _buildPOCard(po);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            // Search and Create PO Section
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: searchController,
-                    onChanged: (value) {
-                      setState(() {
-                        // This will trigger rebuild when search text changes
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Search PO...',
-                      hintStyle: AppFonts.sfProStyle(
-                        fontSize: 16,
-                        color:
-                            theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
-                      ),
-                      prefixIcon:
-                          Icon(Icons.search, color: theme.iconTheme.color),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding:
-                          EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                      filled: true,
-                      fillColor: scheme.surface,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    final result =
-                        await Navigator.pushNamed(context, '/create-po');
-                    if (!mounted) return;
-                    if (result == true) {
-                      await _load();
-                    } else {
-                      await _load();
-                    }
-                  },
-                  icon: Icon(Icons.add, color: Colors.white),
-                  label: Text(
-                    'Create PO',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF00D4AA),
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Main Content Area - Expanded to fill remaining space
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: theme.brightness == Brightness.dark
-                      ? theme.colorScheme.surface
-                      : const Color(0xFFE8D5E8),
-                  borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: theme.dividerColor.withOpacity(0.2)),
-                ),
-                child: Column(
-                  children: [
-                    // Tabs
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildTab("Open", activeTabIndex == 0, () {
-                            setState(() {
-                              activeTabIndex = 0;
-                            });
-                          }),
-                          const SizedBox(width: 12),
-                          _buildTab("Partial", activeTabIndex == 1, () {
-                            setState(() {
-                              activeTabIndex = 1;
-                            });
-                          }),
-                          const SizedBox(width: 12),
-                          _buildTab("Approval", activeTabIndex == 2, () {
-                            setState(() {
-                              activeTabIndex = 2;
-                            });
-                          }),
-                          const SizedBox(width: 12),
-                          _buildTab("Closed", activeTabIndex == 3, () {
-                            setState(() {
-                              activeTabIndex = 3;
-                            });
-                          }),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: _load,
-                        child: StreamBuilder<List<PurchaseOrder>>(
-                          stream: activeTabIndex == 0
-                              ? _controller.getOpenPOsStream()
-                              : activeTabIndex == 1
-                                  ? _controller.getPartialPOsStream()
-                                  : activeTabIndex == 2
-                                      ? _controller.getApprovalPOsStream()
-                                      : _controller.getClosedPOsStream(),
-                          builder: (context, snapshot) {
-                            final data =
-                                snapshot.data ?? const <PurchaseOrder>[];
-                            final displayed = _applySearchFilter(data);
-
-                            // Show skeleton loader only when online AND waiting for data
-                            // When offline, cached data shows immediately (no skeleton needed)
-                            if (snapshot.connectionState ==
-                                    ConnectionState.waiting &&
-                                data.isEmpty &&
-                                (_hasConnection == true)) {
-                              final isDark = Theme.of(context).brightness ==
-                                  Brightness.dark;
-                              final baseColor = isDark
-                                  ? Colors.grey[800]!
-                                  : Colors.grey[300]!;
-                              final highlightColor = isDark
-                                  ? Colors.grey[700]!
-                                  : Colors.grey[100]!;
-
-                              return ListView.separated(
-                                physics: NeverScrollableScrollPhysics(),
-                                padding: EdgeInsets.all(12),
-                                clipBehavior: Clip.hardEdge,
-                                itemCount: 5,
-                                separatorBuilder: (_, __) =>
-                                    SizedBox(height: 8),
-                                itemBuilder: (_, __) => Shimmer.fromColors(
-                                  baseColor: baseColor,
-                                  highlightColor: highlightColor,
-                                  child: Container(
-                                    height: 120,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            // Handle errors gracefully
-                            if (snapshot.hasError && data.isEmpty) {
-                              return Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.cloud_off_outlined,
-                                        size: 64, color: Colors.grey),
-                                    SizedBox(height: 16),
-                                    Text(
-                                      "Connection Issue",
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color:
-                                            theme.textTheme.bodyMedium?.color,
-                                      ),
-                                    ),
-                                    SizedBox(height: 8),
-                                    Text(
-                                      "Pull down to refresh",
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-
-                            if (displayed.isEmpty) {
-                              return Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      width: 120,
-                                      height: 120,
-                                      decoration: BoxDecoration(
-                                        color: theme.brightness ==
-                                                Brightness.dark
-                                            ? theme.colorScheme.surface
-                                            : scheme.surface.withOpacity(0.6),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: theme.brightness ==
-                                                  Brightness.dark
-                                              ? theme.dividerColor
-                                                  .withOpacity(0.2)
-                                              : theme.dividerColor
-                                                  .withOpacity(0.3),
-                                        ),
-                                      ),
-                                      child: Icon(
-                                        Icons.shopping_cart_outlined,
-                                        size: 60,
-                                        color:
-                                            theme.brightness == Brightness.dark
-                                                ? Colors.white
-                                                : const Color(0xFF8B5A8B),
-                                      ),
-                                    ),
-                                    SizedBox(height: 24),
-                                    Text(
-                                      "No Purchase Order Yet",
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color:
-                                            theme.brightness == Brightness.dark
-                                                ? Colors.white
-                                                : const Color(0xFF8B5A8B),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                            return ListView.separated(
-                              physics: AlwaysScrollableScrollPhysics(),
-                              padding: EdgeInsets.all(12),
-                              clipBehavior: Clip.hardEdge,
-                              itemCount: displayed.length,
-                              separatorBuilder: (_, __) => SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final po = displayed[index];
-                                // Auto-open specific PO details if requested
-                                if (_openPOCode != null &&
-                                    !_autoOpeningDetails &&
-                                    po.code == _openPOCode) {
-                                  _autoOpeningDetails = true;
-                                  _openPOCode = null;
-                                  WidgetsBinding.instance
-                                      .addPostFrameCallback((_) async {
-                                    final result = await Navigator.pushNamed(
-                                      context,
-                                      '/po-details',
-                                      arguments: {'purchaseOrder': po},
-                                    );
-                                    if (result is Map) {
-                                      if (result['switchToClosed'] == true) {
-                                        setState(() {
-                                          activeTabIndex = 2;
-                                        });
-                                      } else if (result['switchToApproval'] ==
-                                          true) {
-                                        setState(() {
-                                          activeTabIndex = 2;
-                                        });
-                                      }
-                                    }
-                                    _autoOpeningDetails = false;
-                                  });
-                                }
-                                return _buildPOCard(po);
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1987,292 +1961,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
               : Colors.grey.shade200,
         ),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _load,
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Welcome Panel (with notification and account)
-                  _buildWelcomePanel(theme),
-                  const SizedBox(height: 12),
-                  // Summary Section
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: theme.dividerColor.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildSummaryItem(
-                            "Open", "${_getSummaryCounts()['Open']}"),
-                        _buildSummaryItem(
-                            "Partial", "${_getSummaryCounts()['Partial']}"),
-                        _buildSummaryItem(
-                            "Approval", "${_getSummaryCounts()['Approval']}"),
-                        _buildSummaryItem(
-                            "Closed", "${_getSummaryCounts()['Closed']}"),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Search and Create PO Section
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: searchController,
-                          decoration: InputDecoration(
-                            hintText: 'Search PO...',
-                            hintStyle: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              color: theme.textTheme.bodyMedium?.color
-                                  ?.withOpacity(0.6),
-                            ),
-                            prefixIcon: Icon(Icons.search,
-                                color: theme.iconTheme.color),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                                vertical: 0, horizontal: 16),
-                            filled: true,
-                            fillColor: theme.colorScheme.surface,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          final result =
-                              await Navigator.pushNamed(context, '/create-po');
-                          if (!mounted) return;
-                          if (result == true) {
-                            await _load();
-                          } else {
-                            await _load();
-                          }
-                        },
-                        icon: Icon(Icons.add, color: Colors.white),
-                        label: Text(
-                          'Create PO',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF00D4AA),
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Main Content Area with tabs - Expanded to fill remaining space
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: theme.brightness == Brightness.dark
-                            ? theme.colorScheme.surface
-                            : const Color(0xFFE8D5E8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: theme.dividerColor.withOpacity(0.2)),
-                      ),
-                      child: Column(
-                        children: [
-                          // Tabs
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _buildTab("Open", activeTabIndex == 0, () {
-                                  setState(() {
-                                    activeTabIndex = 0;
-                                  });
-                                }),
-                                const SizedBox(width: 12),
-                                _buildTab("Partial", activeTabIndex == 1, () {
-                                  setState(() {
-                                    activeTabIndex = 1;
-                                  });
-                                }),
-                                const SizedBox(width: 12),
-                                _buildTab("Approval", activeTabIndex == 2, () {
-                                  setState(() {
-                                    activeTabIndex = 2;
-                                  });
-                                }),
-                                const SizedBox(width: 12),
-                                _buildTab("Closed", activeTabIndex == 3, () {
-                                  setState(() {
-                                    activeTabIndex = 3;
-                                  });
-                                }),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: RefreshIndicator(
-                              onRefresh: _load,
-                              child: StreamBuilder<List<PurchaseOrder>>(
-                                stream: activeTabIndex == 0
-                                    ? _controller.getOpenPOsStream()
-                                    : activeTabIndex == 1
-                                        ? _controller.getPartialPOsStream()
-                                        : activeTabIndex == 2
-                                            ? _controller.getApprovalPOsStream()
-                                            : _controller.getClosedPOsStream(),
-                                builder: (context, snapshot) {
-                                  List<PurchaseOrder> displayed = [];
-                                  bool loading = false;
-
-                                  if (activeTabIndex == 0) {
-                                    loading = !_loadedOpen;
-                                  } else if (activeTabIndex == 1) {
-                                    loading = !_loadedPartial;
-                                  } else if (activeTabIndex == 2) {
-                                    loading = !_loadedApproval;
-                                  } else if (activeTabIndex == 3) {
-                                    loading = !_loadedClosed;
-                                  }
-
-                                  // Show skeleton loader only when online AND loading
-                                  // When offline, cached data shows immediately (no skeleton needed)
-                                  if (loading && (_hasConnection == true)) {
-                                    final isDark =
-                                        theme.brightness == Brightness.dark;
-                                    final baseColor = isDark
-                                        ? Colors.grey[800]!
-                                        : Colors.grey[300]!;
-                                    final highlightColor = isDark
-                                        ? Colors.grey[700]!
-                                        : Colors.grey[100]!;
-
-                                    return ListView.separated(
-                                      physics: AlwaysScrollableScrollPhysics(),
-                                      padding: EdgeInsets.all(12),
-                                      itemCount: 5,
-                                      separatorBuilder: (_, __) =>
-                                          SizedBox(height: 8),
-                                      itemBuilder: (_, __) =>
-                                          Shimmer.fromColors(
-                                        baseColor: baseColor,
-                                        highlightColor: highlightColor,
-                                        child: Container(
-                                          height: 120,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }
-
-                                  if (snapshot.hasData) {
-                                    displayed = snapshot.data!;
-                                  }
-
-                                  if (displayed.isEmpty) {
-                                    return Center(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.receipt_long,
-                                              size: 64, color: Colors.grey),
-                                          SizedBox(height: 16),
-                                          Text(
-                                            'No Purchase Orders',
-                                            style: TextStyle(
-                                              color: Colors.grey[600],
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }
-
-                                  return ListView.separated(
-                                    physics: AlwaysScrollableScrollPhysics(),
-                                    padding: EdgeInsets.all(12),
-                                    clipBehavior: Clip.hardEdge,
-                                    itemCount: displayed.length,
-                                    separatorBuilder: (_, __) =>
-                                        SizedBox(height: 8),
-                                    itemBuilder: (context, index) {
-                                      final po = displayed[index];
-                                      if (_openPOCode != null &&
-                                          !_autoOpeningDetails &&
-                                          po.code == _openPOCode) {
-                                        _autoOpeningDetails = true;
-                                        _openPOCode = null;
-                                        WidgetsBinding.instance
-                                            .addPostFrameCallback((_) async {
-                                          final result =
-                                              await Navigator.pushNamed(
-                                            context,
-                                            '/po-details',
-                                            arguments: {'purchaseOrder': po},
-                                          );
-                                          if (result is Map) {
-                                            if (result['switchToClosed'] ==
-                                                true) {
-                                              setState(() {
-                                                activeTabIndex = 2;
-                                              });
-                                            } else if (result[
-                                                    'switchToApproval'] ==
-                                                true) {
-                                              setState(() {
-                                                activeTabIndex = 2;
-                                              });
-                                            }
-                                          }
-                                          _autoOpeningDetails = false;
-                                        });
-                                      }
-                                      return _buildPOCard(po);
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          child: _buildPurchaseOrderContent(theme),
         ),
       ],
     );

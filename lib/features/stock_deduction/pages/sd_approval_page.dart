@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_approval_controller.dart';
 import 'package:familee_dental/features/stock_deduction/controller/stock_deduction_controller.dart';
-import 'package:familee_dental/features/stock_deduction/controller/sd_preset_management_controller.dart';
 import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_approval_card_widget.dart';
@@ -24,7 +23,6 @@ class _ApprovalPageState extends State<ApprovalPage> {
   final StockDeductionController _deductionController =
       StockDeductionController();
   final InventoryController _inventoryController = InventoryController();
-  final PresetController _presetController = PresetController();
   List<Map<String, dynamic>> _allApprovals = [];
   List<Map<String, dynamic>> _lastKnownApprovals = [];
   late Stream<List<Map<String, dynamic>>> _approvalsStream;
@@ -341,7 +339,7 @@ class _ApprovalPageState extends State<ApprovalPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Approvals from Service Management will appear here',
+            'Approvals will appear here',
             style: AppFonts.sfProStyle(
               fontSize: 14,
               color: textColor.withOpacity(0.7),
@@ -549,37 +547,6 @@ class _ApprovalPageState extends State<ApprovalPage> {
       // Update approval status to approved
       await _approvalController.approveApproval(approval['id']);
 
-      // Reset the preset in Service Management: clear patient info and reset supply quantities to 0
-      try {
-        if (presetName != null && presetName.isNotEmpty) {
-          // Find the preset by name
-          final preset = await _presetController.getPresetByName(presetName);
-          if (preset != null) {
-            // Get the current supplies and reset all quantities to 0
-            final currentSupplies =
-                List<Map<String, dynamic>>.from(preset['supplies'] ?? []);
-            final resetSupplies = currentSupplies.map((supply) {
-              return {
-                ...supply,
-                'quantity': 0, // Reset quantity to 0
-              };
-            }).toList();
-
-            // Update the preset: clear patient info and reset supply quantities
-            await _presetController.updatePreset(preset['id'], {
-              'supplies': resetSupplies,
-              'patient_name': '',
-              'age': '',
-              'gender': '',
-              'conditions': '',
-            });
-          }
-        }
-      } catch (e) {
-        // Log error but don't fail the approval
-        print('Error resetting preset: $e');
-      }
-
       // Add to blacklist immediately to prevent it from ever appearing again
       final approvalId = approval['id']?.toString();
       if (approvalId != null) {
@@ -731,40 +698,6 @@ class _ApprovalPageState extends State<ApprovalPage> {
 
     try {
       await _approvalController.rejectApproval(approval['id']);
-
-      // Save patient information back to the preset in Service Management
-      try {
-        final presetName = approval['presetName']?.toString();
-        if (presetName != null && presetName.isNotEmpty) {
-          // Find the preset by name
-          final preset = await _presetController.getPresetByName(presetName);
-          if (preset != null) {
-            // Get patient information
-            final patientName = approval['patientName']?.toString() ?? '';
-            final age = approval['age']?.toString() ?? '';
-            final gender = approval['gender']?.toString() ??
-                approval['sex']?.toString() ??
-                '';
-            final conditions = approval['conditions']?.toString() ?? '';
-
-            // Get supplies with quantities from approval
-            final supplies =
-                List<Map<String, dynamic>>.from(approval['supplies'] ?? []);
-
-            // Update the preset with patient information AND supplies with quantities
-            await _presetController.updatePreset(preset['id'], {
-              'patient_name': patientName,
-              'age': age,
-              'gender': gender,
-              'conditions': conditions,
-              'supplies': supplies,
-            });
-          }
-        }
-      } catch (e) {
-        // Log error but don't fail the rejection
-        print('Error saving patient info to preset: $e');
-      }
 
       // Add to blacklist immediately to prevent it from ever appearing again
       final approvalId = approval['id']?.toString();

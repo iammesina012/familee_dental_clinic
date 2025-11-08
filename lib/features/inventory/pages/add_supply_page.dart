@@ -344,7 +344,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                             ?.withOpacity(0.6)),
                                     SizedBox(height: 8),
                                     Text(
-                                      'No image',
+                                      'Upload image',
                                       style:
                                           theme.textTheme.bodySmall?.copyWith(
                                         fontSize: 12,
@@ -590,7 +590,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Stock Quantity',
+                              Text('Unit Quantity',
                                   style: theme.textTheme.bodyMedium
                                       ?.copyWith(fontWeight: FontWeight.w500)),
                               const SizedBox(height: 6),
@@ -765,7 +765,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Quantity',
+                              Text('Content Quantity',
                                   style: theme.textTheme.bodyMedium
                                       ?.copyWith(fontWeight: FontWeight.w500)),
                               const SizedBox(height: 6),

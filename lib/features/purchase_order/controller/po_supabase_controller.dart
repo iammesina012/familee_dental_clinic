@@ -249,40 +249,37 @@ class POSupabaseController {
     }
 
     try {
-      _supabase
-          .from('purchase_orders')
-          .stream(primaryKey: ['id'])
-          .eq('status', 'Closed')
-          .listen(
-            (data) {
-              try {
-                final list = data.map((row) {
-                  return PurchaseOrder.fromMap(row);
-                }).toList();
-                list.sort((a, b) => _extractPoNumber(a.code)
-                    .compareTo(_extractPoNumber(b.code)));
+      _supabase.from('purchase_orders').stream(primaryKey: ['id']).inFilter(
+          'status', ['Closed', 'Cancelled']).listen(
+        (data) {
+          try {
+            final list = data.map((row) {
+              return PurchaseOrder.fromMap(row);
+            }).toList();
+            list.sort((a, b) =>
+                _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
 
-                // Cache the result
-                _cachedClosedPOs = list;
-                controller.add(list);
-              } catch (e) {
-                // On error, emit cached data if available, otherwise emit empty list
-                if (_cachedClosedPOs != null) {
-                  controller.add(_cachedClosedPOs!);
-                } else {
-                  controller.add([]);
-                }
-              }
-            },
-            onError: (error) {
-              // On stream error, emit cached data if available, otherwise emit empty list
-              if (_cachedClosedPOs != null) {
-                controller.add(_cachedClosedPOs!);
-              } else {
-                controller.add([]);
-              }
-            },
-          );
+            // Cache the result
+            _cachedClosedPOs = list;
+            controller.add(list);
+          } catch (e) {
+            // On error, emit cached data if available, otherwise emit empty list
+            if (_cachedClosedPOs != null) {
+              controller.add(_cachedClosedPOs!);
+            } else {
+              controller.add([]);
+            }
+          }
+        },
+        onError: (error) {
+          // On stream error, emit cached data if available, otherwise emit empty list
+          if (_cachedClosedPOs != null) {
+            controller.add(_cachedClosedPOs!);
+          } else {
+            controller.add([]);
+          }
+        },
+      );
     } catch (e) {
       // If stream creation fails, emit cached data if available, otherwise emit empty list
       if (_cachedClosedPOs != null) {

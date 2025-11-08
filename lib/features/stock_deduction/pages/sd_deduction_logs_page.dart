@@ -79,7 +79,7 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
 
         // Check if a deduction log preset with this name already exists
         // Only update if it's already a deduction log preset (from_deduction == true)
-        // Don't update service management presets - create a new record instead
+        // Don't overwrite manually created presets - create a new record instead
         final existingPreset = await _presetController.getPresetByName(purpose);
         final isExistingDeductionLog = existingPreset != null &&
             (existingPreset['from_deduction'] == true ||
@@ -91,7 +91,7 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
               existingPreset['id'], presetData);
         } else {
           // Always create a new preset for deduction logs
-          // This ensures service management presets are not overwritten
+          // This ensures manually maintained presets are not overwritten
           await _presetController.savePreset(presetData);
 
           // Log the preset creation activity (only if newly created)

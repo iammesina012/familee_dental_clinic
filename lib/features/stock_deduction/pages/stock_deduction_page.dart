@@ -3,9 +3,6 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/features/stock_deduction/controller/sd_approval_controller.dart';
-import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
-import 'package:familee_dental/features/inventory/data/inventory_item.dart';
-import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
@@ -20,8 +17,6 @@ class StockDeductionPage extends StatefulWidget {
 
 class _StockDeductionPageState extends State<StockDeductionPage> {
   final List<Map<String, dynamic>> _deductions = [];
-  final InventoryController _inventoryController = InventoryController();
-  final SdActivityController _activityController = SdActivityController();
   final ApprovalController _approvalController = ApprovalController();
   OverlayEntry? _undoOverlayEntry;
   Route? _currentRoute;
@@ -286,19 +281,6 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     _undoOverlayEntry = null;
   }
 
-  void _createPreset() async {
-    // Navigate to Service Management page
-    final result = await Navigator.of(context)
-        .pushNamed('/stock-deduction/service-management');
-
-    // Handle the preset that was selected
-    if (result != null && result is Map<String, dynamic>) {
-      if (result['action'] == 'use_preset' && result['preset'] != null) {
-        await _loadPresetIntoDeductions(result['preset']);
-      }
-    }
-  }
-
   void _openDeductionLogs() async {
     // Navigate to Deduction Logs page
     await Navigator.of(context).pushNamed('/stock-deduction/deduction-logs');
@@ -307,189 +289,6 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   void _openApproval() async {
     // Navigate to Approval page
     await Navigator.of(context).pushNamed('/stock-deduction/approval');
-  }
-
-  Future<void> _loadPresetIntoDeductions(Map<String, dynamic> preset) async {
-    try {
-      final supplies = preset['supplies'] as List<dynamic>? ?? [];
-
-      // Check if ALL supplies from the preset are already in the current deductions list
-      final List<String> existingSupplyNames = _deductions
-          .map((e) =>
-              '${e['name']?.toString() ?? ''} - ${e['brand']?.toString() ?? ''}')
-          .toList();
-
-      final List<String> presetSupplyNames = supplies
-          .map((e) =>
-              '${e['name']?.toString() ?? ''} - ${e['brand']?.toString() ?? ''}')
-          .toList();
-
-      final List<String> duplicates = existingSupplyNames
-          .where((name) => presetSupplyNames.contains(name))
-          .toList();
-
-      // Only prevent loading if ALL supplies from the preset are already in the list
-      if (duplicates.length == presetSupplyNames.length &&
-          presetSupplyNames.isNotEmpty) {
-        await _showPresetAlreadyLoadedDialog(
-            preset['name']?.toString() ?? 'This preset');
-        return;
-      }
-
-      // Get current inventory data to update stock and expiry information
-      // Use inventory controller instead of catalog controller for proper FIFO logic
-      List<GroupedInventoryItem> currentInventory = [];
-      try {
-        currentInventory = await _inventoryController
-            .getGroupedSuppliesStream(archived: false)
-            .first;
-      } catch (e) {
-        print('Error loading current inventory: $e');
-        // Continue with empty inventory - will handle as missing items
-      }
-
-      setState(() {
-        _deductions.clear();
-        for (final supply in supplies) {
-          if (supply is Map<String, dynamic>) {
-            final supplyName = supply['name']?.toString() ?? '';
-            final supplyBrand = supply['brand']?.toString() ?? '';
-
-            // Find current inventory data for this supply by name and brand
-            GroupedInventoryItem? currentItem;
-            try {
-              currentItem = currentInventory.firstWhere(
-                (item) =>
-                    item.mainItem.name == supplyName &&
-                    item.mainItem.brand == supplyBrand,
-              );
-            } catch (e) {
-              currentItem = null;
-            }
-
-            if (currentItem != null) {
-              // Block expired items from deduction. Treat them as missing (0 stock, no expiry).
-              if (currentItem.getStatus() == 'Expired') {
-                _deductions.add({
-                  'docId': null,
-                  'name': currentItem.mainItem.name,
-                  'type': currentItem.mainItem.type,
-                  'brand': currentItem.mainItem.brand,
-                  'imageUrl': currentItem.mainItem.imageUrl,
-                  'expiry': null,
-                  'noExpiry': true,
-                  'stock': 0,
-                  'deductQty': 0,
-                });
-              } else {
-                // Use current inventory data instead of stored preset values
-                // For stock deduction, we need to include all batches (earliest expiry first)
-                final allBatches = [
-                  currentItem.mainItem,
-                  ...currentItem.variants
-                ];
-                final validBatches =
-                    allBatches.where((batch) => batch.stock > 0).toList();
-
-                // Sort by expiry (earliest first, no expiry last)
-                validBatches.sort((a, b) {
-                  if (a.noExpiry && b.noExpiry) return 0;
-                  if (a.noExpiry) return 1;
-                  if (b.noExpiry) return -1;
-
-                  final aExpiry = a.expiry != null
-                      ? DateTime.tryParse(a.expiry!.replaceAll('/', '-'))
-                      : null;
-                  final bExpiry = b.expiry != null
-                      ? DateTime.tryParse(b.expiry!.replaceAll('/', '-'))
-                      : null;
-
-                  if (aExpiry == null && bExpiry == null) return 0;
-                  if (aExpiry == null) return 1;
-                  if (bExpiry == null) return -1;
-                  return aExpiry.compareTo(bExpiry);
-                });
-
-                // Add the earliest expiry batch with stock as the main deduction item
-                if (validBatches.isNotEmpty) {
-                  final primaryBatch = validBatches.first;
-
-                  // Use preset quantity if available, otherwise default to 1
-                  final int presetQuantity = (supply['quantity'] ?? 1) as int;
-                  final int defaultQty =
-                      primaryBatch.stock > 0 ? presetQuantity : 0;
-                  final int deductQty = defaultQty > primaryBatch.stock
-                      ? primaryBatch.stock
-                      : defaultQty;
-
-                  _deductions.add({
-                    'docId': primaryBatch.id,
-                    'name': primaryBatch.name,
-                    'type': primaryBatch.type,
-                    'brand': primaryBatch.brand,
-                    'imageUrl': primaryBatch.imageUrl,
-                    'expiry': primaryBatch.expiry,
-                    'noExpiry': primaryBatch.noExpiry,
-                    'stock': primaryBatch.stock,
-                    'deductQty': deductQty,
-                    'allBatches': validBatches
-                        .map((batch) => {
-                              'docId': batch.id,
-                              'stock': batch.stock,
-                              'expiry': batch.expiry,
-                            })
-                        .toList(),
-                  });
-                }
-              }
-            } else {
-              // Not in current inventory (likely expired/removed)
-              // Use a safe placeholder so it cannot be deducted
-              _deductions.add({
-                'docId': null,
-                'name': supplyName,
-                'type': supply['type'],
-                'brand': supplyBrand,
-                'imageUrl': (supply['imageUrl'] ?? '').toString(),
-                'expiry': null,
-                'noExpiry': true,
-                'stock': 0,
-                'deductQty': 0,
-              });
-            }
-          }
-        }
-      });
-
-      // Log preset usage activity
-      await _activityController.logPresetUsed(
-        presetName: preset['name']?.toString() ?? 'Unknown',
-        supplies: supplies.cast<Map<String, dynamic>>(),
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Preset "${preset['name']}" loaded with ${_deductions.length} supplies',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: const Color(0xFF00D4AA),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to load preset: $e',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   Future<bool> _confirmLeave() async {
@@ -654,34 +453,6 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           ),
           content: Text(
             '"$supplyName" is already in your deduction list.',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'OK',
-                style: AppFonts.sfProStyle(fontSize: 16),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showPresetAlreadyLoadedDialog(String presetName) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Preset already loaded',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            '"$presetName" contains supplies that are already in your deduction list.',
             style: AppFonts.sfProStyle(fontSize: 16),
           ),
           actions: [
@@ -1266,6 +1037,8 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
 
   Widget _buildStockDeductionContent() {
     final theme = Theme.of(context);
+    final roleProvider = UserRoleProvider();
+    final showDeductionLogs = !roleProvider.isStaff;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -1277,10 +1050,9 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
           const SizedBox(height: 12),
           // Top bar for in-page actions
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               // Deduction Logs button - Only for Owner and Admin
-              if (!UserRoleProvider().isStaff)
+              if (showDeductionLogs)
                 ElevatedButton(
                   onPressed: _openDeductionLogs,
                   style: ElevatedButton.styleFrom(
@@ -1299,63 +1071,51 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
                     ),
                   ),
                 ),
-              if (!UserRoleProvider().isStaff) const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _createPreset,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00D4AA),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text(
-                  'Service',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _openApproval,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00D4AA),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text(
-                  'Approval',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _deductions.isEmpty ? null : _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _deductions.isEmpty
-                      ? Colors.grey[400]
-                      : const Color(0xFF00D4AA),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text(
-                  'Deduct',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+              if (showDeductionLogs) const SizedBox(width: 8),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton(
+                      onPressed: _openApproval,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00D4AA),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: Text(
+                        'Approval',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _deductions.isEmpty ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _deductions.isEmpty
+                            ? Colors.grey[400]
+                            : const Color(0xFF00D4AA),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: Text(
+                        'Deduct',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

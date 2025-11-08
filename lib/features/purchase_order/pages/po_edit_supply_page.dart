@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 import 'package:familee_dental/shared/services/connectivity_service.dart';
 import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 
 class EditSupplyPOPage extends StatefulWidget {
   final Map<String, dynamic> supply;
@@ -31,6 +32,12 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   final List<DateTime?> _batchExpiries = [];
   final List<bool> _batchNoExpirySelected = [];
   final ViewSupplyController _viewSupplyController = ViewSupplyController();
+  List<_PackagingOption> _packagingContentOptions = [];
+  List<String> _packagingUnitOptions = [];
+  final Map<String, Map<String, dynamic>> _variantByUnitKey = {};
+  bool _isApplyingVariant = false;
+  int _typeRequestToken = 0;
+  int _packagingRequestToken = 0;
 
   // Inventory unit (kept for saving; no longer editable in UI)
   String _selectedUnit = 'Box';
@@ -66,6 +73,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     // Initialize controllers and focus behavior for quantity inputs
     _packagingQtyController.text = _packagingQuantity.toString();
     _packagingContentQtyController.text = _packagingContentQuantity.toString();
+    if (_selectedPackagingUnit.isNotEmpty) {
+      _packagingUnitOptions = [_selectedPackagingUnit];
+    }
 
     _packagingQtyFocus.addListener(() {
       if (!_packagingQtyFocus.hasFocus) {
@@ -98,6 +108,13 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
 
     // Initialize the correct type if not already set
     _initializeCorrectType();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadPackagingContentOptions(
+        supplyName: widget.supply['supplyName']?.toString() ?? '',
+        type: widget.supply['type']?.toString(),
+      );
+    });
 
     // Initialize batches from existing data if present
     final List<dynamic>? existingBatches =
@@ -165,12 +182,18 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final fieldFillColor = theme.brightness == Brightness.dark
+        ? scheme.surface
+        : const Color(0xFFF4F5F9);
+    final fieldBorderColor = theme.brightness == Brightness.dark
+        ? Colors.white.withOpacity(0.1)
+        : const Color(0xFFE0E4EC);
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          "Edit Supply",
+          "Edit Supply (PO)",
           style: AppFonts.sfProStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -251,10 +274,10 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                         child: Container(
                           width: 120,
                           decoration: BoxDecoration(
-                            color: scheme.surface,
+                            color: fieldFillColor,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: theme.dividerColor,
+                              color: fieldBorderColor,
                               width: 1,
                             ),
                           ),
@@ -380,11 +403,11 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
+                              borderSide: BorderSide(color: fieldBorderColor),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
+                              borderSide: BorderSide(color: fieldBorderColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -396,7 +419,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                               horizontal: 16,
                             ),
                             filled: true,
-                            fillColor: scheme.surface,
+                            fillColor: fieldFillColor,
                           ),
                         ),
                       ),
@@ -419,11 +442,11 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
+                              borderSide: BorderSide(color: fieldBorderColor),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
+                              borderSide: BorderSide(color: fieldBorderColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -435,7 +458,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                               horizontal: 16,
                             ),
                             filled: true,
-                            fillColor: scheme.surface,
+                            fillColor: fieldFillColor,
                           ),
                         ),
                       ),
@@ -476,11 +499,11 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
+                              borderSide: BorderSide(color: fieldBorderColor),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
+                              borderSide: BorderSide(color: fieldBorderColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -492,7 +515,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                               horizontal: 16,
                             ),
                             filled: true,
-                            fillColor: scheme.surface,
+                            fillColor: fieldFillColor,
                           ),
                         ),
                       ),
@@ -502,113 +525,76 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                 // Removed Quantity + Packaging Unit (handled in Quantity & Expiry)
                 SizedBox(height: 16),
 
-                // Quantity + Packaging Content
+                // Packaging Unit & Content
                 Row(
                   children: [
                     Expanded(
                       child: _buildFieldSection(
-                        title: "Quantity",
+                        title: "Packaging Unit",
                         child: Container(
                           decoration: BoxDecoration(
-                            color: scheme.surface,
+                            color: fieldFillColor,
                             borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: fieldBorderColor),
                           ),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                onPressed: _isPackagingContentDisabled()
-                                    ? null
-                                    : () {
-                                        if (_packagingContentQuantity > 1) {
-                                          setState(() {
-                                            _packagingContentQuantity--;
-                                            _packagingContentQtyController
-                                                    .text =
-                                                _packagingContentQuantity
-                                                    .toString();
-                                          });
-                                        }
-                                      },
-                                icon: Icon(Icons.remove,
-                                    color: _isPackagingContentDisabled()
-                                        ? theme.textTheme.bodyMedium?.color
-                                            ?.withOpacity(0.3)
-                                        : theme.textTheme.bodyMedium?.color),
-                              ),
-                              Expanded(
-                                child: TextField(
-                                  enabled: !_isPackagingContentDisabled(),
-                                  textAlign: TextAlign.center,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(3),
-                                  ],
-                                  controller: _packagingContentQtyController,
-                                  focusNode: _packagingContentQtyFocus,
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                  decoration: InputDecoration(
-                                    border: InputBorder.none,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                  onChanged: (val) {
-                                    if (val.isEmpty) {
-                                      setState(
-                                          () => _packagingContentQuantity = 0);
-                                      return;
-                                    }
-                                    if (RegExp(r'^0+$').hasMatch(val)) {
-                                      _packagingContentQtyController.text = '';
-                                      _packagingContentQtyController.selection =
-                                          TextSelection.collapsed(offset: 0);
-                                      setState(
-                                          () => _packagingContentQuantity = 0);
-                                      return;
-                                    }
-                                    final normalized =
-                                        val.replaceFirst(RegExp(r'^0+'), '');
-                                    if (normalized != val) {
-                                      _packagingContentQtyController.text =
-                                          normalized;
-                                      _packagingContentQtyController.selection =
-                                          TextSelection.collapsed(
-                                              offset: normalized.length);
-                                    }
-                                    final parsed =
-                                        int.tryParse(normalized) ?? 0;
-                                    setState(() {
-                                      int clamped = parsed;
-                                      if (clamped > 999) clamped = 999;
-                                      _packagingContentQuantity = clamped;
-                                    });
-                                  },
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: () {
+                                final options = _packagingUnitOptions.isNotEmpty
+                                    ? _packagingUnitOptions
+                                    : (_selectedPackagingUnit.isNotEmpty
+                                        ? [_selectedPackagingUnit]
+                                        : ['Box']);
+                                final currentValue =
+                                    _getValidPackagingUnitValue();
+                                return options.contains(currentValue)
+                                    ? currentValue
+                                    : null;
+                              }(),
+                              hint: Text(
+                                'Select unit',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.6),
                                 ),
                               ),
-                              IconButton(
-                                onPressed: _isPackagingContentDisabled()
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          final next =
-                                              _packagingContentQuantity + 1;
-                                          _packagingContentQuantity =
-                                              next > 999 ? 999 : next;
-                                          _packagingContentQtyController.text =
-                                              _packagingContentQuantity
-                                                  .toString();
-                                        });
-                                      },
-                                icon: Icon(Icons.add,
-                                    color: _isPackagingContentDisabled()
-                                        ? theme.textTheme.bodyMedium?.color
-                                            ?.withOpacity(0.3)
-                                        : theme.textTheme.bodyMedium?.color),
+                              isExpanded: true,
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                color: theme.textTheme.bodyMedium?.color,
                               ),
-                            ],
+                              items: (_packagingUnitOptions.isNotEmpty
+                                      ? _packagingUnitOptions
+                                      : (_selectedPackagingUnit.isNotEmpty
+                                          ? [_selectedPackagingUnit]
+                                          : ['Box']))
+                                  .map(
+                                    (optionLabel) => DropdownMenuItem<String>(
+                                      value: optionLabel,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 16),
+                                        child: Text(
+                                          optionLabel,
+                                          style: AppFonts.sfProStyle(
+                                            fontSize: 16,
+                                            color: theme
+                                                .textTheme.bodyMedium?.color,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue == null) return;
+                                setState(() {
+                                  _ensureValidPackagingSelection(
+                                      forcedUnit: newValue);
+                                });
+                              },
+                            ),
                           ),
                         ),
                       ),
@@ -619,43 +605,61 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                         title: "Packaging Content",
                         child: Container(
                           decoration: BoxDecoration(
-                            color: scheme.surface,
+                            color: fieldFillColor,
                             borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: fieldBorderColor),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
-                              value: _getValidPackagingContentValue(),
+                              value: () {
+                                final options = _getPackagingContentOptions();
+                                final value = _getValidPackagingContentValue();
+                                return (value != null &&
+                                        options.contains(value))
+                                    ? value
+                                    : null;
+                              }(),
+                              hint: Text(
+                                _isPackagingContentDisabled()
+                                    ? 'Not applicable'
+                                    : 'Select content',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.6),
+                                ),
+                              ),
                               isExpanded: true,
                               style: AppFonts.sfProStyle(
                                 fontSize: 16,
                                 color: theme.textTheme.bodyMedium?.color,
                               ),
                               items: _getPackagingContentOptions()
-                                  .map((String content) {
-                                return DropdownMenuItem<String>(
-                                  value: content,
-                                  child: Padding(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 16),
-                                    child: Text(
-                                      content,
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 16,
-                                        color:
-                                            theme.textTheme.bodyMedium?.color,
+                                  .map(
+                                    (optionLabel) => DropdownMenuItem<String>(
+                                      value: optionLabel,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 16),
+                                        child: Text(
+                                          optionLabel,
+                                          style: AppFonts.sfProStyle(
+                                            fontSize: 16,
+                                            color: theme
+                                                .textTheme.bodyMedium?.color,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              }).toList(),
+                                  )
+                                  .toList(),
                               onChanged: _isPackagingContentDisabled()
                                   ? null
                                   : (String? newValue) {
-                                      if (newValue != null) {
-                                        setState(() {
-                                          _selectedPackagingContent = newValue;
-                                        });
-                                      }
+                                      if (newValue == null) return;
+                                      setState(() {
+                                        _applySelectedContent(newValue);
+                                      });
                                     },
                             ),
                           ),
@@ -680,8 +684,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                               Container(
                                 width: 120,
                                 decoration: BoxDecoration(
-                                  color: scheme.surface,
+                                  color: fieldFillColor,
                                   borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: fieldBorderColor),
                                 ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -758,23 +763,6 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              // Read-only packaging unit beside quantity (match expiry field padding)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 13, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: scheme.surface,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  _selectedPackagingUnit,
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
                               // Expiry date picker
                               Expanded(
                                 child: InkWell(
@@ -802,8 +790,11 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 12),
                                     decoration: BoxDecoration(
-                                      color: scheme.surface,
+                                      color: fieldFillColor,
                                       borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: fieldBorderColor,
+                                      ),
                                     ),
                                     child: Row(
                                       children: [
@@ -1079,26 +1070,6 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
 
     // Return to previous page with the updated supply data
     Navigator.of(context).pop(updatedSupplyData);
-
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Supply updated successfully!',
-          style: AppFonts.sfProStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: Color(0xFF00D4AA),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
   }
 
   Future<Object?> _showCustomDatePicker({
@@ -1110,6 +1081,12 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
       builder: (BuildContext dialogContext) {
         final theme = Theme.of(dialogContext);
         final scheme = theme.colorScheme;
+        final fieldFillColor = theme.brightness == Brightness.dark
+            ? scheme.surface
+            : const Color(0xFFF4F5F9);
+        final fieldBorderColor = theme.brightness == Brightness.dark
+            ? Colors.white.withOpacity(0.1)
+            : const Color(0xFFE0E4EC);
         return AlertDialog(
           title: Text(
             'Select Expiry Date',
@@ -1132,10 +1109,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                   padding:
                       const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                   decoration: BoxDecoration(
-                    color: scheme.surface,
+                    color: fieldFillColor,
                     borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                    border: Border.all(color: fieldBorderColor),
                   ),
                   child: Row(
                     children: [
@@ -1531,7 +1507,8 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   }
 
   // Fetch packaging information from inventory by supply name (without type)
-  Future<void> _fetchPackagingInfoFromInventory(String supplyName) async {
+  Future<void> _fetchPackagingInfoFromInventory(String supplyName,
+      {int? typeRequestToken}) async {
     try {
       print('Fetching packaging info from inventory for: $supplyName');
 
@@ -1545,26 +1522,36 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
 
       print('Packaging info response: $response');
 
+      if (typeRequestToken != null && _typeRequestToken != typeRequestToken) {
+        return;
+      }
+
       if (response != null && mounted) {
         setState(() {
+          if (typeRequestToken != null &&
+              _typeRequestToken != typeRequestToken) {
+            return;
+          }
           // Only update packaging unit and content type from inventory
           // Preserve packaging content quantity from PO supply
           _selectedPackagingUnit =
-              response['packaging_          unit']?.toString() ?? 'Box';
+              response['packaging_unit']?.toString() ?? 'Box';
           _selectedPackagingContent =
               response['packaging_content']?.toString() ?? 'Pieces';
-
-          // Preserve packaging content quantity from PO supply (don't overwrite with inventory)
-          // The value should already be set from widget.supply in initState()
-          // Keep current values in _packagingContentQuantity and controller
-
-          // Also update widget.supply for consistency
           widget.supply['packagingUnit'] = _selectedPackagingUnit;
           widget.supply['packagingContent'] = _selectedPackagingContent;
           // Don't overwrite packagingContentQuantity - preserve from PO
         });
         print(
             'Successfully updated packaging info from inventory (preserved packaging content quantity)');
+        await _loadPackagingContentOptions(
+          supplyName: supplyName,
+          type: widget.supply['type']?.toString(),
+          requestToken: typeRequestToken,
+        );
+        if (typeRequestToken != null && _typeRequestToken != typeRequestToken) {
+          return;
+        }
       } else {
         print('No supply found in inventory for: $supplyName');
       }
@@ -1636,6 +1623,10 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
         });
         print(
             'Successfully updated packaging info only (loaded cost/brand/supplier for correct type if PO supply missing them)');
+        await _loadPackagingContentOptions(
+          supplyName: supplyName,
+          type: type,
+        );
       } else {
         // Fallback: try to fetch packaging info by name only
         await _fetchPackagingInfoOnly(supplyName);
@@ -1671,6 +1662,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
           widget.supply['packagingContent'] = _selectedPackagingContent;
         });
         print('Successfully updated packaging info only from inventory');
+        await _loadPackagingContentOptions(supplyName: supplyName);
       }
     } catch (e) {
       print('Error fetching packaging info only from inventory: $e');
@@ -1686,144 +1678,208 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
       final supplyName = widget.supply['supplyName'] ?? '';
       print('Updating supply for type: $newType, supply: $supplyName');
 
-      // Query database for supply with the same name and new type
-      final response = await Supabase.instance.client
-          .from('supplies')
-          .select('*')
-          .eq('name', supplyName)
-          .eq('type', newType)
-          .maybeSingle(); // Use maybeSingle() instead of single() to handle null cases
+      final int requestToken = ++_typeRequestToken;
 
-      print('Database response: $response');
+      InventoryItem? inventoryItem = await _viewSupplyController
+          .getSupplyByNameAndType(supplyName, newType);
 
-      if (response != null) {
+      if (!mounted || requestToken != _typeRequestToken) {
+        return;
+      }
+
+      Map<String, dynamic>? supplyData;
+
+      if (inventoryItem != null) {
+        supplyData = {
+          'id': inventoryItem.id,
+          'name': inventoryItem.name,
+          'type': inventoryItem.type,
+          'image_url': inventoryItem.imageUrl,
+          'brand': inventoryItem.brand,
+          'supplier': inventoryItem.supplier,
+          'cost': inventoryItem.cost,
+          'unit': inventoryItem.unit,
+          'packaging_unit': inventoryItem.packagingUnit,
+          'packaging_quantity': inventoryItem.packagingQuantity,
+          'packaging_content': inventoryItem.packagingContent,
+          'packaging_content_quantity': inventoryItem.packagingContentQuantity,
+        };
+      } else {
+        final response = await Supabase.instance.client
+            .from('supplies')
+            .select('*')
+            .eq('name', supplyName)
+            .eq('type', newType)
+            .maybeSingle();
+
+        if (!mounted || requestToken != _typeRequestToken) {
+          return;
+        }
+
+        print('Database response (fallback): $response');
+
+        if (response != null) {
+          supplyData = response;
+        }
+      }
+
+      if (supplyData != null) {
+        final data = Map<String, dynamic>.from(supplyData);
         setState(() {
-          // Preserve cost, brand, supplier, and packaging content quantity from PO supply BEFORE updating
-          final poCost = widget.supply['cost'];
-          final poBrand = widget.supply['brandName'];
-          final poSupplier = widget.supply['supplierName'];
-          final poPackagingContentQty =
-              widget.supply['packagingContentQuantity'];
-
-          // Update all supply details with the new type's data
-          widget.supply['type'] = newType;
-          widget.supply['imageUrl'] = response['image_url'] ?? '';
-
-          // If preservePOData is false (manual type change), load all data from inventory
-          // Otherwise, preserve PO supply data if it exists
-          if (!preservePOData) {
-            // Load all data from inventory for the new type
-            widget.supply['brand'] = response['brand'] ?? '';
-            widget.supply['brandName'] = response['brand'] ?? '';
-            widget.supply['supplier'] = response['supplier'] ?? '';
-            widget.supply['supplierName'] = response['supplier'] ?? '';
-            widget.supply['cost'] = response['cost'] ?? 0.0;
-          } else {
-            // Preserve brand from PO supply if it exists, otherwise use inventory brand
-            if (poBrand != null && poBrand.toString().trim().isNotEmpty) {
-              widget.supply['brand'] = poBrand;
-              widget.supply['brandName'] = poBrand;
-            } else {
-              widget.supply['brand'] = response['brand'] ?? '';
-              widget.supply['brandName'] = response['brand'] ?? '';
-            }
-
-            // Preserve supplier from PO supply if it exists, otherwise use inventory supplier
-            if (poSupplier != null && poSupplier.toString().trim().isNotEmpty) {
-              widget.supply['supplier'] = poSupplier;
-              widget.supply['supplierName'] = poSupplier;
-            } else {
-              widget.supply['supplier'] = response['supplier'] ?? '';
-              widget.supply['supplierName'] = response['supplier'] ?? '';
-            }
-
-            // Preserve cost from PO supply if it exists, otherwise use inventory cost
-            if (poCost != null && poCost is num && poCost > 0) {
-              widget.supply['cost'] = poCost;
-            } else {
-              widget.supply['cost'] = response['cost'] ?? 0.0;
-            }
+          if (requestToken != _typeRequestToken) {
+            return;
           }
-
-          widget.supply['packagingUnit'] = response['packaging_unit'] ?? 'Box';
-          widget.supply['packagingQuantity'] =
-              response['packaging_quantity'] ?? 1;
-          widget.supply['packagingContent'] =
-              response['packaging_content'] ?? 'Pieces';
-
-          // Preserve packaging content quantity from PO supply if it exists
-          if (poPackagingContentQty != null &&
-              poPackagingContentQty is int &&
-              poPackagingContentQty > 0) {
-            widget.supply['packagingContentQuantity'] = poPackagingContentQty;
-          } else {
-            widget.supply['packagingContentQuantity'] =
-                response['packaging_content_quantity'] ?? 1;
-          }
-
-          // Update controllers based on preservePOData flag
-          if (!preservePOData) {
-            // Load all data from inventory for the new type
-            brandController.text = widget.supply['brandName']?.toString() ?? '';
-            supplierController.text =
-                widget.supply['supplierName']?.toString() ?? '';
-            costController.text = (widget.supply['cost'] ?? 0.0).toString();
-          } else {
-            // Preserve PO values if they exist, otherwise use inventory values
-            brandController.text = widget.supply['brandName']?.toString() ?? '';
-            supplierController.text =
-                widget.supply['supplierName']?.toString() ?? '';
-
-            // Preserve cost in controller if PO has it
-            if (poCost != null && poCost is num && poCost > 0) {
-              costController.text = poCost.toString();
-            } else {
-              costController.text = (response['cost'] ?? 0.0).toString();
-            }
-          }
-          _selectedPackagingUnit =
-              response['packaging_unit']?.toString() ?? 'Box';
-          _packagingQuantity = response['packaging_quantity'] ?? 1;
-          _packagingQtyController.text = _packagingQuantity.toString();
-          _selectedPackagingContent =
-              response['packaging_content']?.toString() ?? 'Pieces';
-
-          // Use the packaging content quantity we preserved above (from PO supply or inventory)
-          _packagingContentQuantity =
-              widget.supply['packagingContentQuantity'] ?? 1;
-          _packagingContentQtyController.text =
-              _packagingContentQuantity.toString();
+          _applySupplyData(
+            newType: newType,
+            supplyData: data,
+            preservePOData: preservePOData,
+          );
         });
         print('Successfully updated supply for type: $newType');
-      } else {
-        print(
-            'No supply found for type: $newType, trying fallback by name only');
-        // Fallback: try to fetch packaging info by name only
-        await _fetchPackagingInfoFromInventory(supplyName);
+        await _loadPackagingContentOptions(
+          supplyName: supplyName,
+          type: newType,
+          requestToken: requestToken,
+        );
+        return;
       }
+
+      print('No supply found for type: $newType, trying fallback by name only');
+      await _fetchPackagingInfoFromInventory(
+        supplyName,
+        typeRequestToken: requestToken,
+      );
     } catch (e) {
       print('Error updating supply for type: $e');
     }
   }
 
+  Future<void> _loadPackagingContentOptions({
+    required String supplyName,
+    String? type,
+    int? requestToken,
+  }) async {
+    if (supplyName.trim().isEmpty || _isPackagingContentDisabled()) {
+      if (_packagingContentOptions.isNotEmpty && mounted) {
+        setState(() {
+          _packagingContentOptions = [];
+        });
+      }
+      return;
+    }
+
+    int token;
+    if (requestToken != null) {
+      token = requestToken;
+      _packagingRequestToken = token;
+    } else {
+      token = ++_packagingRequestToken;
+    }
+
+    if (mounted && _packagingContentOptions.isNotEmpty) {
+      setState(() {
+        if (_packagingRequestToken == token) {
+          _packagingContentOptions = [];
+        }
+      });
+    }
+
+    try {
+      final Set<String> units = {};
+      var query = Supabase.instance.client
+          .from('supplies')
+          .select(
+              'id, name, type, image_url, brand, supplier, cost, unit, packaging_unit, packaging_quantity, packaging_content, packaging_content_quantity')
+          .eq('name', supplyName);
+
+      if (type != null && type.trim().isNotEmpty) {
+        query = query.eq('type', type);
+      }
+
+      final response = await query.order('packaging_content_quantity');
+
+      if (!mounted || _packagingRequestToken != token) {
+        return;
+      }
+
+      final List<_PackagingOption> options = [];
+      final Set<String> seen = {};
+      final Map<String, Map<String, dynamic>> variants = {};
+
+      for (final row in response) {
+        final rawQuantity = row['packaging_content_quantity'];
+        final quantity = rawQuantity is int
+            ? rawQuantity
+            : int.tryParse(rawQuantity?.toString() ?? '');
+        final content = (row['packaging_content'] ?? '').toString().trim();
+        final unit = (row['packaging_unit'] ?? row['packagingUnit'] ?? '')
+            .toString()
+            .trim();
+
+        if (quantity == null || quantity <= 0) continue;
+        final resolvedUnit = unit.isNotEmpty ? unit : 'Box';
+        units.add(resolvedUnit);
+        final option = _PackagingOption(
+          unit: resolvedUnit,
+          quantity: quantity,
+          content: content,
+        );
+        final key =
+            '${option.unit.toLowerCase()}|${option.quantity}|${option.content.toLowerCase()}';
+        if (seen.contains(key)) continue;
+        seen.add(key);
+        options.add(option);
+
+        final variantKey =
+            '${option.unit.toLowerCase()}|${option.content.toLowerCase()}|${option.quantity}';
+        variants[variantKey] = Map<String, dynamic>.from(row);
+      }
+
+      options.sort((a, b) => a.quantity.compareTo(b.quantity));
+
+      if (!mounted || _packagingRequestToken != token) return;
+
+      setState(() {
+        if (_packagingRequestToken != token) {
+          return;
+        }
+        _packagingContentOptions = options;
+        _packagingUnitOptions = units.isNotEmpty
+            ? (units.toList()..sort())
+            : (_selectedPackagingUnit.isNotEmpty
+                ? [_selectedPackagingUnit]
+                : ['Box']);
+        _variantByUnitKey
+          ..clear()
+          ..addAll(variants);
+        _ensureValidPackagingSelection();
+      });
+    } catch (e) {
+      print('Error loading packaging content options: $e');
+    }
+  }
+
   // Get packaging content options based on selected packaging unit
   List<String> _getPackagingContentOptions() {
-    switch (_selectedPackagingUnit) {
-      case 'Pack':
-      case 'Box':
-        return ['Pieces'];
-      case 'Bottle':
-      case 'Jug':
-        return ['mL', 'L'];
-      case 'Pad':
-        return ['Cartridge'];
-      case 'Pieces':
-      case 'Spool':
-      case 'Tub':
-        return []; // These don't need packaging content
-      default:
-        return ['Pieces'];
+    if (_isPackagingContentDisabled()) {
+      return [];
     }
+
+    final filtered = _getFilteredPackagingOptions();
+    if (filtered.isNotEmpty) {
+      return filtered.map((option) => option.label).toList();
+    }
+
+    if (_packagingContentOptions.isNotEmpty) {
+      return _packagingContentOptions.map((option) => option.label).toList();
+    }
+
+    final fallbackQuantity =
+        _packagingContentQuantity > 0 ? _packagingContentQuantity : 1;
+    final fallbackContent = _selectedPackagingContent.isNotEmpty
+        ? _selectedPackagingContent
+        : 'Pieces';
+    return [_formatPackagingLabel(fallbackQuantity, fallbackContent)];
   }
 
   // Check if packaging content should be disabled
@@ -1832,11 +1888,326 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
   }
 
   // Get valid packaging content value
-  String _getValidPackagingContentValue() {
+  String? _getValidPackagingContentValue() {
     final options = _getPackagingContentOptions();
-    if (options.contains(_selectedPackagingContent)) {
-      return _selectedPackagingContent;
+    if (options.isEmpty) {
+      return null;
     }
-    return options.isNotEmpty ? options.first : 'Pieces';
+
+    if (_packagingContentOptions.isNotEmpty) {
+      final filtered = _getFilteredPackagingOptions();
+      final searchPool =
+          filtered.isNotEmpty ? filtered : _packagingContentOptions;
+      final matchingOption = searchPool.firstWhere(
+        (option) =>
+            option.quantity == _packagingContentQuantity &&
+            option.content.toLowerCase() ==
+                _selectedPackagingContent.toLowerCase(),
+        orElse: () => searchPool.first,
+      );
+      return matchingOption.label;
+    }
+
+    final fallbackLabel = _formatPackagingLabel(
+      _packagingContentQuantity > 0 ? _packagingContentQuantity : 1,
+      _selectedPackagingContent.isNotEmpty
+          ? _selectedPackagingContent
+          : 'Pieces',
+    );
+
+    if (options.contains(fallbackLabel)) {
+      return fallbackLabel;
+    }
+
+    return options.first;
+  }
+
+  String _formatPackagingLabel(int quantity, String content) {
+    final trimmedContent = content.trim();
+    if (trimmedContent.isEmpty) {
+      return quantity.toString();
+    }
+    return '$quantity $trimmedContent';
+  }
+
+  List<_PackagingOption> _getFilteredPackagingOptions() {
+    if (_packagingContentOptions.isEmpty) return [];
+    return _packagingContentOptions
+        .where((option) => option.unit == _selectedPackagingUnit)
+        .toList();
+  }
+
+  void _ensureValidPackagingSelection({String? forcedUnit}) {
+    String unit = forcedUnit ?? _selectedPackagingUnit;
+    if (_packagingUnitOptions.isEmpty && unit.isNotEmpty) {
+      _packagingUnitOptions = [unit];
+    }
+    if (_packagingUnitOptions.isNotEmpty) {
+      if (unit.isEmpty || !_packagingUnitOptions.contains(unit)) {
+        unit = _packagingUnitOptions.first;
+      }
+    } else if (unit.isEmpty) {
+      unit = 'Box';
+    }
+    _selectedPackagingUnit = unit;
+    widget.supply['packagingUnit'] = _selectedPackagingUnit;
+
+    final optionsForUnit = _getFilteredPackagingOptions();
+    if (optionsForUnit.isNotEmpty) {
+      final match = optionsForUnit.firstWhere(
+        (option) =>
+            option.quantity == _packagingContentQuantity &&
+            option.content.toLowerCase() ==
+                _selectedPackagingContent.toLowerCase(),
+        orElse: () => optionsForUnit.first,
+      );
+      _selectedPackagingContent = match.content;
+      _packagingContentQuantity = match.quantity;
+    }
+
+    _syncPackagingContentToSupply();
+
+    if (_isApplyingVariant) {
+      return;
+    }
+
+    final variant = _getVariantForCurrentSelection();
+    if (variant != null) {
+      _applyVariantData(variant);
+    }
+  }
+
+  void _applySelectedContent(String label) {
+    if (_packagingContentOptions.isNotEmpty) {
+      final optionsForUnit = _getFilteredPackagingOptions();
+      final searchPool =
+          optionsForUnit.isNotEmpty ? optionsForUnit : _packagingContentOptions;
+      final option = searchPool.firstWhere(
+        (opt) => opt.label == label,
+        orElse: () => searchPool.first,
+      );
+      _selectedPackagingContent = option.content;
+      _packagingContentQuantity = option.quantity;
+    } else {
+      final parts = label.split(' ');
+      if (parts.length >= 2) {
+        _packagingContentQuantity =
+            int.tryParse(parts.first) ?? _packagingContentQuantity;
+        _selectedPackagingContent = parts.sublist(1).join(' ');
+      } else {
+        _selectedPackagingContent = label;
+      }
+    }
+    _syncPackagingContentToSupply();
+
+    final variant = _getVariantForCurrentSelection();
+    if (variant != null) {
+      _applyVariantData(variant);
+    }
+  }
+
+  void _syncPackagingContentToSupply() {
+    if (_packagingContentQuantity <= 0) {
+      _packagingContentQuantity = 1;
+    }
+    _packagingContentQtyController.text = _packagingContentQuantity.toString();
+    widget.supply['packagingContentQuantity'] = _packagingContentQuantity;
+    widget.supply['packagingContent'] = _selectedPackagingContent;
+  }
+
+  String? _getValidPackagingUnitValue() {
+    if (_selectedPackagingUnit.isEmpty) return null;
+    if (_packagingUnitOptions.isEmpty) return _selectedPackagingUnit;
+    return _packagingUnitOptions.contains(_selectedPackagingUnit)
+        ? _selectedPackagingUnit
+        : _packagingUnitOptions.first;
+  }
+
+  Map<String, dynamic>? _getVariantForCurrentSelection() {
+    final unitKey = _selectedPackagingUnit.toLowerCase();
+    final contentKey = _selectedPackagingContent.toLowerCase();
+    final qtyKey = _packagingContentQuantity;
+    final key = '$unitKey|$contentKey|$qtyKey';
+    return _variantByUnitKey[key];
+  }
+
+  void _applyVariantData(Map<String, dynamic> variant) {
+    _isApplyingVariant = true;
+    try {
+      final supplyData = Map<String, dynamic>.from(variant);
+      final variantType = supplyData['type']?.toString() ??
+          widget.supply['type']?.toString() ??
+          '';
+      _applySupplyData(
+        newType: variantType,
+        supplyData: supplyData,
+        preservePOData: false,
+      );
+    } finally {
+      _isApplyingVariant = false;
+    }
+  }
+
+  void _applySupplyData({
+    required String newType,
+    required Map<String, dynamic> supplyData,
+    required bool preservePOData,
+  }) {
+    final poCost = widget.supply['cost'];
+    final poBrand = widget.supply['brandName'];
+    final poSupplier = widget.supply['supplierName'];
+    final poPackagingContentQty = widget.supply['packagingContentQuantity'];
+
+    final double inventoryCost =
+        _parseDouble(supplyData['cost'], fallback: 0.0);
+    final String imageUrl =
+        (supplyData['image_url'] ?? supplyData['imageUrl'] ?? '').toString();
+    final String brandFromInventory =
+        (supplyData['brand'] ?? '').toString().trim();
+    final String supplierFromInventory =
+        (supplyData['supplier'] ?? '').toString().trim();
+    final String unitFromInventory =
+        (supplyData['unit'] ?? '').toString().trim();
+    final String packagingUnitFromInventory =
+        (supplyData['packaging_unit'] ?? supplyData['packagingUnit'] ?? '')
+            .toString()
+            .trim();
+    final String packagingContentFromInventory =
+        (supplyData['packaging_content'] ??
+                supplyData['packagingContent'] ??
+                '')
+            .toString()
+            .trim();
+    final int packagingQuantityFromInventory = _parseInt(
+      supplyData['packaging_quantity'] ?? supplyData['packagingQuantity'],
+      fallback: 1,
+    );
+    final int packagingContentQuantityFromInventory = _parseInt(
+      supplyData['packaging_content_quantity'] ??
+          supplyData['packagingContentQuantity'],
+      fallback: 1,
+    );
+
+    widget.supply['type'] = newType;
+    widget.supply['imageUrl'] = imageUrl;
+
+    if (!preservePOData) {
+      widget.supply['brand'] = brandFromInventory;
+      widget.supply['brandName'] = brandFromInventory;
+      widget.supply['supplier'] = supplierFromInventory;
+      widget.supply['supplierName'] = supplierFromInventory;
+      widget.supply['cost'] = inventoryCost;
+    } else {
+      if (poBrand != null && poBrand.toString().trim().isNotEmpty) {
+        widget.supply['brand'] = poBrand;
+        widget.supply['brandName'] = poBrand;
+      } else {
+        widget.supply['brand'] = brandFromInventory;
+        widget.supply['brandName'] = brandFromInventory;
+      }
+
+      if (poSupplier != null && poSupplier.toString().trim().isNotEmpty) {
+        widget.supply['supplier'] = poSupplier;
+        widget.supply['supplierName'] = poSupplier;
+      } else {
+        widget.supply['supplier'] = supplierFromInventory;
+        widget.supply['supplierName'] = supplierFromInventory;
+      }
+
+      if (poCost != null && poCost is num && poCost > 0) {
+        widget.supply['cost'] = poCost;
+      } else {
+        widget.supply['cost'] = inventoryCost;
+      }
+    }
+
+    widget.supply['packagingUnit'] = packagingUnitFromInventory.isNotEmpty
+        ? packagingUnitFromInventory
+        : 'Box';
+    widget.supply['packagingQuantity'] =
+        packagingQuantityFromInventory > 0 ? packagingQuantityFromInventory : 1;
+    widget.supply['packagingContent'] = packagingContentFromInventory.isNotEmpty
+        ? packagingContentFromInventory
+        : 'Pieces';
+
+    if (preservePOData &&
+        poPackagingContentQty != null &&
+        poPackagingContentQty is int &&
+        poPackagingContentQty > 0) {
+      widget.supply['packagingContentQuantity'] = poPackagingContentQty;
+    } else {
+      widget.supply['packagingContentQuantity'] =
+          packagingContentQuantityFromInventory > 0
+              ? packagingContentQuantityFromInventory
+              : 1;
+    }
+
+    _selectedUnit =
+        unitFromInventory.isNotEmpty ? unitFromInventory : _selectedUnit;
+    _selectedPackagingUnit =
+        widget.supply['packagingUnit']?.toString() ?? 'Box';
+    _packagingQuantity =
+        _parseInt(widget.supply['packagingQuantity'], fallback: 1);
+    _packagingQtyController.text = _packagingQuantity.toString();
+
+    _selectedPackagingContent =
+        widget.supply['packagingContent']?.toString() ?? 'Pieces';
+    _packagingContentQuantity =
+        _parseInt(widget.supply['packagingContentQuantity'], fallback: 1);
+    _packagingContentQtyController.text = _packagingContentQuantity.toString();
+
+    brandController.text = widget.supply['brandName']?.toString() ?? '';
+    supplierController.text = widget.supply['supplierName']?.toString() ?? '';
+
+    final double costValue = _parseDouble(widget.supply['cost'], fallback: 0.0);
+    widget.supply['cost'] = costValue;
+    if (costValue == costValue.roundToDouble()) {
+      costController.text = costValue.toInt().toString();
+    } else {
+      costController.text = costValue.toStringAsFixed(2);
+    }
+
+    _ensureValidPackagingSelection();
+  }
+
+  int _parseInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final parsed = int.tryParse(value.trim());
+      if (parsed != null) return parsed;
+    }
+    return fallback;
+  }
+
+  double _parseDouble(dynamic value, {double fallback = 0.0}) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final parsed = double.tryParse(value.trim());
+      if (parsed != null) return parsed;
+    }
+    return fallback;
+  }
+}
+
+class _PackagingOption {
+  final String unit;
+  final int quantity;
+  final String content;
+
+  const _PackagingOption({
+    required this.unit,
+    required this.quantity,
+    required this.content,
+  });
+
+  String get label {
+    final trimmedContent = content.trim();
+    if (trimmedContent.isEmpty) {
+      return quantity.toString();
+    }
+    return '$quantity $trimmedContent';
   }
 }

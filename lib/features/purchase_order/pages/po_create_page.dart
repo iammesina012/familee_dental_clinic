@@ -652,13 +652,30 @@ class _CreatePOPageState extends State<CreatePOPage> {
           );
           if (result != null) {
             final newSupply = result as Map<String, dynamic>;
-            final bool alreadyExists = addedSupplies.any(
-              (s) =>
-                  s['supplyId']?.toString() ==
-                      newSupply['supplyId']?.toString() &&
-                  (s['type'] ?? '').toString().toLowerCase() ==
-                      (newSupply['type'] ?? '').toString().toLowerCase(),
-            );
+            final bool alreadyExists = addedSupplies.any((s) {
+              final sameSupplyId = s['supplyId']?.toString() ==
+                  newSupply['supplyId']?.toString();
+              final sameType = (s['type'] ?? '').toString().toLowerCase() ==
+                  (newSupply['type'] ?? '').toString().toLowerCase();
+              final samePackagingUnit = (s['packagingUnit'] ?? '')
+                      .toString()
+                      .toLowerCase() ==
+                  (newSupply['packagingUnit'] ?? '').toString().toLowerCase();
+              final samePackagingContent =
+                  (s['packagingContent'] ?? '').toString().toLowerCase() ==
+                      (newSupply['packagingContent'] ?? '')
+                          .toString()
+                          .toLowerCase();
+              final samePackagingQuantity =
+                  (s['packagingContentQuantity'] ?? '').toString() ==
+                      (newSupply['packagingContentQuantity'] ?? '').toString();
+
+              return sameSupplyId &&
+                  sameType &&
+                  samePackagingUnit &&
+                  samePackagingContent &&
+                  samePackagingQuantity;
+            });
 
             if (alreadyExists) {
               // Show duplicate dialog
@@ -1039,7 +1056,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               icon: Icons.delete,
-              label: 'Delete',
+              label: 'Remove',
               borderRadius: BorderRadius.circular(12),
             ),
           ],
@@ -1383,7 +1400,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
     }
   }
 
-  // Merge items with the same supplyId and type into a single entry
+  // Merge items with the same supplyId, type, and packaging into a single entry
   void _mergeDuplicatesByType() {
     final Map<String, int> firstIndexByKey = {};
 
@@ -1392,7 +1409,14 @@ class _CreatePOPageState extends State<CreatePOPage> {
       final s = addedSupplies[i];
       final String id = (s['supplyId'] ?? s['id'] ?? '').toString();
       final String type = (s['type'] ?? '').toString().toLowerCase();
-      final String key = '${id}_$type';
+      final String packagingUnit =
+          (s['packagingUnit'] ?? '').toString().toLowerCase();
+      final String packagingContent =
+          (s['packagingContent'] ?? '').toString().toLowerCase();
+      final String packagingContentQty =
+          (s['packagingContentQuantity'] ?? '').toString();
+      final String key =
+          '${id}_$type\_$packagingUnit\_$packagingContent\_$packagingContentQty';
 
       if (firstIndexByKey.containsKey(key)) {
         final int targetIdx = firstIndexByKey[key]!;
@@ -1449,7 +1473,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
           builder: (BuildContext context) {
             return AlertDialog(
               title: Text(
-                'Delete Supply?',
+                'Remove Supply?',
                 style: AppFonts.sfProStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1520,7 +1544,7 @@ class _CreatePOPageState extends State<CreatePOPage> {
                     backgroundColor: Colors.red,
                   ),
                   child: Text(
-                    'Delete',
+                    'Remove',
                     style: AppFonts.sfProStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

@@ -108,7 +108,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          "Add Supply",
+          "Add Supply (PO)",
           style: AppFonts.sfProStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
