@@ -762,13 +762,15 @@ class _PODetailsPageState extends State<PODetailsPage> {
                       child: TextButton(
                         onPressed: () => Navigator.of(context).pop(false),
                         style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
+                          foregroundColor: isDark ? Colors.white : Colors.black,
                           backgroundColor: Colors.transparent,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
-                            side: const BorderSide(
-                              color: Colors.grey,
+                            side: BorderSide(
+                              color: isDark
+                                  ? Colors.grey.shade500
+                                  : const Color(0xFFADB4C2),
                               width: 1,
                             ),
                           ),
@@ -778,7 +780,7 @@ class _PODetailsPageState extends State<PODetailsPage> {
                           style: AppFonts.sfProStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
                       ),
@@ -2797,17 +2799,18 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                       return Container(
                                         margin: EdgeInsets.only(bottom: 12),
                                         decoration: BoxDecoration(
-                                          color: Theme.of(context).brightness ==
+                                          color: theme.brightness ==
                                                   Brightness.dark
                                               ? const Color(0xFF2A2A2A)
-                                              : Theme.of(context)
-                                                  .colorScheme
-                                                  .surface,
+                                              : const Color(0xFFF9FBFF),
                                           borderRadius:
                                               BorderRadius.circular(12),
                                           border: Border.all(
-                                            color: theme.dividerColor
-                                                .withOpacity(0.2),
+                                            color: theme.brightness ==
+                                                    Brightness.dark
+                                                ? theme.dividerColor
+                                                    .withOpacity(0.2)
+                                                : const Color(0xFFD0D7E3),
                                             width: 1,
                                           ),
                                         ),

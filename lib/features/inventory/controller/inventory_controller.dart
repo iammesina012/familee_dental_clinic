@@ -20,10 +20,16 @@ class InventoryController {
   // Stream to get all supplies ordered by name, with optional archived filter
   Stream<List<InventoryItem>> getSuppliesStream({bool? archived}) {
     final controller = StreamController<List<InventoryItem>>.broadcast();
+    StreamSubscription<List<Map<String, dynamic>>>? supabaseSubscription;
 
-    // Emit cached data immediately if available (no delay - instant feedback)
-    if (_cachedSupplies != null) {
-      List<InventoryItem> filtered = _cachedSupplies!;
+    void safeAdd(List<InventoryItem> items) {
+      if (!controller.isClosed) {
+        controller.add(items);
+      }
+    }
+
+    void emitFiltered(List<InventoryItem> items) {
+      List<InventoryItem> filtered = items;
       if (archived != null) {
         if (archived == true) {
           filtered = filtered.where((item) => item.archived == true).toList();
@@ -33,112 +39,72 @@ class InventoryController {
       }
       filtered
           .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      controller.add(filtered);
+      safeAdd(filtered);
     }
 
-    try {
-      _supabase.from('supplies').stream(primaryKey: ['id']).listen(
-        (data) {
-          try {
-            List<InventoryItem> items = data.map((row) {
-              return InventoryItem(
-                id: row['id'] as String,
-                name: row['name'] ?? '',
-                type: row['type'],
-                imageUrl: row['image_url'] ?? '',
-                category: row['category'] ?? '',
-                cost: (row['cost'] ?? 0).toDouble(),
-                stock: (row['stock'] ?? 0) as int,
-                unit: row['unit'] ?? '',
-                packagingUnit: row['packaging_unit'],
-                packagingContent: row['packaging_content'],
-                packagingQuantity: row['packaging_quantity'],
-                packagingContentQuantity: row['packaging_content_quantity'],
-                supplier: row['supplier'] ?? '',
-                brand: row['brand'] ?? '',
-                expiry: row['expiry'],
-                noExpiry: row['no_expiry'] ?? false,
-                archived: row['archived'] ?? false,
-              );
-            }).toList();
-
-            // Cache all supplies (before filtering)
-            _cachedSupplies = items;
-
-            // Apply archived filter
-            if (archived != null) {
-              if (archived == true) {
-                items = items.where((item) => item.archived == true).toList();
-              } else {
-                items = items.where((item) => item.archived != true).toList();
-              }
-            }
-
-            // Sort by name
-            items.sort(
-                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-            controller.add(items);
-          } catch (e) {
-            // On error, emit cached data if available
-            if (_cachedSupplies != null) {
-              List<InventoryItem> filtered = _cachedSupplies!;
-              if (archived != null) {
-                if (archived == true) {
-                  filtered =
-                      filtered.where((item) => item.archived == true).toList();
-                } else {
-                  filtered =
-                      filtered.where((item) => item.archived != true).toList();
-                }
-              }
-              filtered.sort((a, b) =>
-                  a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-              controller.add(filtered);
-            } else {
-              controller.add([]);
-            }
-          }
-        },
-        onError: (error) {
-          // On stream error, emit cached data if available
-          if (_cachedSupplies != null) {
-            List<InventoryItem> filtered = _cachedSupplies!;
-            if (archived != null) {
-              if (archived == true) {
-                filtered =
-                    filtered.where((item) => item.archived == true).toList();
-              } else {
-                filtered =
-                    filtered.where((item) => item.archived != true).toList();
-              }
-            }
-            filtered.sort(
-                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-            controller.add(filtered);
-          } else {
-            controller.add([]);
-          }
-        },
-      );
-    } catch (e) {
-      // If stream creation fails, emit cached data if available
+    void emitCachedOrEmpty() {
       if (_cachedSupplies != null) {
-        List<InventoryItem> filtered = _cachedSupplies!;
-        if (archived != null) {
-          if (archived == true) {
-            filtered = filtered.where((item) => item.archived == true).toList();
-          } else {
-            filtered = filtered.where((item) => item.archived != true).toList();
-          }
-        }
-        filtered.sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-        controller.add(filtered);
+        emitFiltered(List<InventoryItem>.from(_cachedSupplies!));
       } else {
-        controller.add([]);
+        safeAdd([]);
       }
     }
+
+    void startSubscription() {
+      if (supabaseSubscription != null) return;
+      try {
+        supabaseSubscription =
+            _supabase.from('supplies').stream(primaryKey: ['id']).listen(
+          (data) {
+            try {
+              final List<InventoryItem> items = data.map((row) {
+                return InventoryItem(
+                  id: row['id'] as String,
+                  name: row['name'] ?? '',
+                  type: row['type'],
+                  imageUrl: row['image_url'] ?? '',
+                  category: row['category'] ?? '',
+                  cost: (row['cost'] ?? 0).toDouble(),
+                  stock: (row['stock'] ?? 0) as int,
+                  unit: row['unit'] ?? '',
+                  packagingUnit: row['packaging_unit'],
+                  packagingContent: row['packaging_content'],
+                  packagingQuantity: row['packaging_quantity'],
+                  packagingContentQuantity: row['packaging_content_quantity'],
+                  supplier: row['supplier'] ?? '',
+                  brand: row['brand'] ?? '',
+                  expiry: row['expiry'],
+                  noExpiry: row['no_expiry'] ?? false,
+                  archived: row['archived'] ?? false,
+                );
+              }).toList();
+
+              emitFiltered(items);
+              _cachedSupplies = List<InventoryItem>.from(items);
+            } catch (e) {
+              emitCachedOrEmpty();
+            }
+          },
+          onError: (error) {
+            emitCachedOrEmpty();
+          },
+        );
+      } catch (e) {
+        emitCachedOrEmpty();
+      }
+    }
+
+    controller
+      ..onListen = () {
+        emitCachedOrEmpty();
+        startSubscription();
+      }
+      ..onCancel = () async {
+        if (!controller.hasListener) {
+          await supabaseSubscription?.cancel();
+          supabaseSubscription = null;
+        }
+      };
 
     return controller.stream;
   }
@@ -147,51 +113,67 @@ class InventoryController {
   Stream<List<GroupedInventoryItem>> getGroupedSuppliesStream(
       {bool? archived, bool? expired}) {
     final controller = StreamController<List<GroupedInventoryItem>>.broadcast();
+    StreamSubscription<List<InventoryItem>>? suppliesSubscription;
 
-    // Emit cached grouped data immediately if available (no delay - instant feedback)
-    if (_cachedGroupedSupplies != null) {
-      controller.add(_cachedGroupedSupplies!);
+    void safeAdd(List<GroupedInventoryItem> items) {
+      if (!controller.isClosed) {
+        controller.add(items);
+      }
     }
 
-    getSuppliesStream(archived: archived).listen(
-      (items) {
-        try {
-          // Filter out expired items if expired: false is specified
-          List<InventoryItem> filteredItems = items;
-          if (expired == false) {
-            filteredItems = items.where((item) {
-              if (item.expiry == null) return true; // Keep items without expiry
-              try {
-                return DateTime.now().isBefore(
-                    DateTime.parse(item.expiry!.replaceAll('/', '-')));
-              } catch (e) {
-                return true; // Keep items with invalid expiry dates
-              }
-            }).toList();
-          }
-          final grouped = _groupItems(filteredItems);
+    void emitCachedOrEmpty() {
+      if (_cachedGroupedSupplies != null) {
+        safeAdd(List<GroupedInventoryItem>.from(_cachedGroupedSupplies!));
+      } else {
+        safeAdd([]);
+      }
+    }
 
-          // Cache the grouped result
-          _cachedGroupedSupplies = grouped;
-          controller.add(grouped);
-        } catch (e) {
-          // On error, emit cached data if available
-          if (_cachedGroupedSupplies != null) {
-            controller.add(_cachedGroupedSupplies!);
-          } else {
-            controller.add([]);
-          }
+    void handleItems(List<InventoryItem> items) {
+      try {
+        List<InventoryItem> filteredItems = items;
+        if (expired == false) {
+          filteredItems = items.where((item) {
+            if (item.expiry == null) return true; // Keep items without expiry
+            try {
+              return DateTime.now()
+                  .isBefore(DateTime.parse(item.expiry!.replaceAll('/', '-')));
+            } catch (e) {
+              return true; // Keep items with invalid expiry dates
+            }
+          }).toList();
         }
-      },
-      onError: (error) {
-        // On stream error, emit cached data if available
+        final grouped = _groupItems(filteredItems);
+        safeAdd(grouped);
+        _cachedGroupedSupplies = List<GroupedInventoryItem>.from(grouped);
+      } catch (e) {
+        emitCachedOrEmpty();
+      }
+    }
+
+    void startListening() {
+      if (suppliesSubscription != null) return;
+      suppliesSubscription = getSuppliesStream(archived: archived).listen(
+        handleItems,
+        onError: (error) {
+          emitCachedOrEmpty();
+        },
+      );
+    }
+
+    controller
+      ..onListen = () {
         if (_cachedGroupedSupplies != null) {
-          controller.add(_cachedGroupedSupplies!);
-        } else {
-          controller.add([]);
+          safeAdd(List<GroupedInventoryItem>.from(_cachedGroupedSupplies!));
         }
-      },
-    );
+        startListening();
+      }
+      ..onCancel = () async {
+        if (!controller.hasListener) {
+          await suppliesSubscription?.cancel();
+          suppliesSubscription = null;
+        }
+      };
 
     return controller.stream;
   }

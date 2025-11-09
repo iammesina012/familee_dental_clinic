@@ -13,7 +13,7 @@ class ActivityLogController extends ChangeNotifier {
 
   // Real-time activities from Supabase
   List<Map<String, dynamic>> _allActivities = [];
-  StreamSubscription? _activitiesSubscription;
+  RealtimeChannel? _realtimeChannel;
 
   // Current user's role (cached)
   String _currentUserRole = 'staff';
@@ -115,43 +115,25 @@ class ActivityLogController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _activitiesSubscription?.cancel();
+    _realtimeChannel?.unsubscribe();
     super.dispose();
   }
 
   // Start listening to activities from Supabase
   void _startListeningToActivities() {
+    unawaited(_subscribeToSelectedDate());
+  }
+
+  Future<void> _subscribeToSelectedDate() async {
     try {
-      _activitiesSubscription = _supabase
-          .from('activity_logs')
-          .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false)
-          .listen((data) {
-            if (data is List<Map<String, dynamic>>) {
-              _allActivities = data.map((row) {
-                return {
-                  'id': row['id'],
-                  'userName': row['user_name'] ?? 'Unknown User',
-                  'description': row['description'] ?? '',
-                  'date': row['date'] != null
-                      ? DateTime.parse(row['date'] as String)
-                      : DateTime.now(),
-                  'time': row['time'] ?? '',
-                  'category': row['category'] ?? '',
-                  'action': row['action'] ?? '',
-                  'user_role': row['user_role'] ?? 'staff', // Include user role
-                  'metadata': row['metadata'] ?? {},
-                };
-              }).toList();
+      _isLoading = true;
+      _allActivities = [];
+      notifyListeners();
 
-              // Mark loading as complete after first data
-              if (_isLoading) {
-                _isLoading = false;
-              }
+      final range = _buildUtcRangeForDate(_selectedDate);
 
-              notifyListeners();
-            }
-          });
+      await _fetchActivitiesForRange(range);
+      _attachRealtimeChannel(range);
     } catch (e) {
       print('Error starting activity stream: $e');
     }
@@ -162,31 +144,8 @@ class ActivityLogController extends ChangeNotifier {
     try {
       // Reload current user role first
       await _loadCurrentUserRole();
-
-      final response = await _supabase
-          .from('activity_logs')
-          .select('*')
-          .order('created_at', ascending: false);
-
-      if (response is List<Map<String, dynamic>>) {
-        _allActivities = response.map((row) {
-          return {
-            'id': row['id'],
-            'userName': row['user_name'] ?? 'Unknown User',
-            'description': row['description'] ?? '',
-            'date': row['date'] != null
-                ? DateTime.parse(row['date'] as String)
-                : DateTime.now(),
-            'time': row['time'] ?? '',
-            'category': row['category'] ?? '',
-            'action': row['action'] ?? '',
-            'user_role': row['user_role'] ?? 'staff', // Include user role
-            'metadata': row['metadata'] ?? {},
-          };
-        }).toList();
-
-        notifyListeners();
-      }
+      final range = _buildUtcRangeForDate(_selectedDate);
+      await _fetchActivitiesForRange(range, resetLoading: true);
     } catch (e) {
       print('Error refreshing activities: $e');
     }
@@ -270,8 +229,12 @@ class ActivityLogController extends ChangeNotifier {
 
   // Methods to update filters
   void updateSelectedDate(DateTime date) {
+    final bool changed = !_isSameDay(_selectedDate, date);
     _selectedDate = date;
     notifyListeners();
+    if (changed) {
+      unawaited(_subscribeToSelectedDate());
+    }
   }
 
   void updateSelectedCategory(String category) {
@@ -282,6 +245,158 @@ class ActivityLogController extends ChangeNotifier {
   void updateSearchQuery(String query) {
     _searchQuery = query;
     notifyListeners();
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Map<String, DateTime> _buildUtcRangeForDate(DateTime date) {
+    final start = DateTime.utc(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+    return {'start': start, 'end': end};
+  }
+
+  Future<void> _fetchActivitiesForRange(Map<String, DateTime> range,
+      {bool resetLoading = false}) async {
+    try {
+      if (resetLoading) {
+        _isLoading = true;
+        notifyListeners();
+      }
+
+      final response = await _supabase
+          .from('activity_logs')
+          .select('*')
+          .gte('created_at', range['start']!.toIso8601String())
+          .lt('created_at', range['end']!.toIso8601String())
+          .limit(250)
+          .order('created_at', ascending: false);
+
+      final List<dynamic> rows = response as List<dynamic>;
+      _allActivities = rows
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .map(_mapRowToActivity)
+          .toList(growable: false);
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      print('Error fetching activities: $e');
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void _attachRealtimeChannel(Map<String, DateTime> range) {
+    try {
+      _realtimeChannel?.unsubscribe();
+      final startIso = range['start']!;
+      final endIso = range['end']!;
+
+      _realtimeChannel = _supabase.channel(
+          'activity_logs_${startIso.toIso8601String()}_${endIso.toIso8601String()}');
+
+      _realtimeChannel!
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'activity_logs',
+            callback: (payload) => _handleRealtimePayload(
+                payload, range, PostgresChangeEvent.insert),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'activity_logs',
+            callback: (payload) => _handleRealtimePayload(
+                payload, range, PostgresChangeEvent.update),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.delete,
+            schema: 'public',
+            table: 'activity_logs',
+            callback: (payload) => _handleRealtimePayload(
+                payload, range, PostgresChangeEvent.delete),
+          )
+          .subscribe();
+    } catch (e) {
+      print('Error attaching realtime channel: $e');
+    }
+  }
+
+  void _handleRealtimePayload(PostgresChangePayload payload,
+      Map<String, DateTime> range, PostgresChangeEvent eventType) {
+    try {
+      final Map<String, dynamic>? record =
+          eventType == PostgresChangeEvent.delete
+              ? payload.oldRecord as Map<String, dynamic>?
+              : payload.newRecord as Map<String, dynamic>?;
+      if (record == null) return;
+
+      final DateTime? createdAt = _extractCreatedAt(record);
+      if (createdAt == null) return;
+      final start = range['start']!;
+      final end = range['end']!;
+      if (createdAt.isBefore(start) || !createdAt.isBefore(end)) {
+        return;
+      }
+
+      if (eventType == PostgresChangeEvent.delete) {
+        final id = record['id'];
+        if (id != null) {
+          _allActivities.removeWhere((activity) => activity['id'] == id);
+          notifyListeners();
+        }
+        return;
+      }
+
+      _addOrUpdateActivity(record);
+    } catch (e) {
+      print('Error handling realtime payload: $e');
+    }
+  }
+
+  DateTime? _extractCreatedAt(Map<String, dynamic> record) {
+    final createdAtRaw = record['created_at']?.toString();
+    if (createdAtRaw == null) return null;
+    return DateTime.tryParse(createdAtRaw);
+  }
+
+  void _addOrUpdateActivity(Map<String, dynamic> record) {
+    if (record.isEmpty) return;
+    final mapped = _mapRowToActivity(record);
+    final id = mapped['id'];
+    if (id == null) return;
+
+    final index = _allActivities.indexWhere((activity) => activity['id'] == id);
+    if (index >= 0) {
+      _allActivities[index] = mapped;
+    } else {
+      _allActivities.insert(0, mapped);
+    }
+    _allActivities.sort((a, b) {
+      final dateA = a['date'] as DateTime;
+      final dateB = b['date'] as DateTime;
+      return dateB.compareTo(dateA);
+    });
+    notifyListeners();
+  }
+
+  Map<String, dynamic> _mapRowToActivity(Map<String, dynamic> row) {
+    return {
+      'id': row['id'],
+      'userName': row['user_name'] ?? 'Unknown User',
+      'description': row['description'] ?? '',
+      'date': row['date'] != null
+          ? DateTime.parse(row['date'] as String)
+          : DateTime.now(),
+      'time': row['time'] ?? '',
+      'category': row['category'] ?? '',
+      'action': row['action'] ?? '',
+      'user_role': row['user_role'] ?? 'staff',
+      'metadata': row['metadata'] ?? {},
+    };
   }
 
   // Method to add new activity (for future use)

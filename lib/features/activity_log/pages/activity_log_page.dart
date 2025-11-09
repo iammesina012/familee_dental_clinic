@@ -20,7 +20,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
   final ActivityLogController _controller = ActivityLogController();
   // Removed unused per-category controllers from UI page
   int _currentPage = 1;
-  static const int _itemsPerPage = 10;
+  static const int _itemsPerPage = 5;
   String? _userName;
   String? _userRole;
 
@@ -154,13 +154,13 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     for (int i = startPage; i <= endPage; i++) {
       final bool selected = _currentPage == i;
       buttons.add(Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         child: InkWell(
           onTap: () => setState(() => _currentPage = i),
           borderRadius: BorderRadius.circular(6),
           child: Container(
-            width: 40,
-            height: 36,
+            width: 36,
+            height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: selected
@@ -174,7 +174,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
               i.toString(),
               style: TextStyle(
                 fontFamily: 'SF Pro',
-                fontSize: 15,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Theme.of(context).textTheme.bodyLarge?.color,
               ),
@@ -195,7 +195,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     ));
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -203,12 +203,12 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
             'Page ' + _currentPage.toString() + ' of ' + totalPages.toString(),
             style: TextStyle(
               fontFamily: 'SF Pro',
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
               color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           LayoutBuilder(
             builder: (context, constraints) {
               return SingleChildScrollView(
@@ -722,7 +722,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
           baseColor: baseColor,
           highlightColor: highlightColor,
           child: Container(
-            height: 80,
+            height: 83,
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1181,96 +1181,178 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
         children: [
           // Welcome Panel (with notification and account)
           _buildWelcomePanel(theme),
-          const SizedBox(height: 12),
-          // Search and Filter Bar
-          Row(
-            children: [
-              // Search Bar
-              Expanded(
-                flex: 3,
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search...',
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      suffixIcon:
-                          Icon(Icons.search, color: theme.iconTheme.color),
-                      hintStyle: TextStyle(
-                        fontFamily: 'SF Pro',
-                        color:
-                            theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+          const SizedBox(height: 8),
+          // Search, Category, Date
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final bool isNarrow = constraints.maxWidth < 900;
+              final double spacing = isNarrow ? 8 : 12;
+              final children = <Widget>[
+                Expanded(
+                  flex: 5,
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.2)),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search...',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        suffixIcon:
+                            Icon(Icons.search, color: theme.iconTheme.color),
+                        hintStyle: TextStyle(
+                          fontFamily: 'SF Pro',
+                          color: theme.textTheme.bodyMedium?.color
+                              ?.withOpacity(0.6),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              // Category Filter
-              Expanded(
-                flex: 2,
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                SizedBox(width: spacing),
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.2)),
+                    ),
+                    child: ListenableBuilder(
+                      listenable: _controller,
+                      builder: (context, child) {
+                        return DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _controller.selectedCategory,
+                            isExpanded: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            items: [
+                              'All Categories',
+                              'Login',
+                              'Inventory',
+                              'Purchase Order',
+                              'Stock Deduction',
+                              'Settings'
+                            ].map((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(
+                                  value,
+                                  style: TextStyle(
+                                    fontSize:
+                                        value == 'All Categories' ? 13 : 15,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                    fontWeight: FontWeight.w500,
+                                    fontFamily: 'SF Pro',
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                _controller.updateSelectedCategory(newValue);
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
                   ),
+                ),
+                SizedBox(width: spacing),
+                SizedBox(
+                  width: 180,
                   child: ListenableBuilder(
                     listenable: _controller,
                     builder: (context, child) {
-                      return DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _controller.selectedCategory,
-                          isExpanded: true,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          items: [
-                            'All Categories',
-                            'Login',
-                            'Inventory',
-                            'Purchase Order',
-                            'Stock Deduction',
-                            'Settings'
-                          ].map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value,
-                                style: TextStyle(
-                                  fontSize: value == 'All Categories' ? 13 : 15,
-                                  color: theme.textTheme.bodyMedium?.color,
-                                  fontWeight: FontWeight.w500,
-                                  fontFamily: 'SF Pro',
-                                ),
-                              ),
+                      return Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: theme.dividerColor.withOpacity(0.2)),
+                        ),
+                        child: InkWell(
+                          onTap: () async {
+                            final DateTime? picked = await showDatePicker(
+                              context: context,
+                              initialDate: _controller.selectedDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
                             );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            if (newValue != null) {
-                              _controller.updateSelectedCategory(newValue);
+                            if (picked != null) {
+                              _controller.updateSelectedDate(picked);
                             }
                           },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.calendar_today,
+                                    size: 16, color: theme.iconTheme.color),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    _controller
+                                        .formatDateForDisplay(
+                                            _controller.selectedDate)
+                                        .toString(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: theme.textTheme.bodyMedium?.color,
+                                      fontWeight: FontWeight.w500,
+                                      fontFamily: 'SF Pro',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     },
                   ),
                 ),
-              ),
-            ],
+              ];
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    children[0],
+                    SizedBox(height: spacing),
+                    children[2],
+                    SizedBox(height: spacing),
+                    children[4],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children,
+              );
+            },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           // Activity Log List
-          Expanded(
+          Flexible(
+            fit: FlexFit.loose,
             child: Container(
               decoration: BoxDecoration(
                 color: theme.brightness == Brightness.dark
@@ -1282,77 +1364,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title and Date Picker
-                  Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Recent Activity',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: theme.textTheme.bodyMedium?.color,
-                            fontFamily: 'SF Pro',
-                          ),
-                        ),
-                        ListenableBuilder(
-                          listenable: _controller,
-                          builder: (context, child) {
-                            return Container(
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surface,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: theme.dividerColor.withOpacity(0.2)),
-                              ),
-                              child: InkWell(
-                                onTap: () async {
-                                  final DateTime? picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: _controller.selectedDate,
-                                    firstDate: DateTime(2020),
-                                    lastDate: DateTime.now(),
-                                  );
-                                  if (picked != null) {
-                                    _controller.updateSelectedDate(picked);
-                                  }
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.calendar_today,
-                                        size: 16,
-                                        color: theme.iconTheme.color,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        _controller.formatDateForDisplay(
-                                            _controller.selectedDate),
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color:
-                                              theme.textTheme.bodyMedium?.color,
-                                          fontWeight: FontWeight.w500,
-                                          fontFamily: 'SF Pro',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(height: 8),
                   // Activity List
                   Expanded(
                     child: ListenableBuilder(
@@ -1400,153 +1412,179 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                         final pageItems =
                             filteredActivities.sublist(startIndex, endIndex);
 
-                        return Column(
-                          children: [
-                            Expanded(
-                              child: RefreshIndicator(
-                                onRefresh: () async {
-                                  await _controller.refreshActivities();
-                                },
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.all(12),
-                                  itemCount: pageItems.length,
-                                  itemBuilder: (context, index) {
-                                    final activity = pageItems[index];
-                                    return Slidable(
-                                      endActionPane: ActionPane(
-                                        motion: const ScrollMotion(),
-                                        children: [
-                                          SlidableAction(
-                                            onPressed: (_) =>
-                                                _showDeleteConfirmation(
-                                              context,
-                                              activity['id'],
-                                              _formatDescription(
-                                                  activity['description']),
-                                            ),
-                                            backgroundColor: Colors.red,
-                                            foregroundColor: Colors.white,
-                                            icon: Icons.delete,
-                                            label: 'Delete',
-                                            borderRadius:
-                                                const BorderRadius.only(
-                                              topRight: Radius.circular(8),
-                                              bottomRight: Radius.circular(8),
-                                            ),
+                        return ScrollConfiguration(
+                          behavior: ScrollConfiguration.of(context)
+                              .copyWith(scrollbars: false),
+                          child: CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              SliverPadding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(12, 1, 12, 8),
+                                sliver: SliverList(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) {
+                                      final activity = pageItems[index];
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 10),
+                                        child: Slidable(
+                                          endActionPane: ActionPane(
+                                            motion: const ScrollMotion(),
+                                            children: [
+                                              SlidableAction(
+                                                onPressed: (_) =>
+                                                    _showDeleteConfirmation(
+                                                  context,
+                                                  activity['id'],
+                                                  _formatDescription(
+                                                      activity['description']),
+                                                ),
+                                                backgroundColor: Colors.red,
+                                                foregroundColor: Colors.white,
+                                                icon: Icons.delete,
+                                                label: 'Delete',
+                                                borderRadius:
+                                                    const BorderRadius.only(
+                                                  topRight: Radius.circular(8),
+                                                  bottomRight:
+                                                      Radius.circular(8),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                      child: InkWell(
-                                        onTap: () => _showActivityDetails(
-                                            context, activity),
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Container(
-                                          margin:
-                                              const EdgeInsets.only(bottom: 12),
-                                          padding: const EdgeInsets.all(16),
-                                          height: 80,
-                                          decoration: BoxDecoration(
-                                            color: theme.colorScheme.surface,
+                                          child: InkWell(
+                                            onTap: () => _showActivityDetails(
+                                                context, activity),
                                             borderRadius:
                                                 BorderRadius.circular(8),
-                                            border: Border.all(
-                                                color: theme.dividerColor
-                                                    .withOpacity(0.2)),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              _getCategoryIcon(
-                                                  activity['category']),
-                                              const SizedBox(width: 16),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Text(
-                                                      _formatDescription(
-                                                          activity[
-                                                              'description']),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: theme.textTheme
-                                                            .bodyLarge?.color,
-                                                        fontFamily: 'SF Pro',
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Row(
+                                            child: Container(
+                                              padding: const EdgeInsets.all(16),
+                                              height: 90,
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    theme.colorScheme.surface,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: theme.dividerColor
+                                                      .withOpacity(0.2),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  _getCategoryIcon(
+                                                      activity['category']),
+                                                  const SizedBox(width: 16),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
                                                       children: [
-                                                        Icon(
-                                                          Icons.person_outline,
-                                                          size: 14,
-                                                          color: theme.textTheme
-                                                              .bodyMedium?.color
-                                                              ?.withOpacity(
-                                                                  0.7),
+                                                        Text(
+                                                          _formatDescription(
+                                                              activity[
+                                                                  'description']),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: TextStyle(
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: theme
+                                                                .textTheme
+                                                                .bodyLarge
+                                                                ?.color,
+                                                            fontFamily:
+                                                                'SF Pro',
+                                                          ),
                                                         ),
                                                         const SizedBox(
-                                                            width: 4),
-                                                        Expanded(
-                                                          child: Text(
-                                                            activity[
-                                                                    'userName'] ??
-                                                                activity[
-                                                                    'user_email'] ??
-                                                                'Unknown User',
-                                                            maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                            style: TextStyle(
-                                                              fontSize: 12,
+                                                            height: 4),
+                                                        Row(
+                                                          children: [
+                                                            Icon(
+                                                              Icons
+                                                                  .person_outline,
+                                                              size: 14,
                                                               color: theme
                                                                   .textTheme
                                                                   .bodyMedium
                                                                   ?.color
                                                                   ?.withOpacity(
                                                                       0.7),
-                                                              fontFamily:
-                                                                  'SF Pro',
                                                             ),
-                                                          ),
+                                                            const SizedBox(
+                                                                width: 4),
+                                                            Expanded(
+                                                              child: Text(
+                                                                activity[
+                                                                        'userName'] ??
+                                                                    activity[
+                                                                        'user_email'] ??
+                                                                    'Unknown User',
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                                style:
+                                                                    TextStyle(
+                                                                  fontSize: 12,
+                                                                  color: theme
+                                                                      .textTheme
+                                                                      .bodyMedium
+                                                                      ?.color
+                                                                      ?.withOpacity(
+                                                                          0.7),
+                                                                  fontFamily:
+                                                                      'SF Pro',
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
                                                       ],
                                                     ),
-                                                  ],
-                                                ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Text(
+                                                    activity['time'] ?? '',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: theme.brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : Colors.black,
+                                                      fontFamily: 'SF Pro',
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                              const SizedBox(width: 12),
-                                              Text(
-                                                activity['time'] ?? '',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: theme.brightness ==
-                                                          Brightness.dark
-                                                      ? Colors.white
-                                                      : Colors.black,
-                                                  fontFamily: 'SF Pro',
-                                                ),
-                                              ),
-                                            ],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    );
-                                  },
+                                      );
+                                    },
+                                    childCount: pageItems.length,
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (totalPages > 1) _buildPagination(totalPages),
-                          ],
+                              if (totalPages > 1)
+                                SliverToBoxAdapter(
+                                  child: _buildPagination(totalPages),
+                                ),
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: 6),
+                              ),
+                            ],
+                          ),
                         );
                       },
                     ),

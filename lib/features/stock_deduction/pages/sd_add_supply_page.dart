@@ -790,10 +790,21 @@ class _StockDeductionAddSupplyPageState
                                       await _showOutOfStockDialog(item.name);
                                       return;
                                     }
-                                    if (_controller.isDuplicate(
-                                        item.id, existingDocIds)) {
-                                      await _showDuplicateDialog(item.name);
-                                      return;
+
+                                    // Helper to finalize selection after choosing exact batch
+                                    Future<void> finalizeSelection(
+                                        InventoryItem selectedBatch) async {
+                                      if (_controller.isDuplicate(
+                                          selectedBatch.id, existingDocIds)) {
+                                        await _showDuplicateDialog(
+                                            selectedBatch.name);
+                                        return;
+                                      }
+                                      if (!mounted) return;
+                                      Navigator.pop(
+                                          context,
+                                          _controller
+                                              .toReturnMap(selectedBatch));
                                     }
 
                                     // Check if there are multiple types/variants
@@ -813,32 +824,25 @@ class _StockDeductionAddSupplyPageState
                                               batch.type!.isNotEmpty)
                                           ? batch.type
                                           : null;
-                                      if (!batchesByType.containsKey(typeKey)) {
-                                        batchesByType[typeKey] = [];
-                                      }
+                                      batchesByType[typeKey] ??= [];
                                       batchesByType[typeKey]!.add(batch);
                                     }
 
                                     // If multiple types exist (including null as a type), show type selection dialog
                                     if (batchesByType.length > 1) {
-                                      // Show type selection dialog
                                       final selectedBatch =
                                           await _showTypeSelectionDialog(
                                               context,
                                               groupedItem,
                                               validBatches);
                                       if (selectedBatch != null) {
-                                        Navigator.pop(
-                                            context,
-                                            _controller
-                                                .toReturnMap(selectedBatch));
+                                        await finalizeSelection(selectedBatch);
                                       }
                                     } else {
                                       // Single type or no type - check if it has multiple batches
                                       final singleTypeBatches =
                                           batchesByType.values.first;
                                       if (singleTypeBatches.length > 1) {
-                                        // Multiple batches for single type - show batch selection
                                         final selectedBatch =
                                             await _showBatchSelectionDialog(
                                           context,
@@ -847,15 +851,12 @@ class _StockDeductionAddSupplyPageState
                                           singleTypeBatches,
                                         );
                                         if (selectedBatch != null) {
-                                          Navigator.pop(
-                                              context,
-                                              _controller
-                                                  .toReturnMap(selectedBatch));
+                                          await finalizeSelection(
+                                              selectedBatch);
                                         }
                                       } else {
-                                        // Single type with single batch - proceed normally
-                                        Navigator.pop(context,
-                                            _controller.toReturnMap(item));
+                                        await finalizeSelection(
+                                            singleTypeBatches.first);
                                       }
                                     }
                                   }
@@ -974,12 +975,10 @@ class _StockDeductionAddSupplyPageState
                         size: 96, color: Colors.grey),
                 const SizedBox(height: 16),
 
-                // Product Name (with type if available)
+                // Product Name
                 Flexible(
                   child: Text(
-                    item.type != null && item.type!.isNotEmpty
-                        ? '${item.name}(${item.type})'
-                        : item.name,
+                    item.name,
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,

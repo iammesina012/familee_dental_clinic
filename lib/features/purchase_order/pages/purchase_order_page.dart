@@ -31,6 +31,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   final POSupabaseController _poSupabaseController = POSupabaseController();
   final ViewSupplyController _viewSupplyController = ViewSupplyController();
   final Set<String> _prefetchedSupplyNames = {};
+  DateTime? _closedStartDate;
+  DateTime? _closedEndDate;
   // ignore: unused_field
   List<PurchaseOrder> _orders = [];
   List<PurchaseOrder> _closedOrders =
@@ -209,6 +211,179 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       } catch (_) {}
       return false;
     }).toList();
+  }
+
+  DateTime _dateOnly(DateTime source) =>
+      DateTime(source.year, source.month, source.day);
+
+  bool _isWithinClosedDateRange(DateTime date) {
+    if (_closedStartDate == null && _closedEndDate == null) return true;
+    final target = _dateOnly(date);
+    if (_closedStartDate != null &&
+        target.isBefore(_dateOnly(_closedStartDate!))) {
+      return false;
+    }
+    if (_closedEndDate != null && target.isAfter(_dateOnly(_closedEndDate!))) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _pickClosedStartDate() async {
+    final now = DateTime.now();
+    final initialDate =
+        _closedStartDate ?? _closedEndDate ?? DateTime(now.year, now.month, 1);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(now.year - 5, 1, 1),
+      lastDate: DateTime(now.year + 1, 12, 31),
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _closedStartDate = _dateOnly(picked);
+        if (_closedEndDate != null &&
+            _closedEndDate!.isBefore(_closedStartDate!)) {
+          _closedEndDate = _closedStartDate;
+        }
+      });
+    }
+  }
+
+  Future<void> _pickClosedEndDate() async {
+    final now = DateTime.now();
+    final initialDate =
+        _closedEndDate ?? _closedStartDate ?? DateTime(now.year, now.month, 1);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(now.year - 5, 1, 1),
+      lastDate: DateTime(now.year + 1, 12, 31),
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _closedEndDate = _dateOnly(picked);
+        if (_closedStartDate != null &&
+            _closedStartDate!.isAfter(_closedEndDate!)) {
+          _closedStartDate = _closedEndDate;
+        }
+      });
+    }
+  }
+
+  void _clearClosedDateRange() {
+    if (_closedStartDate == null && _closedEndDate == null) return;
+    setState(() {
+      _closedStartDate = null;
+      _closedEndDate = null;
+    });
+  }
+
+  Widget _buildClosedDateFilter(ThemeData theme) {
+    final scheme = theme.colorScheme;
+    final localizations = MaterialLocalizations.of(context);
+    final startLabel = _closedStartDate == null
+        ? 'Start date'
+        : localizations.formatShortDate(_closedStartDate!);
+    final endLabel = _closedEndDate == null
+        ? 'End date'
+        : localizations.formatShortDate(_closedEndDate!);
+
+    Widget buildPickerTile({
+      required String title,
+      required String value,
+      required VoidCallback onTap,
+    }) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 168,
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: theme.dividerColor.withOpacity(0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                title,
+                style: AppFonts.sfProStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: AppFonts.sfProStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 420),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              buildPickerTile(
+                title: 'From',
+                value: startLabel,
+                onTap: _pickClosedStartDate,
+              ),
+              const SizedBox(width: 8),
+              buildPickerTile(
+                title: 'To',
+                value: endLabel,
+                onTap: _pickClosedEndDate,
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 40,
+                width: 40,
+                child: Visibility(
+                  visible: _closedStartDate != null || _closedEndDate != null,
+                  maintainState: true,
+                  maintainAnimation: true,
+                  maintainSize: true,
+                  child: IconButton(
+                    tooltip: 'Clear date range',
+                    onPressed: _clearClosedDateRange,
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // Add listener for search functionality
@@ -1453,6 +1628,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                       ],
                     ),
                   ),
+                  if (activeTabIndex == 3) _buildClosedDateFilter(theme),
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: _load,
@@ -1466,7 +1642,16 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                                     : _controller.getClosedPOsStream(),
                         builder: (context, snapshot) {
                           final data = snapshot.data ?? const <PurchaseOrder>[];
-                          final displayed = _applySearchFilter(data);
+                          List<PurchaseOrder> displayed =
+                              _applySearchFilter(data);
+                          if (activeTabIndex == 3 &&
+                              (_closedStartDate != null ||
+                                  _closedEndDate != null)) {
+                            displayed = displayed
+                                .where((po) =>
+                                    _isWithinClosedDateRange(po.createdAt))
+                                .toList();
+                          }
 
                           // Show skeleton loader only when online AND waiting for data
                           // When offline, cached data shows immediately (no skeleton needed)

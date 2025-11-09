@@ -1,6 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 
+String _formatApprovalDateTime(DateTime dateTime) {
+  final local = dateTime.toLocal();
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final year = local.year.toString();
+
+  int hour = local.hour;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12;
+  if (hour == 0) {
+    hour = 12;
+  }
+  final hourStr = hour.toString();
+
+  return '$month/$day/$year - $hourStr:$minute $period';
+}
+
 class ApprovalCard extends StatelessWidget {
   final Map<String, dynamic> approval;
   final int index;
@@ -27,6 +45,15 @@ class ApprovalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final presetName =
         approval['presetName'] ?? approval['name'] ?? 'Unknown Preset';
+    final createdAtRaw = approval['created_at'];
+    DateTime? createdAt;
+    if (createdAtRaw is String) {
+      createdAt = DateTime.tryParse(createdAtRaw);
+    } else if (createdAtRaw is DateTime) {
+      createdAt = createdAtRaw;
+    }
+    final displayTitle =
+        createdAt != null ? _formatApprovalDateTime(createdAt) : presetName;
     final supplies = approval['supplies'] as List<dynamic>? ?? [];
     final patientName = approval['patientName'] ?? '';
     final age = approval['age'] ?? '';
@@ -104,7 +131,7 @@ class ApprovalCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            presetName,
+                            displayTitle,
                             style: AppFonts.sfProStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -351,6 +378,10 @@ class ApprovalCard extends StatelessWidget {
                   ...supplies.asMap().entries.map((entry) {
                     final supply = entry.value as Map<String, dynamic>;
                     final quantity = supply['quantity'] ?? 0;
+                    final purposeRaw =
+                        (supply['purpose']?.toString() ?? '').trim();
+                    final purposeLabel =
+                        purposeRaw.isEmpty ? 'No Purpose' : purposeRaw;
                     return Container(
                       margin: EdgeInsets.only(
                           bottom: entry.key < supplies.length - 1 ? 10 : 0),
@@ -402,13 +433,8 @@ class ApprovalCard extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  (supply['name'] ?? 'Unknown Supply') +
-                                      (supply['type'] != null &&
-                                              supply['type']
-                                                  .toString()
-                                                  .isNotEmpty
-                                          ? '(${supply['type']})'
-                                          : ''),
+                                  supply['name']?.toString() ??
+                                      'Unknown Supply',
                                   style: AppFonts.sfProStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
@@ -417,8 +443,71 @@ class ApprovalCard extends StatelessWidget {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 4),
-                                // Packaging content/unit only (expiry moved to right side)
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Text(
+                                      _formatExpiryLabel(
+                                        supply['expiry'],
+                                        supply['noExpiry'] as bool?,
+                                      ),
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 12,
+                                        color: theme.textTheme.bodySmall?.color
+                                            ?.withOpacity(0.7),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00D4AA)
+                                            .withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: const Color(0xFF00D4AA)
+                                              .withOpacity(0.35),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        purposeLabel,
+                                        style: AppFonts.sfProStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF00A37A),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00D4AA)
+                                            .withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: const Color(0xFF00D4AA)
+                                              .withOpacity(0.35),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'x$quantity',
+                                        style: AppFonts.sfProStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF00A37A),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
                                 Text(
                                   _formatPackaging(supply),
                                   style: AppFonts.sfProStyle(
@@ -431,53 +520,6 @@ class ApprovalCard extends StatelessWidget {
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Expiry and Quantity on the right side
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Expiry text
-                              Text(
-                                _formatExpiry(supply['expiry'],
-                                    supply['noExpiry'] as bool?),
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 12,
-                                  color: theme.textTheme.bodySmall?.color
-                                      ?.withOpacity(0.7),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // Quantity Badge - Changed to show "x[number]"
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      const Color(0xFF00D4AA).withOpacity(0.15),
-                                      const Color(0xFF00D4AA).withOpacity(0.1),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(0xFF00D4AA)
-                                        .withOpacity(0.4),
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: Text(
-                                  'x${quantity.toString()}',
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF00D4AA),
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
@@ -615,15 +657,26 @@ class ApprovalCard extends StatelessWidget {
     return '';
   }
 
-  // Format expiry date
-  String _formatExpiry(dynamic expiry, bool? noExpiry) {
+  // Format expiry date to MM/DD/YYYY or show No Expiry
+  String _formatExpiryLabel(dynamic expiry, bool? noExpiry) {
     if (noExpiry == true) return 'No Expiry';
-    if (expiry == null || expiry.toString().isEmpty) return 'No Expiry';
-    final expiryStr = expiry.toString();
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiryStr)) {
-      return expiryStr.replaceAll('-', '/');
+    if (expiry == null) return 'No Expiry';
+    final raw = expiry.toString().trim();
+    if (raw.isEmpty) return 'No Expiry';
+
+    DateTime? parsed;
+    final normalized = raw.replaceAll('/', '-');
+    parsed = DateTime.tryParse(normalized);
+
+    if (parsed != null) {
+      final local = parsed.toLocal();
+      final month = local.month.toString().padLeft(2, '0');
+      final day = local.day.toString().padLeft(2, '0');
+      final year = local.year.toString();
+      return '$month/$day/$year';
     }
-    return expiryStr;
+
+    return raw;
   }
 
   Widget _buildModernInfoRow(

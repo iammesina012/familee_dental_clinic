@@ -373,60 +373,62 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
                   ),
                   child: Column(
                     children: [
-                      // Search bar
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Theme.of(context)
-                                  .shadowColor
-                                  .withOpacity(0.08),
-                              spreadRadius: 1,
-                              blurRadius: 3,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                          border: Border.all(
-                            color:
-                                Theme.of(context).dividerColor.withOpacity(0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'Search deduction logs...',
-                            hintStyle: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.color
-                                  ?.withOpacity(0.6),
-                            ),
-                            prefixIcon: Icon(Icons.search,
-                                color: Theme.of(context).iconTheme.color),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                          style: AppFonts.sfProStyle(fontSize: 16),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Date picker row
+                      // Search bar and date picker row
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Theme.of(context)
+                                        .shadowColor
+                                        .withOpacity(0.08),
+                                    spreadRadius: 1,
+                                    blurRadius: 3,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: Theme.of(context)
+                                      .dividerColor
+                                      .withOpacity(0.2),
+                                  width: 1,
+                                ),
+                              ),
+                              child: TextField(
+                                controller: _searchController,
+                                decoration: InputDecoration(
+                                  hintText: 'Search deduction logs...',
+                                  hintStyle: AppFonts.sfProStyle(
+                                    fontSize: 16,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color
+                                        ?.withOpacity(0.6),
+                                  ),
+                                  prefixIcon: Icon(Icons.search,
+                                      color: Theme.of(context).iconTheme.color),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  filled: true,
+                                  fillColor:
+                                      Theme.of(context).colorScheme.surface,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                style: AppFonts.sfProStyle(fontSize: 16),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
                           Container(
                             height: 40,
                             decoration: BoxDecoration(
