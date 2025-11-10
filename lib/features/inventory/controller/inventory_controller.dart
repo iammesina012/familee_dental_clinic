@@ -42,10 +42,10 @@ class InventoryController {
       safeAdd(filtered);
     }
 
-    void emitCachedOrEmpty() {
+    void emitCachedOrEmpty({bool forceEmpty = false}) {
       if (_cachedSupplies != null) {
         emitFiltered(List<InventoryItem>.from(_cachedSupplies!));
-      } else {
+      } else if (forceEmpty) {
         safeAdd([]);
       }
     }
@@ -66,6 +66,9 @@ class InventoryController {
                   category: row['category'] ?? '',
                   cost: (row['cost'] ?? 0).toDouble(),
                   stock: (row['stock'] ?? 0) as int,
+                  lowStockBaseline: row['low_stock_baseline'] != null
+                      ? (row['low_stock_baseline'] as num).toInt()
+                      : null,
                   unit: row['unit'] ?? '',
                   packagingUnit: row['packaging_unit'],
                   packagingContent: row['packaging_content'],
@@ -82,15 +85,15 @@ class InventoryController {
               emitFiltered(items);
               _cachedSupplies = List<InventoryItem>.from(items);
             } catch (e) {
-              emitCachedOrEmpty();
+              emitCachedOrEmpty(forceEmpty: true);
             }
           },
           onError: (error) {
-            emitCachedOrEmpty();
+            emitCachedOrEmpty(forceEmpty: true);
           },
         );
       } catch (e) {
-        emitCachedOrEmpty();
+        emitCachedOrEmpty(forceEmpty: true);
       }
     }
 
@@ -121,10 +124,10 @@ class InventoryController {
       }
     }
 
-    void emitCachedOrEmpty() {
+    void emitCachedOrEmpty({bool forceEmpty = false}) {
       if (_cachedGroupedSupplies != null) {
         safeAdd(List<GroupedInventoryItem>.from(_cachedGroupedSupplies!));
-      } else {
+      } else if (forceEmpty) {
         safeAdd([]);
       }
     }
@@ -147,7 +150,7 @@ class InventoryController {
         safeAdd(grouped);
         _cachedGroupedSupplies = List<GroupedInventoryItem>.from(grouped);
       } catch (e) {
-        emitCachedOrEmpty();
+        emitCachedOrEmpty(forceEmpty: true);
       }
     }
 
@@ -156,7 +159,7 @@ class InventoryController {
       suppliesSubscription = getSuppliesStream(archived: archived).listen(
         handleItems,
         onError: (error) {
-          emitCachedOrEmpty();
+          emitCachedOrEmpty(forceEmpty: true);
         },
       );
     }
@@ -248,12 +251,15 @@ class InventoryController {
             nonExpiredItems.where((it) => it.id != mainItem.id).toList();
         final totalStock =
             nonExpiredItems.fold(0, (sum, item) => sum + item.stock);
+        final totalBaseline = nonExpiredItems.fold(
+            0, (sum, item) => sum + (item.lowStockBaseline ?? item.stock));
 
         result.add(GroupedInventoryItem(
           productKey: entry.key,
           mainItem: mainItem,
           variants: variants,
           totalStock: totalStock,
+          totalBaseline: totalBaseline,
         ));
       }
     }

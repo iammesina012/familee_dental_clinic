@@ -40,6 +40,9 @@ class ArchiveSupplyController {
                     category: row['category'] ?? '',
                     cost: (row['cost'] ?? 0).toDouble(),
                     stock: (row['stock'] ?? 0).toInt(),
+                    lowStockBaseline: row['low_stock_baseline'] != null
+                        ? (row['low_stock_baseline'] as num).toInt()
+                        : null,
                     unit: row['unit'] ?? '',
                     packagingUnit: row['packaging_unit'],
                     packagingContent: row['packaging_content'],

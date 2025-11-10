@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
 
 class AppNotification {
   final String id;
@@ -73,6 +77,13 @@ class NotificationsController {
   // Local preferences keys
   static const String _kInventoryPref = 'settings.notify_inventory';
   static const String _kApprovalPref = 'settings.notify_approval';
+  static const String _kCacheKey = 'notifications_cache_v1';
+
+  List<AppNotification>? _cachedNotifications;
+
+  List<AppNotification> get cachedNotifications => _cachedNotifications != null
+      ? List<AppNotification>.from(_cachedNotifications!)
+      : const [];
 
   // Default stream (unbounded)
   Stream<List<AppNotification>> getNotificationsStream() {
@@ -87,14 +98,98 @@ class NotificationsController {
 
   // Limited stream (keeps UI responsive and pairs with enforceMaxNotifications)
   Stream<List<AppNotification>> getNotificationsStreamLimited({int max = 20}) {
-    return _supabase
-        .from('notifications')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
-        .limit(max)
-        .map((data) => data
-            .map((row) => AppNotification.fromMap(row['id'] as String, row))
-            .toList());
+    final controller = StreamController<List<AppNotification>>.broadcast();
+    StreamSubscription<List<Map<String, dynamic>>>? subscription;
+
+    void safeAdd(List<AppNotification> notifications) {
+      if (!controller.isClosed) {
+        controller.add(List<AppNotification>.from(notifications));
+      }
+    }
+
+    void emitCached({bool forceEmpty = false}) {
+      if (_cachedNotifications != null) {
+        safeAdd(_cachedNotifications!);
+      } else if (forceEmpty) {
+        safeAdd(const []);
+      }
+    }
+
+    Future<void> persist(List<AppNotification> notifications) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final serializable = notifications
+            .map((n) => {
+                  'id': n.id,
+                  'data': n.toMap(),
+                })
+            .toList();
+        await prefs.setString(_kCacheKey, jsonEncode(serializable));
+      } catch (_) {
+        // Ignore cache persistence errors
+      }
+    }
+
+    emitCached();
+
+    void start() {
+      subscription ??= _supabase
+          .from('notifications')
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: false)
+          .limit(max)
+          .listen(
+            (data) async {
+              try {
+                final notifications = data
+                    .map((row) =>
+                        AppNotification.fromMap(row['id'] as String, row))
+                    .toList(growable: false);
+                _cachedNotifications = notifications;
+                safeAdd(notifications);
+                unawaited(persist(notifications));
+              } catch (_) {
+                emitCached(forceEmpty: true);
+              }
+            },
+            onError: (error) {
+              emitCached(forceEmpty: true);
+            },
+          );
+    }
+
+    controller
+      ..onListen = start
+      ..onCancel = () async {
+        await subscription?.cancel();
+        subscription = null;
+      };
+
+    return controller.stream;
+  }
+
+  Future<List<AppNotification>> preloadFromLocalCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kCacheKey);
+      if (raw == null || raw.isEmpty) {
+        _cachedNotifications = null;
+        return const [];
+      }
+      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+      final restored = decoded.map((entry) {
+        final map = entry as Map<String, dynamic>;
+        final id = map['id'] as String? ?? '';
+        final data =
+            Map<String, dynamic>.from(map['data'] as Map<String, dynamic>);
+        return AppNotification.fromMap(id, data);
+      }).toList(growable: false);
+      _cachedNotifications = restored;
+      return List<AppNotification>.from(restored);
+    } catch (_) {
+      _cachedNotifications = null;
+      return const [];
+    }
   }
 
   Future<void> createNotification({
@@ -241,16 +336,29 @@ class NotificationsController {
 
   // Delete older notifications so only the most recent [max] remain
   Future<void> enforceMaxNotifications({int max = 20}) async {
-    final data = await _supabase
-        .from('notifications')
-        .select('id')
-        .order('created_at', ascending: false);
+    bool hasConnection = true;
+    try {
+      hasConnection = await ConnectivityService().hasInternetConnection();
+    } catch (_) {
+      hasConnection = true;
+    }
+    if (!hasConnection) return;
 
-    if (data.length <= max) return;
+    try {
+      final data = await _supabase
+          .from('notifications')
+          .select('id')
+          .order('created_at', ascending: false);
 
-    final olderIds = data.skip(max).map((row) => row['id'] as String).toList();
-    if (olderIds.isNotEmpty) {
-      await _supabase.from('notifications').delete().inFilter('id', olderIds);
+      if (data.length <= max) return;
+
+      final olderIds =
+          data.skip(max).map((row) => row['id'] as String).toList();
+      if (olderIds.isNotEmpty) {
+        await _supabase.from('notifications').delete().inFilter('id', olderIds);
+      }
+    } catch (_) {
+      // Ignore cleanup errors when offline; will retry next time we're online.
     }
   }
 
@@ -284,12 +392,14 @@ class NotificationsController {
   }
 
   // Helper method to check if stock is low using 20% critical level
-  bool _isLowStock(int stock) {
+  bool _isLowStock({
+    required int stock,
+    required int baseline,
+  }) {
     if (stock == 0) return false; // Out of stock, not low stock
 
-    final criticalLevel = GroupedInventoryItem.calculateCriticalLevel(stock);
+    final criticalLevel = GroupedInventoryItem.calculateCriticalLevel(baseline);
 
-    // Check if current stock is at or below its own 20% critical level
     if (criticalLevel > 0 && stock <= criticalLevel) {
       return true;
     }
@@ -304,7 +414,7 @@ class NotificationsController {
       // Calculate total stock across all batches of this supply (excluding expired)
       final totalStockData = await _supabase
           .from('supplies')
-          .select('stock, expiry, no_expiry')
+          .select('stock, low_stock_baseline, expiry, no_expiry')
           .eq('name', supplyName)
           .eq('archived', false);
 
@@ -328,8 +438,15 @@ class NotificationsController {
           .map((row) => (row['stock'] ?? 0) as int)
           .fold(0, (sum, stock) => sum + stock);
 
+      final totalCurrentBaseline = totalStockData
+          .map((row) => row['low_stock_baseline'] != null
+              ? (row['low_stock_baseline'] as num).toInt()
+              : (row['stock'] ?? 0) as int)
+          .fold(0, (sum, baseline) => sum + baseline);
+
       // Calculate previous total stock (before this batch was updated)
       final totalPreviousStock = totalCurrentStock - newStock + previousStock;
+      final totalPreviousBaseline = totalCurrentBaseline;
 
       // Check for out of stock (from any total stock to 0)
       if (totalCurrentStock == 0 && totalPreviousStock > 0) {
@@ -345,8 +462,14 @@ class NotificationsController {
 
       // Check for low stock using 20% critical level
       // Use the helper method to determine if stock is low
-      final isCurrentlyLow = _isLowStock(totalCurrentStock);
-      final wasPreviouslyLow = _isLowStock(totalPreviousStock);
+      final isCurrentlyLow = _isLowStock(
+        stock: totalCurrentStock,
+        baseline: totalCurrentBaseline,
+      );
+      final wasPreviouslyLow = _isLowStock(
+        stock: totalPreviousStock,
+        baseline: totalPreviousBaseline,
+      );
 
       // Trigger low stock notification when stock becomes low (crosses the threshold)
       if (isCurrentlyLow &&
@@ -372,12 +495,12 @@ class NotificationsController {
         await createInStockNotification(supplyName, newStock);
       } else {
         // Use 20% critical level logic
-        if (_isLowStock(newStock) &&
-            !_isLowStock(previousStock) &&
+        if (_isLowStock(stock: newStock, baseline: newStock) &&
+            !_isLowStock(stock: previousStock, baseline: previousStock) &&
             previousStock > 0) {
           await createLowStockNotification(supplyName, newStock);
-        } else if (!_isLowStock(newStock) &&
-            _isLowStock(previousStock) &&
+        } else if (!_isLowStock(stock: newStock, baseline: newStock) &&
+            _isLowStock(stock: previousStock, baseline: previousStock) &&
             previousStock > 0) {
           await createInStockNotification(supplyName, newStock);
         }

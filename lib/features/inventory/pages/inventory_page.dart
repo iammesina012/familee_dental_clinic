@@ -809,13 +809,22 @@ class _InventoryState extends State<Inventory> {
       stream: categoriesController.getCategoriesStream(),
       builder: (context, snapshot) {
         final currentCategories = snapshot.data ?? [];
+        final cachedCategories =
+            categoriesController.cachedCategories ?? const <String>[];
+
+        final hasCachedCategories = cachedCategories.isNotEmpty;
+        final effectiveCategories = currentCategories.isNotEmpty
+            ? currentCategories
+            : (hasCachedCategories ? cachedCategories : currentCategories);
+
         final List<String> categoriesWithAll = [
           'All Supplies',
-          ...currentCategories
+          ...effectiveCategories
         ];
 
         if (snapshot.connectionState == ConnectionState.waiting &&
-            currentCategories.isEmpty) {
+            effectiveCategories.isEmpty &&
+            !hasCachedCategories) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
           final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
           final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
@@ -841,7 +850,7 @@ class _InventoryState extends State<Inventory> {
           );
         }
 
-        if (snapshot.hasError && currentCategories.isEmpty) {
+        if (snapshot.hasError && effectiveCategories.isEmpty) {
           return SizedBox(
             height: 50,
             child: SingleChildScrollView(
@@ -942,7 +951,14 @@ class _InventoryState extends State<Inventory> {
       stream: categoriesController.getCategoriesStream(),
       builder: (context, categorySnapshot) {
         final currentCategories = categorySnapshot.data ?? [];
-        final categoriesWithAll = ['All Supplies', ...currentCategories];
+        final cachedCategories =
+            categoriesController.cachedCategories ?? const <String>[];
+        final categoriesWithAll = [
+          'All Supplies',
+          ...(currentCategories.isNotEmpty
+              ? currentCategories
+              : (cachedCategories.isNotEmpty ? cachedCategories : []))
+        ];
         final selectedCategoryName = (selectedCategory == 0)
             ? ""
             : (selectedCategory < categoriesWithAll.length

@@ -48,6 +48,9 @@ class ExpiredViewSupplyController {
                   category: row['category'] ?? '',
                   cost: (row['cost'] ?? 0).toDouble(),
                   stock: (row['stock'] ?? 0).toInt(),
+                  lowStockBaseline: row['low_stock_baseline'] != null
+                      ? (row['low_stock_baseline'] as num).toInt()
+                      : null,
                   unit: row['unit'] ?? '',
                   packagingUnit: row['packaging_unit'],
                   packagingContent: row['packaging_content'],
@@ -132,6 +135,9 @@ class ExpiredViewSupplyController {
                     category: row['category'] ?? '',
                     cost: (row['cost'] ?? 0).toDouble(),
                     stock: (row['stock'] ?? 0).toInt(),
+                    lowStockBaseline: row['low_stock_baseline'] != null
+                        ? (row['low_stock_baseline'] as num).toInt()
+                        : null,
                     unit: row['unit'] ?? '',
                     packagingUnit: row['packaging_unit'],
                     packagingContent: row['packaging_content'],
@@ -322,6 +328,9 @@ class ExpiredViewSupplyController {
           category: itemResponse['category'] ?? '',
           cost: (itemResponse['cost'] ?? 0).toDouble(),
           stock: (itemResponse['stock'] ?? 0).toInt(),
+          lowStockBaseline: itemResponse['low_stock_baseline'] != null
+              ? (itemResponse['low_stock_baseline'] as num).toInt()
+              : null,
           unit: itemResponse['unit'] ?? '',
           supplier: itemResponse['supplier'] ?? '',
           brand: itemResponse['brand'] ?? '',
@@ -347,6 +356,7 @@ class ExpiredViewSupplyController {
           // so the product remains visible in catalog/pickers with 0 stock.
           await _supabase.from('supplies').update({
             'stock': 0,
+            'low_stock_baseline': 0,
             'no_expiry': true,
             'expiry': null,
           }).eq('id', id);

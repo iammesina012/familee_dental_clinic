@@ -39,24 +39,10 @@ class InventoryItemCard extends StatelessWidget {
       return "Out of Stock";
     }
 
-    // Calculate critical level dynamically (20% of stock, rounded)
-    // For display, we use tiered thresholds to ensure items show as "Low Stock" appropriately
-    final criticalLevel =
-        GroupedInventoryItem.calculateCriticalLevel(item.stock);
+    final baseline = item.lowStockBaseline ?? item.stock;
+    final criticalLevel = GroupedInventoryItem.calculateCriticalLevel(baseline);
 
-    // Primary check: If current stock is at or below its own 20% critical level
-    if (criticalLevel > 0 && item.stock <= criticalLevel) {
-      return "Low Stock";
-    }
-
-    // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
-    // This ensures that when stock is deducted (e.g., 20 -> 4), it shows as low stock
-    if (item.stock <= 5) {
-      return "Low Stock";
-    }
-
-    // For stocks > 5, use dynamic calculation
-    if (item.stock > 5 && item.stock <= criticalLevel) {
+    if (item.stock <= criticalLevel) {
       return "Low Stock";
     }
 

@@ -17,6 +17,9 @@ class CategoriesController {
   // Stream controller for broadcasting updates
   StreamController<List<String>>? _streamController;
 
+  List<String>? get cachedCategories =>
+      _cachedCategories != null ? List<String>.from(_cachedCategories!) : null;
+
   // Get all categories as stream
   Stream<List<String>> getCategoriesStream() {
     // If stream controller exists and is still open, reuse it
@@ -31,14 +34,17 @@ class CategoriesController {
 
     _streamController = StreamController<List<String>>.broadcast();
 
-    // ALWAYS emit something immediately to prevent StreamBuilder from blocking
-    // Emit cached data if available, otherwise empty list
-    if (_cachedCategories != null) {
-      _streamController!.add(_cachedCategories!);
-    } else {
-      // Emit empty list immediately so UI doesn't wait
-      _streamController!.add([]);
+    void emitCachedOrEmpty({bool forceEmpty = false}) {
+      if (_streamController == null || _streamController!.isClosed) return;
+      if (_cachedCategories != null) {
+        _streamController!.add(List<String>.from(_cachedCategories!));
+      } else if (forceEmpty) {
+        _streamController!.add(<String>[]);
+      }
     }
+
+    // Immediately emit cache (if any), otherwise emit empty once
+    emitCachedOrEmpty(forceEmpty: true);
 
     // Use a one-time query with timeout to avoid blocking when offline
     // This prevents the app from freezing when trying to establish a stream connection
@@ -57,32 +63,13 @@ class CategoriesController {
 
             // Cache the result
             _cachedCategories = categories;
-            if (_streamController != null && !_streamController!.isClosed) {
-              _streamController!.add(categories);
-            }
+            emitCachedOrEmpty(forceEmpty: true);
           } catch (e) {
-            // On error, emit cached data if available
-            if (_cachedCategories != null) {
-              if (_streamController != null && !_streamController!.isClosed) {
-                _streamController!.add(_cachedCategories!);
-              }
-            } else {
-              if (_streamController != null && !_streamController!.isClosed) {
-                _streamController!.add([]);
-              }
-            }
+            emitCachedOrEmpty(forceEmpty: true);
           }
         } catch (error) {
           // On query error (network/timeout), emit cached data if available
-          if (_cachedCategories != null) {
-            if (_streamController != null && !_streamController!.isClosed) {
-              _streamController!.add(_cachedCategories!);
-            }
-          } else {
-            if (_streamController != null && !_streamController!.isClosed) {
-              _streamController!.add([]);
-            }
-          }
+          emitCachedOrEmpty(forceEmpty: true);
         }
 
         // After initial query, set up stream for real-time updates (non-blocking)
@@ -95,31 +82,14 @@ class CategoriesController {
 
                 // Cache the result
                 _cachedCategories = categories;
-                if (_streamController != null && !_streamController!.isClosed) {
-                  _streamController!.add(categories);
-                }
+                emitCachedOrEmpty(forceEmpty: true);
               } catch (e) {
-                // On error, emit cached data if available
-                if (_cachedCategories != null) {
-                  if (_streamController != null &&
-                      !_streamController!.isClosed) {
-                    _streamController!.add(_cachedCategories!);
-                  }
-                } else {
-                  if (_streamController != null &&
-                      !_streamController!.isClosed) {
-                    _streamController!.add([]);
-                  }
-                }
+                emitCachedOrEmpty(forceEmpty: true);
               }
             },
             onError: (error) {
               // On stream error, emit cached data if available (don't block)
-              if (_cachedCategories != null) {
-                if (_streamController != null && !_streamController!.isClosed) {
-                  _streamController!.add(_cachedCategories!);
-                }
-              }
+              emitCachedOrEmpty();
               // Don't emit empty list on stream errors to avoid overwriting good data
             },
             cancelOnError: false, // Continue listening even on errors
@@ -130,15 +100,7 @@ class CategoriesController {
         }
       } catch (e) {
         // If query fails (timeout/network error), emit cached data if available
-        if (_cachedCategories != null) {
-          if (_streamController != null && !_streamController!.isClosed) {
-            _streamController!.add(_cachedCategories!);
-          }
-        } else {
-          if (_streamController != null && !_streamController!.isClosed) {
-            _streamController!.add([]);
-          }
-        }
+        emitCachedOrEmpty(forceEmpty: true);
       }
     }
 

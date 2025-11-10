@@ -56,6 +56,9 @@ class ViewSupplyController {
                   category: row['category'] ?? '',
                   cost: (row['cost'] ?? 0).toDouble(),
                   stock: (row['stock'] ?? 0).toInt(),
+                  lowStockBaseline: row['low_stock_baseline'] != null
+                      ? (row['low_stock_baseline'] as num).toInt()
+                      : null,
                   unit: row['unit'] ?? '',
                   packagingUnit: row['packaging_unit'],
                   packagingContent: row['packaging_content'],
@@ -130,32 +133,18 @@ class ViewSupplyController {
     // Main inventory system no longer shows expired status
 
     // For view supply page, show stock status when not expired
-    // Using dynamic 20% critical level with tiered thresholds
     if (item.stock == 0) {
       return "Out of Stock";
-    } else {
-      // Calculate critical level dynamically
-      final criticalLevel =
-          GroupedInventoryItem.calculateCriticalLevel(item.stock);
-
-      // Primary check: If current stock is at or below its own 20% critical level
-      if (criticalLevel > 0 && item.stock <= criticalLevel) {
-        return "Low Stock";
-      }
-
-      // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
-      // This ensures that when stock is deducted (e.g., 20 -> 4), it shows as low stock
-      if (item.stock <= 5) {
-        return "Low Stock";
-      }
-
-      // For stocks > 5, use dynamic calculation
-      if (item.stock > 5 && item.stock <= criticalLevel) {
-        return "Low Stock";
-      }
-
-      return "In Stock";
     }
+
+    final baseline = item.lowStockBaseline ?? item.stock;
+    final criticalLevel = GroupedInventoryItem.calculateCriticalLevel(baseline);
+
+    if (item.stock <= criticalLevel) {
+      return "Low Stock";
+    }
+
+    return "In Stock";
   }
 
   Color getStatusBgColor(String status) {
@@ -371,6 +360,7 @@ class ViewSupplyController {
           category: '',
           cost: 0,
           stock: 0,
+          lowStockBaseline: null,
           unit: '',
           supplier: '',
           brand: '',
@@ -430,6 +420,9 @@ class ViewSupplyController {
           category: row['category'] ?? '',
           cost: (row['cost'] ?? 0).toDouble(),
           stock: (row['stock'] ?? 0).toInt(),
+          lowStockBaseline: row['low_stock_baseline'] != null
+              ? (row['low_stock_baseline'] as num).toInt()
+              : null,
           unit: row['unit'] ?? '',
           packagingUnit: row['packaging_unit'],
           packagingContent: row['packaging_content'],

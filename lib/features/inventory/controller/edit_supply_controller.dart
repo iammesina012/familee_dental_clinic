@@ -44,6 +44,7 @@ class EditSupplyController {
   String? originalType;
   String? originalCategory;
   int? originalStock;
+  int? originalLowStockBaseline;
   String? originalUnit;
   String? originalPackagingUnit;
   String? originalPackagingContent;
@@ -87,6 +88,7 @@ class EditSupplyController {
     originalType = item.type ?? '';
     originalCategory = item.category;
     originalStock = item.stock;
+    originalLowStockBaseline = item.lowStockBaseline;
     originalUnit = item.unit;
     originalPackagingUnit = item.packagingUnit ?? 'Box';
     originalPackagingContent = item.packagingContent ?? 'Pieces';
@@ -251,6 +253,11 @@ class EditSupplyController {
     final error = validateFieldsForBackend();
     if (error != null) return error;
     final updatedData = buildUpdatedData();
+    final int newStock = (updatedData['stock'] ?? 0) as int;
+    final int prevStock = originalStock ?? 0;
+    if (newStock > prevStock) {
+      updatedData['low_stock_baseline'] = newStock;
+    }
     try {
       // Try to merge with an existing batch if name + brand + expiry match
       final String name = (updatedData['name'] ?? '').toString();
@@ -389,7 +396,10 @@ class EditSupplyController {
           final int thisStock = (updatedData['stock'] ?? 0) as int;
           final int mergedStock = targetStock + thisStock;
 
-          final Map<String, dynamic> updates = {'stock': mergedStock};
+          final Map<String, dynamic> updates = {
+            'stock': mergedStock,
+            'low_stock_baseline': mergedStock,
+          };
           // Fill missing fields on target if needed
           if ((mergeTarget['image_url'] ?? '').toString().isEmpty &&
               (updatedData['image_url'] ?? '').toString().isNotEmpty) {

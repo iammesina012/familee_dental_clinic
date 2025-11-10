@@ -23,6 +23,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   void initState() {
     super.initState();
+    _controller.preloadFromLocalCache().then((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     // Enforce max 20 on entry (older ones are deleted)
     // Fire and forget; UI listens to stream
     _controller.enforceMaxNotifications(max: 20);
@@ -85,29 +90,23 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         stream:
                             _controller.getNotificationsStreamLimited(max: 20),
                         builder: (context, snapshot) {
-                          // Handle errors
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Text(
-                                'Error loading notifications',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 16,
-                                  color: Colors.red,
-                                ),
-                              ),
-                            );
-                          }
-
-                          final all =
+                          final List<AppNotification> cached =
+                              _controller.cachedNotifications;
+                          final List<AppNotification> live =
                               snapshot.data ?? const <AppNotification>[];
-                          final items = all.take(_visibleCount).toList();
-                          final unreadCount =
-                              all.where((n) => !(n.isRead)).length;
+                          final bool hasLive = live.isNotEmpty;
+                          final bool hasCached = cached.isNotEmpty;
+                          final List<AppNotification> all =
+                              hasLive ? live : cached;
 
-                          // Show skeleton loader on first load
-                          if (snapshot.connectionState ==
-                                  ConnectionState.waiting &&
-                              all.isEmpty) {
+                          final bool showSkeleton = (snapshot.connectionState ==
+                                      ConnectionState.waiting ||
+                                  snapshot.connectionState ==
+                                      ConnectionState.active) &&
+                              !hasLive &&
+                              !hasCached;
+
+                          if (showSkeleton) {
                             final isDark =
                                 Theme.of(context).brightness == Brightness.dark;
                             final baseColor =
@@ -179,6 +178,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
                               ),
                             );
                           }
+
+                          final items = all.take(_visibleCount).toList();
+                          final unreadCount =
+                              all.where((n) => !(n.isRead)).length;
 
                           final bool showLoadMore =
                               all.length > _visibleCount && _visibleCount == 10;
@@ -520,6 +523,9 @@ class _NotificationTile extends StatelessWidget {
                             category: (d['category'] ?? '').toString(),
                             cost: ((d['cost'] ?? 0) as num).toDouble(),
                             stock: (d['stock'] ?? 0) as int,
+                            lowStockBaseline: d['low_stock_baseline'] != null
+                                ? (d['low_stock_baseline'] as num).toInt()
+                                : null,
                             unit: (d['unit'] ?? '').toString(),
                             supplier: (d['supplier'] ?? '').toString(),
                             brand: (d['brand'] ?? '').toString(),

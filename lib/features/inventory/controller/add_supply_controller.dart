@@ -166,6 +166,7 @@ class AddSupplyController {
       "category": selectedCategory ?? "",
       "cost": double.tryParse(costController.text.trim()) ?? 0.0,
       "stock": packagingQuantity, // Stock should be the packaging quantity
+      "low_stock_baseline": packagingQuantity,
       "unit": selectedPackagingUnit ?? "", // Legacy column
       "packaging_unit": selectedPackagingUnit ?? "",
       "packaging_quantity": 1, // Always 1 (e.g., 1 Box)

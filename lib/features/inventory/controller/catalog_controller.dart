@@ -40,6 +40,9 @@ class CatalogController {
                 category: row['category'] ?? '',
                 cost: (row['cost'] ?? 0).toDouble(),
                 stock: (row['stock'] ?? 0) as int,
+                lowStockBaseline: row['low_stock_baseline'] != null
+                    ? (row['low_stock_baseline'] as num).toInt()
+                    : null,
                 unit: row['unit'] ?? '',
                 packagingUnit: row['packaging_unit'],
                 packagingContent: row['packaging_content'],
@@ -75,17 +78,18 @@ class CatalogController {
 
             final result = <GroupedInventoryItem>[];
             for (final entry in byProduct.entries) {
-              final variants = entry.value;
+              final productVariants = entry.value;
 
-              List<InventoryItem> candidates = variants
+              List<InventoryItem> candidates = productVariants
                   .where((v) => !_isExpired(v, today) && v.stock > 0)
                   .toList();
               if (candidates.isEmpty) {
-                candidates =
-                    variants.where((v) => !_isExpired(v, today)).toList();
+                candidates = productVariants
+                    .where((v) => !_isExpired(v, today))
+                    .toList();
               }
               if (candidates.isEmpty) {
-                candidates = List<InventoryItem>.from(variants);
+                candidates = List<InventoryItem>.from(productVariants);
               }
               bool hasImage(InventoryItem x) => x.imageUrl.trim().isNotEmpty;
               candidates.sort((a, b) {
@@ -95,10 +99,13 @@ class CatalogController {
               });
               final InventoryItem preferred = candidates.first;
 
-              final totalStock = variants.fold(0, (sum, it) => sum + it.stock);
+              final totalStock =
+                  productVariants.fold(0, (sum, it) => sum + it.stock);
+              final totalBaseline = productVariants.fold(
+                  0, (sum, it) => sum + (it.lowStockBaseline ?? it.stock));
               final preferredId = preferred.id;
               final others =
-                  variants.where((v) => v.id != preferredId).toList();
+                  productVariants.where((v) => v.id != preferredId).toList();
 
               result.add(
                 GroupedInventoryItem(
@@ -106,6 +113,7 @@ class CatalogController {
                   mainItem: preferred,
                   variants: others,
                   totalStock: totalStock,
+                  totalBaseline: totalBaseline,
                 ),
               );
             }

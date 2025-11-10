@@ -21,6 +21,10 @@ class ActivityLogController extends ChangeNotifier {
   // Loading state
   bool _isLoading = true;
 
+  // Cache previously fetched activities by date key (yyyy-mm-dd)
+  final Map<String, List<Map<String, dynamic>>> _cachedActivitiesByDate = {};
+  static const int _maxCachedDates = 7;
+
   // Getters
   DateTime get selectedDate => _selectedDate;
   String get selectedCategory => _selectedCategory;
@@ -126,14 +130,25 @@ class ActivityLogController extends ChangeNotifier {
 
   Future<void> _subscribeToSelectedDate() async {
     try {
-      _isLoading = true;
-      _allActivities = [];
+      final targetDate = _selectedDate;
+      final cached = _getCachedActivities(targetDate);
+
+      if (cached != null) {
+        _allActivities = cached;
+        _isLoading = false;
+      } else {
+        _allActivities = [];
+        _isLoading = true;
+      }
       notifyListeners();
 
-      final range = _buildUtcRangeForDate(_selectedDate);
+      final range = _buildUtcRangeForDate(targetDate);
 
-      await _fetchActivitiesForRange(range);
-      _attachRealtimeChannel(range);
+      await _fetchActivitiesForRange(range, cacheDate: targetDate);
+
+      if (_isSameDay(_selectedDate, targetDate)) {
+        _attachRealtimeChannel(range);
+      }
     } catch (e) {
       print('Error starting activity stream: $e');
     }
@@ -144,8 +159,10 @@ class ActivityLogController extends ChangeNotifier {
     try {
       // Reload current user role first
       await _loadCurrentUserRole();
-      final range = _buildUtcRangeForDate(_selectedDate);
-      await _fetchActivitiesForRange(range, resetLoading: true);
+      final targetDate = _selectedDate;
+      final range = _buildUtcRangeForDate(targetDate);
+      await _fetchActivitiesForRange(range,
+          resetLoading: true, cacheDate: targetDate);
     } catch (e) {
       print('Error refreshing activities: $e');
     }
@@ -257,8 +274,46 @@ class ActivityLogController extends ChangeNotifier {
     return {'start': start, 'end': end};
   }
 
+  String _dateKey(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  List<Map<String, dynamic>>? _getCachedActivities(DateTime date) {
+    final cached = _cachedActivitiesByDate[_dateKey(date)];
+    if (cached == null) return null;
+    return cached
+        .map((activity) => Map<String, dynamic>.from(activity))
+        .toList(growable: false);
+  }
+
+  bool hasCachedDataFor(DateTime date) {
+    final cached = _cachedActivitiesByDate[_dateKey(date)];
+    return cached != null && cached.isNotEmpty;
+  }
+
+  void _cacheActivitiesForDate(
+      DateTime date, List<Map<String, dynamic>> activities) {
+    final key = _dateKey(date);
+    final cachedList = activities
+        .map((activity) => Map<String, dynamic>.from(activity))
+        .toList(growable: false);
+    _cachedActivitiesByDate[key] = cachedList;
+
+    if (_cachedActivitiesByDate.length > _maxCachedDates) {
+      final keys = _cachedActivitiesByDate.keys.toList()
+        ..sort(); // oldest first
+      while (keys.length > _maxCachedDates) {
+        final removeKey = keys.removeAt(0);
+        _cachedActivitiesByDate.remove(removeKey);
+      }
+    }
+  }
+
   Future<void> _fetchActivitiesForRange(Map<String, DateTime> range,
-      {bool resetLoading = false}) async {
+      {bool resetLoading = false, DateTime? cacheDate}) async {
     try {
       if (resetLoading) {
         _isLoading = true;
@@ -278,6 +333,10 @@ class ActivityLogController extends ChangeNotifier {
           .map((row) => Map<String, dynamic>.from(row as Map))
           .map(_mapRowToActivity)
           .toList(growable: false);
+
+      if (cacheDate != null) {
+        _cacheActivitiesForDate(cacheDate, _allActivities);
+      }
 
       _isLoading = false;
       notifyListeners();
@@ -346,6 +405,7 @@ class ActivityLogController extends ChangeNotifier {
         final id = record['id'];
         if (id != null) {
           _allActivities.removeWhere((activity) => activity['id'] == id);
+          _cacheActivitiesForDate(_selectedDate, _allActivities);
           notifyListeners();
         }
         return;
@@ -381,6 +441,7 @@ class ActivityLogController extends ChangeNotifier {
       return dateB.compareTo(dateA);
     });
     notifyListeners();
+    _cacheActivitiesForDate(_selectedDate, _allActivities);
   }
 
   Map<String, dynamic> _mapRowToActivity(Map<String, dynamic> row) {

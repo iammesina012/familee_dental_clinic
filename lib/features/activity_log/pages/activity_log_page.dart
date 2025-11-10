@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/features/activity_log/controller/activity_log_controller.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
@@ -7,6 +8,8 @@ import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
 
 class ActivityLogPage extends StatefulWidget {
   const ActivityLogPage({super.key});
@@ -23,6 +26,8 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
   static const int _itemsPerPage = 5;
   String? _userName;
   String? _userRole;
+  bool? _hasConnection;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
   void initState() {
@@ -32,10 +37,12 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
       _controller.updateSearchQuery(_searchController.text);
     });
     _controller.addListener(_resetPageOnDataChange);
+    _initConnectivityWatch();
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _searchController.dispose();
     _controller.removeListener(_resetPageOnDataChange);
     _controller.dispose();
@@ -45,6 +52,29 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
   // Format description delegated to controller (UI-only page)
   String _formatDescription(String description) {
     return _controller.formatListDescription(description);
+  }
+
+  void _initConnectivityWatch() {
+    _checkConnectivity();
+    _connectivitySubscription =
+        ConnectivityService().onConnectivityChanged.listen((results) {
+      final hasConnection =
+          results.isNotEmpty && !results.contains(ConnectivityResult.none);
+      if (mounted) {
+        setState(() {
+          _hasConnection = hasConnection;
+        });
+      }
+    });
+  }
+
+  Future<void> _checkConnectivity() async {
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (mounted) {
+      setState(() {
+        _hasConnection = hasConnection;
+      });
+    }
   }
 
   // Get icon for each category
@@ -228,7 +258,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     );
   }
 
-  // Show delete confirmation dialog
+  // ignore: unused_element
   void _showDeleteConfirmation(
       BuildContext parentContext, String activityId, String description) {
     showDialog(
@@ -1187,90 +1217,95 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
             builder: (context, constraints) {
               final bool isNarrow = constraints.maxWidth < 900;
               final double spacing = isNarrow ? 8 : 12;
-              final children = <Widget>[
-                Expanded(
-                  flex: 5,
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: theme.dividerColor.withOpacity(0.2)),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search...',
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        suffixIcon:
-                            Icon(Icons.search, color: theme.iconTheme.color),
-                        hintStyle: TextStyle(
-                          fontFamily: 'SF Pro',
-                          color: theme.textTheme.bodyMedium?.color
-                              ?.withOpacity(0.6),
-                        ),
+              Widget buildSearchField({double? width}) {
+                final field = Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search...',
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      suffixIcon:
+                          Icon(Icons.search, color: theme.iconTheme.color),
+                      hintStyle: TextStyle(
+                        fontFamily: 'SF Pro',
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
                       ),
                     ),
                   ),
-                ),
-                SizedBox(width: spacing),
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: theme.dividerColor.withOpacity(0.2)),
-                    ),
-                    child: ListenableBuilder(
-                      listenable: _controller,
-                      builder: (context, child) {
-                        return DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _controller.selectedCategory,
-                            isExpanded: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            items: [
-                              'All Categories',
-                              'Login',
-                              'Inventory',
-                              'Purchase Order',
-                              'Stock Deduction',
-                              'Settings'
-                            ].map((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(
-                                  value,
-                                  style: TextStyle(
-                                    fontSize:
-                                        value == 'All Categories' ? 13 : 15,
-                                    color: theme.textTheme.bodyMedium?.color,
-                                    fontWeight: FontWeight.w500,
-                                    fontFamily: 'SF Pro',
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (String? newValue) {
-                              if (newValue != null) {
-                                _controller.updateSelectedCategory(newValue);
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                );
+                if (width != null) {
+                  return SizedBox(width: width, child: field);
+                }
+                return field;
+              }
+
+              Widget buildCategoryDropdown({double? width}) {
+                final dropdown = Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.2)),
                   ),
-                ),
-                SizedBox(width: spacing),
-                SizedBox(
-                  width: 180,
+                  child: ListenableBuilder(
+                    listenable: _controller,
+                    builder: (context, child) {
+                      return DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _controller.selectedCategory,
+                          isExpanded: true,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          items: [
+                            'All Categories',
+                            'Login',
+                            'Inventory',
+                            'Purchase Order',
+                            'Stock Deduction',
+                            'Settings'
+                          ].map((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(
+                                value,
+                                style: TextStyle(
+                                  fontSize: value == 'All Categories' ? 13 : 15,
+                                  color: theme.textTheme.bodyMedium?.color,
+                                  fontWeight: FontWeight.w500,
+                                  fontFamily: 'SF Pro',
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            if (newValue != null) {
+                              _controller.updateSelectedCategory(newValue);
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                );
+                if (width != null) {
+                  return SizedBox(width: width, child: dropdown);
+                }
+                return dropdown;
+              }
+
+              Widget buildDatePicker({double? width}) {
+                return SizedBox(
+                  width: width,
                   child: ListenableBuilder(
                     listenable: _controller,
                     builder: (context, child) {
@@ -1327,25 +1362,67 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                       );
                     },
                   ),
-                ),
-              ];
-
-              if (isNarrow) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    children[0],
-                    SizedBox(height: spacing),
-                    children[2],
-                    SizedBox(height: spacing),
-                    children[4],
-                  ],
                 );
               }
 
+              const double datePickerWidth = 180;
+
+              if (isNarrow) {
+                const double categoryWidth = 200;
+                const double minSearchWidth = 180;
+                final double requiredWidth = categoryWidth +
+                    datePickerWidth +
+                    minSearchWidth +
+                    spacing * 2;
+
+                if (constraints.maxWidth >= requiredWidth) {
+                  final double searchWidth = (constraints.maxWidth -
+                          categoryWidth -
+                          datePickerWidth -
+                          spacing * 2)
+                      .clamp(minSearchWidth, double.infinity);
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      buildSearchField(width: searchWidth),
+                      SizedBox(width: spacing),
+                      buildCategoryDropdown(width: categoryWidth),
+                      SizedBox(width: spacing),
+                      buildDatePicker(width: datePickerWidth),
+                    ],
+                  );
+                }
+
+                const double scrollSearchWidth = 220;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      buildSearchField(width: scrollSearchWidth),
+                      SizedBox(width: spacing),
+                      buildCategoryDropdown(width: categoryWidth),
+                      SizedBox(width: spacing),
+                      buildDatePicker(width: datePickerWidth),
+                    ],
+                  ),
+                );
+              }
+
+              final double availableWidth =
+                  (constraints.maxWidth - datePickerWidth - spacing * 2)
+                      .clamp(0.0, double.infinity);
+              final double searchWidth = availableWidth * (5 / 8);
+              final double categoryWidth = availableWidth * (3 / 8);
+
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: children,
+                children: [
+                  buildSearchField(width: searchWidth),
+                  SizedBox(width: spacing),
+                  buildCategoryDropdown(width: categoryWidth),
+                  SizedBox(width: spacing),
+                  buildDatePicker(width: datePickerWidth),
+                ],
               );
             },
           ),
@@ -1378,24 +1455,61 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                             _controller.filteredActivities;
 
                         if (filteredActivities.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.history,
-                                    size: 64, color: Colors.grey),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No activity logs found',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.textTheme.bodyLarge?.color,
-                                    fontFamily: 'SF Pro',
+                          final bool isOffline = _hasConnection == false;
+                          final bool hasCache = _controller
+                              .hasCachedDataFor(_controller.selectedDate);
+
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 24),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight,
+                                  ),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.history,
+                                            size: 64, color: Colors.grey),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          (!hasCache && isOffline)
+                                              ? 'Activity logs unavailable offline'
+                                              : 'No activity logs found',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: theme
+                                                .textTheme.bodyLarge?.color,
+                                            fontFamily: 'SF Pro',
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          (!hasCache && isOffline)
+                                              ? 'Reconnect to the internet to refresh this date.'
+                                              : 'Pull down to fetch the latest activities for this date.',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: theme.textTheme.bodyMedium
+                                                    ?.color ??
+                                                Colors.grey,
+                                            fontFamily: 'SF Pro',
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           );
                         }
 
@@ -1428,145 +1542,112 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                                       return Padding(
                                         padding:
                                             const EdgeInsets.only(bottom: 10),
-                                        child: Slidable(
-                                          endActionPane: ActionPane(
-                                            motion: const ScrollMotion(),
-                                            children: [
-                                              SlidableAction(
-                                                onPressed: (_) =>
-                                                    _showDeleteConfirmation(
-                                                  context,
-                                                  activity['id'],
-                                                  _formatDescription(
-                                                      activity['description']),
-                                                ),
-                                                backgroundColor: Colors.red,
-                                                foregroundColor: Colors.white,
-                                                icon: Icons.delete,
-                                                label: 'Delete',
-                                                borderRadius:
-                                                    const BorderRadius.only(
-                                                  topRight: Radius.circular(8),
-                                                  bottomRight:
-                                                      Radius.circular(8),
-                                                ),
+                                        child: InkWell(
+                                          onTap: () => _showActivityDetails(
+                                              context, activity),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(16),
+                                            height: 90,
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: theme.dividerColor
+                                                    .withOpacity(0.2),
                                               ),
-                                            ],
-                                          ),
-                                          child: InkWell(
-                                            onTap: () => _showActivityDetails(
-                                                context, activity),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(16),
-                                              height: 90,
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    theme.colorScheme.surface,
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                border: Border.all(
-                                                  color: theme.dividerColor
-                                                      .withOpacity(0.2),
-                                                ),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  _getCategoryIcon(
-                                                      activity['category']),
-                                                  const SizedBox(width: 16),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .center,
-                                                      children: [
-                                                        Text(
-                                                          _formatDescription(
-                                                              activity[
-                                                                  'description']),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                          style: TextStyle(
-                                                            fontSize: 14,
-                                                            fontWeight:
-                                                                FontWeight.w600,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                _getCategoryIcon(
+                                                    activity['category']),
+                                                const SizedBox(width: 16),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Text(
+                                                        _formatDescription(
+                                                            activity[
+                                                                'description']),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: theme.textTheme
+                                                              .bodyLarge?.color,
+                                                          fontFamily: 'SF Pro',
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          Icon(
+                                                            Icons
+                                                                .person_outline,
+                                                            size: 14,
                                                             color: theme
                                                                 .textTheme
-                                                                .bodyLarge
-                                                                ?.color,
-                                                            fontFamily:
-                                                                'SF Pro',
+                                                                .bodyMedium
+                                                                ?.color
+                                                                ?.withOpacity(
+                                                                    0.7),
                                                           ),
-                                                        ),
-                                                        const SizedBox(
-                                                            height: 4),
-                                                        Row(
-                                                          children: [
-                                                            Icon(
-                                                              Icons
-                                                                  .person_outline,
-                                                              size: 14,
-                                                              color: theme
-                                                                  .textTheme
-                                                                  .bodyMedium
-                                                                  ?.color
-                                                                  ?.withOpacity(
-                                                                      0.7),
-                                                            ),
-                                                            const SizedBox(
-                                                                width: 4),
-                                                            Expanded(
-                                                              child: Text(
-                                                                activity[
-                                                                        'userName'] ??
-                                                                    activity[
-                                                                        'user_email'] ??
-                                                                    'Unknown User',
-                                                                maxLines: 1,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontSize: 12,
-                                                                  color: theme
-                                                                      .textTheme
-                                                                      .bodyMedium
-                                                                      ?.color
-                                                                      ?.withOpacity(
-                                                                          0.7),
-                                                                  fontFamily:
-                                                                      'SF Pro',
-                                                                ),
+                                                          const SizedBox(
+                                                              width: 4),
+                                                          Expanded(
+                                                            child: Text(
+                                                              activity[
+                                                                      'userName'] ??
+                                                                  activity[
+                                                                      'user_email'] ??
+                                                                  'Unknown User',
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                              style: TextStyle(
+                                                                fontSize: 12,
+                                                                color: theme
+                                                                    .textTheme
+                                                                    .bodyMedium
+                                                                    ?.color
+                                                                    ?.withOpacity(
+                                                                        0.7),
+                                                                fontFamily:
+                                                                    'SF Pro',
                                                               ),
                                                             ),
-                                                          ],
-                                                        ),
-                                                      ],
-                                                    ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
                                                   ),
-                                                  const SizedBox(width: 12),
-                                                  Text(
-                                                    activity['time'] ?? '',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: theme.brightness ==
-                                                              Brightness.dark
-                                                          ? Colors.white
-                                                          : Colors.black,
-                                                      fontFamily: 'SF Pro',
-                                                    ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Text(
+                                                  activity['time'] ?? '',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: theme.brightness ==
+                                                            Brightness.dark
+                                                        ? Colors.white
+                                                        : Colors.black,
+                                                    fontFamily: 'SF Pro',
                                                   ),
-                                                ],
-                                              ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ),

@@ -6,6 +6,7 @@ class InventoryItem {
   final String category;
   final double cost;
   final int stock;
+  final int? lowStockBaseline;
   final String unit;
   final String? packagingUnit;
   final String? packagingContent;
@@ -25,6 +26,7 @@ class InventoryItem {
     required this.category,
     required this.cost,
     required this.stock,
+    this.lowStockBaseline,
     required this.unit,
     this.packagingUnit,
     this.packagingContent,
@@ -98,12 +100,14 @@ class GroupedInventoryItem {
   final List<InventoryItem>
       variants; // All other items with same name + category
   final int totalStock; // Total stock across all variants
+  final int totalBaseline;
 
   GroupedInventoryItem({
     required this.productKey,
     required this.mainItem,
     required this.variants,
     required this.totalStock,
+    required this.totalBaseline,
   });
 
   // Helper function to calculate critical level (20% of stock, rounded)
@@ -166,26 +170,17 @@ class GroupedInventoryItem {
       }
     }
 
-    // Low stock threshold based on dynamic 20% critical level with tiered thresholds
+    // Low stock threshold based purely on the dynamic 20% critical level
     if (totalStock == 0) {
       return "Out of Stock"; // This should already be handled above, but keeping for safety
     }
 
-    // Calculate critical level based on current stock (20% rounded)
-    final criticalLevel = calculateCriticalLevel(totalStock);
+    final baseline = totalBaseline > 0
+        ? totalBaseline
+        : (mainItem.lowStockBaseline ?? totalStock);
+    final criticalLevel = calculateCriticalLevel(baseline);
 
-    // Primary check: If current stock is at or below its own 20% critical level
-    if (criticalLevel > 0 && totalStock <= criticalLevel) {
-      return "Low Stock";
-    }
-
-    // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
-    if (totalStock <= 5) {
-      return "Low Stock";
-    }
-
-    // For stocks > 5, use dynamic calculation
-    if (totalStock > 5 && totalStock <= criticalLevel) {
+    if (totalStock <= criticalLevel) {
       return "Low Stock";
     }
 

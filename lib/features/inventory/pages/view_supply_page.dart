@@ -230,6 +230,12 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                             category: preferredRow['category'] ?? '',
                             cost: (preferredRow['cost'] ?? 0).toDouble(),
                             stock: (preferredRow['stock'] ?? 0).toInt(),
+                            lowStockBaseline:
+                                preferredRow['low_stock_baseline'] != null
+                                    ? (preferredRow['low_stock_baseline']
+                                            as num)
+                                        .toInt()
+                                    : null,
                             unit: preferredRow['unit'] ?? '',
                             supplier: preferredRow['supplier'] ?? '',
                             brand: preferredRow['brand'] ?? '',
@@ -1621,6 +1627,10 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
               category: latestSupplyResponse['category'] ?? '',
               cost: (latestSupplyResponse['cost'] ?? 0).toDouble(),
               stock: (latestSupplyResponse['stock'] ?? 0).toInt(),
+              lowStockBaseline: latestSupplyResponse['low_stock_baseline'] !=
+                      null
+                  ? (latestSupplyResponse['low_stock_baseline'] as num).toInt()
+                  : null,
               unit: latestSupplyResponse['unit'] ?? '',
               packagingUnit: latestSupplyResponse['packaging_unit'],
               packagingContent: latestSupplyResponse['packaging_content'],
@@ -1643,6 +1653,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         'category': sourceItem.category,
         'cost': sourceItem.cost,
         'stock': stockQuantity, // Use selected stock quantity
+        'low_stock_baseline': stockQuantity,
         'unit': sourceItem.unit,
         'packaging_unit': sourceItem.packagingUnit,
         'packaging_quantity': sourceItem.packagingQuantity,
@@ -1675,6 +1686,9 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         category: response['category'] ?? '',
         cost: (response['cost'] ?? 0).toDouble(),
         stock: (response['stock'] ?? 0).toInt(),
+        lowStockBaseline: response['low_stock_baseline'] != null
+            ? (response['low_stock_baseline'] as num).toInt()
+            : null,
         unit: response['unit'] ?? '',
         packagingUnit: response['packaging_unit'],
         packagingContent: response['packaging_content'],
