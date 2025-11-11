@@ -55,12 +55,6 @@ class ApprovalCard extends StatelessWidget {
     final displayTitle =
         createdAt != null ? _formatApprovalDateTime(createdAt) : presetName;
     final supplies = approval['supplies'] as List<dynamic>? ?? [];
-    final patientName = approval['patientName'] ?? '';
-    final age = approval['age'] ?? '';
-    final sex = approval['sex'] ??
-        approval['gender'] ??
-        ''; // Use sex first, fallback to gender
-    final conditions = approval['conditions'] ?? '';
     final status = approval['status'] ?? 'pending';
 
     final theme = Theme.of(context);
@@ -251,109 +245,6 @@ class ApprovalCard extends StatelessWidget {
                 // Expanded Content
                 if (isExpanded) ...[
                   const SizedBox(height: 20),
-
-                  // Patient Information Section
-                  if (patientName.isNotEmpty ||
-                      age.isNotEmpty ||
-                      sex.isNotEmpty ||
-                      conditions.isNotEmpty) ...[
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.person_outline_rounded,
-                          size: 18,
-                          color: const Color(0xFF00D4AA),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Patient Information',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: theme.textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.grey[800]!.withOpacity(0.5)
-                            : const Color(0xFF00D4AA).withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.grey[700]!.withOpacity(0.3)
-                              : const Color(0xFF00D4AA).withOpacity(0.2),
-                          width: 1,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          // Row 1: Patient Name | Sex
-                          Row(
-                            children: [
-                              if (patientName.isNotEmpty)
-                                Expanded(
-                                  child: _buildModernInfoRow(
-                                    Icons.badge_outlined,
-                                    'Patient Name',
-                                    patientName,
-                                    theme,
-                                    isDark,
-                                  ),
-                                ),
-                              if (patientName.isNotEmpty && sex.isNotEmpty)
-                                const SizedBox(width: 16),
-                              if (sex.isNotEmpty)
-                                Expanded(
-                                  child: _buildModernInfoRow(
-                                    Icons.people_outline_rounded,
-                                    'Sex',
-                                    sex,
-                                    theme,
-                                    isDark,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          // Row 2: Age | Conditions
-                          if ((age.isNotEmpty || conditions.isNotEmpty) &&
-                              (patientName.isNotEmpty || sex.isNotEmpty))
-                            const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              if (age.isNotEmpty)
-                                Expanded(
-                                  child: _buildModernInfoRow(
-                                    Icons.calendar_today_outlined,
-                                    'Age',
-                                    age,
-                                    theme,
-                                    isDark,
-                                  ),
-                                ),
-                              if (age.isNotEmpty && conditions.isNotEmpty)
-                                const SizedBox(width: 16),
-                              if (conditions.isNotEmpty)
-                                Expanded(
-                                  child: _buildModernInfoRow(
-                                    Icons.medical_information_outlined,
-                                    'Conditions',
-                                    conditions,
-                                    theme,
-                                    isDark,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
 
                   // Supplies Section
                   Row(
@@ -616,7 +507,7 @@ class ApprovalCard extends StatelessWidget {
                                 ),
                               const SizedBox(width: 8),
                               Text(
-                                isProcessing ? 'Processing...' : 'Approved',
+                                isProcessing ? 'Processing...' : 'Approve',
                                 style: AppFonts.sfProStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
@@ -677,49 +568,5 @@ class ApprovalCard extends StatelessWidget {
     }
 
     return raw;
-  }
-
-  Widget _buildModernInfoRow(
-    IconData icon,
-    String label,
-    String value,
-    ThemeData theme,
-    bool isDark,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: const Color(0xFF00D4AA),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppFonts.sfProStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: theme.textTheme.bodyMedium?.color,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 }

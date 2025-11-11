@@ -32,6 +32,14 @@ class ArchiveSupplyController {
             (data) {
               try {
                 final items = data.map((row) {
+                  DateTime? createdAt;
+                  if (row['created_at'] != null) {
+                    try {
+                      createdAt = DateTime.parse(row['created_at'] as String);
+                    } catch (e) {
+                      createdAt = null;
+                    }
+                  }
                   return InventoryItem(
                     id: row['id'] as String,
                     name: row['name'] ?? '',
@@ -53,6 +61,7 @@ class ArchiveSupplyController {
                     expiry: row['expiry'],
                     noExpiry: row['no_expiry'] ?? false,
                     archived: row['archived'] ?? false,
+                    createdAt: createdAt,
                   );
                 }).toList();
 

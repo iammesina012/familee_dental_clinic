@@ -1,56 +1,157 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApprovalController {
   final SupabaseClient _supabase = Supabase.instance.client;
   static const String _table = 'stock_deduction_approvals';
+  static const String _cacheKey = 'sd_pending_approvals_cache_v1';
 
-  // Get all approvals as a stream (only pending ones)
-  // NOTE: We use .eq('status', 'pending') at database level to optimize initial query,
-  // but we also filter in Dart as a safety net because Supabase real-time streams
-  // can emit updates for rows that no longer match the filter (e.g., when status changes).
+  List<Map<String, dynamic>>? _cachedPendingApprovals;
+
+  List<Map<String, dynamic>> get cachedPendingApprovals =>
+      _cachedPendingApprovals != null
+          ? List<Map<String, dynamic>>.from(_cachedPendingApprovals!)
+          : const [];
+
+  Future<List<Map<String, dynamic>>> preloadPendingApprovals() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKey);
+      if (raw == null || raw.isEmpty) {
+        _cachedPendingApprovals = null;
+        return const [];
+      }
+      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+      final restored = decoded
+          .map((entry) =>
+              Map<String, dynamic>.from(entry as Map<String, dynamic>))
+          .toList(growable: false);
+      _cachedPendingApprovals = restored;
+      return List<Map<String, dynamic>>.from(restored);
+    } catch (_) {
+      _cachedPendingApprovals = null;
+      return const [];
+    }
+  }
+
+  Map<String, dynamic> _mapRow(Map<String, dynamic> row) {
+    return {
+      'id': row['id'],
+      'presetName': row['preset_name'] ?? row['presetName'],
+      'name': row['preset_name'] ?? row['name'],
+      'supplies': row['supplies'],
+      'purpose': row['purpose'],
+      'remarks': row['remarks'],
+      'status': row['status'] ?? 'pending',
+      'created_at': row['created_at']?.toString(),
+    };
+  }
+
+  bool _isPendingRow(Map<String, dynamic> row) {
+    final rawStatus = row['status'] as String?;
+    if (rawStatus == 'rejected' || rawStatus == 'approved') {
+      return false;
+    }
+    return rawStatus == 'pending' || rawStatus == null;
+  }
+
   Stream<List<Map<String, dynamic>>> getApprovalsStream() {
-    return _supabase
-        .from(_table)
-        .stream(primaryKey: ['id'])
-        .eq('status', 'pending') // Database-level filter: only pending
-        .order('created_at', ascending: false)
-        .map((data) {
-          // Filter for pending status INSIDE Dart (safety net for real-time updates)
-          // This ensures that when a row's status changes to 'rejected' or 'approved',
-          // Supabase sends a real-time update and this filter immediately excludes it
-          return data.where((row) {
-            final rawStatus = row['status'] as String?;
-            // Explicitly check and exclude rejected/approved FIRST
-            if (rawStatus == 'rejected' || rawStatus == 'approved') {
-              return false; // Exclude immediately - don't process these
-            }
-            // Only include pending or null status
-            return rawStatus == 'pending' || rawStatus == null;
-          }).map((row) {
-            // Convert snake_case to camelCase for application use
-            return {
-              'id': row['id'],
-              'presetName': row['preset_name'] ?? row['presetName'],
-              'name': row['preset_name'] ?? row['name'], // For compatibility
-              'supplies': row['supplies'],
-              'patientName': row['patient_name'] ?? row['patientName'],
-              'age': row['age'],
-              'gender': row['gender'],
-              'sex': row['gender'], // Map gender to sex for display
-              'conditions': row['conditions'],
-              'purpose': row['purpose'],
-              'remarks': row['remarks'],
-              'status': row['status'] ?? 'pending',
-              'created_at': row['created_at'],
-            };
-          }).toList();
-        });
+    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
+    StreamSubscription<List<Map<String, dynamic>>>? subscription;
+
+    void safeAdd(List<Map<String, dynamic>> approvals) {
+      if (!controller.isClosed) {
+        controller
+            .add(List<Map<String, dynamic>>.from(approvals, growable: false));
+      }
+    }
+
+    Future<void> persist(List<Map<String, dynamic>> approvals) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          _cacheKey,
+          jsonEncode(approvals),
+        );
+      } catch (_) {
+        // Ignore cache persistence issues
+      }
+    }
+
+    void emitCached({bool forceEmpty = false}) {
+      if (_cachedPendingApprovals != null) {
+        safeAdd(_cachedPendingApprovals!);
+      } else if (forceEmpty) {
+        safeAdd(const []);
+      }
+    }
+
+    List<Map<String, dynamic>> filterAndMap(List<Map<String, dynamic>> data) {
+      return data
+          .where(_isPendingRow)
+          .map((row) => _mapRow(row))
+          .toList(growable: false);
+    }
+
+    void start() {
+      subscription ??= _supabase
+          .from(_table)
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: false)
+          .listen(
+            (data) {
+              try {
+                final mapped = filterAndMap(data);
+                _cachedPendingApprovals = mapped;
+                safeAdd(mapped);
+                unawaited(persist(mapped));
+              } catch (_) {
+                emitCached(forceEmpty: true);
+              }
+            },
+            onError: (error) {
+              emitCached(forceEmpty: true);
+            },
+          );
+    }
+
+    // Emit cache immediately (if any) then start stream on listen
+    emitCached();
+
+    controller
+      ..onListen = () {
+        emitCached();
+        start();
+      }
+      ..onCancel = () async {
+        await subscription?.cancel();
+        subscription = null;
+      };
+
+    return controller.stream;
   }
 
   // Save a new approval to Supabase
   Future<void> saveApproval(Map<String, dynamic> approvalData) async {
     try {
       // Convert camelCase keys to snake_case to match database schema
+      DateTime createdAt;
+      if (approvalData['created_at'] is String) {
+        try {
+          createdAt =
+              DateTime.parse(approvalData['created_at'] as String).toUtc();
+        } catch (_) {
+          createdAt = DateTime.now().toUtc();
+        }
+      } else if (approvalData['created_at'] is DateTime) {
+        createdAt = (approvalData['created_at'] as DateTime).toUtc();
+      } else {
+        createdAt = DateTime.now().toUtc();
+      }
+
       final dataToSave = <String, dynamic>{
         'preset_name': approvalData['presetName'] ??
             approvalData['preset_name'] ??
@@ -58,17 +159,9 @@ class ApprovalController {
                 'purpose'] ?? // Use purpose if preset_name not provided
             'Unknown Preset',
         'supplies': approvalData['supplies'] ?? [],
-        'patient_name':
-            approvalData['patientName'] ?? approvalData['patient_name'] ?? '',
-        'age': approvalData['age'] ?? '',
-        'gender': approvalData['sex'] ??
-            approvalData['gender'] ??
-            '', // Store sex in gender column
-        'conditions': approvalData['conditions'] ?? '',
         'purpose': approvalData['purpose'] ?? '',
         'remarks': approvalData['remarks'] ?? '',
-        'created_at':
-            approvalData['created_at'] ?? DateTime.now().toIso8601String(),
+        'created_at': createdAt.toIso8601String(),
       };
 
       await _supabase.from(_table).insert(dataToSave);
@@ -102,11 +195,6 @@ class ApprovalController {
         'name':
             response['preset_name'] ?? response['name'], // For compatibility
         'supplies': response['supplies'],
-        'patientName': response['patient_name'] ?? response['patientName'],
-        'age': response['age'],
-        'gender': response['gender'],
-        'sex': response['sex'], // Include sex field
-        'conditions': response['conditions'],
         'purpose': response['purpose'],
         'remarks': response['remarks'],
         'status': response['status'] ?? 'pending',

@@ -198,128 +198,23 @@ class SdActivityController {
     );
   }
 
-  /// Log preset creation activities
-  Future<void> logPresetCreated({
-    required String presetName,
+  /// Log deduction log creation activities
+  Future<void> logDeductionLogCreated({
+    required String purpose,
     required List<Map<String, dynamic>> supplies,
   }) async {
     await _logActivity(
-      action: 'preset_created',
+      action: 'deduction_log_created',
       category: 'Stock Deduction',
-      description: 'Created Preset: $presetName',
+      description: 'Created Deduction Log: $purpose',
       metadata: {
-        'presetName': presetName,
+        'purpose': purpose,
         'suppliesCount': supplies.length,
         'supplies': supplies
             .map((supply) => {
                   'supplyName': supply['name'] ?? 'Unknown',
                   'brand': supply['brand'] ?? 'Unknown',
                   'supplier': supply['supplier'] ?? 'Unknown',
-                })
-            .toList(),
-      },
-    );
-  }
-
-  /// Log preset editing activities
-  Future<void> logPresetEdited({
-    required String originalPresetName,
-    required String newPresetName,
-    required List<Map<String, dynamic>> originalSupplies,
-    required List<Map<String, dynamic>> newSupplies,
-    required Map<String, dynamic> fieldChanges,
-  }) async {
-    // Main description should show only the new preset name
-    String description = 'Edited Preset: $newPresetName';
-
-    // Find added and removed supplies
-    List<String> addedSupplies = [];
-    List<String> removedSupplies = [];
-
-    // Get supply names for comparison
-    List<String> originalSupplyNames = originalSupplies
-        .map((s) => s['name']?.toString() ?? 'Unknown')
-        .toList();
-    List<String> newSupplyNames =
-        newSupplies.map((s) => s['name']?.toString() ?? 'Unknown').toList();
-
-    // Find added supplies
-    for (String supplyName in newSupplyNames) {
-      if (!originalSupplyNames.contains(supplyName)) {
-        addedSupplies.add(supplyName);
-      }
-    }
-
-    // Find removed supplies
-    for (String supplyName in originalSupplyNames) {
-      if (!newSupplyNames.contains(supplyName)) {
-        removedSupplies.add(supplyName);
-      }
-    }
-
-    await _logActivity(
-      action: 'preset_edited',
-      category: 'Stock Deduction',
-      description: description,
-      metadata: {
-        'presetName': newPresetName,
-        'originalPresetName': originalPresetName,
-        'suppliesCount': newSupplies.length,
-        'originalSuppliesCount': originalSupplies.length,
-        'supplies': newSupplies
-            .map((supply) => {
-                  'supplyName': supply['name'] ?? 'Unknown',
-                  'brand': supply['brand'] ?? 'Unknown',
-                  'supplier': supply['supplier'] ?? 'Unknown',
-                })
-            .toList(),
-        'fieldChanges': fieldChanges,
-        'addedSupplies': addedSupplies,
-        'removedSupplies': removedSupplies,
-      },
-    );
-  }
-
-  /// Log preset deletion activities
-  Future<void> logPresetDeleted({
-    required String presetName,
-    required List<Map<String, dynamic>> supplies,
-  }) async {
-    await _logActivity(
-      action: 'preset_deleted',
-      category: 'Stock Deduction',
-      description: 'Deleted Preset: ' + presetName,
-      metadata: {
-        'suppliesCount': supplies.length,
-        'supplies': supplies
-            .map((supply) => {
-                  'supplyName':
-                      supply['name'] ?? supply['supplyName'] ?? 'Unknown',
-                  'brand': supply['brand'] ?? 'Unknown',
-                  'supplier': supply['supplier'] ?? 'Unknown',
-                })
-            .toList(),
-      },
-    );
-  }
-
-  /// Log preset usage activities
-  Future<void> logPresetUsed({
-    required String presetName,
-    required List<Map<String, dynamic>> supplies,
-  }) async {
-    await _logActivity(
-      action: 'preset_used',
-      category: 'Stock Deduction',
-      description: 'Preset Used: ' + presetName,
-      metadata: {
-        'presetName': presetName,
-        'suppliesCount': supplies.length,
-        'supplies': supplies
-            .map((supply) => {
-                  'supplyName': supply['name'] ?? supply['supplyName'] ?? 'N/A',
-                  'brand': supply['brand'] ?? 'N/A',
-                  'supplier': supply['supplier'] ?? 'N/A',
                 })
             .toList(),
       },

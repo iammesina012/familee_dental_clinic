@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/drawer.dart';
@@ -7,6 +9,10 @@ import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:familee_dental/features/inventory/controller/catalog_controller.dart';
+import 'package:familee_dental/features/stock_deduction/controller/sd_logs_controller.dart';
+import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
+import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 
 class StockDeductionPage extends StatefulWidget {
   const StockDeductionPage({super.key});
@@ -30,6 +36,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     _loadUserData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _currentRoute = ModalRoute.of(context);
+      _prePopulateCaches();
     });
   }
 
@@ -245,10 +252,6 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
         'preset_name':
             purpose, // Use purpose as preset_name for direct deductions
         'supplies': supplies,
-        'patient_name': '', // Empty for direct deductions
-        'age': '',
-        'gender': '',
-        'conditions': '',
         'purpose': purpose,
         'remarks': '',
       });
@@ -350,6 +353,39 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   void _openApproval() async {
     // Navigate to Approval page
     await Navigator.of(context).pushNamed('/stock-deduction/approval');
+  }
+
+  Future<void> _prePopulateCaches() async {
+    try {
+      await _approvalController.preloadPendingApprovals();
+    } catch (_) {}
+
+    try {
+      await StockDeductionLogsController().preloadLogs();
+    } catch (_) {}
+
+    try {
+      final catalogController = CatalogController();
+      final viewSupplyController = ViewSupplyController();
+      final products = await catalogController
+          .getAllProductsStream(archived: false, expired: false)
+          .first
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => const <GroupedInventoryItem>[],
+          )
+          .catchError((_) => const <GroupedInventoryItem>[]) as List;
+
+      final Set<String> prefetchedNames = {};
+      for (final item in products.take(30)) {
+        if (item is GroupedInventoryItem) {
+          final name = item.mainItem.name;
+          if (name.isNotEmpty && prefetchedNames.add(name)) {
+            unawaited(viewSupplyController.getSupplyTypes(name));
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<bool> _confirmLeave() async {

@@ -260,6 +260,11 @@ class _SupabaseOtherSupplyBatchesState
                 expiry: existing.expiry,
                 noExpiry: existing.noExpiry,
                 archived: existing.archived,
+                createdAt: existing.createdAt != null && b.createdAt != null
+                    ? (existing.createdAt!.isBefore(b.createdAt!)
+                        ? existing.createdAt
+                        : b.createdAt)
+                    : existing.createdAt ?? b.createdAt,
               );
             } else {
               merged[key] = b;

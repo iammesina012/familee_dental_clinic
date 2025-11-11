@@ -174,7 +174,10 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     // Previous
     buttons.add(IconButton(
       icon: Icon(Icons.chevron_left,
-          color: Theme.of(context).textTheme.bodyLarge?.color, size: 24),
+          color: _currentPage > 1
+              ? Theme.of(context).textTheme.bodyLarge?.color
+              : Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.3),
+          size: 24),
       onPressed: _currentPage > 1
           ? () => setState(() => _currentPage = _currentPage - 1)
           : null,
@@ -217,7 +220,10 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     // Next
     buttons.add(IconButton(
       icon: Icon(Icons.chevron_right,
-          color: Theme.of(context).textTheme.bodyLarge?.color, size: 24),
+          color: _currentPage < totalPages
+              ? Theme.of(context).textTheme.bodyLarge?.color
+              : Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.3),
+          size: 24),
       onPressed: _currentPage < totalPages
           ? () => setState(() => _currentPage = _currentPage + 1)
           : null,

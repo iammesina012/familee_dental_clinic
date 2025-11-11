@@ -17,6 +17,7 @@ class InventoryItem {
   final String? expiry;
   final bool noExpiry;
   final bool archived;
+  final DateTime? createdAt;
 
   InventoryItem({
     required this.id,
@@ -37,6 +38,7 @@ class InventoryItem {
     this.expiry,
     required this.noExpiry,
     required this.archived,
+    this.createdAt,
   });
 }
 

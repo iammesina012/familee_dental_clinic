@@ -532,6 +532,9 @@ class _NotificationTile extends StatelessWidget {
                             expiry: (d['expiry'] ?? '').toString(),
                             noExpiry: (d['no_expiry'] ?? false) as bool,
                             archived: (d['archived'] ?? false) as bool,
+                            createdAt: d['created_at'] != null
+                                ? DateTime.tryParse(d['created_at'] as String)
+                                : null,
                           );
                         }
                       }

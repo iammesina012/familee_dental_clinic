@@ -96,7 +96,7 @@ class InventoryItemCard extends StatelessWidget {
   // Format expiry date for display
   String formatExpiryDate() {
     if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
-      return "N/A";
+      return "No Expiry";
     }
 
     try {

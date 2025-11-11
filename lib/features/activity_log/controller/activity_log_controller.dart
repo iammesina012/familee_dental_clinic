@@ -269,9 +269,10 @@ class ActivityLogController extends ChangeNotifier {
   }
 
   Map<String, DateTime> _buildUtcRangeForDate(DateTime date) {
-    final start = DateTime.utc(date.year, date.month, date.day);
-    final end = start.add(const Duration(days: 1));
-    return {'start': start, 'end': end};
+    final localStart = DateTime(date.year, date.month, date.day);
+    final startUtc = localStart.toUtc();
+    final endUtc = localStart.add(const Duration(days: 1)).toUtc();
+    return {'start': startUtc, 'end': endUtc};
   }
 
   String _dateKey(DateTime date) {

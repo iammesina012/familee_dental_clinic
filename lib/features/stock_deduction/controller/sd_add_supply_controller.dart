@@ -93,9 +93,22 @@ class SdAddSupplyController {
   String formatExpiry(String? expiry, bool noExpiry) {
     if (noExpiry) return 'No Expiry';
     if (expiry == null || expiry.isEmpty) return 'No Expiry';
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiry)) {
-      return expiry.replaceAll('-', '/');
+
+    final normalized = expiry.replaceAll('/', '-');
+    try {
+      final parsed = DateTime.parse(normalized);
+      final month = parsed.month.toString().padLeft(2, '0');
+      final day = parsed.day.toString().padLeft(2, '0');
+      return '$month/$day/${parsed.year}';
+    } catch (_) {
+      final match = RegExp(r'^(\d{4})/(\d{2})/(\d{2})$').firstMatch(expiry);
+      if (match != null) {
+        final month = match.group(2);
+        final day = match.group(3);
+        final year = match.group(1);
+        return '$month/$day/$year';
+      }
+      return expiry;
     }
-    return expiry;
   }
 }

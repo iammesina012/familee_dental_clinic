@@ -48,6 +48,14 @@ class ViewSupplyController {
                   return;
                 }
                 final row = data.first;
+                DateTime? createdAt;
+                if (row['created_at'] != null) {
+                  try {
+                    createdAt = DateTime.parse(row['created_at'] as String);
+                  } catch (e) {
+                    createdAt = null;
+                  }
+                }
                 final item = InventoryItem(
                   id: row['id'] as String,
                   name: row['name'] ?? '',
@@ -69,6 +77,7 @@ class ViewSupplyController {
                   expiry: row['expiry'],
                   noExpiry: row['no_expiry'] ?? false,
                   archived: row['archived'] ?? false,
+                  createdAt: createdAt,
                 );
 
                 debugPrint(

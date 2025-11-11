@@ -242,6 +242,10 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                             expiry: preferredRow['expiry'],
                             noExpiry: preferredRow['no_expiry'] ?? false,
                             archived: preferredRow['archived'] ?? false,
+                            createdAt: preferredRow['created_at'] != null
+                                ? DateTime.tryParse(
+                                    preferredRow['created_at'] as String)
+                                : null,
                           ),
                           skipAutoRedirect: true,
                         ),
@@ -1642,6 +1646,10 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
               expiry: latestSupplyResponse['expiry'],
               noExpiry: latestSupplyResponse['no_expiry'] ?? false,
               archived: latestSupplyResponse['archived'] ?? false,
+              createdAt: latestSupplyResponse['created_at'] != null
+                  ? DateTime.tryParse(
+                      latestSupplyResponse['created_at'] as String)
+                  : null,
             )
           : currentItem;
 
@@ -1699,6 +1707,9 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         expiry: response['expiry'],
         noExpiry: response['no_expiry'] ?? false,
         archived: response['archived'] ?? false,
+        createdAt: response['created_at'] != null
+            ? DateTime.tryParse(response['created_at'] as String)
+            : null,
       );
 
       Navigator.of(context).pushReplacement(

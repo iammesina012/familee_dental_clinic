@@ -39,12 +39,15 @@ class _ApprovalPageState extends State<ApprovalPage> {
     super.initState();
     // Initialize stream first (will show loading)
     _initializeStream();
+    _approvalController.preloadPendingApprovals().then((_) {
+      if (mounted) setState(() {});
+    });
     // Load rejected approvals and rebuild when done
     _loadRejectedApprovals();
   }
 
   void _initializeStream() {
-    _approvalsStream = ApprovalController().getApprovalsStream();
+    _approvalsStream = _approvalController.getApprovalsStream();
   }
 
   // Load already rejected/approved IDs on init to prevent them from appearing
@@ -187,18 +190,37 @@ class _ApprovalPageState extends State<ApprovalPage> {
               });
             }
 
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  'Error loading approvals: ${snapshot.error}',
-                  style: AppFonts.sfProStyle(fontSize: 16, color: Colors.red),
-                ),
-              );
+            final List<Map<String, dynamic>> cached =
+                _approvalController.cachedPendingApprovals;
+            final List<Map<String, dynamic>> live =
+                snapshot.data ?? const <Map<String, dynamic>>[];
+            final bool hasLive = live.isNotEmpty;
+            final bool hasCached =
+                cached.isNotEmpty || _lastKnownApprovals.isNotEmpty;
+
+            final bool showSkeleton = !snapshot.hasData &&
+                (snapshot.connectionState == ConnectionState.waiting ||
+                    snapshot.connectionState == ConnectionState.active) &&
+                !hasCached;
+
+            if (showSkeleton) {
+              return _buildSkeletonLoader(context);
+            }
+
+            List<Map<String, dynamic>> candidateList;
+            if (hasLive) {
+              candidateList = List<Map<String, dynamic>>.from(live);
+              _lastKnownApprovals = candidateList;
+            } else if (_lastKnownApprovals.isNotEmpty) {
+              candidateList =
+                  List<Map<String, dynamic>>.from(_lastKnownApprovals);
+            } else {
+              candidateList = List<Map<String, dynamic>>.from(cached);
+              _lastKnownApprovals = candidateList;
             }
 
             // Filter to show only pending approvals
-            // CRITICAL: Blacklist check MUST happen FIRST before any processing
-            List<Map<String, dynamic>> allData = snapshot.data ?? [];
+            List<Map<String, dynamic>> allData = candidateList;
 
             // Triple-layer protection: blacklist → status check → stream filter
             _allApprovals = allData.where((approval) {
@@ -565,26 +587,17 @@ class _ApprovalPageState extends State<ApprovalPage> {
       final savedDeductions =
           List<Map<String, dynamic>>.from(deductionsToApply);
 
-      // Get patient information from approval before we reset it
-      final patientName = approval['patientName']?.toString() ?? '';
-      final age = approval['age']?.toString() ?? '';
-      final gender =
-          approval['gender']?.toString() ?? approval['sex']?.toString() ?? '';
-      final conditions = approval['conditions']?.toString() ?? '';
-
       if (!mounted) return;
 
       // Navigate to Deduction Logs
-      await Navigator.of(context).pushNamed(
+      await Navigator.of(context).pushNamedAndRemoveUntil(
         '/stock-deduction/deduction-logs',
+        (route) => route.settings.name == '/stock-deduction',
         arguments: {
           'purpose': purpose,
           'remarks': remarks,
           'supplies': savedDeductions,
-          'patient_name': patientName,
-          'age': age,
-          'gender': gender,
-          'conditions': conditions,
+          'approval_id': approval['id'],
         },
       );
 

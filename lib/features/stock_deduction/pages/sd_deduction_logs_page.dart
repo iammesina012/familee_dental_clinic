@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/shared/themes/font.dart';
-import 'package:familee_dental/features/stock_deduction/controller/sd_preset_management_controller.dart';
+import 'package:familee_dental/features/stock_deduction/controller/sd_logs_controller.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
-import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shimmer/shimmer.dart';
 
 class DeductionLogsPage extends StatefulWidget {
@@ -17,93 +17,65 @@ class DeductionLogsPage extends StatefulWidget {
 
 class _DeductionLogsPageState extends State<DeductionLogsPage> {
   final TextEditingController _searchController = TextEditingController();
-  final PresetController _presetController = PresetController();
+  final StockDeductionLogsController _logsController =
+      StockDeductionLogsController();
   final SdActivityController _activityController = SdActivityController();
-  List<Map<String, dynamic>> _allPresets = [];
-  List<Map<String, dynamic>> _filteredPresets = [];
-  List<Map<String, dynamic>> _lastKnownPresets = []; // Cache last known data
+  List<Map<String, dynamic>> _allLogs = [];
+  List<Map<String, dynamic>> _filteredLogs = [];
+  List<Map<String, dynamic>> _lastKnownLogs = []; // Cache last known data
   Timer? _debounceTimer;
+  final Set<String> _expandedCards = <String>{};
   // Stream key for forcing refresh
-  late Stream<List<Map<String, dynamic>>> _presetsStream;
+  Stream<List<Map<String, dynamic>>> _logsStream =
+      const Stream<List<Map<String, dynamic>>>.empty();
   int _streamKey = 0;
   bool _isFirstLoad = true;
   DateTime _selectedDate = DateTime.now();
+  int _currentPage = 1;
+  static const int _itemsPerPage = 6;
+  bool? _hasConnection;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
     _initializeStream();
-    // Auto-save purpose and supplies as a preset if they exist
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndSavePurposePreset();
+    _logsController.preloadLogs().then((_) {
+      if (mounted) setState(() {});
     });
+    // Auto-save deduction log if navigation provided data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _savePendingLog();
+    });
+    _initConnectivityWatch();
   }
 
-  Future<void> _checkAndSavePurposePreset() async {
+  Future<void> _savePendingLog() async {
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final purpose = args?['purpose'] as String?;
     final remarks = args?['remarks'] as String?;
     final supplies = args?['supplies'] as List<dynamic>?;
-    final patientName = args?['patient_name'] as String?;
-    final age = args?['age'] as String?;
-    final gender = args?['gender'] as String?;
-    final conditions = args?['conditions'] as String?;
+    final approvalId = args?['approval_id'];
 
     if (purpose != null && supplies != null && supplies.isNotEmpty) {
       try {
-        // Create preset data with purpose as name
-        // Mark it as from deduction log so we can filter it
-        final presetData = {
-          'name': purpose,
+        final logData = {
+          'purpose': purpose,
+          'remarks': remarks,
           'supplies': supplies,
-          'from_deduction': true, // Mark as created from approved deduction
+          'approval_id': approvalId,
         };
-        if (remarks != null && remarks.isNotEmpty) {
-          presetData['remarks'] = remarks;
-        }
-        // Include patient information if available
-        if (patientName != null && patientName.isNotEmpty) {
-          presetData['patient_name'] = patientName;
-        }
-        if (age != null && age.isNotEmpty) {
-          presetData['age'] = age;
-        }
-        if (gender != null && gender.isNotEmpty) {
-          presetData['gender'] = gender;
-        }
-        if (conditions != null && conditions.isNotEmpty) {
-          presetData['conditions'] = conditions;
-        }
+        await _logsController.saveLog(logData);
 
-        // Check if a deduction log preset with this name already exists
-        // Only update if it's already a deduction log preset (from_deduction == true)
-        // Don't overwrite manually created presets - create a new record instead
-        final existingPreset = await _presetController.getPresetByName(purpose);
-        final isExistingDeductionLog = existingPreset != null &&
-            (existingPreset['from_deduction'] == true ||
-                existingPreset['fromDeduction'] == true);
+        await _activityController.logDeductionLogCreated(
+          purpose: purpose,
+          supplies: supplies.cast<Map<String, dynamic>>(),
+        );
 
-        if (isExistingDeductionLog) {
-          // Update existing deduction log preset instead of creating duplicate
-          await _presetController.updatePreset(
-              existingPreset['id'], presetData);
-        } else {
-          // Always create a new preset for deduction logs
-          // This ensures manually maintained presets are not overwritten
-          await _presetController.savePreset(presetData);
-
-          // Log the preset creation activity (only if newly created)
-          final suppliesList = supplies.cast<Map<String, dynamic>>();
-          await _activityController.logPresetCreated(
-            presetName: purpose,
-            supplies: suppliesList,
-          );
-        }
-
-        // Force refresh the stream to show the updated/new preset immediately
-        _refreshPresets();
+        // Force refresh the stream to show the updated/new log immediately
+        _refreshLogs();
 
         // Show success message
         if (mounted) {
@@ -135,13 +107,7 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
   }
 
   void _initializeStream() {
-    // Only show presets that were created from approved deductions
-    _presetsStream = PresetController().getPresetsStream().map((presets) =>
-        presets
-            .where((preset) =>
-                preset['from_deduction'] == true ||
-                preset['fromDeduction'] == true)
-            .toList());
+    _logsStream = _logsController.getLogsStream(selectedDate: _selectedDate);
   }
 
   @override
@@ -149,48 +115,82 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _debounceTimer?.cancel();
+    _connectivitySubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _initConnectivityWatch() async {
+    try {
+      final hasConnection = await ConnectivityService().hasInternetConnection();
+      if (mounted) {
+        setState(() {
+          _hasConnection = hasConnection;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _hasConnection = null;
+        });
+      }
+    }
+
+    _connectivitySubscription = Connectivity()
+        .onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      final bool online = results.any((result) =>
+          result == ConnectivityResult.mobile ||
+          result == ConnectivityResult.wifi ||
+          result == ConnectivityResult.ethernet);
+      if (mounted) {
+        setState(() {
+          _hasConnection = online;
+        });
+      }
+    });
   }
 
   void _onSearchChanged() {
     // Update immediately for real-time search feedback
     _debounceTimer?.cancel();
     if (!mounted) return;
-    _filterPresets();
+    setState(() {
+      _currentPage = 1;
+    });
+    _filterLogs();
     setState(() {});
   }
 
-  void _filterPresets() {
-    final query = _searchController.text.toLowerCase().trim();
-    List<Map<String, dynamic>> filtered = List.from(_allPresets);
-
-    // Filter by date first
-    filtered = filtered.where((preset) {
-      final createdAt = preset['created_at']?.toString();
+  List<Map<String, dynamic>> _logsForSelectedDate(
+      List<Map<String, dynamic>> logs, DateTime date) {
+    return logs.where((log) {
+      final createdAt = log['created_at']?.toString();
       if (createdAt == null || createdAt.isEmpty) return false;
-
       try {
-        final presetDate = DateTime.parse(createdAt);
-        return presetDate.year == _selectedDate.year &&
-            presetDate.month == _selectedDate.month &&
-            presetDate.day == _selectedDate.day;
-      } catch (e) {
+        final parsed = DateTime.parse(createdAt).toLocal();
+        return parsed.year == date.year &&
+            parsed.month == date.month &&
+            parsed.day == date.day;
+      } catch (_) {
         return false;
       }
     }).toList();
+  }
 
-    // Then filter by search query
+  void _filterLogs() {
+    final query = _searchController.text.toLowerCase().trim();
+    // Controller already filters by date, so we only need to filter by search query
+    List<Map<String, dynamic>> filtered = List.from(_allLogs);
+
     if (query.isNotEmpty) {
-      filtered = filtered.where((preset) {
-        final presetName = preset['name']?.toString().toLowerCase() ?? '';
+      filtered = filtered.where((log) {
+        final purpose = log['purpose']?.toString().toLowerCase() ?? '';
 
-        // Check if the name starts with the search text
-        if (presetName.startsWith(query)) {
+        if (purpose.startsWith(query)) {
           return true;
         }
 
-        // Check if any word in the name starts with the search text
-        final words = presetName.split(' ');
+        final words = purpose.split(' ');
         for (final word in words) {
           if (word.startsWith(query)) {
             return true;
@@ -201,8 +201,30 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
       }).toList();
     }
 
-    _filteredPresets = filtered;
+    _filteredLogs = filtered;
+
+    // Reset to page 1 when filters change
+    final totalPages = (_filteredLogs.length / _itemsPerPage).ceil();
+    if (_currentPage > totalPages && totalPages > 0) {
+      _currentPage = 1;
+    } else if (_filteredLogs.isEmpty) {
+      _currentPage = 1;
+    }
   }
+
+  List<Map<String, dynamic>> get _paginatedLogs {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+    if (startIndex >= _filteredLogs.length) {
+      return [];
+    }
+    return _filteredLogs.sublist(
+      startIndex,
+      endIndex > _filteredLogs.length ? _filteredLogs.length : endIndex,
+    );
+  }
+
+  int get _totalPages => (_filteredLogs.length / _itemsPerPage).ceil();
 
   String _formatDateForDisplay(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
@@ -211,28 +233,15 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
     return '$month/$day/$year';
   }
 
-  String _formatTimeForDisplay(DateTime date) {
-    final hour = date.hour;
-    final minute = date.minute.toString().padLeft(2, '0');
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour = hour == 0
-        ? 12
-        : hour > 12
-            ? hour - 12
-            : hour;
-    return '$displayHour:$minute $period';
-  }
-
-  // Pull-to-refresh method
-  Future<void> _refreshPresets() async {
-    // Force stream refresh by recreating it
+  Future<void> _refreshLogs() async {
+    // Force stream refresh by recreating it with current selected date
     _streamKey++;
     _initializeStream();
     setState(() {});
 
     // Wait for the stream to emit at least one event
     // This ensures the RefreshIndicator shows its animation
-    await _presetsStream.first;
+    await _logsStream.first;
   }
 
   Widget _buildSkeletonLoader(BuildContext context) {
@@ -262,10 +271,10 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              // Preset cards skeleton
+              // Deduction cards skeleton
               Expanded(
                 child: ListView.builder(
-                  itemCount: 5,
+                  itemCount: 6,
                   itemBuilder: (context, index) {
                     return Shimmer.fromColors(
                       baseColor: baseColor,
@@ -313,19 +322,54 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
             Theme.of(context).shadowColor,
       ),
       body: RefreshIndicator(
-        onRefresh: _refreshPresets,
+        onRefresh: _refreshLogs,
         color: const Color(0xFF00D4AA),
         child: StreamBuilder<List<Map<String, dynamic>>>(
           key: ValueKey(_streamKey),
-          stream: _presetsStream,
+          stream: _logsStream,
           builder: (context, snapshot) {
-            // Show skeleton loader only on first load
-            if (_isFirstLoad && !snapshot.hasData) {
+            // Get cached logs for the selected date FIRST (before skeleton check)
+            final List<Map<String, dynamic>> cachedForDate =
+                _logsController.hasCachedDataFor(_selectedDate)
+                    ? (_logsController.getCachedLogsForDate(_selectedDate) ??
+                        const <Map<String, dynamic>>[])
+                    : const <Map<String, dynamic>>[];
+            final List<Map<String, dynamic>> liveRaw =
+                snapshot.data ?? const <Map<String, dynamic>>[];
+            final List<Map<String, dynamic>> liveForDate =
+                _logsForSelectedDate(liveRaw, _selectedDate);
+
+            final bool hasLive = liveForDate.isNotEmpty;
+            final bool hasCached =
+                cachedForDate.isNotEmpty || _lastKnownLogs.isNotEmpty;
+
+            // Show skeleton loader only if no cached data AND no live data AND first load
+            final bool showSkeleton = (_hasConnection != false) &&
+                _isFirstLoad &&
+                (snapshot.connectionState == ConnectionState.waiting ||
+                    snapshot.connectionState == ConnectionState.active) &&
+                !hasLive &&
+                !hasCached;
+
+            if (showSkeleton) {
               return _buildSkeletonLoader(context);
             }
 
-            // Mark first load as complete once we have data
-            if (snapshot.hasData && _isFirstLoad) {
+            if (!hasLive &&
+                !hasCached &&
+                (_hasConnection == false || snapshot.hasError)) {
+              if (_isFirstLoad) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    setState(() {
+                      _isFirstLoad = false;
+                    });
+                  }
+                });
+              }
+            }
+
+            if (_isFirstLoad) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   setState(() {
@@ -335,32 +379,17 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
               });
             }
 
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  'Error loading deduction logs: ${snapshot.error}',
-                  style: AppFonts.sfProStyle(fontSize: 16, color: Colors.red),
-                ),
-              );
-            }
-
-            // Update data and cache it when we have valid data
-            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-              _allPresets = snapshot.data!;
-              _lastKnownPresets = List.from(snapshot.data!);
-            } else if (snapshot.hasData &&
-                snapshot.data!.isEmpty &&
-                _lastKnownPresets.isEmpty) {
-              // Only update to empty if we never had data
-              _allPresets = [];
-            } else if (!snapshot.hasData && _lastKnownPresets.isNotEmpty) {
-              // During refresh, use cached data
-              _allPresets = _lastKnownPresets;
+            if (hasLive) {
+              _allLogs = List<Map<String, dynamic>>.from(liveForDate);
+              _lastKnownLogs = List<Map<String, dynamic>>.from(liveForDate);
+            } else if (_lastKnownLogs.isNotEmpty) {
+              _allLogs = List<Map<String, dynamic>>.from(_lastKnownLogs);
             } else {
-              _allPresets = snapshot.data ?? [];
+              _allLogs = List<Map<String, dynamic>>.from(cachedForDate);
+              _lastKnownLogs = List<Map<String, dynamic>>.from(cachedForDate);
             }
 
-            _filterPresets();
+            _filterLogs();
 
             return ResponsiveContainer(
               maxWidth: 1100,
@@ -451,8 +480,15 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
                                 if (picked != null && mounted) {
                                   setState(() {
                                     _selectedDate = picked;
+                                    _currentPage = 1;
+                                    _isFirstLoad = true;
+                                    _lastKnownLogs.clear();
+                                    _allLogs = [];
+                                    _filteredLogs = [];
+                                    _streamKey++;
                                   });
-                                  _filterPresets();
+                                  _initializeStream();
+                                  _filterLogs();
                                 }
                               },
                               child: Padding(
@@ -499,15 +535,28 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
                                     .dividerColor
                                     .withOpacity(0.2)),
                           ),
-                          child: _filteredPresets.isEmpty
-                              ? _buildEmptyState()
-                              : ListView.builder(
-                                  padding: const EdgeInsets.all(12),
-                                  itemCount: _filteredPresets.length,
-                                  itemBuilder: (context, index) {
-                                    final preset = _filteredPresets[index];
-                                    return _buildPresetCard(preset, index);
-                                  },
+                          child: _filteredLogs.isEmpty
+                              ? _buildEmptyState(
+                                  isOffline: _hasConnection == false,
+                                  hasCache: _logsController
+                                          .hasCachedDataFor(_selectedDate) ||
+                                      _lastKnownLogs.isNotEmpty,
+                                )
+                              : Column(
+                                  children: [
+                                    Expanded(
+                                      child: ListView.builder(
+                                        padding: const EdgeInsets.all(12),
+                                        itemCount: _paginatedLogs.length,
+                                        itemBuilder: (context, index) {
+                                          final log = _paginatedLogs[index];
+                                          return _buildLogCard(log, index);
+                                        },
+                                      ),
+                                    ),
+                                    if (_filteredLogs.length >= _itemsPerPage)
+                                      _buildPagination(),
+                                  ],
                                 ),
                         ),
                       ),
@@ -522,497 +571,208 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required bool isOffline, required bool hasCache}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : const Color(0xFF8B5A8B);
 
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.grey.withOpacity(0.2)
-                  : Colors.white.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(
-              Icons.history,
-              size: 60,
-              color: isDark
-                  ? Colors.white.withOpacity(0.7)
-                  : const Color(0xFF8B5A8B),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            _searchController.text.isEmpty
-                ? 'No Deduction Logs Yet'
-                : 'No Logs Found',
-            style: AppFonts.sfProStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _searchController.text.isEmpty
-                ? 'Deductions will appear here after you deduct supplies'
-                : 'Try adjusting your search terms',
-            style: AppFonts.sfProStyle(
-              fontSize: 14,
-              color: textColor.withOpacity(0.7),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final bool showOfflineEmpty = isOffline && !hasCache;
+    final String title = showOfflineEmpty
+        ? 'Deduction logs unavailable offline'
+        : (_searchController.text.isEmpty
+            ? 'No deduction logs found'
+            : 'No logs found');
+    final String subtitle = showOfflineEmpty
+        ? 'Reconnect to the internet to refresh this date.'
+        : (_searchController.text.isEmpty
+            ? 'Pull down to fetch the latest deduction logs for this date.'
+            : 'Try adjusting your search terms.');
 
-  Widget _buildPresetCard(Map<String, dynamic> preset, int index) {
-    final supplies = preset['supplies'] as List<dynamic>? ?? [];
-    final presetId = preset['id']?.toString() ?? '';
-    final isStaff = UserRoleProvider().isStaff;
-
-    // Parse time from created_at
-    String? timeDisplay;
-    try {
-      final createdAt = preset['created_at']?.toString();
-      if (createdAt != null && createdAt.isNotEmpty) {
-        final date = DateTime.parse(createdAt);
-        timeDisplay = _formatTimeForDisplay(date);
-      }
-    } catch (e) {
-      // If parsing fails, timeDisplay will remain null
-    }
-
-    // Card content
-    final cardContent = Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: Theme.of(context).colorScheme.surface,
-      elevation: 2,
-      shadowColor: Theme.of(context).shadowColor.withOpacity(0.15),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side:
-            BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2)),
-      ),
-      child: InkWell(
-        onTap: () {
-          _showPresetDetailModal(preset);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.history,
-                      color: const Color(0xFF00D4AA),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            preset['name'] ?? 'Unnamed Deduction',
-                            style: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color:
-                                  Theme.of(context).textTheme.bodyMedium?.color,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${supplies.length} ${supplies.length == 1 ? 'supply' : 'supplies'}',
-                            style: AppFonts.sfProStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.color
-                                  ?.withOpacity(0.8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (timeDisplay != null) ...[
-                Text(
-                  timeDisplay,
-                  style: AppFonts.sfProStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.color
-                        ?.withOpacity(0.7),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Icon(
-                Icons.chevron_right,
-                color: Theme.of(context).iconTheme.color?.withOpacity(0.8),
-                size: 24,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    // Return slidable if not staff, otherwise just the card
-    if (isStaff) {
-      return cardContent;
-    }
-
-    return Slidable(
-      key: ValueKey('deduction-log-$presetId-$index'),
-      closeOnScroll: true,
-      endActionPane: ActionPane(
-        motion: const DrawerMotion(),
-        extentRatio: 0.28,
-        children: [
-          SlidableAction(
-            onPressed: (_) => _deleteDeductionLog(preset),
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-            icon: Icons.delete,
-            label: 'Remove',
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ],
-      ),
-      child: cardContent,
-    );
-  }
-
-  Future<void> _deleteDeductionLog(Map<String, dynamic> preset) async {
-    final presetName = preset['name']?.toString() ?? 'this deduction log';
-    final presetId = preset['id']?.toString();
-
-    if (presetId == null || presetId.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Cannot delete: Invalid preset ID',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Remove Deduction Log',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            'Are you sure you want to remove "$presetName"? This action cannot be undone.',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Cancel',
-                style:
-                    AppFonts.sfProStyle(fontSize: 16, color: Colors.grey[700]),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: Text(
-                'Remove',
-                style: AppFonts.sfProStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      // Delete the preset from database
-      await _presetController.deletePreset(presetId);
-
-      // Log the deletion activity
-      await _activityController.logPresetDeleted(
-        presetName: presetName,
-        supplies: List<Map<String, dynamic>>.from(preset['supplies'] ?? []),
-      );
-
-      if (!mounted) return;
-
-      // Refresh the stream to update the list
-      _refreshPresets();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Deduction log removed successfully',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: const Color(0xFF00D4AA),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to remove deduction log: $e',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
-
-  void _showPresetDetailModal(Map<String, dynamic> preset) {
-    showDialog(
-      context: context,
-      builder: (context) => _PresetDetailModal(preset: preset),
-    );
-  }
-}
-
-class _PresetDetailModal extends StatelessWidget {
-  final Map<String, dynamic> preset;
-
-  const _PresetDetailModal({required this.preset});
-
-  String _formatExpiry(dynamic expiry, bool? noExpiry) {
-    if (noExpiry == true) return 'No Expiry';
-    if (expiry == null || expiry.toString().isEmpty) return 'No Expiry';
-    final expiryStr = expiry.toString();
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiryStr)) {
-      return expiryStr.replaceAll('-', '/');
-    }
-    return expiryStr;
-  }
-
-  String _buildPackagingString(Map<String, dynamic> supply) {
-    final packagingContentQuantity = supply['packagingContentQuantity'];
-    final packagingContent = supply['packagingContent'];
-    final packagingUnit = supply['packagingUnit'];
-
-    if (packagingContent != null &&
-        packagingContent.toString().isNotEmpty &&
-        packagingUnit != null &&
-        packagingUnit.toString().isNotEmpty) {
-      // Format: "10mL per Bottle"
-      return '${packagingContentQuantity ?? ''} ${packagingContent} per $packagingUnit';
-    } else if (packagingUnit != null && packagingUnit.toString().isNotEmpty) {
-      // Format: "pieces" (just the unit)
-      return packagingUnit.toString();
-    }
-    return '';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final supplies = preset['supplies'] as List<dynamic>? ?? [];
-    final patientName = preset['patient_name']?.toString() ?? '';
-    final age = preset['age']?.toString() ?? '';
-    final gender = preset['gender']?.toString() ?? '';
-    final conditions = preset['conditions']?.toString() ?? '';
-    final hasPatientInfo = patientName.isNotEmpty ||
-        age.isNotEmpty ||
-        gender.isNotEmpty ||
-        conditions.isNotEmpty;
-
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header with service name and icon
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    width: 120,
+                    height: 120,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00D4AA).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFF00D4AA).withOpacity(0.2),
-                        width: 1,
-                      ),
+                      color: isDark
+                          ? Colors.grey.withOpacity(0.2)
+                          : Colors.white.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(
-                      Icons.bookmark_rounded,
-                      color: Color(0xFF00D4AA),
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      preset['name'] ?? 'Deduction Details',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
+                    child: Icon(
+                      Icons.history,
+                      size: 60,
+                      color: isDark
+                          ? Colors.white.withOpacity(0.7)
+                          : const Color(0xFF8B5A8B),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
+                  const SizedBox(height: 24),
+                  Text(
+                    title,
+                    style: AppFonts.sfProStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    style: AppFonts.sfProStyle(
+                      fontSize: 14,
+                      color: textColor.withOpacity(0.7),
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
             ),
-            const Divider(),
-            // Content
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLogCard(Map<String, dynamic> log, int index) {
+    final theme = Theme.of(context);
+    final supplies = log['supplies'] as List<dynamic>? ?? [];
+    final createdDisplay = _formatDateTimeLabel(log['created_at']);
+    final supplyCountLabel =
+        supplies.length == 1 ? '1 supply' : '${supplies.length} supplies';
+    final cardKey =
+        log['id']?.toString() ?? 'idx_${index}_${log['created_at']}';
+    final isExpanded = _expandedCards.contains(cardKey);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: theme.colorScheme.surface,
+      elevation: 2,
+      shadowColor: theme.shadowColor.withOpacity(0.15),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.dividerColor.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedCards.remove(cardKey);
+                } else {
+                  _expandedCards.add(cardKey);
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.history,
+                          color: const Color(0xFF00D4AA),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                createdDisplay,
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.textTheme.bodyMedium?.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D4AA).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFF00D4AA).withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 16,
+                          color: const Color(0xFF00D4AA),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          supplyCountLabel,
+                          style: AppFonts.sfProStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF00D4AA),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: theme.iconTheme.color?.withOpacity(0.8),
+                      size: 26,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded)
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: theme.brightness == Brightness.dark
+                    ? theme.colorScheme.surfaceVariant
+                    : Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(12),
+                ),
+                border: Border.all(
+                  color: theme.dividerColor.withOpacity(0.2),
+                ),
+              ),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Patient Information Section
-                    if (hasPatientInfo) ...[
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.person_outline_rounded,
-                            size: 18,
-                            color: const Color(0xFF00D4AA),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Patient Information',
-                            style: AppFonts.sfProStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color:
-                                  Theme.of(context).textTheme.bodyMedium?.color,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.grey[800]!.withOpacity(0.5)
-                              : const Color(0xFF00D4AA).withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color:
-                                Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.grey[700]!.withOpacity(0.3)
-                                    : const Color(0xFF00D4AA).withOpacity(0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            // Row 1: Patient Name | Gender
-                            Row(
-                              children: [
-                                if (patientName.isNotEmpty)
-                                  Expanded(
-                                    child: _buildModernInfoRow(
-                                      context,
-                                      Icons.badge_outlined,
-                                      'Patient Name',
-                                      patientName,
-                                    ),
-                                  ),
-                                if (patientName.isNotEmpty && gender.isNotEmpty)
-                                  const SizedBox(width: 16),
-                                if (gender.isNotEmpty)
-                                  Expanded(
-                                    child: _buildModernInfoRow(
-                                      context,
-                                      Icons.people_outline_rounded,
-                                      'Sex',
-                                      gender,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            // Row 2: Age | Conditions
-                            if ((age.isNotEmpty || conditions.isNotEmpty) &&
-                                (patientName.isNotEmpty || gender.isNotEmpty))
-                              const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                if (age.isNotEmpty)
-                                  Expanded(
-                                    child: _buildModernInfoRow(
-                                      context,
-                                      Icons.calendar_today_outlined,
-                                      'Age',
-                                      age,
-                                    ),
-                                  ),
-                                if (age.isNotEmpty && conditions.isNotEmpty)
-                                  const SizedBox(width: 16),
-                                if (conditions.isNotEmpty)
-                                  Expanded(
-                                    child: _buildModernInfoRow(
-                                      context,
-                                      Icons.medical_information_outlined,
-                                      'Conditions',
-                                      conditions,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    // Supplies Section
                     Row(
                       children: [
                         Icon(
@@ -1026,8 +786,7 @@ class _PresetDetailModal extends StatelessWidget {
                           style: AppFonts.sfProStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color:
-                                Theme.of(context).textTheme.bodyMedium?.color,
+                            color: theme.textTheme.bodyMedium?.color,
                           ),
                         ),
                       ],
@@ -1040,10 +799,7 @@ class _PresetDetailModal extends StatelessWidget {
                           'No supplies in this deduction',
                           style: AppFonts.sfProStyle(
                             fontSize: 14,
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.color
+                            color: theme.textTheme.bodySmall?.color
                                 ?.withOpacity(0.8),
                           ),
                         ),
@@ -1051,85 +807,47 @@ class _PresetDetailModal extends StatelessWidget {
                     else
                       ...supplies.asMap().entries.map((entry) {
                         final supply = entry.value as Map<String, dynamic>;
-                        return _buildSupplyCard(context, supply, entry.key + 1);
+                        return _buildSupplyCard(
+                          context: context,
+                          supply: supply,
+                        );
                       }).toList(),
                   ],
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildModernInfoRow(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String value,
-  ) {
-    final theme = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: const Color(0xFF00D4AA),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppFonts.sfProStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: AppFonts.sfProStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: theme.textTheme.bodyMedium?.color,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSupplyCard(
-      BuildContext context, Map<String, dynamic> supply, int index) {
+  Widget _buildSupplyCard({
+    required BuildContext context,
+    required Map<String, dynamic> supply,
+  }) {
     final theme = Theme.of(context);
     final deductQty = supply['deductQty'] ?? supply['quantity'] ?? 0;
     final imageUrl = supply['imageUrl']?.toString();
+    final purposeRaw = (supply['purpose']?.toString() ?? '').trim();
+    final purposeLabel = purposeRaw.isEmpty ? 'No Purpose' : purposeRaw;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: theme.brightness == Brightness.dark
-            ? const Color(0xFF1A1A1A)
-            : Colors.white,
+            ? Colors.grey[800]
+            : Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: theme.brightness == Brightness.dark
-              ? Colors.grey[700]!
-              : Colors.grey[200]!,
+              ? Colors.grey[700]!.withOpacity(0.5)
+              : Colors.grey[300]!.withOpacity(0.8),
+          width: 1.5,
         ),
       ),
       child: Row(
         children: [
-          // Supply Image
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: Container(
@@ -1169,12 +887,10 @@ class _PresetDetailModal extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 14),
-          // Supply Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Supply name with type in parentheses beside it
                 Text(
                   (supply['name'] ?? 'Unknown Supply') +
                       (supply['type'] != null &&
@@ -1189,8 +905,66 @@ class _PresetDetailModal extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
-                // Packaging content/unit below supply name
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      _formatExpiry(
+                        supply['expiry'],
+                        supply['noExpiry'] == true,
+                      ),
+                      style: AppFonts.sfProStyle(
+                        fontSize: 12,
+                        color:
+                            theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: const Color(0xFF00D4AA).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        purposeLabel,
+                        style: AppFonts.sfProStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF00D4AA),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF00D4AA).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        'x$deductQty',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF00D4AA),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
                 Text(
                   _buildPackagingString(supply),
                   style: AppFonts.sfProStyle(
@@ -1203,50 +977,175 @@ class _PresetDetailModal extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          // Expiry and Quantity Badge
+        ],
+      ),
+    );
+  }
+
+  String _formatExpiry(dynamic expiry, bool? noExpiry) {
+    if (noExpiry == true) return 'No Expiry';
+    if (expiry == null || expiry.toString().isEmpty) return 'No Expiry';
+    final expiryStr = expiry.toString();
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expiryStr)) {
+      return expiryStr.replaceAll('-', '/');
+    }
+    return expiryStr;
+  }
+
+  String _buildPackagingString(Map<String, dynamic> supply) {
+    final packagingContentQuantity = supply['packagingContentQuantity'];
+    final packagingContent = supply['packagingContent'];
+    final packagingUnit = supply['packagingUnit'];
+
+    if (packagingContent != null &&
+        packagingContent.toString().isNotEmpty &&
+        packagingUnit != null &&
+        packagingUnit.toString().isNotEmpty) {
+      return '${packagingContentQuantity ?? ''} ${packagingContent} per $packagingUnit';
+    } else if (packagingUnit != null && packagingUnit.toString().isNotEmpty) {
+      return packagingUnit.toString();
+    }
+    return '';
+  }
+
+  Widget _buildPagination() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final Color textColor = isDark ? Colors.white : Colors.black;
+    final Color backgroundColor =
+        isDark ? theme.colorScheme.surface : const Color(0xFFE8D5E8);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(12),
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Page $_currentPage of $_totalPages',
+            style: AppFonts.sfProStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Expiry on the left
-              Text(
-                _formatExpiry(supply['expiry'], supply['noExpiry'] == true),
-                style: AppFonts.sfProStyle(
-                  fontSize: 12,
-                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+              // Previous button - IconButton with no background
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: _currentPage > 1
+                      ? theme.textTheme.bodyLarge?.color
+                      : theme.textTheme.bodyLarge?.color?.withOpacity(0.3),
+                  size: 24,
                 ),
+                onPressed: _currentPage > 1
+                    ? () {
+                        setState(() {
+                          _currentPage--;
+                        });
+                      }
+                    : null,
+                tooltip: 'Previous',
               ),
-              const SizedBox(width: 8),
-              // Quantity Badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF00D4AA).withOpacity(0.15),
-                      const Color(0xFF00D4AA).withOpacity(0.1),
-                    ],
+              // Page number buttons
+              ...List.generate(_totalPages, (index) {
+                final pageNumber = index + 1;
+                final isActive = pageNumber == _currentPage;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _currentPage = pageNumber;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      width: 36,
+                      height: 32,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? theme.primaryColor.withOpacity(0.2)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        '$pageNumber',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: const Color(0xFF00D4AA).withOpacity(0.4),
-                    width: 1.5,
-                  ),
+                );
+              }),
+              // Next button - IconButton with no background
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: _currentPage < _totalPages
+                      ? theme.textTheme.bodyLarge?.color
+                      : theme.textTheme.bodyLarge?.color?.withOpacity(0.3),
+                  size: 24,
                 ),
-                child: Text(
-                  'x${deductQty.toString()}',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF00D4AA),
-                  ),
-                ),
+                onPressed: _currentPage < _totalPages
+                    ? () {
+                        setState(() {
+                          _currentPage++;
+                        });
+                      }
+                    : null,
+                tooltip: 'Next',
               ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  String _formatDateTimeLabel(dynamic createdAt) {
+    DateTime? parsed;
+    if (createdAt is DateTime) {
+      parsed = createdAt;
+    } else if (createdAt is String && createdAt.isNotEmpty) {
+      try {
+        parsed = DateTime.parse(createdAt);
+      } catch (_) {
+        parsed = null;
+      }
+    }
+
+    if (parsed == null) {
+      return 'Deduction';
+    }
+
+    final local = parsed.toLocal();
+    final datePart =
+        '${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}/${local.year}';
+    final hour = local.hour;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour == 0
+        ? 12
+        : hour > 12
+            ? hour - 12
+            : hour;
+    final timePart = '$displayHour:$minute $period';
+    return '$datePart - $timePart';
   }
 }

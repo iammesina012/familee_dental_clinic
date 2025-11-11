@@ -45,7 +45,7 @@ class BackupRestoreService {
     'activity_logs',
     'user_roles',
     'po_suggestions',
-    'stock_deduction_presets',
+    'stock_deduction_logs',
   ];
 
   BackupRestoreService({
