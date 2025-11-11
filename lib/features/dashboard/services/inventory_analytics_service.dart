@@ -301,6 +301,7 @@ class InventoryAnalyticsService {
                   approval++;
                   break;
                 case 'Closed':
+                case 'Cancelled':
                   closed++;
                   break;
               }
@@ -714,6 +715,7 @@ class InventoryAnalyticsService {
             posByStatus['Approval']!.add(poData);
             break;
           case 'Closed':
+          case 'Cancelled':
             posByStatus['Closed']!.add(poData);
             break;
         }
@@ -869,6 +871,7 @@ class InventoryAnalyticsService {
               posByStatus['Approval']!.add(poData);
               break;
             case 'Closed':
+            case 'Cancelled':
               posByStatus['Closed']!.add(poData);
               break;
           }

@@ -789,11 +789,17 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
   // Calculate summary counts
   Map<String, int> _getSummaryCounts() {
+    // Count Closed POs including Cancelled status
+    // Use _orders to ensure cancelled POs are included in the count
+    final closedCount = _orders
+        .where((po) => po.status == 'Closed' || po.status == 'Cancelled')
+        .length;
+
     return {
       'Open': _openOrders.length,
       'Partial': _partialOrders.length,
       'Approval': _approvalOrders.length,
-      'Closed': _closedOrders.length,
+      'Closed': closedCount,
     };
   }
 

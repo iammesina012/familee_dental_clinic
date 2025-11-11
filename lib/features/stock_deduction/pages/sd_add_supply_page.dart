@@ -190,6 +190,39 @@ class _StockDeductionAddSupplyPageState
     return result ?? false;
   }
 
+  Widget _buildDetailRow(String label, String value,
+      {bool boldLabel = false, bool boldValue = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: AppFonts.sfProStyle(
+                fontSize: 14,
+                fontWeight: boldLabel ? FontWeight.bold : FontWeight.w500,
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppFonts.sfProStyle(
+                fontSize: 14,
+                fontWeight: boldValue ? FontWeight.bold : FontWeight.w500,
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<InventoryItem?> _showBatchSelectionDialog(
     BuildContext context,
     String supplyName,
@@ -311,7 +344,7 @@ class _StockDeductionAddSupplyPageState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Select Batch',
+                  'Batch Overview',
                   style: AppFonts.sfProStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -320,9 +353,7 @@ class _StockDeductionAddSupplyPageState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  type != null && type.isNotEmpty
-                      ? '$supplyName($type)'
-                      : supplyName,
+                  supplyName,
                   style: AppFonts.sfProStyle(
                     fontSize: 14,
                     color: theme.textTheme.bodyMedium?.color,
@@ -330,47 +361,123 @@ class _StockDeductionAddSupplyPageState
                 ),
                 const SizedBox(height: 16),
                 Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: sortedBatches.length,
-                    itemBuilder: (context, index) {
-                      final batch = sortedBatches[index];
-                      final packagingInfo = formatPackaging(batch);
-                      final isPriority = priorityBatch?.id == batch.id;
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Priority batch section
+                        if (priorityBatch != null) ...[
+                          Text(
+                            'Priority',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF00D4AA),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Priority batch details card (Label: Value format)
+                          Builder(
+                            builder: (context) {
+                              final batch = priorityBatch!;
+                              final unit = batch.packagingUnit?.isNotEmpty ==
+                                      true
+                                  ? batch.packagingUnit!
+                                  : (batch.unit.isNotEmpty ? batch.unit : '');
+                              final stockDisplay = unit.isNotEmpty
+                                  ? '${batch.stock} $unit'
+                                  : batch.stock.toString();
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        color: theme.colorScheme.surface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: isPriority
-                              ? BorderSide(
-                                  color: const Color(0xFF00D4AA), width: 2)
-                              : BorderSide.none,
-                        ),
-                        child: Stack(
-                          children: [
-                            InkWell(
-                              onTap: () async {
-                                // If not the priority batch, show warning
-                                if (!isPriority) {
-                                  final shouldProceed =
-                                      await _showNonPriorityWarningDialog(
-                                          context);
-                                  if (!shouldProceed) {
-                                    return; // User cancelled
-                                  }
-                                }
-                                // Proceed with selection
-                                Navigator.of(context).pop(batch);
-                              },
-                              borderRadius: BorderRadius.circular(12),
-                              child: Padding(
+                              return Container(
                                 padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFF00D4AA),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildDetailRow('Stock', stockDisplay,
+                                        boldLabel: true, boldValue: true),
+                                    _buildDetailRow(
+                                        'Type',
+                                        batch.type?.isNotEmpty == true
+                                            ? batch.type!
+                                            : 'No Type'),
+                                    _buildDetailRow(
+                                        'Supplier',
+                                        batch.supplier.isNotEmpty
+                                            ? batch.supplier
+                                            : 'Not specified'),
+                                    _buildDetailRow(
+                                        'Brand',
+                                        batch.brand.isNotEmpty
+                                            ? batch.brand
+                                            : 'Not specified'),
+                                    _buildDetailRow(
+                                        'Category',
+                                        batch.category.isNotEmpty
+                                            ? batch.category
+                                            : 'Not selected'),
+                                    _buildDetailRow(
+                                        'Packaging', formatPackaging(batch)),
+                                    _buildDetailRow(
+                                        'Expiry',
+                                        _controller.formatExpiry(
+                                            batch.expiry, batch.noExpiry)),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        // Next batches section
+                        ...() {
+                          final otherBatches = sortedBatches
+                              .where((b) => priorityBatch?.id != b.id)
+                              .toList();
+                          if (otherBatches.isEmpty) return <Widget>[];
+                          return [
+                            Text(
+                              'Next Batches:',
+                              style: AppFonts.sfProStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...otherBatches.map((batch) {
+                              final packagingInfo = formatPackaging(batch);
+                              final unit = batch.packagingUnit?.isNotEmpty ==
+                                      true
+                                  ? batch.packagingUnit!
+                                  : (batch.unit.isNotEmpty ? batch.unit : '');
+                              final stockDisplay = unit.isNotEmpty
+                                  ? '${batch.stock} $unit'
+                                  : batch.stock.toString();
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: theme.dividerColor.withOpacity(0.3),
+                                  ),
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Expanded(
                                           child: Column(
@@ -378,7 +485,7 @@ class _StockDeductionAddSupplyPageState
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                'Stock: ${batch.stock}',
+                                                'Stock: $stockDisplay',
                                                 style: AppFonts.sfProStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w600,
@@ -400,30 +507,14 @@ class _StockDeductionAddSupplyPageState
                                             ],
                                           ),
                                         ),
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              '₱${batch.cost.toStringAsFixed(2)}',
-                                              style: AppFonts.sfProStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                                color:
-                                                    theme.colorScheme.primary,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              _controller.formatExpiry(
-                                                  batch.expiry, batch.noExpiry),
-                                              style: AppFonts.sfProStyle(
-                                                fontSize: 12,
-                                                color: theme
-                                                    .textTheme.bodySmall?.color,
-                                              ),
-                                            ),
-                                          ],
+                                        Text(
+                                          _controller.formatExpiry(
+                                              batch.expiry, batch.noExpiry),
+                                          style: AppFonts.sfProStyle(
+                                            fontSize: 12,
+                                            color: theme
+                                                .textTheme.bodySmall?.color,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -466,33 +557,12 @@ class _StockDeductionAddSupplyPageState
                                     ],
                                   ],
                                 ),
-                              ),
-                            ),
-                            if (isPriority)
-                              Positioned(
-                                bottom: 8,
-                                right: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF00D4AA),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    'Priority',
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
+                              );
+                            }),
+                          ];
+                        }(),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -506,6 +576,29 @@ class _StockDeductionAddSupplyPageState
                         style: AppFonts.sfProStyle(fontSize: 16),
                       ),
                     ),
+                    if (priorityBatch != null) ...[
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () =>
+                            Navigator.of(context).pop(priorityBatch),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          'Add Supply',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -832,36 +925,55 @@ class _StockDeductionAddSupplyPageState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
-                  controller: _searchController,
-                  onChanged: (v) => setState(() => _searchText = v),
-                  decoration: InputDecoration(
-                    hintText: 'Search supplies...',
-                    hintStyle: AppFonts.sfProStyle(
-                        fontSize: 16,
-                        color: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.color
-                            ?.withOpacity(0.6)),
-                    prefixIcon: Icon(Icons.search,
-                        color: Theme.of(context).iconTheme.color),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(context).shadowColor.withOpacity(0.08),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: Theme.of(context).dividerColor.withOpacity(0.2),
+                      width: 1,
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (v) => setState(() => _searchText = v),
+                    decoration: InputDecoration(
+                      hintText: 'Search supplies...',
+                      hintStyle: AppFonts.sfProStyle(
+                          fontSize: 16,
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.6)),
+                      prefixIcon: Icon(Icons.search,
+                          color: Theme.of(context).iconTheme.color),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12, horizontal: 16),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surface,
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                    filled: true,
-                    fillColor: Theme.of(context).colorScheme.surface,
+                    style: AppFonts.sfProStyle(fontSize: 16),
                   ),
                 ),
                 const SizedBox(height: 16),

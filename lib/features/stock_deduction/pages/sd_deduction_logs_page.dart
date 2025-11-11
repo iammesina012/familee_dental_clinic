@@ -758,7 +758,7 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
               width: double.infinity,
               decoration: BoxDecoration(
                 color: theme.brightness == Brightness.dark
-                    ? theme.colorScheme.surfaceVariant
+                    ? theme.colorScheme.surface
                     : Colors.white,
                 borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(12),

@@ -1171,7 +1171,7 @@ class _DashboardState extends State<Dashboard> {
                             // Find max value for scaling
                             final maxValue = displayItems.isNotEmpty
                                 ? displayItems
-                                    .map((e) => e.timesDeducted)
+                                    .map((e) => e.quantityDeducted)
                                     .reduce((a, b) => a > b ? a : b)
                                 : 1;
 
@@ -1195,21 +1195,64 @@ class _DashboardState extends State<Dashboard> {
     );
   }
 
-  Duration _getDurationForPeriod(String period) {
+  // Get fixed date range for period (Monday-Sunday for weekly, first-last day for monthly)
+  Map<String, DateTime> _getFixedDateRangeForPeriod(String period) {
+    final now = DateTime.now();
+
     switch (period) {
       case 'Weekly':
-        return const Duration(days: 7);
+        // Get Monday of current week
+        final weekday = now.weekday; // 1 = Monday, 7 = Sunday
+        final daysFromMonday = weekday - 1;
+        final monday = DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: daysFromMonday));
+
+        // Get Sunday of current week (6 days after Monday)
+        final sunday = monday.add(const Duration(days: 6));
+
+        return {
+          'start': monday,
+          'end': sunday,
+        };
       case 'Monthly':
-        return const Duration(days: 30);
+        // Get first day of current month
+        final firstDay = DateTime(now.year, now.month, 1);
+
+        // Get last day of current month
+        final lastDay = DateTime(now.year, now.month + 1, 0);
+
+        return {
+          'start': firstDay,
+          'end': lastDay,
+        };
       default:
-        return const Duration(days: 7); // Default to Weekly
+        // Default to weekly
+        final weekday = now.weekday;
+        final daysFromMonday = weekday - 1;
+        final monday = DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: daysFromMonday));
+        final sunday = monday.add(const Duration(days: 6));
+
+        return {
+          'start': monday,
+          'end': sunday,
+        };
     }
   }
 
+  Duration _getDurationForPeriod(String period) {
+    final dateRange = _getFixedDateRangeForPeriod(period);
+    final start = dateRange['start']!;
+    final end = dateRange['end']!;
+    // Return duration that covers the range (end - start + 1 day to include end date)
+    final difference = end.difference(start);
+    return Duration(days: difference.inDays + 1);
+  }
+
   String _getDateRangeForPeriod(String period) {
-    final now = DateTime.now();
-    final duration = _getDurationForPeriod(period);
-    final startDate = now.subtract(duration);
+    final dateRange = _getFixedDateRangeForPeriod(period);
+    final startDate = dateRange['start']!;
+    final endDate = dateRange['end']!;
 
     // Format day without leading zero
     String formatDay(int day) => day.toString();
@@ -1234,37 +1277,40 @@ class _DashboardState extends State<Dashboard> {
 
     switch (period) {
       case 'Weekly':
-        // Show date range: "Jan 1 - Jan 7, 2024"
-        if (startDate.year == now.year && startDate.month == now.month) {
+        // Show date range: "Nov 10 - Nov 16, 2025"
+        if (startDate.year == endDate.year &&
+            startDate.month == endDate.month) {
           // Same month and year
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
-        } else if (startDate.year == now.year) {
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
+        } else if (startDate.year == endDate.year) {
           // Same year, different month
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
         } else {
           // Different year
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
         }
       case 'Monthly':
-        // Show date range: "Dec 1, 2023 - Jan 1, 2024"
-        if (startDate.year == now.year && startDate.month == now.month) {
+        // Show date range: "Nov 1 - Nov 30, 2025"
+        if (startDate.year == endDate.year &&
+            startDate.month == endDate.month) {
           // Same month and year
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatDay(now.day)}, ${now.year}';
-        } else if (startDate.year == now.year) {
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatDay(endDate.day)}, ${endDate.year}';
+        } else if (startDate.year == endDate.year) {
           // Same year, different month
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
         } else {
           // Different year
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
         }
       default:
         // Default to Weekly format
-        if (startDate.year == now.year && startDate.month == now.month) {
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
-        } else if (startDate.year == now.year) {
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+        if (startDate.year == endDate.year &&
+            startDate.month == endDate.month) {
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
+        } else if (startDate.year == endDate.year) {
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
         } else {
-          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(now.month)} ${formatDay(now.day)}, ${now.year}';
+          return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
         }
     }
   }
@@ -1552,7 +1598,7 @@ class _DashboardState extends State<Dashboard> {
           // Calculate bar width - labels start from 0 and go up to roundedMax in steps of 5
           // Bar width is proportional to the value relative to roundedMax
           final barWidth = roundedMax > 0
-              ? (item.timesDeducted / roundedMax).clamp(0.0, 1.0)
+              ? (item.quantityDeducted / roundedMax).clamp(0.0, 1.0)
               : 0.0;
 
           return Padding(
@@ -1626,7 +1672,7 @@ class _DashboardState extends State<Dashboard> {
                                 ),
                                 child: Center(
                                   child: Text(
-                                    '${item.timesDeducted}',
+                                    '${item.quantityDeducted}',
                                     style: AppFonts.sfProStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
@@ -2210,15 +2256,20 @@ class _DashboardState extends State<Dashboard> {
         false; // Default to false if dialog is dismissed
   }
 
-  // CSV Export Confirmation Dialog
-  Future<bool> _showCSVExportConfirmationDialog(BuildContext context) async {
+  // Show report selection modal
+  Future<Set<String>?> _showReportSelectionDialog(BuildContext context) async {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) {
+    Set<String> selectedReports = {'All reports'};
+    bool allReportsSelected = true;
+
+    return await showDialog<Set<String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
             return Dialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -2233,54 +2284,154 @@ class _DashboardState extends State<Dashboard> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Icon and Title
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF107C10).withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.insert_drive_file,
-                        color: Color(0xFF107C10),
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
                     // Title
                     Text(
-                      'Export as CSV',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
+                      'Download Report',
+                      style: AppFonts.sfProStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: theme.textTheme.titleLarge?.color,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 24),
 
-                    // Content
-                    Text(
-                      'Are you sure you want to export the report as CSV?',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
+                    // Report options
+                    _buildReportOption(
+                      context: context,
+                      theme: theme,
+                      isDark: isDark,
+                      label: 'All reports',
+                      isSelected: allReportsSelected,
+                      onTap: () {
+                        setState(() {
+                          allReportsSelected = true;
+                          selectedReports = {'All reports'};
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildReportOption(
+                      context: context,
+                      theme: theme,
+                      isDark: isDark,
+                      label: 'Inventory Check',
+                      isSelected: !allReportsSelected &&
+                          selectedReports.contains('Inventory Check'),
+                      isDisabled: allReportsSelected,
+                      onTap: () {
+                        setState(() {
+                          if (allReportsSelected) {
+                            // Deselect "All reports" and select this option
+                            allReportsSelected = false;
+                            selectedReports = {'Inventory Check'};
+                          } else {
+                            // Toggle this option
+                            if (selectedReports.contains('Inventory Check')) {
+                              selectedReports.remove('Inventory Check');
+                            } else {
+                              selectedReports.add('Inventory Check');
+                            }
+                            selectedReports.remove('All reports');
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildReportOption(
+                      context: context,
+                      theme: theme,
+                      isDark: isDark,
+                      label: 'Purchase Order Summary',
+                      isSelected: !allReportsSelected &&
+                          selectedReports.contains('Purchase Order Summary'),
+                      isDisabled: allReportsSelected,
+                      onTap: () {
+                        setState(() {
+                          if (allReportsSelected) {
+                            // Deselect "All reports" and select this option
+                            allReportsSelected = false;
+                            selectedReports = {'Purchase Order Summary'};
+                          } else {
+                            // Toggle this option
+                            if (selectedReports
+                                .contains('Purchase Order Summary')) {
+                              selectedReports.remove('Purchase Order Summary');
+                            } else {
+                              selectedReports.add('Purchase Order Summary');
+                            }
+                            selectedReports.remove('All reports');
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildReportOption(
+                      context: context,
+                      theme: theme,
+                      isDark: isDark,
+                      label: 'Fast Moving Supply',
+                      isSelected: !allReportsSelected &&
+                          selectedReports.contains('Fast Moving Supply'),
+                      isDisabled: allReportsSelected,
+                      onTap: () {
+                        setState(() {
+                          if (allReportsSelected) {
+                            // Deselect "All reports" and select this option
+                            allReportsSelected = false;
+                            selectedReports = {'Fast Moving Supply'};
+                          } else {
+                            // Toggle this option
+                            if (selectedReports
+                                .contains('Fast Moving Supply')) {
+                              selectedReports.remove('Fast Moving Supply');
+                            } else {
+                              selectedReports.add('Fast Moving Supply');
+                            }
+                            selectedReports.remove('All reports');
+                          }
+                        });
+                      },
                     ),
                     const SizedBox(height: 24),
 
-                    // Buttons (Yes first, then No)
+                    // Buttons
                     Row(
                       children: [
                         Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(null),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
                           child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
+                            onPressed: () {
+                              if (allReportsSelected) {
+                                Navigator.of(context).pop({'All reports'});
+                              } else if (selectedReports.isNotEmpty) {
+                                Navigator.of(context).pop(selectedReports);
+                              }
+                            },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF107C10),
                               foregroundColor: Colors.white,
@@ -2291,38 +2442,11 @@ class _DashboardState extends State<Dashboard> {
                               elevation: 2,
                             ),
                             child: Text(
-                              'Yes',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
+                              'Confirm',
+                              style: AppFonts.sfProStyle(
+                                fontSize: 16,
                                 fontWeight: FontWeight.w500,
                                 color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              'No',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
                               ),
                             ),
                           ),
@@ -2334,143 +2458,87 @@ class _DashboardState extends State<Dashboard> {
               ),
             );
           },
-        ) ??
-        false; // Default to false if dialog is dismissed
+        );
+      },
+    );
   }
 
-  // PDF Export Confirmation Dialog
-  Future<bool> _showPDFExportConfirmationDialog(BuildContext context) async {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 400,
-                  minWidth: 350,
+  Widget _buildReportOption({
+    required BuildContext context,
+    required ThemeData theme,
+    required bool isDark,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    bool isDisabled = false,
+  }) {
+    return InkWell(
+      onTap: onTap, // Always allow tap, let the callback handle the logic
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? Colors.grey[800] : Colors.grey[100])
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF107C10)
+                : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDisabled
+                      ? (isDark ? Colors.grey[700]! : Colors.grey[400]!)
+                      : (isSelected
+                          ? const Color(0xFF107C10)
+                          : (isDark ? Colors.grey[600]! : Colors.grey[400]!)),
+                  width: 2,
                 ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon and Title
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE53E3E).withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.picture_as_pdf,
-                        color: Color(0xFFE53E3E),
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      'Export as PDF',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Content
-                    Text(
-                      'Are you sure you want to export the report as PDF?',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Buttons (Yes first, then No)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFE53E3E),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              'Yes',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              'No',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                color:
+                    isSelected ? const Color(0xFF107C10) : Colors.transparent,
+              ),
+              child: isSelected
+                  ? const Icon(
+                      Icons.check,
+                      size: 14,
+                      color: Colors.white,
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: AppFonts.sfProStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: isDisabled
+                      ? (isDark ? Colors.grey[600] : Colors.grey[400])
+                      : theme.textTheme.bodyMedium?.color,
                 ),
               ),
-            );
-          },
-        ) ??
-        false; // Default to false if dialog is dismissed
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // CSV Export Handler
   Future<void> _handleCSVExport(BuildContext context) async {
-    // Show confirmation dialog first
-    final shouldExport = await _showCSVExportConfirmationDialog(context);
-    if (shouldExport != true) return;
+    // Show report selection dialog
+    final selectedReports = await _showReportSelectionDialog(context);
+    if (selectedReports == null || selectedReports.isEmpty) return;
 
     // Check connectivity before proceeding
     final hasConnection = await ConnectivityService().hasInternetConnection();
@@ -2505,8 +2573,8 @@ class _DashboardState extends State<Dashboard> {
       // Collect all dashboard data
       final reportData = await _collectReportData();
 
-      // Generate CSV
-      final csvContent = _generateCSV(reportData);
+      // Generate CSV with selected sections
+      final csvContent = _generateCSV(reportData, selectedReports);
 
       // Save file
       final filePath = await _saveFile(csvContent, 'csv');
@@ -2569,9 +2637,9 @@ class _DashboardState extends State<Dashboard> {
 
   // PDF Export Handler
   Future<void> _handlePDFExport(BuildContext context) async {
-    // Show confirmation dialog first
-    final shouldExport = await _showPDFExportConfirmationDialog(context);
-    if (shouldExport != true) return;
+    // Show report selection dialog
+    final selectedReports = await _showReportSelectionDialog(context);
+    if (selectedReports == null || selectedReports.isEmpty) return;
 
     // Check connectivity before proceeding
     final hasConnection = await ConnectivityService().hasInternetConnection();
@@ -2606,8 +2674,8 @@ class _DashboardState extends State<Dashboard> {
       // Collect all dashboard data
       final reportData = await _collectReportData();
 
-      // Generate PDF
-      final pdfBytes = await _generatePDF(reportData);
+      // Generate PDF with selected sections
+      final pdfBytes = await _generatePDF(reportData, selectedReports);
 
       // Save file
       final filePath = await _saveFile(pdfBytes, 'pdf');
@@ -2668,6 +2736,191 @@ class _DashboardState extends State<Dashboard> {
     }
   }
 
+  // Fetch all supplies deducted within period with purpose and date
+  Future<List<Map<String, dynamic>>> _fetchAllDeductionsWithDetails(
+      String period) async {
+    try {
+      final dateRange = _getFixedDateRangeForPeriod(period);
+      final startDate = dateRange['start']!;
+      final endDate = dateRange['end']!;
+
+      // Set end date to end of day (23:59:59) to include all records from that day
+      final endDateWithTime =
+          DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
+
+      final supabase = Supabase.instance.client;
+
+      // Fetch all stock deduction logs within the fixed date range
+      final logsResponse = await supabase
+          .from('stock_deduction_logs')
+          .select('id, purpose, supplies, created_at')
+          .gte('created_at', startDate.toIso8601String())
+          .lte('created_at', endDateWithTime.toIso8601String())
+          .order('created_at', ascending: false);
+
+      // Aggregate by supply name + brand (matching dashboard behavior)
+      final Map<String, Map<String, dynamic>> aggregates = {};
+
+      for (final log in logsResponse) {
+        final purpose = (log['purpose']?.toString() ?? '').trim();
+        final createdAtRaw = log['created_at']?.toString();
+        DateTime? dateDeducted;
+        if (createdAtRaw != null) {
+          try {
+            dateDeducted = DateTime.parse(createdAtRaw).toLocal();
+          } catch (_) {
+            // Ignore parse errors
+          }
+        }
+
+        final supplies = log['supplies'] as List<dynamic>?;
+        if (supplies != null) {
+          for (final supply in supplies) {
+            final supplyMap = supply as Map<String, dynamic>?;
+            if (supplyMap != null) {
+              final name = (supplyMap['name']?.toString() ?? '').trim();
+              final brand = (supplyMap['brand']?.toString() ?? '').trim();
+              final quantity =
+                  supplyMap['deductQty'] ?? supplyMap['quantity'] ?? 0;
+              final quantityInt = quantity is num
+                  ? quantity.toInt()
+                  : (int.tryParse(quantity.toString()) ?? 0);
+
+              if (name.isNotEmpty) {
+                // Create a key for aggregation (name + brand, case-insensitive)
+                final key =
+                    '${name.toLowerCase().trim()}|${brand.toLowerCase().trim()}';
+
+                if (!aggregates.containsKey(key)) {
+                  aggregates[key] = {
+                    'name': name,
+                    'brand': brand,
+                    'purpose': purpose.isEmpty ? 'No Purpose' : purpose,
+                    'dateDeducted': dateDeducted,
+                    'quantityDeducted': quantityInt,
+                  };
+                } else {
+                  final current = aggregates[key]!;
+                  aggregates[key] = {
+                    'name': name,
+                    'brand': brand,
+                    // Keep the most recent purpose and date
+                    'purpose': purpose.isEmpty ? current['purpose'] : purpose,
+                    'dateDeducted': dateDeducted != null &&
+                            (current['dateDeducted'] == null ||
+                                dateDeducted.isAfter(
+                                    current['dateDeducted'] as DateTime))
+                        ? dateDeducted
+                        : current['dateDeducted'],
+                    'quantityDeducted':
+                        (current['quantityDeducted'] as int) + quantityInt,
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Convert to list and sort by quantity deducted (descending) to match dashboard
+      final List<Map<String, dynamic>> result = aggregates.values.toList();
+      result.sort((a, b) => (b['quantityDeducted'] as int)
+          .compareTo(a['quantityDeducted'] as int));
+
+      return result;
+    } catch (e) {
+      print('Error fetching deduction details: $e');
+      return [];
+    }
+  }
+
+  // Fetch all-time deductions (no date filter)
+  Future<List<Map<String, dynamic>>> _fetchAllTimeDeductions() async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Fetch all stock deduction logs (no date filter)
+      final logsResponse = await supabase
+          .from('stock_deduction_logs')
+          .select('id, purpose, supplies, created_at')
+          .order('created_at', ascending: false);
+
+      // Aggregate by supply name + brand (matching dashboard behavior)
+      final Map<String, Map<String, dynamic>> aggregates = {};
+
+      for (final log in logsResponse) {
+        final purpose = (log['purpose']?.toString() ?? '').trim();
+        final createdAtRaw = log['created_at']?.toString();
+        DateTime? dateDeducted;
+        if (createdAtRaw != null) {
+          try {
+            dateDeducted = DateTime.parse(createdAtRaw).toLocal();
+          } catch (_) {
+            // Ignore parse errors
+          }
+        }
+
+        final supplies = log['supplies'] as List<dynamic>?;
+        if (supplies != null) {
+          for (final supply in supplies) {
+            final supplyMap = supply as Map<String, dynamic>?;
+            if (supplyMap != null) {
+              final name = (supplyMap['name']?.toString() ?? '').trim();
+              final brand = (supplyMap['brand']?.toString() ?? '').trim();
+              final quantity =
+                  supplyMap['deductQty'] ?? supplyMap['quantity'] ?? 0;
+              final quantityInt = quantity is num
+                  ? quantity.toInt()
+                  : (int.tryParse(quantity.toString()) ?? 0);
+
+              if (name.isNotEmpty) {
+                // Create a key for aggregation (name + brand, case-insensitive)
+                final key =
+                    '${name.toLowerCase().trim()}|${brand.toLowerCase().trim()}';
+
+                if (!aggregates.containsKey(key)) {
+                  aggregates[key] = {
+                    'name': name,
+                    'brand': brand,
+                    'purpose': purpose.isEmpty ? 'No Purpose' : purpose,
+                    'dateDeducted': dateDeducted,
+                    'quantityDeducted': quantityInt,
+                  };
+                } else {
+                  final current = aggregates[key]!;
+                  aggregates[key] = {
+                    'name': name,
+                    'brand': brand,
+                    // Keep the most recent purpose and date
+                    'purpose': purpose.isEmpty ? current['purpose'] : purpose,
+                    'dateDeducted': dateDeducted != null &&
+                            (current['dateDeducted'] == null ||
+                                dateDeducted.isAfter(
+                                    current['dateDeducted'] as DateTime))
+                        ? dateDeducted
+                        : current['dateDeducted'],
+                    'quantityDeducted':
+                        (current['quantityDeducted'] as int) + quantityInt,
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Convert to list and sort by quantity deducted (descending)
+      final List<Map<String, dynamic>> result = aggregates.values.toList();
+      result.sort((a, b) => (b['quantityDeducted'] as int)
+          .compareTo(a['quantityDeducted'] as int));
+
+      return result;
+    } catch (e) {
+      print('Error fetching all-time deduction details: $e');
+      return [];
+    }
+  }
+
   // Collect all dashboard data
   Future<Map<String, dynamic>> _collectReportData() async {
     final supplyCounts = await _analyticsService.getSupplyCountsStream().first;
@@ -2677,12 +2930,11 @@ class _DashboardState extends State<Dashboard> {
     final suppliesByStatus = await _analyticsService.getSuppliesByStatus();
     final purchaseOrdersByStatus =
         await _analyticsService.getPurchaseOrdersByStatus();
-    final fastMovingItems = await _fastMovingService
-        .streamTopFastMovingItems(
-          limit: 5,
-          window: _getDurationForPeriod(_selectedPeriod),
-        )
-        .first;
+
+    // Fetch deductions for weekly, monthly, and all-time periods
+    final weeklyDeductions = await _fetchAllDeductionsWithDetails('Weekly');
+    final monthlyDeductions = await _fetchAllDeductionsWithDetails('Monthly');
+    final allTimeDeductions = await _fetchAllTimeDeductions();
 
     return {
       'supplyCounts': supplyCounts,
@@ -2690,15 +2942,24 @@ class _DashboardState extends State<Dashboard> {
       'poCounts': poCounts,
       'suppliesByStatus': suppliesByStatus,
       'purchaseOrdersByStatus': purchaseOrdersByStatus,
-      'fastMovingItems': fastMovingItems,
+      'weeklyDeductions': weeklyDeductions,
+      'monthlyDeductions': monthlyDeductions,
+      'allTimeDeductions': allTimeDeductions,
       'selectedPeriod': _selectedPeriod,
       'generatedAt': DateTime.now(),
     };
   }
 
   // Generate CSV content
-  String _generateCSV(Map<String, dynamic> data) {
+  String _generateCSV(Map<String, dynamic> data, Set<String> selectedReports) {
     final rows = <List<dynamic>>[];
+    final includeAll = selectedReports.contains('All reports');
+    final includeInventory =
+        includeAll || selectedReports.contains('Inventory Check');
+    final includePO =
+        includeAll || selectedReports.contains('Purchase Order Summary');
+    final includeFastMoving =
+        includeAll || selectedReports.contains('Fast Moving Supply');
 
     // Header
     rows.add(['Dashboard Report']);
@@ -2707,123 +2968,223 @@ class _DashboardState extends State<Dashboard> {
     rows.add([]);
 
     // Supply Counts by Status - Detailed Tables
-    final suppliesByStatus =
-        data['suppliesByStatus'] as Map<String, List<Map<String, dynamic>>>;
-    final statuses = [
-      'In Stock',
-      'Low Stock',
-      'Out of Stock',
-      'Expiring',
-      'Expired'
-    ];
+    if (includeInventory) {
+      final suppliesByStatus =
+          data['suppliesByStatus'] as Map<String, List<Map<String, dynamic>>>;
+      final statuses = [
+        'In Stock',
+        'Low Stock',
+        'Out of Stock',
+        'Expiring',
+        'Expired'
+      ];
 
-    rows.add(['Supply Count']);
-    rows.add([]);
-
-    for (final status in statuses) {
-      final supplies = suppliesByStatus[status] ?? [];
-      rows.add([status]);
-      rows.add([
-        'Supply Name',
-        'Quantity',
-        'Packaging Unit',
-        'Packaging Content',
-        'Brand Name',
-        'Supplier Name',
-        'Cost',
-        'Expiry Date',
-      ]);
-
-      if (supplies.isEmpty) {
-        rows.add(['No supplies found']);
-      } else {
-        for (final supply in supplies) {
-          final costValue = supply['cost'];
-          final formattedCost = costValue is num
-              ? costValue.toStringAsFixed(2)
-              : double.tryParse((costValue ?? '').toString())
-                      ?.toStringAsFixed(2) ??
-                  '0.00';
-
-          rows.add([
-            supply['displayName'] ?? supply['name'] ?? '',
-            supply['stock'] ?? 0,
-            supply['packagingUnit'] ?? '',
-            supply['packagingContent'] ?? '',
-            supply['brand'] ?? 'N/A',
-            supply['supplier'] ?? 'N/A',
-            formattedCost,
-            supply['expiryDisplay'] ?? 'No expiry',
-          ]);
-        }
-      }
+      rows.add(['Supply Count']);
       rows.add([]);
+
+      for (final status in statuses) {
+        final supplies = suppliesByStatus[status] ?? [];
+        rows.add([status]);
+        rows.add([
+          'Supply Name',
+          'Quantity',
+          'Packaging Unit',
+          'Packaging Content',
+          'Brand Name',
+          'Supplier Name',
+          'Cost',
+          'Expiry Date',
+        ]);
+
+        if (supplies.isEmpty) {
+          rows.add(['No supplies found']);
+        } else {
+          for (final supply in supplies) {
+            final costValue = supply['cost'];
+            final formattedCost = costValue is num
+                ? costValue.toStringAsFixed(2)
+                : double.tryParse((costValue ?? '').toString())
+                        ?.toStringAsFixed(2) ??
+                    '0.00';
+
+            rows.add([
+              supply['displayName'] ?? supply['name'] ?? '',
+              supply['stock'] ?? 0,
+              supply['packagingUnit'] ?? '',
+              supply['packagingContent'] ?? '',
+              supply['brand'] ?? 'N/A',
+              supply['supplier'] ?? 'N/A',
+              formattedCost,
+              supply['expiryDisplay'] ?? 'No expiry',
+            ]);
+          }
+        }
+        rows.add([]);
+      }
     }
 
     // Purchase Order Summary by Status - Detailed Tables
-    final purchaseOrdersByStatus = data['purchaseOrdersByStatus']
-        as Map<String, List<Map<String, dynamic>>>;
-    final poStatuses = ['Open', 'Partial', 'Approval', 'Closed'];
+    if (includePO) {
+      final purchaseOrdersByStatus = data['purchaseOrdersByStatus']
+          as Map<String, List<Map<String, dynamic>>>;
+      final poStatuses = ['Open', 'Partial', 'Approval', 'Closed'];
 
-    rows.add(['Purchase Order Summary']);
-    rows.add([]);
+      rows.add(['Purchase Order Summary']);
+      rows.add([]);
 
-    for (final status in poStatuses) {
-      final orders = purchaseOrdersByStatus[status] ?? [];
-      rows.add([status]);
+      for (final status in poStatuses) {
+        final orders = purchaseOrdersByStatus[status] ?? [];
+        rows.add([status]);
+        rows.add([
+          'ID',
+          'Supplier Name',
+          'Number of Supplies',
+          'Expiry Date',
+          'Date Created',
+          'Date Received',
+          'Receipt Number',
+          'Recipient Name',
+          'Remarks',
+        ]);
+
+        if (orders.isEmpty) {
+          rows.add(['No purchase orders found']);
+        } else {
+          for (final order in orders) {
+            final suppliesCount = order['suppliesCount'];
+            final formattedSuppliesCount = suppliesCount is num
+                ? suppliesCount.toString()
+                : suppliesCount?.toString() ?? '0';
+
+            rows.add([
+              order['code'] ?? '',
+              order['supplierName'] ?? 'N/A',
+              formattedSuppliesCount,
+              order['expiryDates'] ?? 'N/A',
+              order['dateCreated'] ?? 'N/A',
+              order['dateReceived'] ?? 'N/A',
+              order['receiptNumber'] ?? 'N/A',
+              order['recipientName'] ?? 'N/A',
+              order['remarks'] ?? 'N/A',
+            ]);
+          }
+        }
+        rows.add([]);
+      }
+    }
+
+    // Fast Moving Supply - Three sections: Weekly, Monthly, All-time
+    if (includeFastMoving) {
+      rows.add(['Fast Moving Supply']);
+      rows.add([]);
+
+      // Weekly Deduction Section
+      final weeklyDateRange = _getDateRangeForPeriod('Weekly');
+      rows.add(['Weekly Deduction']);
+      rows.add(['Period', weeklyDateRange]);
       rows.add([
-        'ID',
-        'Supplier Name',
-        'Number of Supplies',
-        'Expiry Date',
-        'Date Created',
-        'Date Received',
-        'Receipt Number',
-        'Recipient Name',
-        'Remarks',
+        'Supply Name',
+        'Brand',
+        'Purpose',
+        'Quantity Deducted',
+        'Date Deducted'
       ]);
-
-      if (orders.isEmpty) {
-        rows.add(['No purchase orders found']);
+      final weeklyDeductions = data['weeklyDeductions'] as List<dynamic>;
+      if (weeklyDeductions.isEmpty) {
+        rows.add(['No deductions found for this period']);
       } else {
-        for (final order in orders) {
-          final suppliesCount = order['suppliesCount'];
-          final formattedSuppliesCount = suppliesCount is num
-              ? suppliesCount.toString()
-              : suppliesCount?.toString() ?? '0';
+        for (final item in weeklyDeductions) {
+          final itemMap = item as Map<String, dynamic>;
+          final name = itemMap['name']?.toString() ?? '';
+          final brand = itemMap['brand']?.toString() ?? '';
+          final purpose = itemMap['purpose']?.toString() ?? 'No Purpose';
+          final quantityDeducted = itemMap['quantityDeducted'] ?? 0;
+          final dateDeducted = itemMap['dateDeducted'] as DateTime?;
+          final dateStr = dateDeducted != null
+              ? _formatDateTimeWithAMPM(dateDeducted)
+              : 'N/A';
 
           rows.add([
-            order['code'] ?? '',
-            order['supplierName'] ?? 'N/A',
-            formattedSuppliesCount,
-            order['expiryDates'] ?? 'N/A',
-            order['dateCreated'] ?? 'N/A',
-            order['dateReceived'] ?? 'N/A',
-            order['receiptNumber'] ?? 'N/A',
-            order['recipientName'] ?? 'N/A',
-            order['remarks'] ?? 'N/A',
+            name,
+            brand,
+            purpose,
+            quantityDeducted.toString(),
+            dateStr,
           ]);
         }
       }
       rows.add([]);
-    }
 
-    // Fast Moving Supply
-    final period = data['selectedPeriod'] as String;
-    final periodDays = _getPeriodDays(period);
-    rows.add(['Fast Moving Supply']);
-    rows.add(['Period', '$period (Last $periodDays days)']);
-    rows.add(['Supply Name', 'Brand', 'Times Deducted']);
-    final fastMovingItems = data['fastMovingItems'] as List<FastMovingItem>;
-    if (fastMovingItems.isEmpty) {
-      rows.add(['No fast-moving supplies found']);
-    } else {
-      for (final item in fastMovingItems) {
-        rows.add([
-          item.name,
-          item.brand,
-          item.timesDeducted,
-        ]);
+      // Monthly Deduction Section
+      final monthlyDateRange = _getDateRangeForPeriod('Monthly');
+      rows.add(['Monthly Deduction']);
+      rows.add(['Period', monthlyDateRange]);
+      rows.add([
+        'Supply Name',
+        'Brand',
+        'Purpose',
+        'Quantity Deducted',
+        'Date Deducted'
+      ]);
+      final monthlyDeductions = data['monthlyDeductions'] as List<dynamic>;
+      if (monthlyDeductions.isEmpty) {
+        rows.add(['No deductions found for this period']);
+      } else {
+        for (final item in monthlyDeductions) {
+          final itemMap = item as Map<String, dynamic>;
+          final name = itemMap['name']?.toString() ?? '';
+          final brand = itemMap['brand']?.toString() ?? '';
+          final purpose = itemMap['purpose']?.toString() ?? 'No Purpose';
+          final quantityDeducted = itemMap['quantityDeducted'] ?? 0;
+          final dateDeducted = itemMap['dateDeducted'] as DateTime?;
+          final dateStr = dateDeducted != null
+              ? _formatDateTimeWithAMPM(dateDeducted)
+              : 'N/A';
+
+          rows.add([
+            name,
+            brand,
+            purpose,
+            quantityDeducted.toString(),
+            dateStr,
+          ]);
+        }
+      }
+      rows.add([]);
+
+      // All-time Deduction Section
+      rows.add(['All-time Deduction']);
+      rows.add(['Period', 'All time']);
+      rows.add([
+        'Supply Name',
+        'Brand',
+        'Purpose',
+        'Quantity Deducted',
+        'Date Deducted'
+      ]);
+      final allTimeDeductions = data['allTimeDeductions'] as List<dynamic>;
+      if (allTimeDeductions.isEmpty) {
+        rows.add(['No deductions found']);
+      } else {
+        for (final item in allTimeDeductions) {
+          final itemMap = item as Map<String, dynamic>;
+          final name = itemMap['name']?.toString() ?? '';
+          final brand = itemMap['brand']?.toString() ?? '';
+          final purpose = itemMap['purpose']?.toString() ?? 'No Purpose';
+          final quantityDeducted = itemMap['quantityDeducted'] ?? 0;
+          final dateDeducted = itemMap['dateDeducted'] as DateTime?;
+          final dateStr = dateDeducted != null
+              ? _formatDateTimeWithAMPM(dateDeducted)
+              : 'N/A';
+
+          rows.add([
+            name,
+            brand,
+            purpose,
+            quantityDeducted.toString(),
+            dateStr,
+          ]);
+        }
       }
     }
 
@@ -2832,16 +3193,24 @@ class _DashboardState extends State<Dashboard> {
   }
 
   // Generate PDF
-  Future<List<int>> _generatePDF(Map<String, dynamic> data) async {
+  Future<List<int>> _generatePDF(
+      Map<String, dynamic> data, Set<String> selectedReports) async {
     final pdf = pw.Document();
+    final includeAll = selectedReports.contains('All reports');
+    final includeInventory =
+        includeAll || selectedReports.contains('Inventory Check');
+    final includePO =
+        includeAll || selectedReports.contains('Purchase Order Summary');
+    final includeFastMoving =
+        includeAll || selectedReports.contains('Fast Moving Supply');
 
     final suppliesByStatus =
         data['suppliesByStatus'] as Map<String, List<Map<String, dynamic>>>;
     final purchaseOrdersByStatus = data['purchaseOrdersByStatus']
         as Map<String, List<Map<String, dynamic>>>;
-    final fastMovingItems = data['fastMovingItems'] as List;
-    final period = data['selectedPeriod'] as String;
-    final periodDays = _getPeriodDays(period);
+    final weeklyDeductions = data['weeklyDeductions'] as List;
+    final monthlyDeductions = data['monthlyDeductions'] as List;
+    final allTimeDeductions = data['allTimeDeductions'] as List;
     final generatedAt = data['generatedAt'] as DateTime;
 
     pdf.addPage(
@@ -2874,412 +3243,542 @@ class _DashboardState extends State<Dashboard> {
           widgets.add(pw.SizedBox(height: 20));
 
           // Supply Counts by Status - Detailed Tables
-          final statuses = [
-            'In Stock',
-            'Low Stock',
-            'Out of Stock',
-            'Expiring',
-            'Expired'
-          ];
+          if (includeInventory) {
+            final statuses = [
+              'In Stock',
+              'Low Stock',
+              'Out of Stock',
+              'Expiring',
+              'Expired'
+            ];
 
-          widgets.add(
-            pw.Text(
-              'Supply Count',
-              style: pw.TextStyle(
-                fontSize: 18,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          );
-          widgets.add(pw.SizedBox(height: 12));
-
-          for (final status in statuses) {
-            final supplies = suppliesByStatus[status] ?? [];
             widgets.add(
               pw.Text(
-                status,
+                'Supply Count',
                 style: pw.TextStyle(
-                  fontSize: 14,
+                  fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
             );
-            widgets.add(pw.SizedBox(height: 8));
+            widgets.add(pw.SizedBox(height: 12));
 
-            if (supplies.isEmpty) {
+            for (final status in statuses) {
+              final supplies = suppliesByStatus[status] ?? [];
               widgets.add(
-                pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                  child: pw.Text('No supplies found',
-                      style: const pw.TextStyle(fontSize: 10)),
+                pw.Text(
+                  status,
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
               );
-            } else {
-              widgets.add(
-                pw.Table(
-                  border: pw.TableBorder.all(width: 0.5),
-                  columnWidths: {
-                    0: const pw.FlexColumnWidth(2.5),
-                    1: const pw.FlexColumnWidth(0.8),
-                    2: const pw.FlexColumnWidth(1.5),
-                    3: const pw.FlexColumnWidth(1.5),
-                    4: const pw.FlexColumnWidth(1.5),
-                    5: const pw.FlexColumnWidth(1.5),
-                    6: const pw.FlexColumnWidth(1),
-                    7: const pw.FlexColumnWidth(1.5),
-                  },
-                  children: [
-                    pw.TableRow(
-                      decoration: const pw.BoxDecoration(
-                        color: PdfColor.fromInt(0xFFEFEFEF),
-                      ),
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Supply Name',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Quantity',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Packaging Unit',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Packaging Content',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Brand Name',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Supplier Name',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Cost',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Expiry Date',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                    ...supplies.map((supply) {
-                      final costValue = supply['cost'];
-                      final formattedCost = costValue is num
-                          ? costValue.toStringAsFixed(2)
-                          : double.tryParse((costValue ?? '').toString())
-                                  ?.toStringAsFixed(2) ??
-                              '0.00';
+              widgets.add(pw.SizedBox(height: 8));
 
-                      return pw.TableRow(
+              if (supplies.isEmpty) {
+                widgets.add(
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                    child: pw.Text('No supplies found',
+                        style: const pw.TextStyle(fontSize: 10)),
+                  ),
+                );
+              } else {
+                widgets.add(
+                  pw.Table(
+                    border: pw.TableBorder.all(width: 0.5),
+                    columnWidths: {
+                      0: const pw.FlexColumnWidth(2.5),
+                      1: const pw.FlexColumnWidth(0.8),
+                      2: const pw.FlexColumnWidth(1.5),
+                      3: const pw.FlexColumnWidth(1.5),
+                      4: const pw.FlexColumnWidth(1.5),
+                      5: const pw.FlexColumnWidth(1.5),
+                      6: const pw.FlexColumnWidth(1),
+                      7: const pw.FlexColumnWidth(1.5),
+                    },
+                    children: [
+                      pw.TableRow(
+                        decoration: const pw.BoxDecoration(
+                          color: PdfColor.fromInt(0xFFEFEFEF),
+                        ),
                         children: [
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(
-                                supply['displayName'] ?? supply['name'] ?? '',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Supply Name',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('${supply['stock'] ?? 0}',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Quantity',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(supply['packagingUnit'] ?? '',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Packaging Unit',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(supply['packagingContent'] ?? '',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Packaging Content',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(supply['brand'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Brand Name',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(supply['supplier'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Supplier Name',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(formattedCost,
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Cost',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(
-                                supply['expiryDisplay'] ?? 'No expiry',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Expiry Date',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                         ],
-                      );
-                    }).toList(),
-                  ],
-                ),
-              );
-            }
-            widgets.add(pw.SizedBox(height: 16));
-          }
+                      ),
+                      ...supplies.map((supply) {
+                        final costValue = supply['cost'];
+                        final formattedCost = costValue is num
+                            ? costValue.toStringAsFixed(2)
+                            : double.tryParse((costValue ?? '').toString())
+                                    ?.toStringAsFixed(2) ??
+                                '0.00';
 
-          widgets.add(pw.SizedBox(height: 24));
+                        return pw.TableRow(
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(
+                                  supply['displayName'] ?? supply['name'] ?? '',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text('${supply['stock'] ?? 0}',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(supply['packagingUnit'] ?? '',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(supply['packagingContent'] ?? '',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(supply['brand'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(supply['supplier'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(formattedCost,
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(
+                                  supply['expiryDisplay'] ?? 'No expiry',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                );
+              }
+              widgets.add(pw.SizedBox(height: 16));
+            }
+
+            widgets.add(pw.SizedBox(height: 24));
+          }
 
           // Purchase Order Summary by Status - Detailed Tables
-          final poStatuses = ['Open', 'Partial', 'Approval', 'Closed'];
+          if (includePO) {
+            final poStatuses = ['Open', 'Partial', 'Approval', 'Closed'];
 
-          widgets.add(
-            pw.Text(
-              'Purchase Order Summary',
-              style: pw.TextStyle(
-                fontSize: 18,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          );
-          widgets.add(pw.SizedBox(height: 12));
-
-          for (final status in poStatuses) {
-            final orders = purchaseOrdersByStatus[status] ?? [];
             widgets.add(
               pw.Text(
-                status,
+                'Purchase Order Summary',
                 style: pw.TextStyle(
-                  fontSize: 14,
+                  fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
             );
-            widgets.add(pw.SizedBox(height: 8));
+            widgets.add(pw.SizedBox(height: 12));
 
-            if (orders.isEmpty) {
+            for (final status in poStatuses) {
+              final orders = purchaseOrdersByStatus[status] ?? [];
               widgets.add(
-                pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                  child: pw.Text('No purchase orders found',
-                      style: const pw.TextStyle(fontSize: 10)),
+                pw.Text(
+                  status,
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
               );
-            } else {
-              widgets.add(
-                pw.Table(
-                  border: pw.TableBorder.all(width: 0.5),
-                  columnWidths: {
-                    0: const pw.FlexColumnWidth(0.8),
-                    1: const pw.FlexColumnWidth(1.5),
-                    2: const pw.FlexColumnWidth(0.8),
-                    3: const pw.FlexColumnWidth(1.5),
-                    4: const pw.FlexColumnWidth(1.2),
-                    5: const pw.FlexColumnWidth(1.2),
-                    6: const pw.FlexColumnWidth(1),
-                    7: const pw.FlexColumnWidth(1.2),
-                    8: const pw.FlexColumnWidth(1.5),
-                  },
-                  children: [
-                    pw.TableRow(
-                      decoration: const pw.BoxDecoration(
-                        color: PdfColor.fromInt(0xFFEFEFEF),
-                      ),
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('ID',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Supplier Name',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Supplies',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Expiry Date',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Date Created',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Date Received',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Receipt No.',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Recipient',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text('Remarks',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                    ...orders.map((order) {
-                      final suppliesCount = order['suppliesCount'];
-                      final formattedSuppliesCount = suppliesCount is num
-                          ? suppliesCount.toString()
-                          : suppliesCount?.toString() ?? '0';
+              widgets.add(pw.SizedBox(height: 8));
 
-                      return pw.TableRow(
+              if (orders.isEmpty) {
+                widgets.add(
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                    child: pw.Text('No purchase orders found',
+                        style: const pw.TextStyle(fontSize: 10)),
+                  ),
+                );
+              } else {
+                widgets.add(
+                  pw.Table(
+                    border: pw.TableBorder.all(width: 0.5),
+                    columnWidths: {
+                      0: const pw.FlexColumnWidth(0.8),
+                      1: const pw.FlexColumnWidth(1.5),
+                      2: const pw.FlexColumnWidth(0.8),
+                      3: const pw.FlexColumnWidth(1.5),
+                      4: const pw.FlexColumnWidth(1.2),
+                      5: const pw.FlexColumnWidth(1.2),
+                      6: const pw.FlexColumnWidth(1),
+                      7: const pw.FlexColumnWidth(1.2),
+                      8: const pw.FlexColumnWidth(1.5),
+                    },
+                    children: [
+                      pw.TableRow(
+                        decoration: const pw.BoxDecoration(
+                          color: PdfColor.fromInt(0xFFEFEFEF),
+                        ),
                         children: [
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['code'] ?? '',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('ID',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['supplierName'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Supplier Name',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(formattedSuppliesCount,
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Supplies',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['expiryDates'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Expiry Date',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['dateCreated'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Date Created',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['dateReceived'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Date Received',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['receiptNumber'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Receipt No.',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['recipientName'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Recipient',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(order['remarks'] ?? 'N/A',
-                                style: const pw.TextStyle(fontSize: 8)),
+                            child: pw.Text('Remarks',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                         ],
-                      );
-                    }).toList(),
-                  ],
-                ),
-              );
+                      ),
+                      ...orders.map((order) {
+                        final suppliesCount = order['suppliesCount'];
+                        final formattedSuppliesCount = suppliesCount is num
+                            ? suppliesCount.toString()
+                            : suppliesCount?.toString() ?? '0';
+
+                        return pw.TableRow(
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(order['code'] ?? '',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(order['supplierName'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(formattedSuppliesCount,
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(order['expiryDates'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(order['dateCreated'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(order['dateReceived'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(order['receiptNumber'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(order['recipientName'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(order['remarks'] ?? 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                );
+              }
+              widgets.add(pw.SizedBox(height: 16));
             }
-            widgets.add(pw.SizedBox(height: 16));
+
+            widgets.add(pw.SizedBox(height: 24));
           }
 
-          // Fast Moving Supply Table
-          widgets.add(
-            pw.Text(
-              'Fast Moving Supply ($period - Last $periodDays days)',
-              style: pw.TextStyle(
-                fontSize: 16,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          );
-          widgets.add(pw.SizedBox(height: 10));
-          widgets.add(
-            pw.Table(
-              border: pw.TableBorder.all(),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(3),
-                1: const pw.FlexColumnWidth(2),
-                2: const pw.FlexColumnWidth(1),
-              },
-              children: [
-                pw.TableRow(
-                  children: [
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text('Supply Name'),
-                    ),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text('Brand'),
-                    ),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text('Times Deducted'),
-                    ),
-                  ],
+          // Fast Moving Supply - Three sections: Weekly, Monthly, All-time
+          if (includeFastMoving) {
+            widgets.add(
+              pw.Text(
+                'Fast Moving Supply',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
                 ),
-                ...fastMovingItems.map((item) {
-                  return pw.TableRow(
+              ),
+            );
+            widgets.add(pw.SizedBox(height: 12));
+
+            // Helper function to build deduction table
+            void buildDeductionTable(
+                String title, String periodLabel, List deductions) {
+              widgets.add(
+                pw.Text(
+                  title,
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              );
+              widgets.add(pw.SizedBox(height: 8));
+              widgets.add(
+                pw.Text(
+                  'Period: $periodLabel',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              );
+              widgets.add(pw.SizedBox(height: 8));
+
+              if (deductions.isEmpty) {
+                widgets.add(
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                    child: pw.Text('No deductions found for this period',
+                        style: const pw.TextStyle(fontSize: 10)),
+                  ),
+                );
+              } else {
+                widgets.add(
+                  pw.Table(
+                    border: pw.TableBorder.all(width: 0.5),
+                    columnWidths: {
+                      0: const pw.FlexColumnWidth(2.5),
+                      1: const pw.FlexColumnWidth(1.5),
+                      2: const pw.FlexColumnWidth(2),
+                      3: const pw.FlexColumnWidth(1),
+                      4: const pw.FlexColumnWidth(1.5),
+                    },
                     children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(item.name),
+                      pw.TableRow(
+                        decoration: const pw.BoxDecoration(
+                          color: PdfColor.fromInt(0xFFEFEFEF),
+                        ),
+                        children: [
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Supply Name',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Brand',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Purpose',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Quantity Deducted',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Date Deducted',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                        ],
                       ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(item.brand),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('${item.timesDeducted}'),
-                      ),
+                      ...deductions.map((item) {
+                        final itemMap = item as Map<String, dynamic>;
+                        final name = itemMap['name']?.toString() ?? '';
+                        final brand = itemMap['brand']?.toString() ?? '';
+                        final purpose =
+                            itemMap['purpose']?.toString() ?? 'No Purpose';
+                        final quantityDeducted =
+                            itemMap['quantityDeducted'] ?? 0;
+                        final dateDeducted =
+                            itemMap['dateDeducted'] as DateTime?;
+                        final dateStr = dateDeducted != null
+                            ? _formatDateTimeWithAMPM(dateDeducted)
+                            : 'N/A';
+
+                        return pw.TableRow(
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(name,
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(brand,
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(purpose,
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(quantityDeducted.toString(),
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(dateStr,
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                          ],
+                        );
+                      }).toList(),
                     ],
-                  );
-                }).toList(),
-              ],
-            ),
-          );
+                  ),
+                );
+              }
+              widgets.add(pw.SizedBox(height: 24));
+            }
+
+            // Weekly Deduction Section
+            final weeklyDateRange = _getDateRangeForPeriod('Weekly');
+            buildDeductionTable(
+                'Weekly Deduction', weeklyDateRange, weeklyDeductions);
+
+            // Monthly Deduction Section
+            final monthlyDateRange = _getDateRangeForPeriod('Monthly');
+            buildDeductionTable(
+                'Monthly Deduction', monthlyDateRange, monthlyDeductions);
+
+            // All-time Deduction Section
+            buildDeductionTable(
+                'All-time Deduction', 'All time', allTimeDeductions);
+          }
 
           return widgets;
         },
@@ -3405,21 +3904,30 @@ class _DashboardState extends State<Dashboard> {
     return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
   }
 
+  // Format datetime with AM/PM for reports
+  String _formatDateTimeWithAMPM(DateTime dateTime) {
+    final year = dateTime.year;
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+
+    int hour = dateTime.hour;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+
+    if (hour == 0) {
+      hour = 12;
+    } else if (hour > 12) {
+      hour = hour - 12;
+    }
+
+    final hourStr = hour.toString();
+
+    return '$year-$month-$day $hourStr:$minute $period';
+  }
+
   // Format datetime for filename
   String _formatFileDateTime(DateTime dateTime) {
     return '${dateTime.year}${dateTime.month.toString().padLeft(2, '0')}${dateTime.day.toString().padLeft(2, '0')}_${dateTime.hour.toString().padLeft(2, '0')}${dateTime.minute.toString().padLeft(2, '0')}${dateTime.second.toString().padLeft(2, '0')}';
-  }
-
-  // Get period days
-  int _getPeriodDays(String period) {
-    switch (period) {
-      case 'Weekly':
-        return 7;
-      case 'Monthly':
-        return 30;
-      default:
-        return 7; // Default to Weekly
-    }
   }
 }
 
