@@ -550,14 +550,12 @@ class EditSupplyController {
         final newStock = int.tryParse(stockController.text.trim()) ?? 0;
         final prevStock = originalStock ?? 0;
         if (newStock != prevStock) {
-          // For edit supply, we need to handle merging cases
-          // If merging happened, we already updated the merged batch
-          // Otherwise, we just updated the current batch
-          // The notification will recalculate totals from the database
+          // Pass batchId so we can calculate status before/after accurately
           await notificationsController.checkStockLevelNotification(
             nameController.text.trim(),
             newStock,
             prevStock,
+            batchId: docId,
           );
         }
       } catch (notificationError) {

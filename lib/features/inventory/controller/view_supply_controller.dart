@@ -132,16 +132,75 @@ class ViewSupplyController {
     return controller.stream;
   }
 
-  String getStatus(InventoryItem item) {
+  String getStatus(InventoryItem item, {int? totalStock, int? totalBaseline}) {
     // Check archived status first
     if (item.archived) {
       return "Archived";
     }
 
-    // Note: Expired status is now handled by the dedicated Expired Supply page
-    // Main inventory system no longer shows expired status
+    // Use grouped logic if totalStock and totalBaseline are provided
+    if (totalStock != null && totalBaseline != null) {
+      // Check expiry status (same logic as GroupedInventoryItem.getStatus)
+      if (!item.noExpiry && item.expiry != null && item.expiry!.isNotEmpty) {
+        final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+        if (expiryDate != null) {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          final dateOnly =
+              DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
 
-    // For view supply page, show stock status when not expired
+          // Check if expired
+          if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
+            return "Expired";
+          }
+
+          // Check if expiring soon (within 30 days) - but only if there's stock
+          final daysUntilExpiry = dateOnly.difference(today).inDays;
+          if (daysUntilExpiry <= 30 && totalStock > 0) {
+            return "Expiring";
+          }
+        }
+      }
+
+      // Check stock status using grouped totals
+      if (totalStock == 0) {
+        return "Out of Stock";
+      }
+
+      final criticalLevel =
+          GroupedInventoryItem.calculateCriticalLevel(totalBaseline);
+
+      if (totalStock <= criticalLevel) {
+        return "Low Stock";
+      }
+
+      return "In Stock";
+    }
+
+    // Fallback to individual item logic (for backward compatibility)
+    // Check expiry status (same logic as GroupedInventoryItem.getStatus)
+    if (!item.noExpiry && item.expiry != null && item.expiry!.isNotEmpty) {
+      final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+      if (expiryDate != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+
+        // Check if expired
+        if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
+          return "Expired";
+        }
+
+        // Check if expiring soon (within 30 days) - but only if there's stock
+        final daysUntilExpiry = dateOnly.difference(today).inDays;
+        if (daysUntilExpiry <= 30 && item.stock > 0) {
+          return "Expiring";
+        }
+      }
+    }
+
+    // Check stock status only
     if (item.stock == 0) {
       return "Out of Stock";
     }

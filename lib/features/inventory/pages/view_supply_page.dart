@@ -6,6 +6,7 @@ import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/inventory/components/inventory_other_supply_batches.dart';
 import 'package:familee_dental/features/inventory/pages/edit_supply_page.dart';
 import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
+import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
@@ -40,6 +41,65 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
       _streamKey = UniqueKey();
       _dropdownKey = UniqueKey();
     });
+  }
+
+  // Calculate total stock and baseline from batch data
+  (int totalStock, int totalBaseline) _calculateTotals(
+      List<Map<String, dynamic>> batches) {
+    int totalStock = 0;
+    int totalBaseline = 0;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (final batch in batches) {
+      final stock = (batch['stock'] ?? 0) as int;
+      final lowStockBaseline = batch['low_stock_baseline'] != null
+          ? (batch['low_stock_baseline'] as num).toInt()
+          : stock;
+
+      // Only count non-expired batches
+      final expiryStr = batch['expiry']?.toString();
+      bool isExpired = false;
+
+      if (expiryStr != null && expiryStr.isNotEmpty) {
+        final expiryDate = DateTime.tryParse(expiryStr.replaceAll('/', '-'));
+        if (expiryDate != null) {
+          final dateOnly =
+              DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+          isExpired =
+              dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today);
+        }
+      }
+
+      if (!isExpired) {
+        totalStock += stock;
+        totalBaseline += lowStockBaseline;
+      }
+    }
+
+    return (totalStock, totalBaseline);
+  }
+
+  // Get grouped totals from cache if available
+  (int?, int?) _getGroupedTotalsFromCache(InventoryItem item) {
+    try {
+      final inventoryController = InventoryController();
+      final cachedGrouped = inventoryController.getCachedGroupedSupplies();
+
+      if (cachedGrouped != null) {
+        // Find the grouped item that matches this item
+        for (final grouped in cachedGrouped) {
+          if (grouped.mainItem.name == item.name &&
+              grouped.mainItem.category == item.category) {
+            return (grouped.totalStock, grouped.totalBaseline);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[VIEW_SUPPLY] Error getting cached grouped data: $e');
+    }
+    return (null, null);
   }
 
   @override
@@ -99,8 +159,44 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         // Query same name+brand and pick the earliest non-null expiry
         // UI-only re-route; no backend change
         if (widget.skipAutoRedirect) {
-          final status = controller.getStatus(updatedItem);
-          return _buildScaffold(context, controller, updatedItem, status);
+          // Even with skipAutoRedirect, we still want grouped status for consistency
+          // Query batches to calculate grouped totals
+          return FutureBuilder<List<Map<String, dynamic>>>(
+            future: () {
+              return Supabase.instance.client
+                  .from('supplies')
+                  .select('*')
+                  .eq('name', updatedItem.name)
+                  .eq('brand', updatedItem.brand)
+                  .eq('type', updatedItem.type ?? '')
+                  .timeout(
+                const Duration(seconds: 2),
+                onTimeout: () {
+                  return <Map<String, dynamic>>[];
+                },
+              );
+            }(),
+            builder: (context, batchSnap) {
+              // Use cached grouped data immediately if available
+              final (cachedTotalStock, cachedTotalBaseline) =
+                  _getGroupedTotalsFromCache(updatedItem);
+
+              // If we have batch data, use it; otherwise use cache or fallback to individual
+              int? totalStock = cachedTotalStock;
+              int? totalBaseline = cachedTotalBaseline;
+
+              if (batchSnap.hasData && batchSnap.data!.isNotEmpty) {
+                final (calculatedStock, calculatedBaseline) =
+                    _calculateTotals(batchSnap.data!);
+                totalStock = calculatedStock;
+                totalBaseline = calculatedBaseline;
+              }
+
+              final status = controller.getStatus(updatedItem,
+                  totalStock: totalStock, totalBaseline: totalBaseline);
+              return _buildScaffold(context, controller, updatedItem, status);
+            },
+          );
         }
         debugPrint('[VIEW_SUPPLY] Starting FutureBuilder for batch query');
         final batchQueryStart = DateTime.now();
@@ -128,13 +224,21 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
             if (batchSnap.connectionState == ConnectionState.waiting) {
               debugPrint(
                   '[VIEW_SUPPLY] Batch query waiting... (${DateTime.now().difference(batchQueryStart).inMilliseconds}ms)');
-              // Show UI immediately, don't block
-              final status = controller.getStatus(updatedItem);
+              // Try to get grouped totals from cache immediately to avoid flash
+              final (cachedTotalStock, cachedTotalBaseline) =
+                  _getGroupedTotalsFromCache(updatedItem);
+              final status = controller.getStatus(updatedItem,
+                  totalStock: cachedTotalStock,
+                  totalBaseline: cachedTotalBaseline);
               return _buildScaffold(context, controller, updatedItem, status);
             } else if (batchSnap.hasError) {
               debugPrint('[VIEW_SUPPLY] Batch query ERROR: ${batchSnap.error}');
-              // On error, show UI immediately (don't block)
-              final status = controller.getStatus(updatedItem);
+              // Try to get grouped totals from cache on error too
+              final (cachedTotalStock, cachedTotalBaseline) =
+                  _getGroupedTotalsFromCache(updatedItem);
+              final status = controller.getStatus(updatedItem,
+                  totalStock: cachedTotalStock,
+                  totalBaseline: cachedTotalBaseline);
               return _buildScaffold(context, controller, updatedItem, status);
             } else if (batchSnap.hasData) {
               debugPrint(
@@ -145,7 +249,12 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
             if (batchSnap.hasData && batchSnap.data!.isEmpty) {
               debugPrint(
                   '[VIEW_SUPPLY] Batch query returned empty, showing UI');
-              final status = controller.getStatus(updatedItem);
+              // Try to get grouped totals from cache
+              final (cachedTotalStock, cachedTotalBaseline) =
+                  _getGroupedTotalsFromCache(updatedItem);
+              final status = controller.getStatus(updatedItem,
+                  totalStock: cachedTotalStock,
+                  totalBaseline: cachedTotalBaseline);
               return _buildScaffold(context, controller, updatedItem, status);
             }
 
@@ -254,8 +363,14 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                   }
                 });
               }
+              // Fall back to normal render - use grouped status for consistency
+              final (totalStock, totalBaseline) = _calculateTotals(rows);
+              final status = controller.getStatus(updatedItem,
+                  totalStock: totalStock, totalBaseline: totalBaseline);
+              return _buildScaffold(context, controller, updatedItem, status);
             }
-            // Fall back to normal render
+
+            // Fallback case - should never reach here
             final status = controller.getStatus(updatedItem);
             return _buildScaffold(context, controller, updatedItem, status);
           },

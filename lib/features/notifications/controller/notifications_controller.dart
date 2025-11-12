@@ -73,6 +73,12 @@ class AppNotification {
 }
 
 class NotificationsController {
+  // Singleton pattern to ensure cache and active controllers are shared
+  static final NotificationsController _instance =
+      NotificationsController._internal();
+  factory NotificationsController() => _instance;
+  NotificationsController._internal();
+
   final SupabaseClient _supabase = Supabase.instance.client;
   // Local preferences keys
   static const String _kInventoryPref = 'settings.notify_inventory';
@@ -81,9 +87,30 @@ class NotificationsController {
 
   List<AppNotification>? _cachedNotifications;
 
+  // Track active stream controllers to emit cache updates immediately
+  final Set<StreamController<List<AppNotification>>> _activeControllers = {};
+
   List<AppNotification> get cachedNotifications => _cachedNotifications != null
       ? List<AppNotification>.from(_cachedNotifications!)
       : const [];
+
+  // Emit current cache to all active stream controllers
+  void _emitToAllActiveControllers() {
+    if (_cachedNotifications != null) {
+      final notifications = List<AppNotification>.from(_cachedNotifications!);
+      print(
+          '[NOTIFICATIONS] Emitting to ${_activeControllers.length} active controllers, ${notifications.length} notifications');
+      for (final controller in _activeControllers) {
+        if (!controller.isClosed) {
+          controller.add(notifications);
+        } else {
+          print('[NOTIFICATIONS] Skipping closed controller');
+        }
+      }
+    } else {
+      print('[NOTIFICATIONS] Cache is null, cannot emit');
+    }
+  }
 
   // Default stream (unbounded)
   Stream<List<AppNotification>> getNotificationsStream() {
@@ -130,8 +157,6 @@ class NotificationsController {
       }
     }
 
-    emitCached();
-
     void start() {
       subscription ??= _supabase
           .from('notifications')
@@ -159,8 +184,14 @@ class NotificationsController {
     }
 
     controller
-      ..onListen = start
+      ..onListen = () {
+        _activeControllers.add(controller);
+        // Emit cached data immediately when stream starts listening
+        emitCached();
+        start();
+      }
       ..onCancel = () async {
+        _activeControllers.remove(controller);
         await subscription?.cancel();
         subscription = null;
       };
@@ -216,15 +247,60 @@ class NotificationsController {
       return; // Respect preferences: do not create notification
     }
 
-    await _supabase.from('notifications').insert({
-      'title': title,
-      'message': message,
-      'created_at': DateTime.now().toUtc().toIso8601String(),
-      'type': type,
-      'is_read': false,
-      if (supplyName != null) 'supply_name': supplyName,
-      if (poCode != null) 'po_code': poCode,
-    });
+    final response = await _supabase
+        .from('notifications')
+        .insert({
+          'title': title,
+          'message': message,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'type': type,
+          'is_read': false,
+          if (supplyName != null) 'supply_name': supplyName,
+          if (poCode != null) 'po_code': poCode,
+        })
+        .select()
+        .single();
+
+    // Create the notification object from the response
+    final newNotification = AppNotification.fromMap(
+      response['id'] as String,
+      response,
+    );
+
+    // Add to cache immediately so badge updates right away
+    if (_cachedNotifications != null) {
+      _cachedNotifications = [newNotification, ..._cachedNotifications!];
+      // Keep only the most recent 20 to match the stream limit
+      if (_cachedNotifications!.length > 20) {
+        _cachedNotifications = _cachedNotifications!.take(20).toList();
+      }
+      // Sort by created_at descending to ensure proper order
+      _cachedNotifications!.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      print(
+          '[NOTIFICATIONS] Added new notification to cache. Total: ${_cachedNotifications!.length}, Unread: ${_cachedNotifications!.where((n) => !n.isRead).length}');
+    } else {
+      // If cache is null, fetch latest notifications
+      try {
+        final latest = await _supabase
+            .from('notifications')
+            .select()
+            .order('created_at', ascending: false)
+            .limit(20);
+        _cachedNotifications = latest
+            .map((row) => AppNotification.fromMap(row['id'] as String, row))
+            .toList();
+        print(
+            '[NOTIFICATIONS] Fetched ${_cachedNotifications!.length} notifications from database');
+      } catch (e) {
+        // Fallback: just use the new notification
+        _cachedNotifications = [newNotification];
+        print('[NOTIFICATIONS] Using fallback cache with 1 notification');
+      }
+    }
+
+    // Emit updated cache to all active streams immediately
+    print('[NOTIFICATIONS] About to emit to active controllers...');
+    _emitToAllActiveControllers();
 
     // Send push notification
     await _sendPushNotification(title, message);
@@ -311,6 +387,28 @@ class NotificationsController {
     await _supabase.from('notifications').update({
       'is_read': true,
     }).eq('id', id);
+
+    // Immediately update cache to reflect the change
+    if (_cachedNotifications != null) {
+      _cachedNotifications = _cachedNotifications!.map((notification) {
+        if (notification.id == id) {
+          return AppNotification(
+            id: notification.id,
+            title: notification.title,
+            message: notification.message,
+            createdAt: notification.createdAt,
+            type: notification.type,
+            isRead: true, // Update to read
+            supplyName: notification.supplyName,
+            poCode: notification.poCode,
+          );
+        }
+        return notification;
+      }).toList();
+    }
+
+    // Emit updated cache to all active streams immediately
+    _emitToAllActiveControllers();
   }
 
   Future<void> markAllAsRead() async {
@@ -320,6 +418,25 @@ class NotificationsController {
         'is_read': true,
       }).eq('is_read', false);
       print('Mark all as read result: $result');
+
+      // Immediately update cache to reflect all notifications as read
+      if (_cachedNotifications != null) {
+        _cachedNotifications = _cachedNotifications!.map((notification) {
+          return AppNotification(
+            id: notification.id,
+            title: notification.title,
+            message: notification.message,
+            createdAt: notification.createdAt,
+            type: notification.type,
+            isRead: true, // Mark all as read
+            supplyName: notification.supplyName,
+            poCode: notification.poCode,
+          );
+        }).toList();
+      }
+
+      // Emit updated cache to all active streams immediately
+      _emitToAllActiveControllers();
     } catch (e) {
       print('Error in markAllAsRead: $e');
       rethrow;
@@ -391,119 +508,220 @@ class NotificationsController {
     }
   }
 
-  // Helper method to check if stock is low using 20% critical level
-  bool _isLowStock({
-    required int stock,
-    required int baseline,
-  }) {
-    if (stock == 0) return false; // Out of stock, not low stock
-
-    final criticalLevel = GroupedInventoryItem.calculateCriticalLevel(baseline);
-
-    if (criticalLevel > 0 && stock <= criticalLevel) {
-      return true;
-    }
-
-    return false;
-  }
-
-  // Helper method to check if stock level triggers a notification
-  Future<void> checkStockLevelNotification(
-      String supplyName, int newStock, int previousStock) async {
+  // Helper method to calculate status for a supply using the same logic as UI
+  // This reuses GroupedInventoryItem.getStatus() logic
+  // Returns (status, totalStock) tuple
+  Future<(String?, int)> _getSupplyStatus(String supplyName,
+      {int? overrideStock, String? overrideId}) async {
     try {
-      // Calculate total stock across all batches of this supply (excluding expired)
-      final totalStockData = await _supabase
+      // Fetch all batches for this supply
+      final batches = await _supabase
           .from('supplies')
-          .select('stock, low_stock_baseline, expiry, no_expiry')
+          .select('*')
           .eq('name', supplyName)
           .eq('archived', false);
 
-      final totalCurrentStock = totalStockData
-          .where((row) {
-            // Filter out expired supplies
-            if (row['no_expiry'] == true)
-              return true; // Keep items with no expiry
-            if (row['expiry'] == null)
-              return true; // Keep items without expiry date
+      if (batches.isEmpty) return (null, 0);
 
-            try {
-              final expiryDate =
-                  DateTime.parse(row['expiry'].toString().replaceAll('/', '-'));
-              return DateTime.now()
-                  .isBefore(expiryDate); // Keep only non-expired items
-            } catch (e) {
-              return true; // Keep items with invalid expiry dates
-            }
-          })
-          .map((row) => (row['stock'] ?? 0) as int)
-          .fold(0, (sum, stock) => sum + stock);
+      // Convert to InventoryItem list
+      final items = batches.map((row) {
+        DateTime? createdAt;
+        if (row['created_at'] != null) {
+          try {
+            createdAt = DateTime.parse(row['created_at'] as String);
+          } catch (e) {
+            createdAt = null;
+          }
+        }
 
-      final totalCurrentBaseline = totalStockData
-          .map((row) => row['low_stock_baseline'] != null
+        // Override stock if specified (for "before" calculation)
+        int stock = (row['stock'] ?? 0) as int;
+        if (overrideStock != null) {
+          // If overrideId is provided, use it to find the specific batch
+          if (overrideId != null && row['id'] == overrideId) {
+            stock = overrideStock;
+          }
+          // If overrideId is null, try to find batch that matches current stock pattern
+          // (This is a best-effort approach when batchId is not available)
+          // Note: This might not be 100% accurate if multiple batches have the same stock
+        }
+
+        return InventoryItem(
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          type: row['type'],
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: stock,
+          lowStockBaseline: row['low_stock_baseline'] != null
               ? (row['low_stock_baseline'] as num).toInt()
-              : (row['stock'] ?? 0) as int)
-          .fold(0, (sum, baseline) => sum + baseline);
+              : null,
+          unit: row['unit'] ?? '',
+          packagingUnit: row['packaging_unit'],
+          packagingContent: row['packaging_content'],
+          packagingQuantity: row['packaging_quantity'],
+          packagingContentQuantity: row['packaging_content_quantity'],
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
+          createdAt: createdAt,
+        );
+      }).toList();
 
-      // Calculate previous total stock (before this batch was updated)
-      final totalPreviousStock = totalCurrentStock - newStock + previousStock;
-      final totalPreviousBaseline = totalCurrentBaseline;
+      // Group items by name + category (same logic as InventoryController)
+      final Map<String, List<InventoryItem>> grouped = {};
+      for (final item in items) {
+        final nameKey = item.name.trim().toLowerCase();
+        final categoryKey = item.category.trim().toLowerCase();
+        final key = '${nameKey}_${categoryKey}';
+        if (!grouped.containsKey(key)) {
+          grouped[key] = [];
+        }
+        grouped[key]!.add(item);
+      }
 
-      // Check for out of stock (from any total stock to 0)
-      if (totalCurrentStock == 0 && totalPreviousStock > 0) {
+      // Get the first group (should be the supply we're checking)
+      if (grouped.isEmpty) return (null, 0);
+      final groupItems = grouped.values.first;
+
+      // Filter out expired items (same logic as UI)
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final nonExpiredItems = groupItems.where((item) {
+        if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
+          return true;
+        }
+        final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+        if (expiryDate == null) return true;
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+        return !(dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today));
+      }).toList();
+
+      if (nonExpiredItems.isEmpty) return (null, 0);
+
+      // Sort by expiry (earliest first)
+      nonExpiredItems.sort((a, b) {
+        if (a.noExpiry && b.noExpiry) return 0;
+        if (a.noExpiry) return 1;
+        if (b.noExpiry) return -1;
+        final aExpiry = a.expiry != null
+            ? DateTime.tryParse(a.expiry!.replaceAll('/', '-'))
+            : null;
+        final bExpiry = b.expiry != null
+            ? DateTime.tryParse(b.expiry!.replaceAll('/', '-'))
+            : null;
+        if (aExpiry == null && bExpiry == null) return 0;
+        if (aExpiry == null) return 1;
+        if (bExpiry == null) return -1;
+        return aExpiry.compareTo(bExpiry);
+      });
+
+      // Find main item
+      final mainItem = nonExpiredItems.firstWhere(
+        (it) => it.stock > 0,
+        orElse: () => nonExpiredItems.firstWhere(
+          (it) => it.stock == 0 && it.noExpiry,
+          orElse: () => nonExpiredItems.first,
+        ),
+      );
+      final variants =
+          nonExpiredItems.where((it) => it.id != mainItem.id).toList();
+      final totalStock =
+          nonExpiredItems.fold(0, (sum, item) => sum + item.stock);
+      final totalBaseline = nonExpiredItems.fold(
+          0, (sum, item) => sum + (item.lowStockBaseline ?? item.stock));
+
+      // Create GroupedInventoryItem and get status (same as UI)
+      final groupedItem = GroupedInventoryItem(
+        productKey: grouped.keys.first,
+        mainItem: mainItem,
+        variants: variants,
+        totalStock: totalStock,
+        totalBaseline: totalBaseline,
+      );
+
+      return (groupedItem.getStatus(), totalStock);
+    } catch (e) {
+      print('Error calculating supply status: $e');
+      return (null, 0);
+    }
+  }
+
+  // Helper method to check if stock level triggers a notification
+  // Now uses status comparison instead of recomputing
+  Future<void> checkStockLevelNotification(
+      String supplyName, int newStock, int previousStock,
+      {String? batchId}) async {
+    try {
+      // Get status BEFORE the change (using previousStock)
+      final (statusBefore, _) = await _getSupplyStatus(
+        supplyName,
+        overrideStock: previousStock,
+        overrideId: batchId,
+      );
+
+      // Get status AFTER the change (current state) - also get totalStock
+      final (statusAfter, totalStock) = await _getSupplyStatus(supplyName);
+
+      // If we couldn't calculate status, fall back to old method
+      if (statusBefore == null || statusAfter == null) {
+        print('[NOTIFICATIONS] Could not calculate status, using fallback');
+        // Fallback to simple stock comparison
+        if (newStock == 0 && previousStock > 0) {
+          await createOutOfStockNotification(supplyName);
+        } else if (newStock > 0 && previousStock == 0) {
+          await createInStockNotification(supplyName, newStock);
+        }
+        return;
+      }
+
+      print(
+          '[NOTIFICATIONS] Status change: $statusBefore -> $statusAfter for $supplyName');
+
+      // Check status changes and create appropriate notifications
+      // Out of Stock: from any status to "Out of Stock"
+      if (statusAfter == "Out of Stock" && statusBefore != "Out of Stock") {
         await createOutOfStockNotification(supplyName);
         return;
       }
 
-      // Check for restocked (from 0 to any positive total stock)
-      if (totalCurrentStock > 0 && totalPreviousStock == 0) {
-        await createInStockNotification(supplyName, totalCurrentStock);
+      // Restocked: from "Out of Stock" to any status with stock
+      if (statusBefore == "Out of Stock" &&
+          (statusAfter == "In Stock" ||
+              statusAfter == "Low Stock" ||
+              statusAfter == "Expiring")) {
+        await createInStockNotification(supplyName, totalStock);
         return;
       }
 
-      // Check for low stock using 20% critical level
-      // Use the helper method to determine if stock is low
-      final isCurrentlyLow = _isLowStock(
-        stock: totalCurrentStock,
-        baseline: totalCurrentBaseline,
-      );
-      final wasPreviouslyLow = _isLowStock(
-        stock: totalPreviousStock,
-        baseline: totalPreviousBaseline,
-      );
-
-      // Trigger low stock notification when stock becomes low (crosses the threshold)
-      if (isCurrentlyLow &&
-          !wasPreviouslyLow &&
-          totalCurrentStock < totalPreviousStock) {
-        print(
-            'Low Stock Notification - Item: $supplyName, Current: $totalCurrentStock, Previous: $totalPreviousStock');
-        await createLowStockNotification(supplyName, totalCurrentStock);
+      // Low Stock: from "In Stock" or "Expiring" to "Low Stock"
+      if (statusAfter == "Low Stock" &&
+          (statusBefore == "In Stock" || statusBefore == "Expiring")) {
+        await createLowStockNotification(supplyName, totalStock);
         return;
       }
 
-      // Check for back to normal stock: from low to above threshold
-      if (!isCurrentlyLow && wasPreviouslyLow && totalPreviousStock > 0) {
-        await createInStockNotification(supplyName, totalCurrentStock);
+      // Back to In Stock: from "Low Stock" to "In Stock" or "Expiring"
+      if ((statusAfter == "In Stock" || statusAfter == "Expiring") &&
+          statusBefore == "Low Stock") {
+        await createInStockNotification(supplyName, totalStock);
         return;
       }
+
+      // No status change that requires notification
+      print(
+          '[NOTIFICATIONS] No notification needed: status unchanged or no relevant change');
     } catch (e) {
       print('Error checking stock level notification: $e');
-      // Fallback to 20% critical level logic if database query fails
+      // Fallback to simple stock comparison if status calculation fails
       if (newStock == 0 && previousStock > 0) {
         await createOutOfStockNotification(supplyName);
       } else if (newStock > 0 && previousStock == 0) {
         await createInStockNotification(supplyName, newStock);
-      } else {
-        // Use 20% critical level logic
-        if (_isLowStock(stock: newStock, baseline: newStock) &&
-            !_isLowStock(stock: previousStock, baseline: previousStock) &&
-            previousStock > 0) {
-          await createLowStockNotification(supplyName, newStock);
-        } else if (!_isLowStock(stock: newStock, baseline: newStock) &&
-            _isLowStock(stock: previousStock, baseline: previousStock) &&
-            previousStock > 0) {
-          await createInStockNotification(supplyName, newStock);
-        }
       }
     }
   }

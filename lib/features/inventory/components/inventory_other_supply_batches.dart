@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
-import 'package:familee_dental/features/inventory/pages/view_supply_page.dart'; // for status helpers
-import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
+import 'package:familee_dental/features/inventory/pages/view_supply_page.dart';
 import 'package:shimmer/shimmer.dart';
 
 class SupabaseOtherSupplyBatches extends StatefulWidget {
@@ -19,6 +18,16 @@ class _SupabaseOtherSupplyBatchesState
   // Cache for processed batches to prevent expensive recomputation on rebuilds
   List<InventoryItem>? _cachedProcessedBatches;
   String? _lastItemId;
+
+  String _formatPackagingDisplay(InventoryItem batch) {
+    if (batch.packagingContentQuantity != null &&
+        batch.packagingContentQuantity! > 0 &&
+        batch.packagingContent != null &&
+        batch.packagingContent!.isNotEmpty) {
+      return "${batch.packagingContentQuantity} ${batch.packagingContent} per ${batch.packagingUnit ?? batch.unit}";
+    }
+    return batch.packagingUnit ?? batch.unit;
+  }
 
   Widget _buildSkeletonLoader(ThemeData theme, ColorScheme scheme) {
     return Shimmer.fromColors(
@@ -51,7 +60,6 @@ class _SupabaseOtherSupplyBatchesState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final controller = ViewSupplyController();
     final inventoryController = InventoryController();
 
     // Use cached batches if item hasn't changed
@@ -335,7 +343,6 @@ class _SupabaseOtherSupplyBatchesState
 
         return Column(
           children: mergedList.map((batch) {
-            final status = controller.getStatus(batch); // from your helpers
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -347,7 +354,7 @@ class _SupabaseOtherSupplyBatchesState
               child: Row(
                 children: [
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       "${batch.stock}",
                       style: TextStyle(
@@ -360,9 +367,9 @@ class _SupabaseOtherSupplyBatchesState
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 3,
                     child: Text(
-                      batch.unit,
+                      _formatPackagingDisplay(batch),
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
@@ -385,31 +392,9 @@ class _SupabaseOtherSupplyBatchesState
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: controller.getStatusBgColor(status),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          color: controller.getStatusTextColor(status),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: Text(
                       batch.noExpiry ||
                               batch.expiry == null ||
