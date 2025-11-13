@@ -138,8 +138,8 @@ class ViewSupplyController {
       return "Archived";
     }
 
-    // Use grouped logic if totalStock and totalBaseline are provided
-    if (totalStock != null && totalBaseline != null) {
+    // Use grouped logic if totalStock is provided
+    if (totalStock != null) {
       // Check expiry status (same logic as GroupedInventoryItem.getStatus)
       if (!item.noExpiry && item.expiry != null && item.expiry!.isNotEmpty) {
         final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
@@ -167,10 +167,10 @@ class ViewSupplyController {
         return "Out of Stock";
       }
 
-      final criticalLevel =
-          GroupedInventoryItem.calculateCriticalLevel(totalBaseline);
-
-      if (totalStock <= criticalLevel) {
+      // Use manually set threshold for low stock detection
+      if (totalBaseline != null &&
+          totalBaseline > 0 &&
+          totalStock <= totalBaseline) {
         return "Low Stock";
       }
 
@@ -205,10 +205,10 @@ class ViewSupplyController {
       return "Out of Stock";
     }
 
-    final baseline = item.lowStockBaseline ?? item.stock;
-    final criticalLevel = GroupedInventoryItem.calculateCriticalLevel(baseline);
-
-    if (item.stock <= criticalLevel) {
+    // Use manually set threshold for low stock detection
+    if (item.lowStockBaseline != null &&
+        item.lowStockBaseline! > 0 &&
+        item.stock <= item.lowStockBaseline!) {
       return "Low Stock";
     }
 

@@ -365,7 +365,6 @@ class ExpiredViewSupplyController {
           // so the product remains visible in catalog/pickers with 0 stock.
           await _supabase.from('supplies').update({
             'stock': 0,
-            'low_stock_baseline': 0,
             'no_expiry': true,
             'expiry': null,
           }).eq('id', id);

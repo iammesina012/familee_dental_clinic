@@ -39,6 +39,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     final currentBrand = controller.brandController.text.trim();
     final currentExpiry = controller.expiryController.text.trim();
     final currentNoExpiry = controller.noExpiry;
+    final currentLowStockThreshold = controller.lowStockThreshold;
     final currentImageUrl = controller.imageUrl ?? '';
 
     return currentName != _originalName ||
@@ -55,6 +56,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
         currentBrand != _originalBrand ||
         currentExpiry != _originalExpiry ||
         currentNoExpiry != _originalNoExpiry ||
+        currentLowStockThreshold != _originalLowStockThreshold ||
         currentImageUrl != _originalImageUrl;
   }
 
@@ -73,6 +75,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
   String _originalBrand = '';
   String _originalExpiry = '';
   bool _originalNoExpiry = false;
+  int _originalLowStockThreshold = 1;
   String _originalImageUrl = '';
   List<String>? _cachedCategories;
 
@@ -96,6 +99,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     _originalBrand = controller.brandController.text.trim();
     _originalExpiry = controller.expiryController.text.trim();
     _originalNoExpiry = controller.noExpiry;
+    _originalLowStockThreshold = controller.lowStockThreshold;
     _originalImageUrl = controller.imageUrl ?? '';
   }
 
@@ -954,51 +958,181 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Expiry Date (disable if noExpiry checked)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      // Expiry Date and Low Stock Threshold side by side
+                      Row(
                         children: [
-                          TextField(
-                            controller: controller.expiryController,
-                            enabled: !controller.noExpiry,
-                            decoration: InputDecoration(
-                              labelText: 'Expiry Date *',
-                              border: OutlineInputBorder(),
-                              suffixIcon: Icon(Icons.calendar_today, size: 18),
-                              errorStyle: TextStyle(color: Colors.red),
-                              hintText: controller.noExpiry
-                                  ? 'No expiry date'
-                                  : 'Select date',
+                          // Expiry Date (LEFT)
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Expiry *',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: controller.expiryController,
+                                    enabled: !controller.noExpiry,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      suffixIcon:
+                                          Icon(Icons.calendar_today, size: 18),
+                                      errorStyle: TextStyle(color: Colors.red),
+                                      hintText: controller.noExpiry
+                                          ? 'No expiry date'
+                                          : 'Select date',
+                                    ),
+                                    readOnly: true,
+                                    onTap: !controller.noExpiry
+                                        ? () async {
+                                            DateTime? picked =
+                                                await showDatePicker(
+                                              context: context,
+                                              initialDate:
+                                                  controller.expiryDate ??
+                                                      DateTime.now(),
+                                              firstDate: DateTime(2020),
+                                              lastDate: DateTime(2100),
+                                            );
+                                            if (picked != null) {
+                                              setState(() {
+                                                controller.expiryDate = picked;
+                                                controller
+                                                        .expiryController.text =
+                                                    "${picked.year.toString().padLeft(4, '0')}-"
+                                                    "${picked.month.toString().padLeft(2, '0')}-"
+                                                    "${picked.day.toString().padLeft(2, '0')}";
+                                                // Clear validation error when user selects date
+                                                if (validationErrors[
+                                                        'expiry'] !=
+                                                    null) {
+                                                  validationErrors['expiry'] =
+                                                      null;
+                                                }
+                                                _markAsChanged();
+                                              });
+                                            }
+                                          }
+                                        : null,
+                                  ),
+                                  _buildValidationError(
+                                      validationErrors['expiry']),
+                                ],
+                              ),
                             ),
-                            readOnly: true,
-                            onTap: !controller.noExpiry
-                                ? () async {
-                                    DateTime? picked = await showDatePicker(
-                                      context: context,
-                                      initialDate: controller.expiryDate ??
-                                          DateTime.now(),
-                                      firstDate: DateTime(2020),
-                                      lastDate: DateTime(2100),
-                                    );
-                                    if (picked != null) {
-                                      setState(() {
-                                        controller.expiryDate = picked;
-                                        controller.expiryController.text =
-                                            "${picked.year.toString().padLeft(4, '0')}-"
-                                            "${picked.month.toString().padLeft(2, '0')}-"
-                                            "${picked.day.toString().padLeft(2, '0')}";
-                                        // Clear validation error when user selects date
-                                        if (validationErrors['expiry'] !=
-                                            null) {
-                                          validationErrors['expiry'] = null;
-                                        }
-                                        _markAsChanged();
-                                      });
-                                    }
-                                  }
-                                : null,
                           ),
-                          _buildValidationError(validationErrors['expiry']),
+                          // Low Stock Threshold (RIGHT)
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Low Stock Threshold',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.surface,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: theme.dividerColor
+                                              .withOpacity(0.2)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        IconButton(
+                                          icon: Icon(Icons.remove,
+                                              color: theme.iconTheme.color),
+                                          splashRadius: 18,
+                                          onPressed: () {
+                                            if (controller.lowStockThreshold >
+                                                1) {
+                                              _markAsChanged();
+                                              setState(() {
+                                                controller.lowStockThreshold--;
+                                                controller
+                                                        .lowStockThresholdController
+                                                        .text =
+                                                    controller.lowStockThreshold
+                                                        .toString();
+                                              });
+                                            }
+                                          },
+                                        ),
+                                        Expanded(
+                                          child: TextField(
+                                            textAlign: TextAlign.center,
+                                            keyboardType: TextInputType.number,
+                                            inputFormatters: [
+                                              FilteringTextInputFormatter
+                                                  .digitsOnly,
+                                              LengthLimitingTextInputFormatter(
+                                                  3),
+                                            ],
+                                            decoration: InputDecoration(
+                                                border: InputBorder.none),
+                                            style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w500,
+                                                color: theme.textTheme
+                                                    .bodyMedium?.color),
+                                            controller: controller
+                                                .lowStockThresholdController,
+                                            onChanged: (val) {
+                                              _markAsChanged();
+                                              setState(() {
+                                                final qty =
+                                                    int.tryParse(val) ?? 1;
+                                                controller.lowStockThreshold =
+                                                    qty > 999
+                                                        ? 999
+                                                        : (qty < 1 ? 1 : qty);
+                                                controller
+                                                        .lowStockThresholdController
+                                                        .text =
+                                                    controller.lowStockThreshold
+                                                        .toString();
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: Icon(Icons.add,
+                                              color: theme.iconTheme.color),
+                                          splashRadius: 18,
+                                          onPressed: () {
+                                            if (controller.lowStockThreshold <
+                                                999) {
+                                              _markAsChanged();
+                                              setState(() {
+                                                controller.lowStockThreshold++;
+                                                controller
+                                                        .lowStockThresholdController
+                                                        .text =
+                                                    controller.lowStockThreshold
+                                                        .toString();
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                       // Checkbox for "No expiry date?"
@@ -1457,6 +1591,15 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     if (currentExpiryText != originalExpiryText) {
       changes.add(
           _buildChangeRow('Expiry', originalExpiryText, currentExpiryText));
+    }
+
+    // Low Stock Threshold
+    final currentLowStockThreshold = controller.lowStockThreshold;
+    if (currentLowStockThreshold != _originalLowStockThreshold) {
+      changes.add(_buildChangeRow(
+          'Threshold',
+          _originalLowStockThreshold.toString(),
+          currentLowStockThreshold.toString()));
     }
 
     // Image change detection

@@ -257,7 +257,6 @@ class StockDeductionController {
         // Update stock in Supabase
         await _supabase.from('supplies').update({
           'stock': newStock,
-          'low_stock_baseline': newStock,
         }).eq('id', docId);
 
         results[docId] = revertQty;

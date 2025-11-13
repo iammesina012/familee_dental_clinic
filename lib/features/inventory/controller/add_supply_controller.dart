@@ -18,10 +18,12 @@ class AddSupplyController {
   final expiryController = TextEditingController();
   final packagingQuantityController = TextEditingController(text: "1");
   final packagingContentController = TextEditingController(text: "1");
+  final lowStockThresholdController = TextEditingController(text: "1");
 
   int stock = 0;
   int packagingQuantity = 1; // Default packaging quantity
   int packagingContent = 1; // Default packaging content
+  int lowStockThreshold = 1; // Default low stock threshold
   String? selectedCategory;
   String? selectedPackagingUnit = 'Box';
   String? selectedPackagingContent = 'Pieces';
@@ -47,6 +49,7 @@ class AddSupplyController {
     expiryController.dispose();
     packagingQuantityController.dispose();
     packagingContentController.dispose();
+    lowStockThresholdController.dispose();
   }
 
   Future<String?> uploadImageToSupabase(XFile imageFile) async {
@@ -166,7 +169,6 @@ class AddSupplyController {
       "category": selectedCategory ?? "",
       "cost": double.tryParse(costController.text.trim()) ?? 0.0,
       "stock": packagingQuantity, // Stock should be the packaging quantity
-      "low_stock_baseline": packagingQuantity,
       "unit": selectedPackagingUnit ?? "", // Legacy column
       "packaging_unit": selectedPackagingUnit ?? "",
       "packaging_quantity": 1, // Always 1 (e.g., 1 Box)
@@ -185,6 +187,7 @@ class AddSupplyController {
           ? null
           : expiryController.text,
       "no_expiry": noExpiry,
+      "low_stock_baseline": lowStockThreshold,
       "archived": false,
       "created_at": DateTime.now().toIso8601String(),
     };
@@ -195,6 +198,119 @@ class AddSupplyController {
     if (error != null) return error;
     final supplyData = buildSupplyData();
     try {
+      // Check if an archived supply with the same name exists
+      final archivedCheck = await _supabase
+          .from('supplies')
+          .select('id')
+          .eq('name', nameController.text.trim())
+          .eq('archived', true)
+          .limit(1);
+
+      if (archivedCheck.isNotEmpty) {
+        return 'ARCHIVED_SUPPLY_EXISTS';
+      }
+
+      // Check if an exact duplicate supply exists (all fields match)
+      final supplierValue = supplierController.text.trim().isEmpty
+          ? "N/A"
+          : supplierController.text.trim();
+      final brandValue = brandController.text.trim().isEmpty
+          ? "N/A"
+          : brandController.text.trim();
+      final costValue = double.tryParse(costController.text.trim()) ?? 0.0;
+      final categoryValue = selectedCategory ?? "";
+      final packagingUnitValue = selectedPackagingUnit ?? "";
+      final packagingContentValue = isPackagingContentDisabled()
+          ? null
+          : (selectedPackagingContent ?? "");
+      final expiryValue = noExpiry || expiryController.text.isEmpty
+          ? null
+          : expiryController.text;
+
+      // Query for potential duplicates - query by key fields first, then check all fields
+      // Note: We query by non-nullable fields, then check nullable fields in code
+      var duplicateQuery = _supabase
+          .from('supplies')
+          .select(
+              'id, cost, packaging_content, expiry, no_expiry, supplier, brand, category, packaging_unit, low_stock_baseline')
+          .eq('name', nameController.text.trim())
+          .eq('archived', false);
+
+      // Get all potential matches and check all fields
+      final existingSupplies = await duplicateQuery;
+      bool foundDuplicate = false;
+
+      for (final row in existingSupplies) {
+        // Check supplier
+        final existingSupplier = (row['supplier'] ?? 'N/A').toString();
+        final supplierMatches = supplierValue == 'N/A'
+            ? (existingSupplier == 'N/A' || existingSupplier.isEmpty)
+            : supplierValue == existingSupplier;
+
+        // Check brand
+        final existingBrand = (row['brand'] ?? 'N/A').toString();
+        final brandMatches = brandValue == 'N/A'
+            ? (existingBrand == 'N/A' || existingBrand.isEmpty)
+            : brandValue == existingBrand;
+
+        // Check category
+        final existingCategory = (row['category'] ?? '').toString();
+        final categoryMatches = categoryValue == existingCategory;
+
+        // Check packaging unit
+        final existingPackagingUnit = (row['packaging_unit'] ?? '').toString();
+        final packagingUnitMatches =
+            packagingUnitValue == existingPackagingUnit;
+
+        // Check low stock baseline
+        final existingLowStockBaseline = row['low_stock_baseline'] != null
+            ? (row['low_stock_baseline'] as num).toInt()
+            : null;
+        final lowStockBaselineMatches =
+            lowStockThreshold == (existingLowStockBaseline ?? 0);
+
+        // Check cost (with tolerance for floating point)
+        final existingCost = (row['cost'] ?? 0.0).toDouble();
+        final costMatches = (costValue - existingCost).abs() < 0.01;
+
+        // Check packaging content match
+        final existingPackagingContent = row['packaging_content'];
+        final packagingContentMatches = (packagingContentValue == null &&
+                (existingPackagingContent == null ||
+                    existingPackagingContent.toString().isEmpty)) ||
+            (packagingContentValue != null &&
+                existingPackagingContent != null &&
+                packagingContentValue == existingPackagingContent.toString());
+
+        // Check expiry match
+        final existingExpiry = row['expiry'];
+        final existingNoExpiry = row['no_expiry'] ?? false;
+        final expiryMatches = (expiryValue == null &&
+                (existingExpiry == null ||
+                    existingExpiry.toString().isEmpty ||
+                    existingNoExpiry == true)) ||
+            (expiryValue != null &&
+                existingExpiry != null &&
+                expiryValue == existingExpiry.toString());
+
+        // All fields must match for it to be a duplicate
+        if (supplierMatches &&
+            brandMatches &&
+            categoryMatches &&
+            packagingUnitMatches &&
+            lowStockBaselineMatches &&
+            costMatches &&
+            packagingContentMatches &&
+            expiryMatches) {
+          foundDuplicate = true;
+          break;
+        }
+      }
+
+      if (foundDuplicate) {
+        return 'DUPLICATE_SUPPLY_EXISTS';
+      }
+
       // Add supply to Supabase
       await _supabase.from('supplies').insert(supplyData);
 
@@ -238,6 +354,9 @@ class AddSupplyController {
         nameController.text.trim(),
         newStock,
         0, // previous stock is 0 for new items
+        type: typeController.text.trim().isNotEmpty
+            ? typeController.text.trim()
+            : null,
       );
 
       // Check expiry notifications

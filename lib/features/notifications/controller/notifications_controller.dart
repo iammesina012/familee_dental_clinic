@@ -14,6 +14,7 @@ class AppNotification {
   final String type;
   final bool isRead;
   final String? supplyName; // optional payload for inventory
+  final String? supplyType; // optional payload for supply type
   final String? poCode; // optional payload for purchase orders
 
   AppNotification({
@@ -24,6 +25,7 @@ class AppNotification {
     required this.type,
     this.isRead = false,
     this.supplyName,
+    this.supplyType,
     this.poCode,
   });
 
@@ -36,6 +38,7 @@ class AppNotification {
       type: (data['type'] ?? 'general').toString(),
       isRead: (data['is_read'] ?? false) as bool,
       supplyName: data['supply_name']?.toString(),
+      supplyType: data['supply_type']?.toString(),
       poCode: data['po_code']?.toString(),
     );
   }
@@ -48,6 +51,7 @@ class AppNotification {
       'type': type,
       'is_read': isRead,
       if (supplyName != null) 'supply_name': supplyName,
+      if (supplyType != null) 'supply_type': supplyType,
       if (poCode != null) 'po_code': poCode,
     };
   }
@@ -228,6 +232,7 @@ class NotificationsController {
     required String message,
     required String type,
     String? supplyName,
+    String? supplyType,
     String? poCode,
   }) async {
     // Before creating, enforce user preferences
@@ -307,22 +312,25 @@ class NotificationsController {
   }
 
   // Inventory stock alert methods
-  Future<void> createLowStockNotification(
-      String supplyName, int currentStock) async {
+  Future<void> createLowStockNotification(String supplyName, int currentStock,
+      {String? baseSupplyName, String? supplyType}) async {
     await createNotification(
       title: 'Low Stock Alert',
-      message: '$supplyName is running low',
+      message: '$supplyName is low in stock.',
       type: 'low_stock',
-      supplyName: supplyName,
+      supplyName: baseSupplyName ?? supplyName,
+      supplyType: supplyType,
     );
   }
 
-  Future<void> createOutOfStockNotification(String supplyName) async {
+  Future<void> createOutOfStockNotification(String supplyName,
+      {String? baseSupplyName, String? supplyType}) async {
     await createNotification(
       title: 'Out of Stock Alert',
       message: '$supplyName is now out of stock',
       type: 'out_of_stock',
-      supplyName: supplyName,
+      supplyName: baseSupplyName ?? supplyName,
+      supplyType: supplyType,
     );
   }
 
@@ -345,13 +353,14 @@ class NotificationsController {
     );
   }
 
-  Future<void> createInStockNotification(
-      String supplyName, int newStock) async {
+  Future<void> createInStockNotification(String supplyName, int newStock,
+      {String? baseSupplyName, String? supplyType}) async {
     await createNotification(
       title: 'Restocked',
       message: '$supplyName is back in stock',
       type: 'in_stock',
-      supplyName: supplyName,
+      supplyName: baseSupplyName ?? supplyName,
+      supplyType: supplyType,
     );
   }
 
@@ -632,8 +641,15 @@ class NotificationsController {
           nonExpiredItems.where((it) => it.id != mainItem.id).toList();
       final totalStock =
           nonExpiredItems.fold(0, (sum, item) => sum + item.stock);
-      final totalBaseline = nonExpiredItems.fold(
-          0, (sum, item) => sum + (item.lowStockBaseline ?? item.stock));
+      // Use the threshold value directly (not summed) since all batches share the same threshold
+      // Find the first non-null threshold value, or 0 if none exist
+      int totalBaseline = 0;
+      for (final item in nonExpiredItems) {
+        if (item.lowStockBaseline != null && item.lowStockBaseline! > 0) {
+          totalBaseline = item.lowStockBaseline!;
+          break; // All batches have the same threshold, so we can use the first one
+        }
+      }
 
       // Create GroupedInventoryItem and get status (same as UI)
       final groupedItem = GroupedInventoryItem(
@@ -651,41 +667,288 @@ class NotificationsController {
     }
   }
 
-  // Helper method to check if stock level triggers a notification
-  // Now uses status comparison instead of recomputing
-  Future<void> checkStockLevelNotification(
-      String supplyName, int newStock, int previousStock,
-      {String? batchId}) async {
+  // Helper method to calculate status for a specific type (not overall supply)
+  // Groups batches by name + category + type instead of just name + category
+  // Returns (status, totalStock) tuple for that specific type
+  Future<(String?, int)> _getSupplyStatusByType(String supplyName, String? type,
+      {int? overrideStock, String? overrideId}) async {
     try {
-      // Get status BEFORE the change (using previousStock)
-      final (statusBefore, _) = await _getSupplyStatus(
-        supplyName,
-        overrideStock: previousStock,
-        overrideId: batchId,
+      // Build query - filter by name and type
+      var query = _supabase
+          .from('supplies')
+          .select('*')
+          .eq('name', supplyName)
+          .eq('archived', false);
+
+      // If type is provided, filter by type
+      // If type is null/empty, we'll filter it in code
+      if (type != null && type.trim().isNotEmpty) {
+        query = query.eq('type', type.trim());
+      }
+
+      final batches = await query;
+
+      if (batches.isEmpty) return (null, 0);
+
+      // Convert to InventoryItem list
+      final items = batches.map((row) {
+        DateTime? createdAt;
+        if (row['created_at'] != null) {
+          try {
+            createdAt = DateTime.parse(row['created_at'] as String);
+          } catch (e) {
+            createdAt = null;
+          }
+        }
+
+        // Override stock if specified (for "before" calculation)
+        int stock = (row['stock'] ?? 0) as int;
+        if (overrideStock != null) {
+          // If overrideId is provided, use it to find the specific batch
+          if (overrideId != null && row['id'] == overrideId) {
+            stock = overrideStock;
+          }
+        }
+
+        return InventoryItem(
+          id: row['id'] as String,
+          name: row['name'] ?? '',
+          type: row['type'],
+          imageUrl: row['image_url'] ?? '',
+          category: row['category'] ?? '',
+          cost: (row['cost'] ?? 0).toDouble(),
+          stock: stock,
+          lowStockBaseline: row['low_stock_baseline'] != null
+              ? (row['low_stock_baseline'] as num).toInt()
+              : null,
+          unit: row['unit'] ?? '',
+          packagingUnit: row['packaging_unit'],
+          packagingContent: row['packaging_content'],
+          packagingQuantity: row['packaging_quantity'],
+          packagingContentQuantity: row['packaging_content_quantity'],
+          supplier: row['supplier'] ?? '',
+          brand: row['brand'] ?? '',
+          expiry: row['expiry'],
+          noExpiry: row['no_expiry'] ?? false,
+          archived: row['archived'] ?? false,
+          createdAt: createdAt,
+        );
+      }).toList();
+
+      // Filter by type if not already filtered (for null/empty type cases)
+      final filteredItems = type != null && type.trim().isNotEmpty
+          ? items
+          : items
+              .where((item) => item.type == null || item.type!.trim().isEmpty)
+              .toList();
+
+      if (filteredItems.isEmpty) return (null, 0);
+
+      // Group items by name + category + type
+      final Map<String, List<InventoryItem>> grouped = {};
+      for (final item in filteredItems) {
+        final nameKey = item.name.trim().toLowerCase();
+        final categoryKey = item.category.trim().toLowerCase();
+        final typeKey = (item.type ?? '').trim().toLowerCase();
+        final key = '${nameKey}_${categoryKey}_$typeKey';
+        if (!grouped.containsKey(key)) {
+          grouped[key] = [];
+        }
+        grouped[key]!.add(item);
+      }
+
+      // Get the first group (should be the type we're checking)
+      if (grouped.isEmpty) return (null, 0);
+      final groupItems = grouped.values.first;
+
+      // Filter out expired items (same logic as UI)
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final nonExpiredItems = groupItems.where((item) {
+        if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
+          return true;
+        }
+        final expiryDate = DateTime.tryParse(item.expiry!.replaceAll('/', '-'));
+        if (expiryDate == null) return true;
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+        return !(dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today));
+      }).toList();
+
+      if (nonExpiredItems.isEmpty) return (null, 0);
+
+      // Sort by expiry (earliest first)
+      nonExpiredItems.sort((a, b) {
+        if (a.noExpiry && b.noExpiry) return 0;
+        if (a.noExpiry) return 1;
+        if (b.noExpiry) return -1;
+        final aExpiry = a.expiry != null
+            ? DateTime.tryParse(a.expiry!.replaceAll('/', '-'))
+            : null;
+        final bExpiry = b.expiry != null
+            ? DateTime.tryParse(b.expiry!.replaceAll('/', '-'))
+            : null;
+        if (aExpiry == null && bExpiry == null) return 0;
+        if (aExpiry == null) return 1;
+        if (bExpiry == null) return -1;
+        return aExpiry.compareTo(bExpiry);
+      });
+
+      // Find main item
+      final mainItem = nonExpiredItems.firstWhere(
+        (it) => it.stock > 0,
+        orElse: () => nonExpiredItems.firstWhere(
+          (it) => it.stock == 0 && it.noExpiry,
+          orElse: () => nonExpiredItems.first,
+        ),
+      );
+      final variants =
+          nonExpiredItems.where((it) => it.id != mainItem.id).toList();
+      final totalStock =
+          nonExpiredItems.fold(0, (sum, item) => sum + item.stock);
+      // Use the threshold value directly (not summed) since all batches share the same threshold
+      // Find the first non-null threshold value, or 0 if none exist
+      int totalBaseline = 0;
+      for (final item in nonExpiredItems) {
+        if (item.lowStockBaseline != null && item.lowStockBaseline! > 0) {
+          totalBaseline = item.lowStockBaseline!;
+          break; // All batches have the same threshold, so we can use the first one
+        }
+      }
+
+      // Create GroupedInventoryItem and get status (same as UI)
+      final groupedItem = GroupedInventoryItem(
+        productKey: grouped.keys.first,
+        mainItem: mainItem,
+        variants: variants,
+        totalStock: totalStock,
+        totalBaseline: totalBaseline,
       );
 
+      return (groupedItem.getStatus(), totalStock);
+    } catch (e) {
+      print('Error calculating supply status by type: $e');
+      return (null, 0);
+    }
+  }
+
+  // Helper method to get type from batchId
+  Future<String?> _getTypeFromBatchId(String? batchId) async {
+    if (batchId == null) return null;
+    try {
+      final batch = await _supabase
+          .from('supplies')
+          .select('type')
+          .eq('id', batchId)
+          .single();
+      return batch['type']?.toString();
+    } catch (e) {
+      print('Error getting type from batchId: $e');
+      return null;
+    }
+  }
+
+  // Helper method to format supply name with type
+  String _formatSupplyNameWithType(String supplyName, String? type) {
+    if (type != null && type.trim().isNotEmpty) {
+      return '$supplyName ($type)';
+    }
+    return supplyName;
+  }
+
+  // Helper method to parse supply name and type from formatted name
+  // Returns (baseName, type) tuple
+  (String, String?) _parseSupplyNameAndType(String formattedName) {
+    // Check if name contains type in format "Name (Type)"
+    final match = RegExp(r'^(.+?)\s*\((.+?)\)$').firstMatch(formattedName);
+    if (match != null) {
+      final baseName = match.group(1)?.trim() ?? formattedName;
+      final type = match.group(2)?.trim();
+      if (type != null && type.isNotEmpty) {
+        return (baseName, type);
+      }
+    }
+    // No type found, return as-is
+    return (formattedName, null);
+  }
+
+  // Helper method to check if stock level triggers a notification
+  // Now uses status comparison per type instead of overall supply
+  Future<void> checkStockLevelNotification(
+      String supplyName, int newStock, int previousStock,
+      {String? batchId, String? type}) async {
+    try {
+      // Get type from parameter, or from batchId if available
+      String? supplyType = type;
+      if (supplyType == null && batchId != null) {
+        supplyType = await _getTypeFromBatchId(batchId);
+      }
+      final formattedSupplyName =
+          _formatSupplyNameWithType(supplyName, supplyType);
+
+      // If we have type information, check status for that specific type
+      // Otherwise, fall back to overall supply status
+      final bool useTypeSpecific =
+          supplyType != null && supplyType.trim().isNotEmpty;
+
+      // Get status BEFORE the change (using previousStock)
+      final (statusBefore, _) = useTypeSpecific
+          ? await _getSupplyStatusByType(
+              supplyName,
+              supplyType,
+              overrideStock: previousStock,
+              overrideId: batchId,
+            )
+          : await _getSupplyStatus(
+              supplyName,
+              overrideStock: previousStock,
+              overrideId: batchId,
+            );
+
       // Get status AFTER the change (current state) - also get totalStock
-      final (statusAfter, totalStock) = await _getSupplyStatus(supplyName);
+      final (statusAfter, totalStock) = useTypeSpecific
+          ? await _getSupplyStatusByType(supplyName, supplyType)
+          : await _getSupplyStatus(supplyName);
 
       // If we couldn't calculate status, fall back to old method
       if (statusBefore == null || statusAfter == null) {
         print('[NOTIFICATIONS] Could not calculate status, using fallback');
+        // Parse base name and type for storing in notification
+        final (baseSupplyName, notificationType) =
+            _parseSupplyNameAndType(formattedSupplyName);
         // Fallback to simple stock comparison
         if (newStock == 0 && previousStock > 0) {
-          await createOutOfStockNotification(supplyName);
+          await createOutOfStockNotification(
+            formattedSupplyName,
+            baseSupplyName: baseSupplyName,
+            supplyType: notificationType ?? supplyType,
+          );
         } else if (newStock > 0 && previousStock == 0) {
-          await createInStockNotification(supplyName, newStock);
+          await createInStockNotification(
+            formattedSupplyName,
+            newStock,
+            baseSupplyName: baseSupplyName,
+            supplyType: notificationType ?? supplyType,
+          );
         }
         return;
       }
 
       print(
-          '[NOTIFICATIONS] Status change: $statusBefore -> $statusAfter for $supplyName');
+          '[NOTIFICATIONS] Status change: $statusBefore -> $statusAfter for $formattedSupplyName');
+
+      // Parse base name and type for storing in notification
+      final (baseSupplyName, notificationType) =
+          _parseSupplyNameAndType(formattedSupplyName);
 
       // Check status changes and create appropriate notifications
       // Out of Stock: from any status to "Out of Stock"
       if (statusAfter == "Out of Stock" && statusBefore != "Out of Stock") {
-        await createOutOfStockNotification(supplyName);
+        await createOutOfStockNotification(
+          formattedSupplyName,
+          baseSupplyName: baseSupplyName,
+          supplyType: notificationType ?? supplyType,
+        );
         return;
       }
 
@@ -694,21 +957,36 @@ class NotificationsController {
           (statusAfter == "In Stock" ||
               statusAfter == "Low Stock" ||
               statusAfter == "Expiring")) {
-        await createInStockNotification(supplyName, totalStock);
+        await createInStockNotification(
+          formattedSupplyName,
+          totalStock,
+          baseSupplyName: baseSupplyName,
+          supplyType: notificationType ?? supplyType,
+        );
         return;
       }
 
       // Low Stock: from "In Stock" or "Expiring" to "Low Stock"
       if (statusAfter == "Low Stock" &&
           (statusBefore == "In Stock" || statusBefore == "Expiring")) {
-        await createLowStockNotification(supplyName, totalStock);
+        await createLowStockNotification(
+          formattedSupplyName,
+          totalStock,
+          baseSupplyName: baseSupplyName,
+          supplyType: notificationType ?? supplyType,
+        );
         return;
       }
 
       // Back to In Stock: from "Low Stock" to "In Stock" or "Expiring"
       if ((statusAfter == "In Stock" || statusAfter == "Expiring") &&
           statusBefore == "Low Stock") {
-        await createInStockNotification(supplyName, totalStock);
+        await createInStockNotification(
+          formattedSupplyName,
+          totalStock,
+          baseSupplyName: baseSupplyName,
+          supplyType: notificationType ?? supplyType,
+        );
         return;
       }
 
@@ -718,10 +996,24 @@ class NotificationsController {
     } catch (e) {
       print('Error checking stock level notification: $e');
       // Fallback to simple stock comparison if status calculation fails
+      final fallbackSupplyType = await _getTypeFromBatchId(batchId);
+      final fallbackFormattedSupplyName =
+          _formatSupplyNameWithType(supplyName, fallbackSupplyType);
+      final (baseSupplyName, notificationType) =
+          _parseSupplyNameAndType(fallbackFormattedSupplyName);
       if (newStock == 0 && previousStock > 0) {
-        await createOutOfStockNotification(supplyName);
+        await createOutOfStockNotification(
+          fallbackFormattedSupplyName,
+          baseSupplyName: baseSupplyName,
+          supplyType: notificationType ?? fallbackSupplyType,
+        );
       } else if (newStock > 0 && previousStock == 0) {
-        await createInStockNotification(supplyName, newStock);
+        await createInStockNotification(
+          fallbackFormattedSupplyName,
+          newStock,
+          baseSupplyName: baseSupplyName,
+          supplyType: notificationType ?? fallbackSupplyType,
+        );
       }
     }
   }

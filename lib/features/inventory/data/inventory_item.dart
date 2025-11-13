@@ -112,20 +112,6 @@ class GroupedInventoryItem {
     required this.totalBaseline,
   });
 
-  // Helper function to calculate critical level (20% of stock, rounded)
-  static int calculateCriticalLevel(int stockQuantity) {
-    if (stockQuantity <= 0) return 0;
-    // Calculate 20% of stock quantity and round it
-    return (stockQuantity * 0.2).round();
-  }
-
-  // Check if stock is low based on dynamic 20% critical level
-  static bool isLowStock(int currentStock, int totalStockQuantity) {
-    if (currentStock == 0) return false; // Out of stock, not low stock
-    final criticalLevel = calculateCriticalLevel(totalStockQuantity);
-    return currentStock <= criticalLevel;
-  }
-
   // Get all items including main item
   List<InventoryItem> getAllItems() {
     return [mainItem, ...variants];
@@ -172,17 +158,13 @@ class GroupedInventoryItem {
       }
     }
 
-    // Low stock threshold based purely on the dynamic 20% critical level
+    // Low stock threshold based on manually set baseline threshold
     if (totalStock == 0) {
       return "Out of Stock"; // This should already be handled above, but keeping for safety
     }
 
-    final baseline = totalBaseline > 0
-        ? totalBaseline
-        : (mainItem.lowStockBaseline ?? totalStock);
-    final criticalLevel = calculateCriticalLevel(baseline);
-
-    if (totalStock <= criticalLevel) {
+    // Use manually set threshold (totalBaseline) for low stock detection
+    if (totalBaseline > 0 && totalStock <= totalBaseline) {
       return "Low Stock";
     }
 

@@ -264,8 +264,15 @@ class InventoryController {
             nonExpiredItems.where((it) => it.id != mainItem.id).toList();
         final totalStock =
             nonExpiredItems.fold(0, (sum, item) => sum + item.stock);
-        final totalBaseline = nonExpiredItems.fold(
-            0, (sum, item) => sum + (item.lowStockBaseline ?? item.stock));
+        // Use the threshold value directly (not summed) since all batches share the same threshold
+        // Find the first non-null threshold value, or 0 if none exist
+        int totalBaseline = 0;
+        for (final item in nonExpiredItems) {
+          if (item.lowStockBaseline != null && item.lowStockBaseline! > 0) {
+            totalBaseline = item.lowStockBaseline!;
+            break; // All batches have the same threshold, so we can use the first one
+          }
+        }
 
         result.add(GroupedInventoryItem(
           productKey: entry.key,
@@ -539,10 +546,11 @@ class InventoryController {
       }
     }
 
-    // Priority 3: Low Stock (using dynamic 20% critical level)
-    final criticalLevel =
-        GroupedInventoryItem.calculateCriticalLevel(item.stock);
-    if (item.stock <= criticalLevel && item.stock > 0) return 2;
+    // Priority 3: Low Stock (using manually set threshold)
+    if (item.lowStockBaseline != null &&
+        item.lowStockBaseline! > 0 &&
+        item.stock <= item.lowStockBaseline! &&
+        item.stock > 0) return 2;
 
     // Priority 4: In Stock (lowest priority)
     return 3;
@@ -579,9 +587,10 @@ class InventoryController {
 
     // Priority 3: Items with no expiry - sort by stock status
     // Low Stock items should come before In Stock items
-    final criticalLevel =
-        GroupedInventoryItem.calculateCriticalLevel(item.stock);
-    if (item.stock <= criticalLevel && item.stock > 0) {
+    if (item.lowStockBaseline != null &&
+        item.lowStockBaseline! > 0 &&
+        item.stock <= item.lowStockBaseline! &&
+        item.stock > 0) {
       return 999999999998; // Low stock with no expiry
     }
 
@@ -594,25 +603,13 @@ class InventoryController {
     // Note: Expired status is now handled by the dedicated Expired Supply page
     // Main inventory system no longer shows expired status
 
-    // Check stock status only using dynamic 20% critical level with tiered thresholds
+    // Check stock status only using manually set threshold
     if (item.stock == 0) return "Out of Stock";
 
-    // Calculate critical level dynamically
-    final criticalLevel =
-        GroupedInventoryItem.calculateCriticalLevel(item.stock);
-
-    // Primary check: If current stock is at or below its own 20% critical level
-    if (criticalLevel > 0 && item.stock <= criticalLevel) {
-      return "Low Stock";
-    }
-
-    // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
-    if (item.stock <= 5) {
-      return "Low Stock";
-    }
-
-    // For stocks > 5, use dynamic calculation
-    if (item.stock > 5 && item.stock <= criticalLevel) {
+    // Use manually set threshold for low stock detection
+    if (item.lowStockBaseline != null &&
+        item.lowStockBaseline! > 0 &&
+        item.stock <= item.lowStockBaseline!) {
       return "Low Stock";
     }
 

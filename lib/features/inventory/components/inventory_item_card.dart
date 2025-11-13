@@ -39,10 +39,10 @@ class InventoryItemCard extends StatelessWidget {
       return "Out of Stock";
     }
 
-    final baseline = item.lowStockBaseline ?? item.stock;
-    final criticalLevel = GroupedInventoryItem.calculateCriticalLevel(baseline);
-
-    if (item.stock <= criticalLevel) {
+    // Use manually set threshold for low stock detection
+    if (item.lowStockBaseline != null &&
+        item.lowStockBaseline! > 0 &&
+        item.stock <= item.lowStockBaseline!) {
       return "Low Stock";
     }
 

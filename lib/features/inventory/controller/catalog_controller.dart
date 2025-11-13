@@ -110,8 +110,15 @@ class CatalogController {
 
               final totalStock =
                   productVariants.fold(0, (sum, it) => sum + it.stock);
-              final totalBaseline = productVariants.fold(
-                  0, (sum, it) => sum + (it.lowStockBaseline ?? it.stock));
+              // Use the threshold value directly (not summed) since all batches share the same threshold
+              int totalBaseline = 0;
+              for (final item in productVariants) {
+                if (item.lowStockBaseline != null &&
+                    item.lowStockBaseline! > 0) {
+                  totalBaseline = item.lowStockBaseline!;
+                  break; // All batches have the same threshold, so we can use the first one
+                }
+              }
               final preferredId = preferred.id;
               final others =
                   productVariants.where((v) => v.id != preferredId).toList();

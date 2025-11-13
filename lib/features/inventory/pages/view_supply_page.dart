@@ -43,20 +43,15 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
     });
   }
 
-  // Calculate total stock and baseline from batch data
-  (int totalStock, int totalBaseline) _calculateTotals(
-      List<Map<String, dynamic>> batches) {
+  // Calculate total stock from batch data
+  int _calculateTotals(List<Map<String, dynamic>> batches) {
     int totalStock = 0;
-    int totalBaseline = 0;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
     for (final batch in batches) {
       final stock = (batch['stock'] ?? 0) as int;
-      final lowStockBaseline = batch['low_stock_baseline'] != null
-          ? (batch['low_stock_baseline'] as num).toInt()
-          : stock;
 
       // Only count non-expired batches
       final expiryStr = batch['expiry']?.toString();
@@ -74,11 +69,46 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
 
       if (!isExpired) {
         totalStock += stock;
-        totalBaseline += lowStockBaseline;
       }
     }
 
-    return (totalStock, totalBaseline);
+    return totalStock;
+  }
+
+  // Calculate total baseline from batch data
+  // Use the threshold value directly (not summed) since all batches share the same threshold
+  int _calculateTotalBaseline(List<Map<String, dynamic>> batches) {
+    int totalBaseline = 0;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (final batch in batches) {
+      final lowStockBaseline = batch['low_stock_baseline'] != null
+          ? (batch['low_stock_baseline'] as num).toInt()
+          : 0;
+
+      // Only count non-expired batches
+      final expiryStr = batch['expiry']?.toString();
+      bool isExpired = false;
+
+      if (expiryStr != null && expiryStr.isNotEmpty) {
+        final expiryDate = DateTime.tryParse(expiryStr.replaceAll('/', '-'));
+        if (expiryDate != null) {
+          final dateOnly =
+              DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+          isExpired =
+              dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today);
+        }
+      }
+
+      if (!isExpired && lowStockBaseline > 0) {
+        totalBaseline = lowStockBaseline;
+        break; // All batches have the same threshold, so we can use the first one
+      }
+    }
+
+    return totalBaseline;
   }
 
   // Get grouped totals from cache if available
@@ -186,10 +216,9 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
               int? totalBaseline = cachedTotalBaseline;
 
               if (batchSnap.hasData && batchSnap.data!.isNotEmpty) {
-                final (calculatedStock, calculatedBaseline) =
-                    _calculateTotals(batchSnap.data!);
-                totalStock = calculatedStock;
-                totalBaseline = calculatedBaseline;
+                totalStock = _calculateTotals(batchSnap.data!);
+                // Calculate totalBaseline from batch data
+                totalBaseline = _calculateTotalBaseline(batchSnap.data!);
               }
 
               final status = controller.getStatus(updatedItem,
@@ -364,7 +393,8 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                 });
               }
               // Fall back to normal render - use grouped status for consistency
-              final (totalStock, totalBaseline) = _calculateTotals(rows);
+              final totalStock = _calculateTotals(rows);
+              final totalBaseline = _calculateTotalBaseline(rows);
               final status = controller.getStatus(updatedItem,
                   totalStock: totalStock, totalBaseline: totalBaseline);
               return _buildScaffold(context, controller, updatedItem, status);
@@ -1776,7 +1806,6 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         'category': sourceItem.category,
         'cost': sourceItem.cost,
         'stock': stockQuantity, // Use selected stock quantity
-        'low_stock_baseline': stockQuantity,
         'unit': sourceItem.unit,
         'packaging_unit': sourceItem.packagingUnit,
         'packaging_quantity': sourceItem.packagingQuantity,

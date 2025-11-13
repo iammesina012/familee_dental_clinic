@@ -244,10 +244,6 @@ class _SupabaseOtherSupplyBatchesState
                 '${norm(b.brand)}|${norm(b.supplier)}|$expKey|${norm(b.unit)}|${b.cost.toStringAsFixed(2)}';
             if (merged.containsKey(key)) {
               final existing = merged[key]!;
-              final existingBaseline =
-                  existing.lowStockBaseline ?? existing.stock;
-              final newBaseline =
-                  existingBaseline + (b.lowStockBaseline ?? b.stock);
 
               merged[key] = InventoryItem(
                 id: existing.id,
@@ -257,7 +253,7 @@ class _SupabaseOtherSupplyBatchesState
                 category: existing.category,
                 cost: existing.cost,
                 stock: existing.stock + b.stock,
-                lowStockBaseline: newBaseline,
+                lowStockBaseline: null,
                 unit: existing.unit,
                 packagingUnit: existing.packagingUnit,
                 packagingContent: existing.packagingContent,

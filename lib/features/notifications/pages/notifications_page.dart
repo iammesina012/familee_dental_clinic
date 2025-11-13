@@ -4,6 +4,8 @@ import 'package:familee_dental/features/notifications/controller/notifications_c
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/inventory/pages/expired_view_supply_page.dart';
+import 'package:familee_dental/features/inventory/pages/view_supply_page.dart';
+import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:shimmer/shimmer.dart';
@@ -490,14 +492,30 @@ class _NotificationTile extends StatelessWidget {
                 }
               } else if ((notification.supplyName ?? '').isNotEmpty) {
                 // Inventory notifications
-                final String name = notification.supplyName!;
+                String name = notification.supplyName!;
+                String? supplyType = notification.supplyType;
+
+                // If supplyType is not available, try to parse it from the formatted name
+                // (for backward compatibility with old notifications)
+                if (supplyType == null || supplyType.trim().isEmpty) {
+                  final match = RegExp(r'^(.+?)\s*\((.+?)\)$').firstMatch(name);
+                  if (match != null) {
+                    name = match.group(1)?.trim() ?? name;
+                    supplyType = match.group(2)?.trim();
+                  }
+                }
+
+                // Try to navigate directly to the supply first (preferred)
+                bool navigated = false;
+
+                // Handle expired notifications with special logic
                 if (notification.type == 'expired') {
-                  // Open specific expired batch directly
                   try {
                     final data = await Supabase.instance.client
                         .from('supplies')
                         .select('*')
-                        .eq('name', name);
+                        .eq('name', name)
+                        .eq('archived', false);
                     if (data.isNotEmpty) {
                       final now = DateTime.now();
                       final today = DateTime(now.year, now.month, now.day);
@@ -519,6 +537,7 @@ class _NotificationTile extends StatelessWidget {
                           chosen = InventoryItem(
                             id: d['id'] as String,
                             name: (d['name'] ?? '').toString(),
+                            type: d['type'],
                             imageUrl: (d['image_url'] ?? '').toString(),
                             category: (d['category'] ?? '').toString(),
                             cost: ((d['cost'] ?? 0) as num).toDouble(),
@@ -546,23 +565,85 @@ class _NotificationTile extends StatelessWidget {
                                 item: chosen as InventoryItem),
                           ),
                         );
-                        return;
+                        navigated = true;
                       }
                     }
-                  } catch (_) {}
-                  // Fallback: open Expired list page so user can locate it
-                  if (context.mounted) {
-                    await Navigator.pushNamed(context, '/inventory',
-                        arguments: {'highlightSupplyName': name});
+                  } catch (e) {
+                    print('Error navigating to expired supply: $e');
+                  }
+                } else if (supplyType != null && supplyType.trim().isNotEmpty) {
+                  // Navigate to specific supply type
+                  try {
+                    final viewController = ViewSupplyController();
+                    final item = await viewController.getSupplyByNameAndType(
+                        name, supplyType);
+                    if (item != null && context.mounted) {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InventoryViewSupplyPage(
+                            item: item,
+                          ),
+                        ),
+                      );
+                      navigated = true;
+                    }
+                  } catch (e) {
+                    print('Error navigating to supply type: $e');
                   }
                 } else {
-                  // Default: open Inventory and deep-link
-                  if (context.mounted) {
-                    await Navigator.pushNamed(context, '/inventory',
-                        arguments: {
-                          'highlightSupplyName': name,
-                        });
+                  // No type - try to find any supply with this name
+                  try {
+                    final data = await Supabase.instance.client
+                        .from('supplies')
+                        .select('*')
+                        .eq('name', name)
+                        .eq('archived', false)
+                        .limit(1);
+                    if (data.isNotEmpty && context.mounted) {
+                      final row = data.first;
+                      final item = InventoryItem(
+                        id: row['id'] as String,
+                        name: (row['name'] ?? '').toString(),
+                        type: row['type'],
+                        imageUrl: (row['image_url'] ?? '').toString(),
+                        category: (row['category'] ?? '').toString(),
+                        cost: ((row['cost'] ?? 0) as num).toDouble(),
+                        stock: (row['stock'] ?? 0) as int,
+                        lowStockBaseline: row['low_stock_baseline'] != null
+                            ? (row['low_stock_baseline'] as num).toInt()
+                            : null,
+                        unit: (row['unit'] ?? '').toString(),
+                        supplier: (row['supplier'] ?? '').toString(),
+                        brand: (row['brand'] ?? '').toString(),
+                        expiry: row['expiry']?.toString(),
+                        noExpiry: (row['no_expiry'] ?? false) as bool,
+                        archived: (row['archived'] ?? false) as bool,
+                        createdAt: row['created_at'] != null
+                            ? DateTime.tryParse(row['created_at'] as String)
+                            : null,
+                      );
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InventoryViewSupplyPage(
+                            item: item,
+                          ),
+                        ),
+                      );
+                      navigated = true;
+                    }
+                  } catch (e) {
+                    print('Error navigating to supply: $e');
                   }
+                }
+
+                // Only fall back to inventory page if direct navigation failed
+                if (!navigated && context.mounted) {
+                  // Fallback: open Inventory page with highlight
+                  await Navigator.pushNamed(context, '/inventory', arguments: {
+                    'highlightSupplyName': name,
+                  });
                 }
               }
             } catch (_) {}

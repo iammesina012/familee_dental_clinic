@@ -34,6 +34,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
   String _originalBrand = '';
   String _originalExpiry = '';
   bool _originalNoExpiry = false;
+  int _originalLowStockThreshold = 1;
   List<String>? _cachedCategories;
 
   @override
@@ -54,6 +55,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
     _originalBrand = controller.brandController.text.trim();
     _originalExpiry = controller.expiryController.text.trim();
     _originalNoExpiry = controller.noExpiry;
+    _originalLowStockThreshold = controller.lowStockThreshold;
   }
 
   @override
@@ -135,6 +137,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
     final currentBrand = controller.brandController.text.trim();
     final currentExpiry = controller.expiryController.text.trim();
     final currentNoExpiry = controller.noExpiry;
+    final currentLowStockThreshold = controller.lowStockThreshold;
 
     final hasChanges = currentName != _originalName ||
         currentType != _originalType ||
@@ -147,7 +150,8 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
         currentSupplier != _originalSupplier ||
         currentBrand != _originalBrand ||
         currentExpiry != _originalExpiry ||
-        currentNoExpiry != _originalNoExpiry;
+        currentNoExpiry != _originalNoExpiry ||
+        currentLowStockThreshold != _originalLowStockThreshold;
 
     if (_hasUnsavedChanges != hasChanges) {
       setState(() {
@@ -612,7 +616,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                           color: theme.iconTheme.color),
                                       splashRadius: 18,
                                       onPressed: () {
-                                        if (controller.packagingQuantity > 1) {
+                                        if (controller.packagingQuantity > 0) {
                                           _markAsChanged();
                                           setState(() {
                                             controller.packagingQuantity--;
@@ -632,7 +636,11 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                         inputFormatters: [
                                           FilteringTextInputFormatter
                                               .digitsOnly,
-                                          LengthLimitingTextInputFormatter(2),
+                                          LengthLimitingTextInputFormatter(
+                                              controller.selectedPackagingUnit ==
+                                                      'Pieces'
+                                                  ? 3
+                                                  : 2),
                                         ],
                                         decoration: InputDecoration(
                                             border: InputBorder.none),
@@ -646,19 +654,24 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                         onChanged: (val) {
                                           _markAsChanged();
                                           setState(() {
-                                            final qty = int.tryParse(val) ?? 1;
+                                            final qty = int.tryParse(val) ?? 0;
+                                            final maxValue = controller
+                                                        .selectedPackagingUnit ==
+                                                    'Pieces'
+                                                ? 999
+                                                : 99;
                                             controller.packagingQuantity =
-                                                qty > 99
-                                                    ? 99
-                                                    : (qty < 1 ? 1 : qty);
-                                            if (qty > 99) {
+                                                qty > maxValue
+                                                    ? maxValue
+                                                    : (qty < 0 ? 0 : qty);
+                                            if (qty > maxValue) {
                                               controller
                                                   .packagingQuantityController
-                                                  .text = '99';
-                                            } else if (qty < 1) {
+                                                  .text = maxValue.toString();
+                                            } else if (qty < 0) {
                                               controller
                                                   .packagingQuantityController
-                                                  .text = '1';
+                                                  .text = '0';
                                             }
                                           });
                                         },
@@ -669,7 +682,13 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                           color: theme.iconTheme.color),
                                       splashRadius: 18,
                                       onPressed: () {
-                                        if (controller.packagingQuantity < 99) {
+                                        final maxValue =
+                                            controller.selectedPackagingUnit ==
+                                                    'Pieces'
+                                                ? 999
+                                                : 99;
+                                        if (controller.packagingQuantity <
+                                            maxValue) {
                                           _markAsChanged();
                                           setState(() {
                                             controller.packagingQuantity++;
@@ -721,7 +740,21 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                 onChanged: (val) {
                                   _markAsChanged();
                                   setState(() {
+                                    final wasPieces =
+                                        controller.selectedPackagingUnit ==
+                                            'Pieces';
+                                    final isPieces = val == 'Pieces';
                                     controller.selectedPackagingUnit = val;
+
+                                    // If switching from Pieces to non-Pieces, cap quantity at 99
+                                    if (wasPieces &&
+                                        !isPieces &&
+                                        controller.packagingQuantity > 99) {
+                                      controller.packagingQuantity = 99;
+                                      controller.packagingQuantityController
+                                          .text = '99';
+                                    }
+
                                     // Reset packaging content if the new unit doesn't need it
                                     if (_isPackagingContentDisabled(val)) {
                                       controller.selectedPackagingContent =
@@ -949,49 +982,167 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Expiry Date (disable if noExpiry checked)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Expiry Date and Low Stock Threshold side by side
+                  Row(
                     children: [
-                      TextField(
-                        controller: controller.expiryController,
-                        enabled: !controller.noExpiry,
-                        decoration: InputDecoration(
-                          labelText: 'Expiry *',
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.calendar_today, size: 18),
-                          errorStyle: TextStyle(color: Colors.red),
-                          hintText: controller.noExpiry
-                              ? 'No expiry date'
-                              : 'Select date',
+                      // Expiry Date (LEFT)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Expiry *',
+                                  style: theme.textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: controller.expiryController,
+                                enabled: !controller.noExpiry,
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  suffixIcon:
+                                      Icon(Icons.calendar_today, size: 18),
+                                  errorStyle: TextStyle(color: Colors.red),
+                                  hintText: controller.noExpiry
+                                      ? 'No expiry date'
+                                      : 'Select date',
+                                ),
+                                readOnly: true,
+                                onTap: !controller.noExpiry
+                                    ? () async {
+                                        DateTime? picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: DateTime.now(),
+                                          firstDate: DateTime(2020),
+                                          lastDate: DateTime(2100),
+                                        );
+                                        if (picked != null) {
+                                          setState(() {
+                                            controller.expiryDate = picked;
+                                            controller.expiryController.text =
+                                                "${picked.year.toString().padLeft(4, '0')}-"
+                                                "${picked.month.toString().padLeft(2, '0')}-"
+                                                "${picked.day.toString().padLeft(2, '0')}";
+                                            _markAsChanged();
+                                            // Clear validation error when user selects date
+                                            if (validationErrors['expiry'] !=
+                                                null) {
+                                              validationErrors['expiry'] = null;
+                                            }
+                                          });
+                                        }
+                                      }
+                                    : null,
+                              ),
+                              _buildValidationError(validationErrors['expiry']),
+                            ],
+                          ),
                         ),
-                        readOnly: true,
-                        onTap: !controller.noExpiry
-                            ? () async {
-                                DateTime? picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: DateTime.now(),
-                                  firstDate: DateTime(2020),
-                                  lastDate: DateTime(2100),
-                                );
-                                if (picked != null) {
-                                  setState(() {
-                                    controller.expiryDate = picked;
-                                    controller.expiryController.text =
-                                        "${picked.year.toString().padLeft(4, '0')}-"
-                                        "${picked.month.toString().padLeft(2, '0')}-"
-                                        "${picked.day.toString().padLeft(2, '0')}";
-                                    _markAsChanged();
-                                    // Clear validation error when user selects date
-                                    if (validationErrors['expiry'] != null) {
-                                      validationErrors['expiry'] = null;
-                                    }
-                                  });
-                                }
-                              }
-                            : null,
                       ),
-                      _buildValidationError(validationErrors['expiry']),
+                      // Low Stock Threshold (RIGHT)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Low Stock Threshold',
+                                  style: theme.textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color:
+                                          theme.dividerColor.withOpacity(0.2)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(Icons.remove,
+                                          color: theme.iconTheme.color),
+                                      splashRadius: 18,
+                                      onPressed: () {
+                                        if (controller.lowStockThreshold > 1) {
+                                          _markAsChanged();
+                                          setState(() {
+                                            controller.lowStockThreshold--;
+                                            controller
+                                                    .lowStockThresholdController
+                                                    .text =
+                                                controller.lowStockThreshold
+                                                    .toString();
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    Expanded(
+                                      child: TextField(
+                                        textAlign: TextAlign.center,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                          LengthLimitingTextInputFormatter(3),
+                                        ],
+                                        decoration: InputDecoration(
+                                            border: InputBorder.none),
+                                        style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w500,
+                                            color: theme
+                                                .textTheme.bodyMedium?.color),
+                                        controller: controller
+                                            .lowStockThresholdController,
+                                        onChanged: (val) {
+                                          _markAsChanged();
+                                          setState(() {
+                                            final qty = int.tryParse(val) ?? 1;
+                                            controller.lowStockThreshold =
+                                                qty > 999
+                                                    ? 999
+                                                    : (qty < 1 ? 1 : qty);
+                                            controller
+                                                    .lowStockThresholdController
+                                                    .text =
+                                                controller.lowStockThreshold
+                                                    .toString();
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.add,
+                                          color: theme.iconTheme.color),
+                                      splashRadius: 18,
+                                      onPressed: () {
+                                        if (controller.lowStockThreshold <
+                                            999) {
+                                          _markAsChanged();
+                                          setState(() {
+                                            controller.lowStockThreshold++;
+                                            controller
+                                                    .lowStockThresholdController
+                                                    .text =
+                                                controller.lowStockThreshold
+                                                    .toString();
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                   // Checkbox for "No expiry date?"
@@ -1111,33 +1262,46 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                           false; // Reset flag on successful save
                                       Navigator.of(context).pop(true);
                                     } else {
-                                      // Check if result contains network error
-                                      final errorString = result.toLowerCase();
-                                      if (errorString
-                                              .contains('socketexception') ||
-                                          errorString
-                                              .contains('failed host lookup') ||
-                                          errorString.contains(
-                                              'no address associated') ||
-                                          errorString.contains(
-                                              'network is unreachable') ||
-                                          errorString
-                                              .contains('connection refused') ||
-                                          errorString.contains(
-                                              'connection timed out') ||
-                                          errorString
-                                              .contains('clientexception')) {
-                                        if (mounted) {
-                                          await showConnectionErrorDialog(
-                                              context);
-                                        }
-                                      } else {
-                                        // Other error - show generic error message
+                                      // Check if archived supply exists
+                                      if (result == 'ARCHIVED_SUPPLY_EXISTS') {
                                         if (!mounted) return;
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(content: Text(result)),
-                                        );
+                                        await _showArchivedSupplyWarning(
+                                            context);
+                                      } else if (result ==
+                                          'DUPLICATE_SUPPLY_EXISTS') {
+                                        if (!mounted) return;
+                                        await _showDuplicateSupplyWarning(
+                                            context);
+                                      } else {
+                                        // Check if result contains network error
+                                        final errorString =
+                                            result.toLowerCase();
+                                        if (errorString
+                                                .contains('socketexception') ||
+                                            errorString.contains(
+                                                'failed host lookup') ||
+                                            errorString.contains(
+                                                'no address associated') ||
+                                            errorString.contains(
+                                                'network is unreachable') ||
+                                            errorString.contains(
+                                                'connection refused') ||
+                                            errorString.contains(
+                                                'connection timed out') ||
+                                            errorString
+                                                .contains('clientexception')) {
+                                          if (mounted) {
+                                            await showConnectionErrorDialog(
+                                                context);
+                                          }
+                                        } else {
+                                          // Other error - show generic error message
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(content: Text(result)),
+                                          );
+                                        }
                                       }
                                     }
                                   } catch (e) {
@@ -1303,6 +1467,8 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                 controller.expiryController.text.trim().isEmpty
                                     ? 'Not specified'
                                     : controller.expiryController.text.trim()),
+                          _buildDetailRow('Threshold',
+                              controller.lowStockThreshold.toString()),
                         ],
                       ),
                     ),
@@ -1402,6 +1568,204 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showArchivedSupplyWarning(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // X Icon
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.red,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title
+                Text(
+                  'Add Supply Failed',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Message
+                Text(
+                  'The supply is already archived.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Cancel Button
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showDuplicateSupplyWarning(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // X Icon
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.red,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title
+                Text(
+                  'Add Supply Failed',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Message
+                Text(
+                  'The supply that you are trying to add already exists in the inventory.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Cancel Button
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

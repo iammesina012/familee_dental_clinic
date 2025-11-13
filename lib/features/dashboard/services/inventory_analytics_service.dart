@@ -204,23 +204,12 @@ class InventoryAnalyticsService {
               if (supply.stock == 0) {
                 totalOutOfStock++;
               } else {
-                final criticalLevel =
-                    GroupedInventoryItem.calculateCriticalLevel(supply.stock);
-
-                // Primary check: If current stock is at or below its own 20% critical level
-                if (criticalLevel > 0 && supply.stock <= criticalLevel) {
+                // Use manually set threshold for low stock detection
+                if (supply.lowStockBaseline != null &&
+                    supply.lowStockBaseline! > 0 &&
+                    supply.stock <= supply.lowStockBaseline!) {
                   totalLowStock++;
-                }
-                // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
-                else if (supply.stock <= 5) {
-                  totalLowStock++;
-                }
-                // For stocks > 5, use dynamic calculation
-                else if (supply.stock > 5 && supply.stock <= criticalLevel) {
-                  totalLowStock++;
-                }
-                // In stock: stock > 5 and stock > critical level
-                else {
+                } else {
                   totalInStock++;
                 }
               }
@@ -377,6 +366,9 @@ class InventoryAnalyticsService {
           'type': type,
           'displayName': displayName,
           'stock': stock,
+          'lowStockBaseline': row['low_stock_baseline'] != null
+              ? (row['low_stock_baseline'] as num).toInt()
+              : null,
           'packagingUnit': row['packaging_unit'] ?? row['unit'] ?? '',
           'packagingContent': row['packaging_content'] ?? '',
           'brand': row['brand'] ?? 'N/A',
@@ -431,28 +423,18 @@ class InventoryAnalyticsService {
           }
         }
 
-        // Determine stock status (if not expired/expiring) using dynamic 20% critical level and tiered thresholds
+        // Determine stock status (if not expired/expiring) using manually set threshold
         if (!isExpired && !isExpiring) {
           if (stock == 0) {
             status = 'Out of Stock';
           } else {
-            final criticalLevel =
-                GroupedInventoryItem.calculateCriticalLevel(stock);
-
-            // Primary check: If current stock is at or below its own 20% critical level
-            if (criticalLevel > 0 && stock <= criticalLevel) {
+            final lowStockBaseline = supply['lowStockBaseline'] as int?;
+            // Use manually set threshold for low stock detection
+            if (lowStockBaseline != null &&
+                lowStockBaseline > 0 &&
+                stock <= lowStockBaseline) {
               status = 'Low Stock';
-            }
-            // Extended tiered threshold: stocks <= 5 are likely low (covers 20% of up to 25)
-            else if (stock <= 5) {
-              status = 'Low Stock';
-            }
-            // For stocks > 5, use dynamic calculation
-            else if (stock > 5 && stock <= criticalLevel) {
-              status = 'Low Stock';
-            }
-            // In stock: stock > 5 and stock > critical level
-            else {
+            } else {
               status = 'In Stock';
             }
           }
@@ -561,14 +543,11 @@ class InventoryAnalyticsService {
             if (stock == 0) {
               status = 'Out of Stock';
             } else {
-              final criticalLevel =
-                  GroupedInventoryItem.calculateCriticalLevel(stock);
-
-              if (criticalLevel > 0 && stock <= criticalLevel) {
-                status = 'Low Stock';
-              } else if (stock <= 5) {
-                status = 'Low Stock';
-              } else if (stock > 5 && stock <= criticalLevel) {
+              final lowStockBaseline = supply['lowStockBaseline'] as int?;
+              // Use manually set threshold for low stock detection
+              if (lowStockBaseline != null &&
+                  lowStockBaseline > 0 &&
+                  stock <= lowStockBaseline) {
                 status = 'Low Stock';
               } else {
                 status = 'In Stock';

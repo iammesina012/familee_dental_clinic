@@ -19,6 +19,7 @@ class EditSupplyController {
   final expiryController = TextEditingController();
   final packagingQuantityController = TextEditingController(text: "1");
   final packagingContentController = TextEditingController(text: "1");
+  final lowStockThresholdController = TextEditingController(text: "1");
 
   int stock = 0;
   String? selectedCategory;
@@ -27,6 +28,7 @@ class EditSupplyController {
   String? selectedPackagingContent;
   int packagingQuantity = 1;
   int packagingContent = 1;
+  int lowStockThreshold = 1;
   DateTime? expiryDate;
   bool noExpiry = false;
 
@@ -44,12 +46,12 @@ class EditSupplyController {
   String? originalType;
   String? originalCategory;
   int? originalStock;
-  int? originalLowStockBaseline;
   String? originalUnit;
   String? originalPackagingUnit;
   String? originalPackagingContent;
   int? originalPackagingQuantity;
   int? originalPackagingContentQuantity;
+  int? originalLowStockThreshold;
   double? originalCost;
   String? originalExpiry;
   bool? originalNoExpiry;
@@ -71,8 +73,10 @@ class EditSupplyController {
     selectedPackagingContent = item.packagingContent ?? 'Pieces';
     packagingQuantity = item.packagingQuantity ?? 1;
     packagingContent = item.packagingContentQuantity ?? 1;
+    lowStockThreshold = item.lowStockBaseline ?? 1;
     packagingQuantityController.text = packagingQuantity.toString();
     packagingContentController.text = packagingContent.toString();
+    lowStockThresholdController.text = lowStockThreshold.toString();
     noExpiry = item.noExpiry;
     imageUrl = item.imageUrl;
     if (item.expiry != null && item.expiry!.isNotEmpty) {
@@ -88,12 +92,12 @@ class EditSupplyController {
     originalType = item.type ?? '';
     originalCategory = item.category;
     originalStock = item.stock;
-    originalLowStockBaseline = item.lowStockBaseline;
     originalUnit = item.unit;
     originalPackagingUnit = item.packagingUnit ?? 'Box';
     originalPackagingContent = item.packagingContent ?? 'Pieces';
     originalPackagingQuantity = item.packagingQuantity ?? 1;
     originalPackagingContentQuantity = item.packagingContentQuantity ?? 1;
+    originalLowStockThreshold = item.lowStockBaseline ?? 1;
     originalCost = item.cost;
     originalExpiry = item.expiry;
     originalNoExpiry = item.noExpiry;
@@ -138,6 +142,7 @@ class EditSupplyController {
     stockController.dispose();
     packagingQuantityController.dispose();
     packagingContentController.dispose();
+    lowStockThresholdController.dispose();
     supplierController.dispose();
     brandController.dispose();
     expiryController.dispose();
@@ -246,6 +251,7 @@ class EditSupplyController {
           ? null
           : expiryController.text.replaceAll('/', '-'),
       "no_expiry": noExpiry,
+      "low_stock_baseline": lowStockThreshold,
     };
   }
 
@@ -253,11 +259,6 @@ class EditSupplyController {
     final error = validateFieldsForBackend();
     if (error != null) return error;
     final updatedData = buildUpdatedData();
-    final int newStock = (updatedData['stock'] ?? 0) as int;
-    final int prevStock = originalStock ?? 0;
-    if (newStock > prevStock) {
-      updatedData['low_stock_baseline'] = newStock;
-    }
     try {
       // Try to merge with an existing batch if name + brand + expiry match
       final String name = (updatedData['name'] ?? '').toString();
@@ -398,7 +399,6 @@ class EditSupplyController {
 
           final Map<String, dynamic> updates = {
             'stock': mergedStock,
-            'low_stock_baseline': mergedStock,
           };
           // Fill missing fields on target if needed
           if ((mergeTarget['image_url'] ?? '').toString().isEmpty &&
@@ -421,6 +421,17 @@ class EditSupplyController {
       } else {
         // Only stock changed - just update this document normally (no merging)
         await _supabase.from('supplies').update(updatedData).eq('id', docId);
+      }
+
+      // Update low stock threshold for ALL batches of the same supply (name + category)
+      // This ensures the threshold applies to the overall stock, not just individual batches
+      if (lowStockThreshold != originalLowStockThreshold) {
+        final String category = (updatedData['category'] ?? '').toString();
+        await _supabase
+            .from('supplies')
+            .update({'low_stock_baseline': lowStockThreshold})
+            .eq('name', name)
+            .eq('category', category);
       }
 
       // Auto-manage brands and suppliers

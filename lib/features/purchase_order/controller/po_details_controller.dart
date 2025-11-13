@@ -595,7 +595,6 @@ class PODetailsController {
 
               await _supabase.from('supplies').update({
                 'stock': newStock,
-                'low_stock_baseline': newStock,
               }).eq('id', doc['id']);
 
               foundExactBatch = true;
@@ -664,7 +663,6 @@ class PODetailsController {
               "category": category,
               "cost": itemCost,
               "stock": qty,
-              "low_stock_baseline": qty,
               "unit": unit,
               "supplier": supplierName,
               "brand": brandName,
