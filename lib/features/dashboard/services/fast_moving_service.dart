@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
 
 class FastMovingItem {
   final String productKey;
@@ -32,6 +34,51 @@ class FastMovingService {
   // Cache the last selected period to show appropriate data
   String? _lastSelectedPeriod;
   bool _isPreloading = false;
+
+  // ===== HIVE PERSISTENT CACHE HELPERS =====
+
+  // Load fast moving items from Hive for a specific period
+  Future<List<FastMovingItem>?> _loadFromHive(String period) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.fastMovingItemsBox);
+      final jsonStr = box.get('fast_moving_$period') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        return decoded.map((item) {
+          final map = item as Map<String, dynamic>;
+          return FastMovingItem(
+            productKey: map['productKey'] ?? '',
+            name: map['name'] ?? '',
+            brand: map['brand'] ?? '',
+            type: map['type'],
+            quantityDeducted: map['quantityDeducted'] ?? 0,
+          );
+        }).toList();
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save fast moving items to Hive for a specific period
+  Future<void> _saveToHive(String period, List<FastMovingItem> items) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.fastMovingItemsBox);
+      final jsonList = items
+          .map((item) => {
+                'productKey': item.productKey,
+                'name': item.name,
+                'brand': item.brand,
+                'type': item.type,
+                'quantityDeducted': item.quantityDeducted,
+              })
+          .toList();
+      await box.put('fast_moving_$period', jsonEncode(jsonList));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
 
   // Get fixed date range for period (Monday-Sunday for weekly, first-last day for monthly)
   Map<String, DateTime> _getFixedDateRangeForPeriod(String period) {
@@ -263,165 +310,186 @@ class FastMovingService {
     final endDateWithTime =
         DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
 
-    // Emit cached data immediately if available (no delay - instant feedback)
-    if (_cachedFastMovingItems.containsKey(periodKey)) {
-      controller.add(_cachedFastMovingItems[periodKey]!);
-    } else if (_lastSelectedPeriod != null &&
-        _cachedFastMovingItems.containsKey(_lastSelectedPeriod!)) {
-      // Fallback to last cached period if current period has no cache
-      controller.add(_cachedFastMovingItems[_lastSelectedPeriod!]!);
-    } else if (_cachedFastMovingItems.isNotEmpty) {
-      // Fallback to any cached data if available
-      controller.add(_cachedFastMovingItems.values.first);
+    void emitCached() {
+      if (_cachedFastMovingItems.containsKey(periodKey)) {
+        controller.add(_cachedFastMovingItems[periodKey]!);
+      } else if (_lastSelectedPeriod != null &&
+          _cachedFastMovingItems.containsKey(_lastSelectedPeriod!)) {
+        // Fallback to last cached period if current period has no cache
+        controller.add(_cachedFastMovingItems[_lastSelectedPeriod!]!);
+      } else if (_cachedFastMovingItems.isNotEmpty) {
+        // Fallback to any cached data if available
+        controller.add(_cachedFastMovingItems.values.first);
+      }
     }
 
-    try {
-      _supabase
-          .from('stock_deduction_logs')
-          .stream(primaryKey: ['id'])
-          .gte('created_at', startDate.toIso8601String())
-          .order('created_at', ascending: false)
-          .listen(
-            (data) async {
-              try {
-                // Filter data to only include records within the fixed date range
-                final filteredData = data.where((log) {
-                  final createdAtRaw = log['created_at']?.toString();
-                  if (createdAtRaw == null) return false;
-                  try {
-                    final createdAt = DateTime.parse(createdAtRaw);
-                    return createdAt.isAfter(
-                            startDate.subtract(const Duration(seconds: 1))) &&
-                        createdAt.isBefore(
-                            endDateWithTime.add(const Duration(seconds: 1)));
-                  } catch (_) {
-                    return false;
-                  }
-                }).toList();
+    void startSubscription() {
+      try {
+        _supabase
+            .from('stock_deduction_logs')
+            .stream(primaryKey: ['id'])
+            .gte('created_at', startDate.toIso8601String())
+            .order('created_at', ascending: false)
+            .listen(
+              (data) async {
+                try {
+                  // Filter data to only include records within the fixed date range
+                  final filteredData = data.where((log) {
+                    final createdAtRaw = log['created_at']?.toString();
+                    if (createdAtRaw == null) return false;
+                    try {
+                      final createdAt = DateTime.parse(createdAtRaw);
+                      return createdAt.isAfter(
+                              startDate.subtract(const Duration(seconds: 1))) &&
+                          createdAt.isBefore(
+                              endDateWithTime.add(const Duration(seconds: 1)));
+                    } catch (_) {
+                      return false;
+                    }
+                  }).toList();
 
-                // Aggregate by supply name + brand, summing quantities
-                final Map<String, Map<String, dynamic>> aggregates = {};
-                final Set<String> uniqueNames = {};
+                  // Aggregate by supply name + brand, summing quantities
+                  final Map<String, Map<String, dynamic>> aggregates = {};
+                  final Set<String> uniqueNames = {};
 
-                for (final log in filteredData) {
-                  final supplies = log['supplies'] as List<dynamic>?;
-                  if (supplies != null) {
-                    for (final supply in supplies) {
-                      final supplyMap = supply as Map<String, dynamic>?;
-                      if (supplyMap != null) {
-                        final name =
-                            (supplyMap['name']?.toString() ?? '').trim();
-                        final brand =
-                            (supplyMap['brand']?.toString() ?? '').trim();
-                        final quantity = supplyMap['deductQty'] ??
-                            supplyMap['quantity'] ??
-                            0;
-                        final quantityInt = quantity is num
-                            ? quantity.toInt()
-                            : (int.tryParse(quantity.toString()) ?? 0);
+                  for (final log in filteredData) {
+                    final supplies = log['supplies'] as List<dynamic>?;
+                    if (supplies != null) {
+                      for (final supply in supplies) {
+                        final supplyMap = supply as Map<String, dynamic>?;
+                        if (supplyMap != null) {
+                          final name =
+                              (supplyMap['name']?.toString() ?? '').trim();
+                          final brand =
+                              (supplyMap['brand']?.toString() ?? '').trim();
+                          final quantity = supplyMap['deductQty'] ??
+                              supplyMap['quantity'] ??
+                              0;
+                          final quantityInt = quantity is num
+                              ? quantity.toInt()
+                              : (int.tryParse(quantity.toString()) ?? 0);
 
-                        if (name.isNotEmpty) {
-                          final key =
-                              '${name.toLowerCase().trim()}|${brand.toLowerCase().trim()}';
-                          uniqueNames.add(name.toLowerCase().trim());
+                          if (name.isNotEmpty) {
+                            final key =
+                                '${name.toLowerCase().trim()}|${brand.toLowerCase().trim()}';
+                            uniqueNames.add(name.toLowerCase().trim());
 
-                          if (!aggregates.containsKey(key)) {
-                            aggregates[key] = {
-                              'name': name,
-                              'brand': brand,
-                              'quantityDeducted': quantityInt,
-                            };
-                          } else {
-                            final current = aggregates[key]!;
-                            aggregates[key] = {
-                              'name': name,
-                              'brand': brand,
-                              'quantityDeducted':
-                                  (current['quantityDeducted'] as int) +
-                                      quantityInt,
-                            };
+                            if (!aggregates.containsKey(key)) {
+                              aggregates[key] = {
+                                'name': name,
+                                'brand': brand,
+                                'quantityDeducted': quantityInt,
+                              };
+                            } else {
+                              final current = aggregates[key]!;
+                              aggregates[key] = {
+                                'name': name,
+                                'brand': brand,
+                                'quantityDeducted':
+                                    (current['quantityDeducted'] as int) +
+                                        quantityInt,
+                              };
+                            }
                           }
                         }
                       }
                     }
                   }
-                }
 
-                // Batch fetch all types at once
-                final Map<String, String?> typeCache = {};
-                if (uniqueNames.isNotEmpty) {
-                  try {
-                    final suppliesResponse = await _supabase
-                        .from('supplies')
-                        .select('name, type')
-                        .eq('archived', false);
+                  // Batch fetch all types at once
+                  final Map<String, String?> typeCache = {};
+                  if (uniqueNames.isNotEmpty) {
+                    try {
+                      final suppliesResponse = await _supabase
+                          .from('supplies')
+                          .select('name, type')
+                          .eq('archived', false);
 
-                    for (final supply in suppliesResponse) {
-                      final nameKey = (supply['name'] ?? '')
-                          .toString()
-                          .trim()
-                          .toLowerCase();
-                      if (nameKey.isNotEmpty &&
-                          uniqueNames.contains(nameKey) &&
-                          !typeCache.containsKey(nameKey)) {
-                        final typeValue = supply['type'];
-                        if (typeValue != null &&
-                            typeValue.toString().trim().isNotEmpty) {
-                          typeCache[nameKey] = typeValue.toString().trim();
+                      for (final supply in suppliesResponse) {
+                        final nameKey = (supply['name'] ?? '')
+                            .toString()
+                            .trim()
+                            .toLowerCase();
+                        if (nameKey.isNotEmpty &&
+                            uniqueNames.contains(nameKey) &&
+                            !typeCache.containsKey(nameKey)) {
+                          final typeValue = supply['type'];
+                          if (typeValue != null &&
+                              typeValue.toString().trim().isNotEmpty) {
+                            typeCache[nameKey] = typeValue.toString().trim();
+                          }
                         }
                       }
+                    } catch (e) {
+                      // If batch lookup fails, types remain null
                     }
-                  } catch (e) {
-                    // If batch lookup fails, types remain null
                   }
-                }
 
-                // Create final aggregates with types
-                final Map<String, FastMovingItem> finalAggregates = {};
-                for (final entry in aggregates.entries) {
-                  final nameKey =
-                      entry.value['name'].toString().trim().toLowerCase();
-                  final type = typeCache[nameKey];
-                  final String typeKey = type != null && type.isNotEmpty
-                      ? type.trim().toLowerCase()
-                      : '';
-                  final String key = '$nameKey|$typeKey';
+                  // Create final aggregates with types
+                  final Map<String, FastMovingItem> finalAggregates = {};
+                  for (final entry in aggregates.entries) {
+                    final nameKey =
+                        entry.value['name'].toString().trim().toLowerCase();
+                    final type = typeCache[nameKey];
+                    final String typeKey = type != null && type.isNotEmpty
+                        ? type.trim().toLowerCase()
+                        : '';
+                    final String key = '$nameKey|$typeKey';
 
-                  if (!finalAggregates.containsKey(key)) {
-                    finalAggregates[key] = FastMovingItem(
-                      productKey: key,
-                      name: entry.value['name'],
-                      brand: entry.value['brand'],
-                      type: type,
-                      quantityDeducted: entry.value['quantityDeducted'],
-                    );
+                    if (!finalAggregates.containsKey(key)) {
+                      finalAggregates[key] = FastMovingItem(
+                        productKey: key,
+                        name: entry.value['name'],
+                        brand: entry.value['brand'],
+                        type: type,
+                        quantityDeducted: entry.value['quantityDeducted'],
+                      );
+                    } else {
+                      final current = finalAggregates[key]!;
+                      finalAggregates[key] = FastMovingItem(
+                        productKey: current.productKey,
+                        name: current.name,
+                        brand: current.brand,
+                        type: current.type ?? type,
+                        quantityDeducted: current.quantityDeducted +
+                            (entry.value['quantityDeducted'] as int),
+                      );
+                    }
+                  }
+
+                  final List<FastMovingItem> items =
+                      finalAggregates.values.toList();
+
+                  items.sort((a, b) =>
+                      b.quantityDeducted.compareTo(a.quantityDeducted));
+
+                  final result =
+                      items.length > limit ? items.sublist(0, limit) : items;
+
+                  // Cache the result for this specific period
+                  // Cache the result (in-memory + Hive)
+                  _cachedFastMovingItems[periodKey] = result;
+                  unawaited(_saveToHive(periodKey, result));
+                  controller.add(result);
+                } catch (e) {
+                  // On error, emit cached data if available for this period or any period
+                  if (_cachedFastMovingItems.containsKey(periodKey)) {
+                    controller.add(_cachedFastMovingItems[periodKey]!);
+                  } else if (_lastSelectedPeriod != null &&
+                      _cachedFastMovingItems
+                          .containsKey(_lastSelectedPeriod!)) {
+                    controller
+                        .add(_cachedFastMovingItems[_lastSelectedPeriod!]!);
+                  } else if (_cachedFastMovingItems.isNotEmpty) {
+                    // Fallback to any cached data if available
+                    controller.add(_cachedFastMovingItems.values.first);
                   } else {
-                    final current = finalAggregates[key]!;
-                    finalAggregates[key] = FastMovingItem(
-                      productKey: current.productKey,
-                      name: current.name,
-                      brand: current.brand,
-                      type: current.type ?? type,
-                      quantityDeducted: current.quantityDeducted +
-                          (entry.value['quantityDeducted'] as int),
-                    );
+                    controller.add([]);
                   }
                 }
-
-                final List<FastMovingItem> items =
-                    finalAggregates.values.toList();
-
-                items.sort(
-                    (a, b) => b.quantityDeducted.compareTo(a.quantityDeducted));
-
-                final result =
-                    items.length > limit ? items.sublist(0, limit) : items;
-
-                // Cache the result for this specific period
-                _cachedFastMovingItems[periodKey] = result;
-                controller.add(result);
-              } catch (e) {
-                // On error, emit cached data if available for this period or any period
+              },
+              onError: (error) {
+                // On stream error, emit cached data if available for this period or any period
                 if (_cachedFastMovingItems.containsKey(periodKey)) {
                   controller.add(_cachedFastMovingItems[periodKey]!);
                 } else if (_lastSelectedPeriod != null &&
@@ -433,37 +501,37 @@ class FastMovingService {
                 } else {
                   controller.add([]);
                 }
-              }
-            },
-            onError: (error) {
-              // On stream error, emit cached data if available for this period or any period
-              if (_cachedFastMovingItems.containsKey(periodKey)) {
-                controller.add(_cachedFastMovingItems[periodKey]!);
-              } else if (_lastSelectedPeriod != null &&
-                  _cachedFastMovingItems.containsKey(_lastSelectedPeriod!)) {
-                controller.add(_cachedFastMovingItems[_lastSelectedPeriod!]!);
-              } else if (_cachedFastMovingItems.isNotEmpty) {
-                // Fallback to any cached data if available
-                controller.add(_cachedFastMovingItems.values.first);
-              } else {
-                controller.add([]);
-              }
-            },
-          );
-    } catch (e) {
-      // If stream creation fails, emit cached data if available for this period or any period
-      if (_cachedFastMovingItems.containsKey(periodKey)) {
-        controller.add(_cachedFastMovingItems[periodKey]!);
-      } else if (_lastSelectedPeriod != null &&
-          _cachedFastMovingItems.containsKey(_lastSelectedPeriod!)) {
-        controller.add(_cachedFastMovingItems[_lastSelectedPeriod!]!);
-      } else if (_cachedFastMovingItems.isNotEmpty) {
-        // Fallback to any cached data if available
-        controller.add(_cachedFastMovingItems.values.first);
-      } else {
-        controller.add([]);
+              },
+            );
+      } catch (e) {
+        emitCached();
+        if (_cachedFastMovingItems.isEmpty) {
+          controller.add([]);
+        }
       }
     }
+
+    controller
+      ..onListen = () async {
+        // 1. Check in-memory cache first
+        emitCached();
+
+        // 2. If in-memory cache is null for this period, auto-load from Hive
+        if (!_cachedFastMovingItems.containsKey(periodKey)) {
+          final hiveData = await _loadFromHive(periodKey);
+          if (hiveData != null) {
+            _cachedFastMovingItems[periodKey] =
+                hiveData; // Populate in-memory cache
+            controller.add(hiveData); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
+        startSubscription();
+      }
+      ..onCancel = () {
+        // Cleanup handled automatically
+      };
 
     return controller.stream;
   }

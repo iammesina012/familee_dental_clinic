@@ -41,9 +41,10 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
     super.initState();
     _searchController.addListener(_onSearchChanged);
     _initializeStream();
-    _logsController.preloadLogs().then((_) {
-      if (mounted) setState(() {});
-    });
+    // Pre-loading no longer needed - streams auto-load from Hive
+    // _logsController.preloadLogs().then((_) {
+    //   if (mounted) setState(() {});
+    // });
     // Auto-save deduction log if navigation provided data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _savePendingLog();

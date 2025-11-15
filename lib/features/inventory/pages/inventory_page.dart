@@ -13,9 +13,6 @@ import 'package:familee_dental/features/inventory/pages/expired_supply_page.dart
 import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 import 'package:familee_dental/features/inventory/controller/categories_controller.dart';
 import 'package:familee_dental/features/inventory/controller/expired_supply_controller.dart';
-import 'package:familee_dental/features/inventory/controller/archive_supply_controller.dart';
-import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
-import 'package:familee_dental/features/purchase_order/controller/po_supabase_controller.dart';
 import 'package:familee_dental/features/inventory/pages/archive_supply_page.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
@@ -23,6 +20,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:familee_dental/shared/services/user_data_service.dart';
 
 class Inventory extends StatefulWidget {
   const Inventory({super.key});
@@ -41,9 +39,7 @@ class _InventoryState extends State<Inventory> {
   String? _userName;
   String? _userRole;
 
-  // Static cache for user data (persists across widget rebuilds and navigation)
-  static String? _cachedUserName;
-  static String? _cachedUserRole;
+  final _userDataService = UserDataService();
 
   final TextEditingController searchController = TextEditingController();
   String searchText = '';
@@ -168,13 +164,8 @@ class _InventoryState extends State<Inventory> {
   @override
   void initState() {
     super.initState();
-    // Use cached user data immediately if available
-    if (_cachedUserName != null || _cachedUserRole != null) {
-      setState(() {
-        _userName = _cachedUserName;
-        _userRole = _cachedUserRole;
-      });
-    }
+    // Load user data from Hive first (avoid placeholders)
+    _loadUserDataFromHive();
 
     // Initialize default categories and migrate existing data
     _initializeData();
@@ -188,9 +179,27 @@ class _InventoryState extends State<Inventory> {
     // Handle route arguments after initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleRouteArguments();
-      // Pre-populate all caches in the background (non-blocking)
-      _prePopulateCaches();
+      // Pre-population no longer needed - streams auto-load from Hive
     });
+  }
+
+  /// Load user data from Hive (no placeholders)
+  Future<void> _loadUserDataFromHive() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser != null) {
+        await _userDataService.loadFromHive(currentUser.id);
+        if (mounted) {
+          setState(() {
+            _userName = _userDataService.userName;
+            _userRole = _userDataService.userRole;
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore errors - best effort
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -208,43 +217,43 @@ class _InventoryState extends State<Inventory> {
             .maybeSingle();
 
         if (mounted) {
-          setState(() {
-            if (response != null &&
-                response['name'] != null &&
-                response['name'].toString().trim().isNotEmpty) {
-              // Use data from user_roles table
-              final name = response['name'].toString().trim();
-              final role = response['role']?.toString().trim() ?? 'Admin';
+          if (response != null &&
+              response['name'] != null &&
+              response['name'].toString().trim().isNotEmpty) {
+            // Use data from user_roles table
+            final name = response['name'].toString().trim();
+            final role = response['role']?.toString().trim() ?? 'Admin';
 
-              // Cache the data
-              _cachedUserName = name;
-              _cachedUserRole = role;
-
+            setState(() {
               _userName = name;
               _userRole = role;
-            } else {
-              // Fallback to auth user data
-              final displayName =
-                  currentUser.userMetadata?['display_name']?.toString().trim();
-              final emailName = currentUser.email?.split('@')[0].trim();
-              final name = displayName ?? emailName ?? 'User';
-              final role = 'Admin';
+            });
 
-              // Cache the data
-              _cachedUserName = name;
-              _cachedUserRole = role;
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          } else {
+            // Fallback to auth user data
+            final displayName =
+                currentUser.userMetadata?['display_name']?.toString().trim();
+            final emailName = currentUser.email?.split('@')[0].trim();
+            final name = displayName ?? emailName ?? 'User';
+            final role = 'Admin';
 
+            setState(() {
               _userName = name;
               _userRole = role;
-            }
-          });
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          }
         }
       } else {
-        // If no current user, use cached data if available
+        // If no current user, use cached data from service if available
         if (mounted) {
           setState(() {
-            _userName = _cachedUserName ?? 'User';
-            _userRole = _cachedUserRole ?? 'Admin';
+            _userName = _userDataService.userName;
+            _userRole = _userDataService.userRole;
           });
         }
       }
@@ -252,9 +261,9 @@ class _InventoryState extends State<Inventory> {
       print('Error loading user data: $e');
       if (mounted) {
         setState(() {
-          // Use cached data if available, otherwise use defaults
-          _userName = _cachedUserName ?? 'User';
-          _userRole = _cachedUserRole ?? 'Admin';
+          // Use cached data from service if available (loaded from Hive)
+          _userName = _userDataService.userName;
+          _userRole = _userDataService.userRole;
         });
       }
     }
@@ -308,165 +317,6 @@ class _InventoryState extends State<Inventory> {
   }
 
   // Pre-populate all caches when inventory page loads (non-blocking)
-  Future<void> _prePopulateCaches() async {
-    try {
-      // Start all streams briefly to populate cache
-      // We use .first to get one emission, which will populate the cache
-
-      // Pre-populate archived supplies cache
-      final archiveController = ArchiveSupplyController();
-      archiveController
-          .getArchivedSupplies()
-          .first
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <InventoryItem>[],
-          )
-          .catchError((_) => <InventoryItem>[]); // Ignore errors
-
-      // Pre-populate expired supplies cache
-      expiredController
-          .getSuppliesStream(archived: false)
-          .first
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <InventoryItem>[],
-          )
-          .catchError((_) => <InventoryItem>[]); // Ignore errors
-
-      // Pre-populate brands cache
-      filterController
-          .getBrandsStream()
-          .first
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <Brand>[],
-          )
-          .catchError((_) => <Brand>[]); // Ignore errors
-
-      // Pre-populate suppliers cache
-      filterController
-          .getSuppliersStream()
-          .first
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <Supplier>[],
-          )
-          .catchError((_) => <Supplier>[]); // Ignore errors
-
-      // Pre-populate brand names cache
-      filterController
-          .getBrandNamesStream()
-          .first
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <String>[],
-          )
-          .catchError((_) => <String>[]); // Ignore errors
-
-      // Pre-populate supplier names cache
-      filterController
-          .getSupplierNamesStream()
-          .first
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <String>[],
-          )
-          .catchError((_) => <String>[]); // Ignore errors
-
-      // Pre-populate categories cache
-      categoriesController
-          .getCategoriesStream()
-          .first
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <String>[],
-          )
-          .catchError((_) => <String>[]); // Ignore errors
-
-      // Pre-populate supply types cache for all supplies
-      // Wait for inventory stream to emit first, then pre-populate types
-      controller
-          .getSuppliesStream(archived: false)
-          .first
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <InventoryItem>[],
-          )
-          .then((supplies) async {
-        try {
-          if (supplies.isNotEmpty) {
-            final viewController = ViewSupplyController();
-
-            // Get unique supply names
-            final uniqueSupplyNames =
-                supplies.map((item) => item.name).toSet().toList();
-
-            // Pre-populate types for each unique supply name (in batches to avoid blocking)
-            for (int i = 0; i < uniqueSupplyNames.length; i++) {
-              final supplyName = uniqueSupplyNames[i];
-
-              // Pre-populate types for this supply name (with timeout)
-              viewController
-                  .getSupplyTypes(supplyName)
-                  .timeout(
-                    const Duration(seconds: 2),
-                    onTimeout: () => <String>[],
-                  )
-                  .catchError((_) => <String>[]);
-
-              // Yield to UI thread every 10 supplies to prevent blocking
-              if (i % 10 == 0 && i > 0) {
-                await Future.delayed(const Duration(milliseconds: 50));
-              }
-            }
-          }
-        } catch (e) {
-          // Silently fail - this is best-effort pre-population
-        }
-      }).catchError((_) {}); // Ignore errors
-
-      // Pre-populate purchase order caches so Edit PO works offline
-      final poController = POSupabaseController();
-      poController.preloadFromLocalCache().then((purchaseOrders) async {
-        if (purchaseOrders.isEmpty) {
-          return;
-        }
-
-        final viewController = ViewSupplyController();
-        final Set<String> poSupplyNames = {};
-
-        for (final po in purchaseOrders) {
-          for (final supply in po.supplies) {
-            final name = (supply['supplyName'] ?? supply['name'] ?? '')
-                .toString()
-                .trim();
-            if (name.isNotEmpty) {
-              poSupplyNames.add(name);
-            }
-          }
-        }
-
-        var index = 0;
-        for (final name in poSupplyNames) {
-          viewController
-              .getSupplyTypes(name)
-              .timeout(
-                const Duration(seconds: 2),
-                onTimeout: () => <String>[],
-              )
-              .catchError((_) => <String>[]);
-
-          if (index % 10 == 0 && index > 0) {
-            await Future.delayed(const Duration(milliseconds: 50));
-          }
-          index++;
-        }
-      }).catchError((_) {});
-    } catch (e) {
-      // Silently fail - this is best-effort pre-population
-    }
-  }
 
   void _applyExpiringFilter() {
     // Set the expiry filter to show only expiring items
@@ -1151,6 +1001,7 @@ class _InventoryState extends State<Inventory> {
                         status: groupedItem.getStatus(),
                         currentSort: selectedSort,
                         overrideStock: groupedItem.totalStock,
+                        variants: groupedItem.variants,
                       ),
                     );
                   },
@@ -1164,7 +1015,7 @@ class _InventoryState extends State<Inventory> {
   }
 
   Widget _buildWelcomePanel(ThemeData theme) {
-    final userName = _userName ?? _cachedUserName ?? 'User';
+    final userName = _userName ?? _userDataService.userName ?? 'User';
     final isDark = theme.brightness == Brightness.dark;
 
     return Card(
@@ -1261,7 +1112,7 @@ class _InventoryState extends State<Inventory> {
                           ),
                         ),
                         Text(
-                          _userRole ?? _cachedUserRole ?? 'Admin',
+                          _userRole ?? _userDataService.userRole ?? 'Admin',
                           style: AppFonts.sfProStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,

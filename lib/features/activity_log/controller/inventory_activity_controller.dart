@@ -172,11 +172,14 @@ class InventoryActivityController {
     String? supplier,
     String? expiryDate,
     bool noExpiry = false,
+    int? lowStockBaseline,
   }) async {
     await _logActivity(
       action: 'inventory_supply_added',
       category: 'Inventory',
-      description: 'Added $itemName',
+      description: type.trim().isNotEmpty
+          ? 'Added $itemName ($type)'
+          : 'Added $itemName',
       metadata: {
         'itemName': itemName,
         'type': type,
@@ -191,6 +194,7 @@ class InventoryActivityController {
         'supplier': supplier,
         'expiryDate':
             noExpiry ? 'No expiry date' : (expiryDate ?? 'No expiry date'),
+        'lowStockBaseline': lowStockBaseline,
       },
     );
   }
@@ -211,12 +215,15 @@ class InventoryActivityController {
     String? supplier,
     String? expiryDate,
     bool noExpiry = false,
+    int? lowStockBaseline,
     required Map<String, Map<String, dynamic>> fieldChanges,
   }) async {
     await _logActivity(
       action: 'inventory_supply_edited',
       category: 'Inventory',
-      description: 'Edited $itemName',
+      description: type != null && type.trim().isNotEmpty
+          ? 'Edited $itemName ($type)'
+          : 'Edited $itemName',
       metadata: {
         'itemName': itemName,
         'type': type,
@@ -232,6 +239,7 @@ class InventoryActivityController {
         'supplier': supplier,
         'expiryDate':
             noExpiry ? 'No expiry date' : (expiryDate ?? 'No expiry date'),
+        'lowStockBaseline': lowStockBaseline,
         'fieldChanges': fieldChanges,
       },
     );
@@ -240,29 +248,41 @@ class InventoryActivityController {
   /// Log inventory supply archived
   Future<void> logInventorySupplyArchived({
     required String itemName,
+    String? type,
     required String category,
     required int stock,
     required String unit,
+    String? packagingUnit,
+    String? packagingContent,
+    int? packagingContentQuantity,
     double? cost,
     String? brand,
     String? supplier,
     String? expiryDate,
     bool noExpiry = false,
+    int? lowStockBaseline,
   }) async {
     await _logActivity(
       action: 'inventory_supply_archived',
       category: 'Inventory',
-      description: 'Archived $itemName',
+      description: type != null && type.trim().isNotEmpty
+          ? 'Archived $itemName ($type)'
+          : 'Archived $itemName',
       metadata: {
         'itemName': itemName,
+        'type': type,
         'category': category,
         'stock': stock,
         'unit': unit,
+        'packagingUnit': packagingUnit,
+        'packagingContent': packagingContent,
+        'packagingContentQuantity': packagingContentQuantity,
         'cost': cost,
         'brand': brand,
         'supplier': supplier,
         'expiryDate':
             noExpiry ? 'No expiry date' : (expiryDate ?? 'No expiry date'),
+        'lowStockBaseline': lowStockBaseline,
       },
     );
   }
@@ -300,29 +320,41 @@ class InventoryActivityController {
   /// Log inventory supply deleted
   Future<void> logInventorySupplyDeleted({
     required String itemName,
+    String? type,
     required String category,
     required int stock,
     required String unit,
+    String? packagingUnit,
+    String? packagingContent,
+    int? packagingContentQuantity,
     double? cost,
     String? brand,
     String? supplier,
     String? expiryDate,
     bool noExpiry = false,
+    int? lowStockBaseline,
   }) async {
     await _logActivity(
       action: 'inventory_supply_deleted',
       category: 'Inventory',
-      description: 'Deleted $itemName',
+      description: type != null && type.trim().isNotEmpty
+          ? 'Deleted $itemName ($type)'
+          : 'Deleted $itemName',
       metadata: {
         'itemName': itemName,
+        'type': type,
         'category': category,
         'stock': stock,
         'unit': unit,
+        'packagingUnit': packagingUnit,
+        'packagingContent': packagingContent,
+        'packagingContentQuantity': packagingContentQuantity,
         'cost': cost,
         'brand': brand,
         'supplier': supplier,
         'expiryDate':
             noExpiry ? 'No expiry date' : (expiryDate ?? 'No expiry date'),
+        'lowStockBaseline': lowStockBaseline,
       },
     );
   }
@@ -330,29 +362,41 @@ class InventoryActivityController {
   /// Log expired supply disposed
   Future<void> logExpiredSupplyDisposed({
     required String itemName,
+    String? type,
     required String category,
     required int stock,
     required String unit,
+    String? packagingUnit,
+    String? packagingContent,
+    int? packagingContentQuantity,
     double? cost,
     String? brand,
     String? supplier,
     String? expiryDate,
     bool noExpiry = false,
+    int? lowStockBaseline,
   }) async {
     await _logActivity(
       action: 'expired_supply_disposed',
       category: 'Inventory',
-      description: 'Disposed $itemName',
+      description: type != null && type.trim().isNotEmpty
+          ? 'Disposed $itemName ($type)'
+          : 'Disposed $itemName',
       metadata: {
         'itemName': itemName,
+        'type': type,
         'category': category,
         'stock': stock,
         'unit': unit,
+        'packagingUnit': packagingUnit,
+        'packagingContent': packagingContent,
+        'packagingContentQuantity': packagingContentQuantity,
         'cost': cost,
         'brand': brand,
         'supplier': supplier,
         'expiryDate':
             noExpiry ? 'No expiry date' : (expiryDate ?? 'No expiry date'),
+        'lowStockBaseline': lowStockBaseline,
       },
     );
   }

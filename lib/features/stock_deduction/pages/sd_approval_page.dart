@@ -39,9 +39,10 @@ class _ApprovalPageState extends State<ApprovalPage> {
     super.initState();
     // Initialize stream first (will show loading)
     _initializeStream();
-    _approvalController.preloadPendingApprovals().then((_) {
-      if (mounted) setState(() {});
-    });
+    // Pre-loading no longer needed - streams auto-load from Hive
+    // _approvalController.preloadPendingApprovals().then((_) {
+    //   if (mounted) setState(() {});
+    // });
     // Load rejected approvals and rebuild when done
     _loadRejectedApprovals();
   }

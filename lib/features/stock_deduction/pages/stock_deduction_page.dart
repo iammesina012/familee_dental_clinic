@@ -357,11 +357,13 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
 
   Future<void> _prePopulateCaches() async {
     try {
-      await _approvalController.preloadPendingApprovals();
+      // Pre-loading no longer needed - streams auto-load from Hive
+      // await _approvalController.preloadPendingApprovals();
     } catch (_) {}
 
     try {
-      await StockDeductionLogsController().preloadLogs();
+      // Pre-loading no longer needed - streams auto-load from Hive
+      // await StockDeductionLogsController().preloadLogs();
     } catch (_) {}
 
     try {

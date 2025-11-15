@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
+import 'package:flutter/foundation.dart';
 
 class ApprovalController {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -16,22 +18,54 @@ class ApprovalController {
           ? List<Map<String, dynamic>>.from(_cachedPendingApprovals!)
           : const [];
 
+  /// Load pending approvals from Hive
+  Future<List<Map<String, dynamic>>?> _loadApprovalsFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.sdPendingApprovalsBox);
+      final jsonStr = box.get('pending_approvals') as String?;
+      if (jsonStr != null) {
+        final jsonList = jsonDecode(jsonStr) as List<dynamic>;
+        return jsonList
+            .map((e) => Map<String, dynamic>.from(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error loading approvals from Hive: $e');
+    }
+    return null;
+  }
+
   Future<List<Map<String, dynamic>>> preloadPendingApprovals() async {
     try {
+      // Try Hive first (new persistent cache)
+      final hiveData = await _loadApprovalsFromHive();
+      if (hiveData != null && hiveData.isNotEmpty) {
+        _cachedPendingApprovals = hiveData;
+        return List<Map<String, dynamic>>.from(hiveData);
+      }
+
+      // Fallback to SharedPreferences (backward compatibility)
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_cacheKey);
-      if (raw == null || raw.isEmpty) {
-        _cachedPendingApprovals = null;
-        return const [];
+      if (raw != null && raw.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+        final restored = decoded
+            .map((entry) =>
+                Map<String, dynamic>.from(entry as Map<String, dynamic>))
+            .toList(growable: false);
+        _cachedPendingApprovals = restored;
+        // Migrate to Hive for future use
+        if (restored.isNotEmpty) {
+          final box =
+              await HiveStorage.openBox(HiveStorage.sdPendingApprovalsBox);
+          unawaited(box.put('pending_approvals', jsonEncode(restored)));
+        }
+        return List<Map<String, dynamic>>.from(restored);
       }
-      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
-      final restored = decoded
-          .map((entry) =>
-              Map<String, dynamic>.from(entry as Map<String, dynamic>))
-          .toList(growable: false);
-      _cachedPendingApprovals = restored;
-      return List<Map<String, dynamic>>.from(restored);
-    } catch (_) {
+      _cachedPendingApprovals = null;
+      return const [];
+    } catch (e) {
+      debugPrint('Error preloading approvals: $e');
       _cachedPendingApprovals = null;
       return const [];
     }
@@ -71,12 +105,19 @@ class ApprovalController {
 
     Future<void> persist(List<Map<String, dynamic>> approvals) async {
       try {
+        // Save to Hive for persistent caching
+        final box =
+            await HiveStorage.openBox(HiveStorage.sdPendingApprovalsBox);
+        await box.put('pending_approvals', jsonEncode(approvals));
+
+        // Also save to SharedPreferences for backward compatibility
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(
           _cacheKey,
           jsonEncode(approvals),
         );
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Error persisting approvals: $e');
         // Ignore cache persistence issues
       }
     }
@@ -96,7 +137,7 @@ class ApprovalController {
           .toList(growable: false);
     }
 
-    void start() {
+    void startSubscription() {
       subscription ??= _supabase
           .from(_table)
           .stream(primaryKey: ['id'])
@@ -118,13 +159,22 @@ class ApprovalController {
           );
     }
 
-    // Emit cache immediately (if any) then start stream on listen
-    emitCached();
-
     controller
-      ..onListen = () {
+      ..onListen = () async {
+        // 1. Check in-memory cache first
         emitCached();
-        start();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedPendingApprovals == null) {
+          final hiveData = await _loadApprovalsFromHive();
+          if (hiveData != null && hiveData.isNotEmpty) {
+            _cachedPendingApprovals = hiveData; // Populate in-memory cache
+            safeAdd(hiveData); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
+        startSubscription();
       }
       ..onCancel = () async {
         await subscription?.cancel();

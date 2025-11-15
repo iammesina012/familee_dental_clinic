@@ -343,6 +343,7 @@ class AddSupplyController {
             ? null
             : expiryController.text.trim(),
         noExpiry: noExpiry,
+        lowStockBaseline: lowStockThreshold,
       );
 
       // Check for notifications
@@ -366,6 +367,9 @@ class AddSupplyController {
             ? null
             : expiryController.text.trim(),
         noExpiry,
+        supplyType: typeController.text.trim().isNotEmpty
+            ? typeController.text.trim()
+            : null,
       );
 
       return null; // Success

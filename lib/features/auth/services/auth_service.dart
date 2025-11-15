@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:familee_dental/features/activity_log/controller/login_activity_controller.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/services/user_data_service.dart';
 
 class AuthService {
   SupabaseClient get _supabase => Supabase.instance.client;
@@ -151,6 +152,11 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    // Clear user data from Hive before logout
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser != null) {
+      await UserDataService().clear(currentUser.id);
+    }
     // Log logout activity before signing out
     await LoginActivityController().logLogout();
     final prefs = await SharedPreferences.getInstance();

@@ -335,21 +335,25 @@ class NotificationsController {
   }
 
   Future<void> createExpiringNotification(
-      String supplyName, int daysUntilExpiry) async {
+      String supplyName, int daysUntilExpiry,
+      {String? baseSupplyName, String? supplyType}) async {
     await createNotification(
       title: 'Expiring Soon',
       message: '$supplyName expires in $daysUntilExpiry days',
       type: 'expiring',
-      supplyName: supplyName,
+      supplyName: baseSupplyName ?? supplyName,
+      supplyType: supplyType,
     );
   }
 
-  Future<void> createExpiredNotification(String supplyName) async {
+  Future<void> createExpiredNotification(String supplyName,
+      {String? baseSupplyName, String? supplyType}) async {
     await createNotification(
       title: 'Expired Item',
       message: '$supplyName has expired',
       type: 'expired',
-      supplyName: supplyName,
+      supplyName: baseSupplyName ?? supplyName,
+      supplyType: supplyType,
     );
   }
 
@@ -1020,7 +1024,8 @@ class NotificationsController {
 
   // Helper method to check expiry notifications
   Future<void> checkExpiryNotification(
-      String supplyName, String? expiryDate, bool noExpiry) async {
+      String supplyName, String? expiryDate, bool noExpiry,
+      {String? supplyType}) async {
     if (noExpiry || expiryDate == null || expiryDate.isEmpty) {
       return; // No expiry to check
     }
@@ -1032,20 +1037,39 @@ class NotificationsController {
     final remaining = expiry.difference(now);
     final daysUntilExpiry = remaining.inDays;
 
+    // Format supply name with type if available
+    final formattedSupplyName =
+        _formatSupplyNameWithType(supplyName, supplyType);
+    final baseSupplyName = supplyName;
+
     // Check if expired
     if (expiry.isBefore(now)) {
-      await createExpiredNotification(supplyName);
+      await createExpiredNotification(
+        formattedSupplyName,
+        baseSupplyName: baseSupplyName,
+        supplyType: supplyType,
+      );
       return;
     }
 
     // Only notify at specific thresholds: 30 days, 7 days, and 24 hours
     if (daysUntilExpiry == 30) {
-      await createExpiringNotification(supplyName, 30);
+      await createExpiringNotification(
+        formattedSupplyName,
+        30,
+        baseSupplyName: baseSupplyName,
+        supplyType: supplyType,
+      );
       return;
     }
 
     if (daysUntilExpiry == 7) {
-      await createExpiringNotification(supplyName, 7);
+      await createExpiringNotification(
+        formattedSupplyName,
+        7,
+        baseSupplyName: baseSupplyName,
+        supplyType: supplyType,
+      );
       return;
     }
 
@@ -1055,9 +1079,10 @@ class NotificationsController {
         remaining.inHours <= 24) {
       await createNotification(
         title: 'Expiring Soon',
-        message: '$supplyName expires in 24 hours',
+        message: '$formattedSupplyName expires in 24 hours',
         type: 'expiring',
-        supplyName: supplyName,
+        supplyName: baseSupplyName,
+        supplyType: supplyType,
       );
       return;
     }

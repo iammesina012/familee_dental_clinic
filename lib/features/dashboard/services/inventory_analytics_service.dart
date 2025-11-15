@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
 
 class InventoryAnalyticsService {
   // Singleton pattern to ensure cache persists across widget rebuilds
@@ -18,110 +20,268 @@ class InventoryAnalyticsService {
   Map<String, List<Map<String, dynamic>>>? _cachedSuppliesByStatus;
   Map<String, List<Map<String, dynamic>>>? _cachedPurchaseOrdersByStatus;
 
+  // ===== HIVE PERSISTENT CACHE HELPERS =====
+
+  // Load expiry counts from Hive
+  Future<Map<String, int>?> _loadExpiryCountsFromHive() async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.dashboardExpiryCountsBox);
+      final jsonStr = box.get('expiry_counts') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return decoded.map((k, v) => MapEntry(k, v as int));
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save expiry counts to Hive
+  Future<void> _saveExpiryCountsToHive(Map<String, int> data) async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.dashboardExpiryCountsBox);
+      await box.put('expiry_counts', jsonEncode(data));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Load supply counts from Hive
+  Future<Map<String, int>?> _loadSupplyCountsFromHive() async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.dashboardSupplyCountsBox);
+      final jsonStr = box.get('supply_counts') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return decoded.map((k, v) => MapEntry(k, v as int));
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save supply counts to Hive
+  Future<void> _saveSupplyCountsToHive(Map<String, int> data) async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.dashboardSupplyCountsBox);
+      await box.put('supply_counts', jsonEncode(data));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Load PO counts from Hive
+  Future<Map<String, int>?> _loadPOCountsFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.dashboardPOCountsBox);
+      final jsonStr = box.get('po_counts') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return decoded.map((k, v) => MapEntry(k, v as int));
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save PO counts to Hive
+  Future<void> _savePOCountsToHive(Map<String, int> data) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.dashboardPOCountsBox);
+      await box.put('po_counts', jsonEncode(data));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Load supplies by status from Hive
+  Future<Map<String, List<Map<String, dynamic>>>?>
+      _loadSuppliesByStatusFromHive() async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.dashboardSuppliesByStatusBox);
+      final jsonStr = box.get('supplies_by_status') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return decoded.map(
+            (k, v) => MapEntry(k, (v as List).cast<Map<String, dynamic>>()));
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save supplies by status to Hive
+  Future<void> _saveSuppliesByStatusToHive(
+      Map<String, List<Map<String, dynamic>>> data) async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.dashboardSuppliesByStatusBox);
+      await box.put('supplies_by_status', jsonEncode(data));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Load POs by status from Hive
+  Future<Map<String, List<Map<String, dynamic>>>?>
+      _loadPOsByStatusFromHive() async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.dashboardPOsByStatusBox);
+      final jsonStr = box.get('pos_by_status') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return decoded.map(
+            (k, v) => MapEntry(k, (v as List).cast<Map<String, dynamic>>()));
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save POs by status to Hive
+  Future<void> _savePOsByStatusToHive(
+      Map<String, List<Map<String, dynamic>>> data) async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.dashboardPOsByStatusBox);
+      await box.put('pos_by_status', jsonEncode(data));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // ===== STREAMS =====
+
   // Stream for expired and expiring counts
   Stream<Map<String, int>> getExpiryCountsStream() {
     final controller = StreamController<Map<String, int>>.broadcast();
 
-    // Emit cached data immediately if available (no delay - instant feedback)
-    if (_cachedExpiryCounts != null) {
-      controller.add(_cachedExpiryCounts!);
-    }
-
-    try {
-      _supabase.from('supplies').stream(primaryKey: ['id']).listen(
-        (data) {
-          try {
-            final allSupplies = data.map((row) {
-              DateTime? createdAt;
-              if (row['created_at'] != null) {
-                try {
-                  createdAt = DateTime.parse(row['created_at'] as String);
-                } catch (e) {
-                  createdAt = null;
-                }
-              }
-              return InventoryItem(
-                id: row['id'] as String,
-                name: row['name'] ?? '',
-                imageUrl: row['image_url'] ?? '',
-                category: row['category'] ?? '',
-                cost: (row['cost'] ?? 0).toDouble(),
-                stock: (row['stock'] ?? 0).toInt(),
-                lowStockBaseline: row['low_stock_baseline'] != null
-                    ? (row['low_stock_baseline'] as num).toInt()
-                    : null,
-                unit: row['unit'] ?? '',
-                supplier: row['supplier'] ?? '',
-                brand: row['brand'] ?? '',
-                expiry: row['expiry'],
-                noExpiry: row['no_expiry'] ?? false,
-                archived: row['archived'] ?? false,
-                createdAt: createdAt,
-              );
-            }).toList();
-
-            final supplies = allSupplies
-                .where((supply) => !supply.archived && supply.stock > 0)
-                .toList();
-
-            int expired = 0;
-            int expiring = 0;
-
-            final now = DateTime.now();
-            final today = DateTime(now.year, now.month, now.day);
-
-            for (final s in supplies) {
-              if (s.noExpiry || s.expiry == null || s.expiry!.isEmpty) {
-                continue;
-              }
-              final parsed = DateTime.tryParse(s.expiry!.replaceAll('/', '-'));
-              if (parsed == null) continue;
-              final dateOnly = DateTime(parsed.year, parsed.month, parsed.day);
-              if (dateOnly.isBefore(today) ||
-                  dateOnly.isAtSameMomentAs(today)) {
-                expired++;
-              } else {
-                final daysUntil = dateOnly.difference(today).inDays;
-                if (daysUntil <= 30) {
-                  expiring++;
-                }
-              }
-            }
-
-            final result = {
-              'expired': expired,
-              'expiring': expiring,
-            };
-
-            // Cache the result
-            _cachedExpiryCounts = result;
-            controller.add(result);
-          } catch (e) {
-            // On error, emit cached data if available, otherwise emit defaults
-            if (_cachedExpiryCounts != null) {
-              controller.add(_cachedExpiryCounts!);
-            } else {
-              controller.add({'expired': 0, 'expiring': 0});
-            }
-          }
-        },
-        onError: (error) {
-          // On stream error, emit cached data if available, otherwise emit defaults
-          if (_cachedExpiryCounts != null) {
-            controller.add(_cachedExpiryCounts!);
-          } else {
-            controller.add({'expired': 0, 'expiring': 0});
-          }
-        },
-      );
-    } catch (e) {
-      // If stream creation fails, emit cached data if available, otherwise emit defaults
+    void emitCachedOrEmpty({bool forceEmpty = false}) {
       if (_cachedExpiryCounts != null) {
         controller.add(_cachedExpiryCounts!);
-      } else {
+      } else if (forceEmpty) {
         controller.add({'expired': 0, 'expiring': 0});
       }
     }
+
+    void startSubscription() {
+      try {
+        _supabase.from('supplies').stream(primaryKey: ['id']).listen(
+          (data) {
+            try {
+              final allSupplies = data.map((row) {
+                DateTime? createdAt;
+                if (row['created_at'] != null) {
+                  try {
+                    createdAt = DateTime.parse(row['created_at'] as String);
+                  } catch (e) {
+                    createdAt = null;
+                  }
+                }
+                return InventoryItem(
+                  id: row['id'] as String,
+                  name: row['name'] ?? '',
+                  type: row['type'],
+                  imageUrl: row['image_url'] ?? '',
+                  category: row['category'] ?? '',
+                  cost: (row['cost'] ?? 0).toDouble(),
+                  stock: (row['stock'] ?? 0).toInt(),
+                  lowStockBaseline: row['low_stock_baseline'] != null
+                      ? (row['low_stock_baseline'] as num).toInt()
+                      : null,
+                  unit: row['unit'] ?? '',
+                  supplier: row['supplier'] ?? '',
+                  brand: row['brand'] ?? '',
+                  expiry: row['expiry'],
+                  noExpiry: row['no_expiry'] ?? false,
+                  archived: row['archived'] ?? false,
+                  createdAt: createdAt,
+                );
+              }).toList();
+
+              final supplies = allSupplies
+                  .where((supply) => !supply.archived && supply.stock > 0)
+                  .toList();
+
+              int expired = 0;
+              int expiring = 0;
+
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
+
+              for (final s in supplies) {
+                if (s.noExpiry || s.expiry == null || s.expiry!.isEmpty) {
+                  continue;
+                }
+                final parsed =
+                    DateTime.tryParse(s.expiry!.replaceAll('/', '-'));
+                if (parsed == null) continue;
+                final dateOnly =
+                    DateTime(parsed.year, parsed.month, parsed.day);
+                if (dateOnly.isBefore(today) ||
+                    dateOnly.isAtSameMomentAs(today)) {
+                  expired++;
+                } else {
+                  final daysUntil = dateOnly.difference(today).inDays;
+                  if (daysUntil <= 30) {
+                    expiring++;
+                  }
+                }
+              }
+
+              final result = {
+                'expired': expired,
+                'expiring': expiring,
+              };
+
+              // Cache the result (in-memory + Hive)
+              _cachedExpiryCounts = result;
+              unawaited(_saveExpiryCountsToHive(result));
+              controller.add(result);
+            } catch (e) {
+              emitCachedOrEmpty(forceEmpty: true);
+            }
+          },
+          onError: (error) {
+            emitCachedOrEmpty(forceEmpty: true);
+          },
+        );
+      } catch (e) {
+        emitCachedOrEmpty(forceEmpty: true);
+      }
+    }
+
+    controller
+      ..onListen = () async {
+        // 1. Check in-memory cache first
+        emitCachedOrEmpty();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedExpiryCounts == null) {
+          final hiveData = await _loadExpiryCountsFromHive();
+          if (hiveData != null) {
+            _cachedExpiryCounts = hiveData; // Populate in-memory cache
+            controller.add(hiveData); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
+        startSubscription();
+      }
+      ..onCancel = () {
+        // Cleanup handled automatically
+      };
 
     return controller.stream;
   }
@@ -130,130 +290,195 @@ class InventoryAnalyticsService {
   Stream<Map<String, int>> getSupplyCountsStream() {
     final controller = StreamController<Map<String, int>>.broadcast();
 
-    // Emit cached data immediately if available (no delay - instant feedback)
-    if (_cachedSupplyCounts != null) {
-      controller.add(_cachedSupplyCounts!);
+    void emitCachedOrEmpty({bool forceEmpty = false}) {
+      if (_cachedSupplyCounts != null) {
+        controller.add(_cachedSupplyCounts!);
+      } else if (forceEmpty) {
+        controller
+            .add({'inStock': 0, 'lowStock': 0, 'outOfStock': 0, 'total': 0});
+      }
     }
 
-    try {
-      _supabase.from('supplies').stream(primaryKey: ['id']).listen(
-        (data) {
-          try {
-            final allSupplies = data.map((row) {
-              DateTime? createdAt;
-              if (row['created_at'] != null) {
-                try {
-                  createdAt = DateTime.parse(row['created_at'] as String);
-                } catch (e) {
-                  createdAt = null;
-                }
-              }
-              return InventoryItem(
-                id: row['id'] as String,
-                name: row['name'] ?? '',
-                imageUrl: row['image_url'] ?? '',
-                category: row['category'] ?? '',
-                cost: (row['cost'] ?? 0).toDouble(),
-                stock: (row['stock'] ?? 0).toInt(),
-                lowStockBaseline: row['low_stock_baseline'] != null
-                    ? (row['low_stock_baseline'] as num).toInt()
-                    : null,
-                unit: row['unit'] ?? '',
-                supplier: row['supplier'] ?? '',
-                brand: row['brand'] ?? '',
-                expiry: row['expiry'],
-                noExpiry: row['no_expiry'] ?? false,
-                archived: row['archived'] ?? false,
-                createdAt: createdAt,
-              );
-            }).toList();
-
-            // Filter out archived supplies AND expired supplies
-            final supplies = allSupplies.where((supply) {
-              if (supply.archived) return false;
-
-              // Filter out expired supplies
-              if (!supply.noExpiry &&
-                  supply.expiry != null &&
-                  supply.expiry!.isNotEmpty) {
-                final expiryDate =
-                    DateTime.tryParse(supply.expiry!.replaceAll('/', '-'));
-                if (expiryDate != null) {
-                  final now = DateTime.now();
-                  final today = DateTime(now.year, now.month, now.day);
-                  final dateOnly = DateTime(
-                      expiryDate.year, expiryDate.month, expiryDate.day);
-
-                  if (dateOnly.isBefore(today) ||
-                      dateOnly.isAtSameMomentAs(today)) {
-                    return false; // Filter out expired items
+    void startSubscription() {
+      try {
+        _supabase.from('supplies').stream(primaryKey: ['id']).listen(
+          (data) {
+            try {
+              final allSupplies = data.map((row) {
+                DateTime? createdAt;
+                if (row['created_at'] != null) {
+                  try {
+                    createdAt = DateTime.parse(row['created_at'] as String);
+                  } catch (e) {
+                    createdAt = null;
                   }
                 }
+                return InventoryItem(
+                  id: row['id'] as String,
+                  name: row['name'] ?? '',
+                  type: row['type'],
+                  imageUrl: row['image_url'] ?? '',
+                  category: row['category'] ?? '',
+                  cost: (row['cost'] ?? 0).toDouble(),
+                  stock: (row['stock'] ?? 0).toInt(),
+                  lowStockBaseline: row['low_stock_baseline'] != null
+                      ? (row['low_stock_baseline'] as num).toInt()
+                      : null,
+                  unit: row['unit'] ?? '',
+                  supplier: row['supplier'] ?? '',
+                  brand: row['brand'] ?? '',
+                  expiry: row['expiry'],
+                  noExpiry: row['no_expiry'] ?? false,
+                  archived: row['archived'] ?? false,
+                  createdAt: createdAt,
+                );
+              }).toList();
+
+              // Filter out archived supplies only (keep expired for checking)
+              final nonArchivedSupplies = allSupplies.where((supply) {
+                return !supply.archived;
+              }).toList();
+
+              // Helper function to check if a supply is expired
+              bool isExpired(InventoryItem supply) {
+                if (supply.noExpiry ||
+                    supply.expiry == null ||
+                    supply.expiry!.isEmpty) {
+                  return false;
+                }
+                final expiryDate =
+                    DateTime.tryParse(supply.expiry!.replaceAll('/', '-'));
+                if (expiryDate == null) return false;
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+                final dateOnly =
+                    DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+                return dateOnly.isBefore(today) ||
+                    dateOnly.isAtSameMomentAs(today);
               }
 
-              return true;
-            }).toList();
+              // Filter out expired supplies for grouping (but we'll check all batches later)
+              final supplies = nonArchivedSupplies.where((supply) {
+                return !isExpired(supply);
+              }).toList();
 
-            // Count individual supplies by status (across all batches)
-            // Using dynamic 20% critical level and tiered thresholds
-            int totalInStock = 0;
-            int totalLowStock = 0;
-            int totalOutOfStock = 0; // stock = 0
+              // Group ALL non-archived supplies by name + category + type (including expired)
+              final Map<String, List<InventoryItem>> allGrouped = {};
+              for (final supply in nonArchivedSupplies) {
+                final nameKey = supply.name.trim().toLowerCase();
+                final categoryKey = supply.category.trim().toLowerCase();
+                final typeKey = (supply.type ?? '').trim().toLowerCase();
+                final key = '${nameKey}_${categoryKey}_$typeKey';
+                if (!allGrouped.containsKey(key)) {
+                  allGrouped[key] = [];
+                }
+                allGrouped[key]!.add(supply);
+              }
 
-            for (final supply in supplies) {
-              if (supply.stock == 0) {
-                totalOutOfStock++;
-              } else {
-                // Use manually set threshold for low stock detection
-                if (supply.lowStockBaseline != null &&
-                    supply.lowStockBaseline! > 0 &&
-                    supply.stock <= supply.lowStockBaseline!) {
+              // Group non-expired supplies by name + category + type (for status calculation)
+              final Map<String, List<InventoryItem>> grouped = {};
+              for (final supply in supplies) {
+                final nameKey = supply.name.trim().toLowerCase();
+                final categoryKey = supply.category.trim().toLowerCase();
+                final typeKey = (supply.type ?? '').trim().toLowerCase();
+                final key = '${nameKey}_${categoryKey}_$typeKey';
+                if (!grouped.containsKey(key)) {
+                  grouped[key] = [];
+                }
+                grouped[key]!.add(supply);
+              }
+
+              // Count grouped supplies by status
+              int totalInStock = 0;
+              int totalLowStock = 0;
+              int totalOutOfStock = 0;
+
+              for (final entry in grouped.entries) {
+                final groupKey = entry.key;
+                final groupItems = entry.value;
+
+                // Check if this group has any expired batches (from allGrouped)
+                final allBatchesInGroup = allGrouped[groupKey] ?? [];
+                final hasExpiredBatches =
+                    allBatchesInGroup.any((item) => isExpired(item));
+
+                // If group has expired batches, exclude it from out of stock counting
+                // (it should be in expired section instead)
+                if (hasExpiredBatches) {
+                  // Skip counting this group in out of stock - it belongs in expired section
+                  continue;
+                }
+
+                // Calculate total stock for this group (sum all non-expired batches)
+                final totalStock =
+                    groupItems.fold(0, (sum, item) => sum + item.stock);
+
+                // Get threshold (all batches share the same threshold)
+                int? totalBaseline;
+                for (final item in groupItems) {
+                  if (item.lowStockBaseline != null &&
+                      item.lowStockBaseline! > 0) {
+                    totalBaseline = item.lowStockBaseline;
+                    break; // All batches have the same threshold
+                  }
+                }
+
+                // Determine status based on grouped totals (applies to ALL statuses)
+                if (totalStock == 0) {
+                  totalOutOfStock++;
+                } else if (totalBaseline != null &&
+                    totalBaseline > 0 &&
+                    totalStock <= totalBaseline) {
                   totalLowStock++;
                 } else {
                   totalInStock++;
                 }
               }
-            }
 
-            final result = {
-              'inStock': totalInStock,
-              'lowStock': totalLowStock,
-              'outOfStock': totalOutOfStock,
-              'total': supplies.length,
-            };
+              final result = {
+                'inStock': totalInStock,
+                'lowStock': totalLowStock,
+                'outOfStock': totalOutOfStock,
+                'total': grouped.length, // Count unique groups, not batches
+              };
 
-            // Cache the result
-            _cachedSupplyCounts = result;
-            controller.add(result);
-          } catch (e) {
-            // On error, emit cached data if available, otherwise emit defaults
-            if (_cachedSupplyCounts != null) {
-              controller.add(_cachedSupplyCounts!);
-            } else {
-              controller.add(
-                  {'inStock': 0, 'lowStock': 0, 'outOfStock': 0, 'total': 0});
+              // Cache the result (in-memory + Hive)
+              _cachedSupplyCounts = result;
+              unawaited(_saveSupplyCountsToHive(result));
+              controller.add(result);
+            } catch (e) {
+              emitCachedOrEmpty(forceEmpty: true);
             }
-          }
-        },
-        onError: (error) {
-          // On stream error, emit cached data if available, otherwise emit defaults
-          if (_cachedSupplyCounts != null) {
-            controller.add(_cachedSupplyCounts!);
-          } else {
-            controller.add(
-                {'inStock': 0, 'lowStock': 0, 'outOfStock': 0, 'total': 0});
-          }
-        },
-      );
-    } catch (e) {
-      // If stream creation fails, emit cached data if available, otherwise emit defaults
-      if (_cachedSupplyCounts != null) {
-        controller.add(_cachedSupplyCounts!);
-      } else {
-        controller
-            .add({'inStock': 0, 'lowStock': 0, 'outOfStock': 0, 'total': 0});
+          },
+          onError: (error) {
+            emitCachedOrEmpty(forceEmpty: true);
+          },
+        );
+      } catch (e) {
+        emitCachedOrEmpty(forceEmpty: true);
       }
     }
+
+    controller
+      ..onListen = () async {
+        // 1. Check in-memory cache first
+        emitCachedOrEmpty();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedSupplyCounts == null) {
+          final hiveData = await _loadSupplyCountsFromHive();
+          if (hiveData != null) {
+            _cachedSupplyCounts = hiveData; // Populate in-memory cache
+            controller.add(hiveData); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
+        startSubscription();
+      }
+      ..onCancel = () {
+        // Cleanup handled automatically
+      };
 
     return controller.stream;
   }
@@ -262,89 +487,108 @@ class InventoryAnalyticsService {
   Stream<Map<String, int>> getPurchaseOrderCountsStream() {
     final controller = StreamController<Map<String, int>>.broadcast();
 
-    // Emit cached data immediately if available (no delay - instant feedback)
-    if (_cachedPurchaseOrderCounts != null) {
-      controller.add(_cachedPurchaseOrderCounts!);
-    }
-
-    try {
-      _supabase.from('purchase_orders').stream(primaryKey: ['id']).listen(
-        (data) {
-          try {
-            int open = 0;
-            int partial = 0;
-            int approval = 0;
-            int closed = 0;
-
-            for (final row in data) {
-              final status = row['status']?.toString() ?? '';
-              switch (status) {
-                case 'Open':
-                  open++;
-                  break;
-                case 'Partial':
-                case 'Partially Received':
-                  partial++;
-                  break;
-                case 'Approval':
-                  approval++;
-                  break;
-                case 'Closed':
-                case 'Cancelled':
-                  closed++;
-                  break;
-              }
-            }
-
-            final result = {
-              'Open': open,
-              'Partial': partial,
-              'Approval': approval,
-              'Closed': closed,
-            };
-
-            // Cache the result
-            _cachedPurchaseOrderCounts = result;
-            controller.add(result);
-          } catch (e) {
-            // On error, emit cached data if available, otherwise emit defaults
-            if (_cachedPurchaseOrderCounts != null) {
-              controller.add(_cachedPurchaseOrderCounts!);
-            } else {
-              controller
-                  .add({'Open': 0, 'Partial': 0, 'Approval': 0, 'Closed': 0});
-            }
-          }
-        },
-        onError: (error) {
-          // On stream error, emit cached data if available, otherwise emit defaults
-          if (_cachedPurchaseOrderCounts != null) {
-            controller.add(_cachedPurchaseOrderCounts!);
-          } else {
-            controller
-                .add({'Open': 0, 'Partial': 0, 'Approval': 0, 'Closed': 0});
-          }
-        },
-      );
-    } catch (e) {
-      // If stream creation fails, emit cached data if available, otherwise emit defaults
+    void emitCachedOrEmpty({bool forceEmpty = false}) {
       if (_cachedPurchaseOrderCounts != null) {
         controller.add(_cachedPurchaseOrderCounts!);
-      } else {
+      } else if (forceEmpty) {
         controller.add({'Open': 0, 'Partial': 0, 'Approval': 0, 'Closed': 0});
       }
     }
+
+    void startSubscription() {
+      try {
+        _supabase.from('purchase_orders').stream(primaryKey: ['id']).listen(
+          (data) {
+            try {
+              int open = 0;
+              int partial = 0;
+              int approval = 0;
+              int closed = 0;
+
+              for (final row in data) {
+                final status = row['status']?.toString() ?? '';
+                switch (status) {
+                  case 'Open':
+                    open++;
+                    break;
+                  case 'Partial':
+                  case 'Partially Received':
+                    partial++;
+                    break;
+                  case 'Approval':
+                    approval++;
+                    break;
+                  case 'Closed':
+                  case 'Cancelled':
+                    closed++;
+                    break;
+                }
+              }
+
+              final result = {
+                'Open': open,
+                'Partial': partial,
+                'Approval': approval,
+                'Closed': closed,
+              };
+
+              // Cache the result (in-memory + Hive)
+              _cachedPurchaseOrderCounts = result;
+              unawaited(_savePOCountsToHive(result));
+              controller.add(result);
+            } catch (e) {
+              emitCachedOrEmpty(forceEmpty: true);
+            }
+          },
+          onError: (error) {
+            emitCachedOrEmpty(forceEmpty: true);
+          },
+        );
+      } catch (e) {
+        emitCachedOrEmpty(forceEmpty: true);
+      }
+    }
+
+    controller
+      ..onListen = () async {
+        // 1. Check in-memory cache first
+        emitCachedOrEmpty();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedPurchaseOrderCounts == null) {
+          final hiveData = await _loadPOCountsFromHive();
+          if (hiveData != null) {
+            _cachedPurchaseOrderCounts = hiveData; // Populate in-memory cache
+            controller.add(hiveData); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
+        startSubscription();
+      }
+      ..onCancel = () {
+        // Cleanup handled automatically
+      };
 
     return controller.stream;
   }
 
   // Get all supplies with details, categorized by status
   Future<Map<String, List<Map<String, dynamic>>>> getSuppliesByStatus() async {
-    // Return cached data immediately if available (prepopulate)
+    // 1. Check in-memory cache first
     if (_cachedSuppliesByStatus != null) {
       // Fetch fresh data in the background, but return cached data immediately
       _fetchSuppliesByStatusInBackground();
       return _cachedSuppliesByStatus!;
+    }
+
+    // 2. If in-memory cache is null, auto-load from Hive
+    final hiveData = await _loadSuppliesByStatusFromHive();
+    if (hiveData != null) {
+      _cachedSuppliesByStatus = hiveData; // Populate in-memory cache
+      // Fetch fresh data in the background
+      _fetchSuppliesByStatusInBackground();
+      return hiveData; // Return immediately from Hive
     }
 
     try {
@@ -449,8 +693,9 @@ class InventoryAnalyticsService {
         suppliesByStatus[status]!.add(supply);
       }
 
-      // Cache the result
+      // Cache the result (in-memory + Hive)
       _cachedSuppliesByStatus = suppliesByStatus;
+      unawaited(_saveSuppliesByStatusToHive(suppliesByStatus));
       return suppliesByStatus;
     } catch (e) {
       // On error, return cached data if available, otherwise return empty
@@ -564,6 +809,7 @@ class InventoryAnalyticsService {
         }
 
         _cachedSuppliesByStatus = suppliesByStatus;
+        unawaited(_saveSuppliesByStatusToHive(suppliesByStatus));
       } catch (e) {
         // Ignore background fetch errors
       }
@@ -575,11 +821,20 @@ class InventoryAnalyticsService {
   // Get all purchase orders with details, categorized by status
   Future<Map<String, List<Map<String, dynamic>>>>
       getPurchaseOrdersByStatus() async {
-    // Return cached data immediately if available (prepopulate)
+    // 1. Check in-memory cache first
     if (_cachedPurchaseOrdersByStatus != null) {
       // Fetch fresh data in the background, but return cached data immediately
       _fetchPurchaseOrdersByStatusInBackground();
       return _cachedPurchaseOrdersByStatus!;
+    }
+
+    // 2. If in-memory cache is null, auto-load from Hive
+    final hiveData = await _loadPOsByStatusFromHive();
+    if (hiveData != null) {
+      _cachedPurchaseOrdersByStatus = hiveData; // Populate in-memory cache
+      // Fetch fresh data in the background
+      _fetchPurchaseOrdersByStatusInBackground();
+      return hiveData; // Return immediately from Hive
     }
 
     try {
@@ -728,8 +983,9 @@ class InventoryAnalyticsService {
         });
       }
 
-      // Cache the result
+      // Cache the result (in-memory + Hive)
       _cachedPurchaseOrdersByStatus = posByStatus;
+      unawaited(_savePOsByStatusToHive(posByStatus));
       return posByStatus;
     } catch (e) {
       // On error, return cached data if available, otherwise return empty
@@ -883,6 +1139,7 @@ class InventoryAnalyticsService {
         }
 
         _cachedPurchaseOrdersByStatus = posByStatus;
+        unawaited(_savePOsByStatusToHive(posByStatus));
       } catch (e) {
         // Ignore background fetch errors
       }

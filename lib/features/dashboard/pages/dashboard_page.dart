@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/shared/drawer.dart';
 import 'package:familee_dental/features/dashboard/services/inventory_analytics_service.dart';
 import 'package:familee_dental/features/dashboard/services/fast_moving_service.dart';
+import 'package:familee_dental/features/dashboard/services/turnover_rate.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
@@ -18,6 +19,7 @@ import 'dart:io';
 import 'dart:async';
 import 'package:familee_dental/shared/services/connectivity_service.dart';
 import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
+import 'package:familee_dental/shared/services/user_data_service.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -35,19 +37,20 @@ class _DashboardState extends State<Dashboard> {
   final InventoryAnalyticsService _analyticsService =
       InventoryAnalyticsService();
   final FastMovingService _fastMovingService = FastMovingService();
+  final TurnoverRateService _turnoverRateService = TurnoverRateService();
 
   String? _userName;
   String? _userRole;
-  String _selectedPeriod = 'Weekly'; // Weekly, Monthly
+  String _selectedPeriod = 'Weekly'; // Weekly, Monthly (for Fast Moving)
+  String _selectedUsageSpeedPeriod =
+      'Monthly'; // Monthly, Quarterly, Yearly (for Usage Speed)
   bool _isPeriodChanging = false; // Track if period is being changed
   bool?
       _hasConnection; // Track connectivity status (null = checking, true = online, false = offline)
   List<FastMovingItem>?
       _lastFastMovingItems; // Keep last data visible during period change
 
-  // Cache for user data to persist when offline
-  static String? _cachedUserName;
-  static String? _cachedUserRole;
+  final _userDataService = UserDataService();
 
   @override
   void initState() {
@@ -56,16 +59,36 @@ class _DashboardState extends State<Dashboard> {
     if (_selectedPeriod != 'Weekly' && _selectedPeriod != 'Monthly') {
       _selectedPeriod = 'Weekly';
     }
-    // Load cached data first if available
-    if (_cachedUserName != null) {
-      _userName = _cachedUserName;
+    // Ensure _selectedUsageSpeedPeriod is valid
+    if (_selectedUsageSpeedPeriod != 'Monthly' &&
+        _selectedUsageSpeedPeriod != 'Quarterly' &&
+        _selectedUsageSpeedPeriod != 'Yearly') {
+      _selectedUsageSpeedPeriod = 'Monthly';
     }
-    if (_cachedUserRole != null) {
-      _userRole = _cachedUserRole;
-    }
+    // Load user data from Hive first (avoid placeholders)
+    _loadUserDataFromHive();
     _loadUserData();
     _checkConnectivity();
     // Dashboard access logging removed for now
+  }
+
+  /// Load user data from Hive (no placeholders)
+  Future<void> _loadUserDataFromHive() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser != null) {
+        await _userDataService.loadFromHive(currentUser.id);
+        if (mounted) {
+          setState(() {
+            _userName = _userDataService.userName;
+            _userRole = _userDataService.userRole;
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore errors - best effort
+    }
   }
 
   Future<void> _checkConnectivity() async {
@@ -74,9 +97,7 @@ class _DashboardState extends State<Dashboard> {
       setState(() {
         _hasConnection = hasConnection;
       });
-      if (hasConnection) {
-        unawaited(_fastMovingService.preloadFastMovingPeriods(limit: 5));
-      }
+      // Pre-population no longer needed - streams auto-load from Hive
     }
   }
 
@@ -95,37 +116,44 @@ class _DashboardState extends State<Dashboard> {
             .maybeSingle();
 
         if (mounted) {
-          setState(() {
-            if (response != null &&
-                response['name'] != null &&
-                response['name'].toString().trim().isNotEmpty) {
-              // Use data from user_roles table
-              _userName = response['name'].toString().trim();
-              _userRole = response['role']?.toString().trim() ?? 'Admin';
-              // Cache the successful values
-              _cachedUserName = _userName;
-              _cachedUserRole = _userRole;
-            } else {
-              // Fallback to auth user data
-              final displayName =
-                  currentUser.userMetadata?['display_name']?.toString().trim();
-              final emailName = currentUser.email?.split('@')[0].trim();
-              _userName = displayName ?? emailName ?? 'User';
-              _userRole = 'Admin';
-              // Cache the successful values
-              _cachedUserName = _userName;
-              _cachedUserRole = _userRole;
-            }
-          });
+          if (response != null &&
+              response['name'] != null &&
+              response['name'].toString().trim().isNotEmpty) {
+            // Use data from user_roles table
+            final name = response['name'].toString().trim();
+            final role = response['role']?.toString().trim() ?? 'Admin';
+
+            setState(() {
+              _userName = name;
+              _userRole = role;
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          } else {
+            // Fallback to auth user data
+            final displayName =
+                currentUser.userMetadata?['display_name']?.toString().trim();
+            final emailName = currentUser.email?.split('@')[0].trim();
+            final name = displayName ?? emailName ?? 'User';
+            final role = 'Admin';
+
+            setState(() {
+              _userName = name;
+              _userRole = role;
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          }
         }
       }
     } catch (e) {
-      print('Error loading user data: $e');
       if (mounted) {
         setState(() {
-          // Use cached data if available, otherwise use defaults
-          _userName = _cachedUserName ?? 'User';
-          _userRole = _cachedUserRole ?? 'Admin';
+          // Use cached data from service if available (loaded from Hive)
+          _userName = _userDataService.userName;
+          _userRole = _userDataService.userRole;
         });
       }
     }
@@ -522,7 +550,7 @@ class _DashboardState extends State<Dashboard> {
                                 child: _buildSupplyStatusCard(
                                   context: context,
                                   theme: theme,
-                                  title: 'Total Supplies In Stock',
+                                  title: 'In Stock',
                                   count: inStock,
                                   gradientColors: [
                                     const Color(0xFFE8F5E9), // Light green
@@ -954,6 +982,66 @@ class _DashboardState extends State<Dashboard> {
                                             theme.textTheme.bodyMedium?.color,
                                       ),
                                     ),
+                                    const SizedBox(width: 8),
+                                    // Info tooltip
+                                    Tooltip(
+                                      message:
+                                          'This shows which items are deducted from stock most often in the selected period. Higher bars mean that supply is used more frequently and may need closer monitoring or reordering.',
+                                      child: InkWell(
+                                        onTap: () {
+                                          // Show info dialog
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              contentPadding:
+                                                  const EdgeInsets.fromLTRB(
+                                                      24, 20, 24, 16),
+                                              title: Text(
+                                                'Fast Moving Supply',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              content: ConstrainedBox(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                        maxWidth: 500),
+                                                child: Text(
+                                                  'This shows which items are deducted from stock most often in the selected period. Higher bars mean that supply is used more frequently and may need closer monitoring or reordering.',
+                                                  style: AppFonts.sfProStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(context),
+                                                  child: Text(
+                                                    'Got it',
+                                                    style: AppFonts.sfProStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                        child: Icon(
+                                          Icons.info_outline,
+                                          size: 18,
+                                          color: theme.brightness ==
+                                                  Brightness.dark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 // Period dropdown
@@ -1188,6 +1276,276 @@ class _DashboardState extends State<Dashboard> {
                   ),
                 ),
               ),
+
+              const SizedBox(height: 12),
+
+              // Usage Speed Card
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                margin: EdgeInsets.zero,
+                color: isDark
+                    ? const Color(0xFF2C2C2C)
+                    : theme.colorScheme.surface,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: isDark
+                        ? const Color(0xFF2C2C2C)
+                        : theme.colorScheme.surface,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header with icon, title, subtitle, and info tooltip
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.trending_up,
+                                      color: Colors.blue,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Usage speed (${_getUsageSpeedDateRange(_selectedUsageSpeedPeriod)})',
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    // Info tooltip
+                                    Tooltip(
+                                      message:
+                                          'This shows how often a supply is used in the selected period. "Fast" means it is used very often, "Normal" means it is used appropriately, "Slow" means it is rarely used and tends to stay longer on the shelf.',
+                                      child: InkWell(
+                                        onTap: () {
+                                          // Show info dialog
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              contentPadding:
+                                                  const EdgeInsets.fromLTRB(
+                                                      24, 20, 24, 16),
+                                              title: Text(
+                                                'Usage Speed',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              content: ConstrainedBox(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                        maxWidth: 500),
+                                                child: Text(
+                                                  'This shows how often a supply is used in the selected period. "Fast" means it is used very often, "Normal" means it is used appropriately, "Slow" means it is rarely used and tends to stay longer on the shelf.',
+                                                  style: AppFonts.sfProStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(context),
+                                                  child: Text(
+                                                    'Got it',
+                                                    style: AppFonts.sfProStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                        child: Icon(
+                                          Icons.info_outline,
+                                          size: 18,
+                                          color: theme.brightness ==
+                                                  Brightness.dark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                // Period dropdown
+                                DropdownButton<String>(
+                                  value: _selectedUsageSpeedPeriod,
+                                  isDense: true,
+                                  underline:
+                                      Container(), // Remove default underline
+                                  icon: Icon(
+                                    Icons.arrow_drop_down,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                    size: 20,
+                                  ),
+                                  style: AppFonts.sfProStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                  ),
+                                  items: ['Monthly', 'Quarterly', 'Yearly']
+                                      .map((String period) {
+                                    return DropdownMenuItem<String>(
+                                      value: period,
+                                      child: Text(period),
+                                    );
+                                  }).toList(),
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null &&
+                                        newValue != _selectedUsageSpeedPeriod) {
+                                      setState(() {
+                                        _selectedUsageSpeedPeriod = newValue;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 32),
+                              child: Text(
+                                'Shows how often each supply is used in the selected period.',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: theme.brightness == Brightness.dark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        FutureBuilder<List<TurnoverItem>>(
+                          key: ValueKey(_selectedUsageSpeedPeriod),
+                          future: _turnoverRateService
+                              .computeTurnoverItems(_selectedUsageSpeedPeriod),
+                          builder: (context, snapshot) {
+                            // Show skeleton loader only when actively waiting
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              final baseColor = isDark
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[300]!;
+                              final highlightColor = isDark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[100]!;
+
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                child: Column(
+                                  children: List.generate(
+                                    5,
+                                    (index) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 6),
+                                      child: Shimmer.fromColors(
+                                        baseColor: baseColor,
+                                        highlightColor: highlightColor,
+                                        child: Container(
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? Colors.grey[800]
+                                                : Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // Handle errors
+                            if (snapshot.hasError) {
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 48, horizontal: 24),
+                                  child: Text(
+                                    'Unable to load usage speed data.',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // Get data (will be empty list if no data or error)
+                            final items = snapshot.data ?? [];
+
+                            // Show empty state if no deductions
+                            if (items.isEmpty) {
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 48, horizontal: 24),
+                                  child: Text(
+                                    'No usage data recorded for this period.',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // Find max value for scaling
+                            final maxValue = items.isNotEmpty
+                                ? items
+                                    .map((e) => e.turnoverRate)
+                                    .reduce((a, b) => a > b ? a : b)
+                                : 0.5;
+
+                            return _buildTurnoverChart(
+                              context: context,
+                              theme: theme,
+                              items: items,
+                              maxValue: maxValue,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -1247,6 +1605,47 @@ class _DashboardState extends State<Dashboard> {
     // Return duration that covers the range (end - start + 1 day to include end date)
     final difference = end.difference(start);
     return Duration(days: difference.inDays + 1);
+  }
+
+  /// Get formatted date range for Usage Speed periods (Monthly, Quarterly, Yearly)
+  String _getUsageSpeedDateRange(String period) {
+    // Use the service to get the date range
+    final dateRange = _turnoverRateService.getDateRangeForPeriod(period);
+    final startDate = dateRange['start']!;
+    final endDate = dateRange['end']!;
+
+    // Format day without leading zero
+    String formatDay(int day) => day.toString();
+    // Format month as abbreviation with period
+    String formatMonth(int month) {
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
+      return months[month - 1];
+    }
+
+    // Format: "Nov 1 - Nov 30, 2025" or "Nov 1 - Dec 15, 2025"
+    if (startDate.year == endDate.year && startDate.month == endDate.month) {
+      // Same month and year: "Nov 1 - Nov 30, 2025"
+      return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
+    } else if (startDate.year == endDate.year) {
+      // Same year, different month: "Nov 1 - Dec 15, 2025"
+      return '${formatMonth(startDate.month)} ${formatDay(startDate.day)} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
+    } else {
+      // Different year: "Nov 1, 2024 - Jan 15, 2025"
+      return '${formatMonth(startDate.month)} ${formatDay(startDate.day)}, ${startDate.year} - ${formatMonth(endDate.month)} ${formatDay(endDate.day)}, ${endDate.year}';
+    }
   }
 
   String _getDateRangeForPeriod(String period) {
@@ -1728,6 +2127,339 @@ class _DashboardState extends State<Dashboard> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTurnoverChart({
+    required BuildContext context,
+    required ThemeData theme,
+    required List<TurnoverItem> items,
+    required double maxValue,
+  }) {
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Calculate rounded max for x-axis labels
+    // Always round UP to ensure all values are visible and chart scales properly
+    double roundedMax;
+
+    if (maxValue <= 0) {
+      roundedMax = 0.5;
+    } else if (maxValue <= 0.5) {
+      roundedMax = 0.5;
+    } else if (maxValue <= 1.0) {
+      // Round up to next 0.1
+      roundedMax = ((maxValue * 10).ceil() / 10.0);
+    } else if (maxValue <= 2.0) {
+      // Round up to next 0.2
+      roundedMax = ((maxValue * 5).ceil() / 5.0);
+    } else if (maxValue <= 5.0) {
+      // Round up to next 0.5
+      roundedMax = ((maxValue * 2).ceil() / 2.0);
+    } else if (maxValue <= 10.0) {
+      // Round up to next 1.0
+      roundedMax = maxValue.ceil().toDouble();
+    } else if (maxValue <= 50.0) {
+      // Round up to next 5.0
+      roundedMax = ((maxValue / 5.0).ceil() * 5.0);
+    } else {
+      // Round up to next 10.0
+      roundedMax = ((maxValue / 10.0).ceil() * 10.0);
+    }
+
+    // Safety check: ensure roundedMax is always >= maxValue (with small buffer)
+    if (roundedMax < maxValue) {
+      roundedMax = maxValue * 1.1;
+    }
+
+    // Add small buffer to ensure bars don't touch the edge
+    roundedMax = roundedMax * 1.05;
+
+    // Adjust spacing and bar height based on number of items (more compact when many items)
+    final itemCount = items.length;
+    final itemSpacing = itemCount > 3 ? 16.0 : 24.0;
+    final barHeight = itemCount > 3 ? 28.0 : 32.0;
+    final labelFontSize = itemCount > 3 ? 13.0 : 14.0;
+    final indicatorFontSize = itemCount > 3 ? 10.0 : 11.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Chart items
+        ...items.map((item) {
+          // Calculate bar width - proportional to the value relative to roundedMax
+          final barWidth = roundedMax > 0
+              ? (item.turnoverRate / roundedMax).clamp(0.0, 1.0)
+              : 0.0;
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: itemSpacing),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Left side - Y-axis labels (supply name with brand)
+                SizedBox(
+                  width: 150,
+                  child: Text(
+                    item.brand.isNotEmpty
+                        ? '${item.name} (${item.brand})'
+                        : item.name,
+                    style: AppFonts.sfProStyle(
+                      fontSize: labelFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Middle - Bar chart area with space for indicator
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final barMaxWidth = constraints.maxWidth;
+                      // Reserve space for indicator (approximately 120px for value + label + padding)
+                      final indicatorWidth = 120.0;
+                      final availableWidth = barMaxWidth - indicatorWidth;
+                      final barActualWidth =
+                          availableWidth * barWidth.clamp(0.0, 1.0);
+
+                      // Ensure bar doesn't exceed available space
+                      final clampedBarWidth =
+                          barActualWidth.clamp(0.0, availableWidth);
+
+                      return Stack(
+                        clipBehavior:
+                            Clip.none, // Allow indicator to overflow if needed
+                        children: [
+                          // Bar
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: clampedBarWidth,
+                              child: Container(
+                                height: barHeight,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      const Color(0xFF2196F3), // Blue
+                                      const Color(0xFF1976D2), // Deeper blue
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Value label at the end of the bar (always visible)
+                          Positioned(
+                            left: clampedBarWidth + 8,
+                            top: 0,
+                            bottom: 0,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Numeric value with × symbol
+                                Container(
+                                  height: barHeight,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    maxWidth: 60,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.grey.shade800
+                                        : Colors.grey.shade200,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${item.turnoverRate.toStringAsFixed(1)}×',
+                                      style: AppFonts.sfProStyle(
+                                        fontSize: indicatorFontSize,
+                                        fontWeight: FontWeight.w600,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                // Speed label (Slow / Normal / Fast)
+                                _buildSpeedLabel(
+                                  item.turnoverRate,
+                                  theme,
+                                  isDark,
+                                  indicatorFontSize,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+        const SizedBox(height: 8),
+        // X-axis labels - dynamically adjust based on data range
+        Padding(
+          padding: const EdgeInsets.only(left: 162),
+          child: Builder(
+            builder: (context) {
+              // Calculate optimal step size based on roundedMax
+              // Aim for 4-6 labels for better readability
+              double stepSize;
+              int targetLabels =
+                  5; // Aim for 5 labels (0, step, 2*step, ..., max)
+
+              // Calculate step size to get approximately targetLabels
+              stepSize = roundedMax / (targetLabels - 1);
+
+              // Round step size to nice values for readability
+              if (stepSize <= 0.1) {
+                stepSize = 0.1;
+              } else if (stepSize <= 0.2) {
+                stepSize = 0.2;
+              } else if (stepSize <= 0.5) {
+                stepSize = 0.5;
+              } else if (stepSize <= 1.0) {
+                stepSize = 1.0;
+              } else if (stepSize <= 2.0) {
+                stepSize = 2.0;
+              } else if (stepSize <= 5.0) {
+                stepSize = 5.0;
+              } else {
+                stepSize = (stepSize / 5.0).ceil() * 5.0; // Round to nearest 5
+              }
+
+              // Generate label values: 0, step, 2*step, ... up to roundedMax
+              final labelValues = <double>[];
+              for (double value = 0;
+                  value <= roundedMax + (stepSize * 0.1);
+                  value += stepSize) {
+                if (value <= roundedMax) {
+                  labelValues.add(value);
+                }
+              }
+
+              // Always include 0 and roundedMax
+              if (labelValues.isEmpty) {
+                labelValues.add(0.0);
+              }
+              if (labelValues.last < roundedMax) {
+                labelValues.add(roundedMax);
+              }
+
+              // Remove duplicates and sort
+              final uniqueLabels = labelValues.toSet().toList()..sort();
+
+              // Limit to reasonable number of labels (max 7) to avoid crowding
+              final displayLabels = uniqueLabels.length > 7
+                  ? [
+                      uniqueLabels.first,
+                      ...uniqueLabels.skip(1).take(5).toList(),
+                      uniqueLabels.last,
+                    ]
+                  : uniqueLabels;
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: displayLabels.map((value) {
+                  // Format based on value size
+                  String formattedValue;
+                  if (value < 0.01) {
+                    formattedValue = '0';
+                  } else if (value < 1.0) {
+                    formattedValue = value.toStringAsFixed(1);
+                  } else if (value < 10.0) {
+                    formattedValue = value.toStringAsFixed(1);
+                  } else {
+                    formattedValue = value.toStringAsFixed(0);
+                  }
+
+                  return Text(
+                    formattedValue,
+                    style: AppFonts.sfProStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color:
+                          isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build speed label (Slow / Normal / Fast) based on turnover rate
+  Widget _buildSpeedLabel(
+    double turnoverRate,
+    ThemeData theme,
+    bool isDark,
+    double fontSize,
+  ) {
+    String label;
+    Color labelColor;
+
+    if (turnoverRate < 0.5) {
+      label = 'Slow';
+      labelColor = Colors.orange;
+    } else if (turnoverRate <= 1.5) {
+      label = 'Normal';
+      labelColor = Colors.blue;
+    } else {
+      label = 'Fast';
+      labelColor = Colors.green;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: labelColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: labelColor.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: labelColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: AppFonts.sfProStyle(
+              fontSize: fontSize - 1,
+              fontWeight: FontWeight.w600,
+              color: labelColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2393,6 +3125,33 @@ class _DashboardState extends State<Dashboard> {
                         });
                       },
                     ),
+                    const SizedBox(height: 12),
+                    _buildReportOption(
+                      context: context,
+                      theme: theme,
+                      isDark: isDark,
+                      label: 'Usage Speed',
+                      isSelected: !allReportsSelected &&
+                          selectedReports.contains('Usage Speed'),
+                      isDisabled: allReportsSelected,
+                      onTap: () {
+                        setState(() {
+                          if (allReportsSelected) {
+                            // Deselect "All reports" and select this option
+                            allReportsSelected = false;
+                            selectedReports = {'Usage Speed'};
+                          } else {
+                            // Toggle this option
+                            if (selectedReports.contains('Usage Speed')) {
+                              selectedReports.remove('Usage Speed');
+                            } else {
+                              selectedReports.add('Usage Speed');
+                            }
+                            selectedReports.remove('All reports');
+                          }
+                        });
+                      },
+                    ),
                     const SizedBox(height: 24),
 
                     // Buttons
@@ -2578,7 +3337,6 @@ class _DashboardState extends State<Dashboard> {
 
       // Save file
       final filePath = await _saveFile(csvContent, 'csv');
-      print('CSV file saved to: $filePath'); // Debug print
 
       // Show success message with file path
       if (context.mounted) {
@@ -2609,9 +3367,7 @@ class _DashboardState extends State<Dashboard> {
           ),
         );
       }
-    } catch (e, stackTrace) {
-      print('Error saving CSV report: $e'); // Debug print
-      print('Stack trace: $stackTrace'); // Debug print
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2679,7 +3435,6 @@ class _DashboardState extends State<Dashboard> {
 
       // Save file
       final filePath = await _saveFile(pdfBytes, 'pdf');
-      print('PDF file saved to: $filePath'); // Debug print
 
       // Show success message with file path
       if (context.mounted) {
@@ -2710,9 +3465,7 @@ class _DashboardState extends State<Dashboard> {
           ),
         );
       }
-    } catch (e, stackTrace) {
-      print('Error saving PDF report: $e'); // Debug print
-      print('Stack trace: $stackTrace'); // Debug print
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2829,7 +3582,6 @@ class _DashboardState extends State<Dashboard> {
 
       return result;
     } catch (e) {
-      print('Error fetching deduction details: $e');
       return [];
     }
   }
@@ -2916,7 +3668,6 @@ class _DashboardState extends State<Dashboard> {
 
       return result;
     } catch (e) {
-      print('Error fetching all-time deduction details: $e');
       return [];
     }
   }
@@ -2936,6 +3687,48 @@ class _DashboardState extends State<Dashboard> {
     final monthlyDeductions = await _fetchAllDeductionsWithDetails('Monthly');
     final allTimeDeductions = await _fetchAllTimeDeductions();
 
+    // Fetch usage speed data for monthly, quarterly, and yearly periods
+    final monthlyTurnover =
+        await _turnoverRateService.computeTurnoverItems('Monthly');
+    final quarterlyTurnover =
+        await _turnoverRateService.computeTurnoverItems('Quarterly');
+    final yearlyTurnover =
+        await _turnoverRateService.computeTurnoverItems('Yearly');
+
+    // Convert usage speed items to serializable format
+    final monthlyTurnoverData = monthlyTurnover
+        .map((item) => {
+              'name': item.name,
+              'brand': item.brand,
+              'quantityConsumed': item.quantityConsumed,
+              'currentStock': item.currentStock,
+              'averageStock': item.averageStock,
+              'turnoverRate': item.turnoverRate,
+            })
+        .toList();
+
+    final quarterlyTurnoverData = quarterlyTurnover
+        .map((item) => {
+              'name': item.name,
+              'brand': item.brand,
+              'quantityConsumed': item.quantityConsumed,
+              'currentStock': item.currentStock,
+              'averageStock': item.averageStock,
+              'turnoverRate': item.turnoverRate,
+            })
+        .toList();
+
+    final yearlyTurnoverData = yearlyTurnover
+        .map((item) => {
+              'name': item.name,
+              'brand': item.brand,
+              'quantityConsumed': item.quantityConsumed,
+              'currentStock': item.currentStock,
+              'averageStock': item.averageStock,
+              'turnoverRate': item.turnoverRate,
+            })
+        .toList();
+
     return {
       'supplyCounts': supplyCounts,
       'expiryCounts': expiryCounts,
@@ -2945,6 +3738,9 @@ class _DashboardState extends State<Dashboard> {
       'weeklyDeductions': weeklyDeductions,
       'monthlyDeductions': monthlyDeductions,
       'allTimeDeductions': allTimeDeductions,
+      'monthlyTurnover': monthlyTurnoverData,
+      'quarterlyTurnover': quarterlyTurnoverData,
+      'yearlyTurnover': yearlyTurnoverData,
       'selectedPeriod': _selectedPeriod,
       'generatedAt': DateTime.now(),
     };
@@ -2960,6 +3756,8 @@ class _DashboardState extends State<Dashboard> {
         includeAll || selectedReports.contains('Purchase Order Summary');
     final includeFastMoving =
         includeAll || selectedReports.contains('Fast Moving Supply');
+    final includeTurnoverRate =
+        includeAll || selectedReports.contains('Turnover Rate');
 
     // Header
     rows.add(['Dashboard Report']);
@@ -3188,6 +3986,129 @@ class _DashboardState extends State<Dashboard> {
       }
     }
 
+    // Usage Speed - Monthly, Quarterly, Yearly sections
+    if (includeTurnoverRate) {
+      rows.add(['Usage Speed']);
+      rows.add([]);
+
+      // Monthly Usage Speed Section
+      rows.add(['Monthly Usage Speed']);
+      rows.add(['Period', 'Last 30 days']);
+      rows.add([
+        'Supply Name',
+        'Brand',
+        'Quantity Consumed',
+        'Current Stock',
+        'Opening Stock',
+        'Average Stock',
+        'Usage Speed'
+      ]);
+      final monthlyTurnover = (data['monthlyTurnover'] as List<dynamic>?) ?? [];
+      if (monthlyTurnover.isEmpty) {
+        rows.add(['No usage data found for this period']);
+      } else {
+        for (final item in monthlyTurnover) {
+          final itemMap = item as Map<String, dynamic>;
+          final name = itemMap['name']?.toString() ?? '';
+          final brand = itemMap['brand']?.toString() ?? '';
+          final quantityConsumed = (itemMap['quantityConsumed'] ?? 0) as int;
+          final currentStock = (itemMap['currentStock'] ?? 0) as int;
+          final averageStock = (itemMap['averageStock'] ?? 0.0) as double;
+          final turnoverRate = (itemMap['turnoverRate'] ?? 0.0) as double;
+          final openingStock = currentStock + quantityConsumed;
+
+          rows.add([
+            name,
+            brand.isNotEmpty ? brand : 'N/A',
+            quantityConsumed.toString(),
+            currentStock.toString(),
+            openingStock.toString(),
+            averageStock.toStringAsFixed(2),
+            turnoverRate.toStringAsFixed(2),
+          ]);
+        }
+      }
+      rows.add([]);
+
+      // Quarterly Usage Speed Section
+      rows.add(['Quarterly Usage Speed']);
+      rows.add(['Period', 'Last 3 months']);
+      rows.add([
+        'Supply Name',
+        'Brand',
+        'Quantity Consumed',
+        'Current Stock',
+        'Opening Stock',
+        'Average Stock',
+        'Usage Speed'
+      ]);
+      final quarterlyTurnover =
+          (data['quarterlyTurnover'] as List<dynamic>?) ?? [];
+      if (quarterlyTurnover.isEmpty) {
+        rows.add(['No usage data found for this period']);
+      } else {
+        for (final item in quarterlyTurnover) {
+          final itemMap = item as Map<String, dynamic>;
+          final name = itemMap['name']?.toString() ?? '';
+          final brand = itemMap['brand']?.toString() ?? '';
+          final quantityConsumed = (itemMap['quantityConsumed'] ?? 0) as int;
+          final currentStock = (itemMap['currentStock'] ?? 0) as int;
+          final averageStock = (itemMap['averageStock'] ?? 0.0) as double;
+          final turnoverRate = (itemMap['turnoverRate'] ?? 0.0) as double;
+          final openingStock = currentStock + quantityConsumed;
+
+          rows.add([
+            name,
+            brand.isNotEmpty ? brand : 'N/A',
+            quantityConsumed.toString(),
+            currentStock.toString(),
+            openingStock.toString(),
+            averageStock.toStringAsFixed(2),
+            turnoverRate.toStringAsFixed(2),
+          ]);
+        }
+      }
+      rows.add([]);
+
+      // Yearly Usage Speed Section
+      rows.add(['Yearly Usage Speed']);
+      rows.add(['Period', 'Last 12 months']);
+      rows.add([
+        'Supply Name',
+        'Brand',
+        'Quantity Consumed',
+        'Current Stock',
+        'Opening Stock',
+        'Average Stock',
+        'Usage Speed'
+      ]);
+      final yearlyTurnover = (data['yearlyTurnover'] as List<dynamic>?) ?? [];
+      if (yearlyTurnover.isEmpty) {
+        rows.add(['No usage data found']);
+      } else {
+        for (final item in yearlyTurnover) {
+          final itemMap = item as Map<String, dynamic>;
+          final name = itemMap['name']?.toString() ?? '';
+          final brand = itemMap['brand']?.toString() ?? '';
+          final quantityConsumed = (itemMap['quantityConsumed'] ?? 0) as int;
+          final currentStock = (itemMap['currentStock'] ?? 0) as int;
+          final averageStock = (itemMap['averageStock'] ?? 0.0) as double;
+          final turnoverRate = (itemMap['turnoverRate'] ?? 0.0) as double;
+          final openingStock = currentStock + quantityConsumed;
+
+          rows.add([
+            name,
+            brand.isNotEmpty ? brand : 'N/A',
+            quantityConsumed.toString(),
+            currentStock.toString(),
+            openingStock.toString(),
+            averageStock.toStringAsFixed(2),
+            turnoverRate.toStringAsFixed(2),
+          ]);
+        }
+      }
+    }
+
     // Convert to CSV string
     return const ListToCsvConverter().convert(rows);
   }
@@ -3203,6 +4124,8 @@ class _DashboardState extends State<Dashboard> {
         includeAll || selectedReports.contains('Purchase Order Summary');
     final includeFastMoving =
         includeAll || selectedReports.contains('Fast Moving Supply');
+    final includeTurnoverRate =
+        includeAll || selectedReports.contains('Turnover Rate');
 
     final suppliesByStatus =
         data['suppliesByStatus'] as Map<String, List<Map<String, dynamic>>>;
@@ -3211,6 +4134,10 @@ class _DashboardState extends State<Dashboard> {
     final weeklyDeductions = data['weeklyDeductions'] as List;
     final monthlyDeductions = data['monthlyDeductions'] as List;
     final allTimeDeductions = data['allTimeDeductions'] as List;
+    final monthlyTurnover = (data['monthlyTurnover'] as List<dynamic>?) ?? [];
+    final quarterlyTurnover =
+        (data['quarterlyTurnover'] as List<dynamic>?) ?? [];
+    final yearlyTurnover = (data['yearlyTurnover'] as List<dynamic>?) ?? [];
     final generatedAt = data['generatedAt'] as DateTime;
 
     pdf.addPage(
@@ -3780,6 +4707,195 @@ class _DashboardState extends State<Dashboard> {
                 'All-time Deduction', 'All time', allTimeDeductions);
           }
 
+          // Usage Speed - Monthly, Quarterly, Yearly sections
+          if (includeTurnoverRate) {
+            widgets.add(
+              pw.Text(
+                'Usage Speed',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            );
+            widgets.add(pw.SizedBox(height: 12));
+
+            // Helper function to build usage speed table
+            void buildUsageSpeedTable(
+                String title, String periodLabel, List usageData) {
+              widgets.add(
+                pw.Text(
+                  title,
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              );
+              widgets.add(pw.SizedBox(height: 8));
+              widgets.add(
+                pw.Text(
+                  'Period: $periodLabel',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              );
+              widgets.add(pw.SizedBox(height: 8));
+
+              if (usageData.isEmpty) {
+                widgets.add(
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                    child: pw.Text('No usage data found for this period',
+                        style: const pw.TextStyle(fontSize: 10)),
+                  ),
+                );
+              } else {
+                widgets.add(
+                  pw.Table(
+                    border: pw.TableBorder.all(width: 0.5),
+                    columnWidths: {
+                      0: const pw.FlexColumnWidth(2.5),
+                      1: const pw.FlexColumnWidth(1.5),
+                      2: const pw.FlexColumnWidth(1),
+                      3: const pw.FlexColumnWidth(1),
+                      4: const pw.FlexColumnWidth(1),
+                      5: const pw.FlexColumnWidth(1.2),
+                      6: const pw.FlexColumnWidth(1),
+                    },
+                    children: [
+                      pw.TableRow(
+                        decoration: const pw.BoxDecoration(
+                          color: PdfColor.fromInt(0xFFEFEFEF),
+                        ),
+                        children: [
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Supply Name',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Brand',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Qty Consumed',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Current Stock',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Opening Stock',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Average Stock',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Usage Speed',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                      ...usageData.map((item) {
+                        final itemMap = item as Map<String, dynamic>;
+                        final name = itemMap['name']?.toString() ?? '';
+                        final brand = itemMap['brand']?.toString() ?? '';
+                        final quantityConsumed =
+                            (itemMap['quantityConsumed'] ?? 0) as int;
+                        final currentStock =
+                            (itemMap['currentStock'] ?? 0) as int;
+                        final averageStock =
+                            (itemMap['averageStock'] ?? 0.0) as double;
+                        final turnoverRate =
+                            (itemMap['turnoverRate'] ?? 0.0) as double;
+                        final openingStock = currentStock + quantityConsumed;
+
+                        return pw.TableRow(
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(name,
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(brand.isNotEmpty ? brand : 'N/A',
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(quantityConsumed.toString(),
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(currentStock.toString(),
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(openingStock.toString(),
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(averageStock.toStringAsFixed(2),
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(turnoverRate.toStringAsFixed(2),
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                );
+              }
+              widgets.add(pw.SizedBox(height: 24));
+            }
+
+            // Monthly Usage Speed Section
+            buildUsageSpeedTable(
+                'Monthly Usage Speed', 'Last 30 days', monthlyTurnover);
+
+            // Quarterly Usage Speed Section
+            buildUsageSpeedTable(
+                'Quarterly Usage Speed', 'Last 3 months', quarterlyTurnover);
+
+            // Yearly Usage Speed Section
+            buildUsageSpeedTable(
+                'Yearly Usage Speed', 'Last 12 months', yearlyTurnover);
+          }
+
           return widgets;
         },
       ),
@@ -3829,11 +4945,9 @@ class _DashboardState extends State<Dashboard> {
             await file.writeAsBytes(content as List<int>);
           }
 
-          print('File saved to Android Downloads: ${file.path}'); // Debug print
           return file.path;
         }
       } catch (e) {
-        print('Error saving to Android Downloads: $e'); // Debug print
         // Fallback to app documents directory
       }
 
@@ -3847,7 +4961,6 @@ class _DashboardState extends State<Dashboard> {
         await file.writeAsBytes(content as List<int>);
       }
 
-      print('File saved to app documents: ${file.path}'); // Debug print
       return file.path;
     } else if (platform.isIOS) {
       // For iOS, use app documents directory (iOS doesn't have user-accessible Downloads)
@@ -3869,8 +4982,7 @@ class _DashboardState extends State<Dashboard> {
         );
         await Share.shareXFiles([xFile], subject: 'Dashboard Report');
       } catch (e) {
-        print(
-            'Share not available, file saved to: ${file.path}'); // Debug print
+        // Share not available, file saved to app documents
       }
 
       return file.path;
@@ -3890,10 +5002,6 @@ class _DashboardState extends State<Dashboard> {
       } else {
         await file.writeAsBytes(content as List<int>);
       }
-
-      print('File written successfully to: ${file.path}'); // Debug print
-      print('File exists: ${await file.exists()}'); // Debug print
-      print('File size: ${await file.length()} bytes'); // Debug print
 
       return file.path;
     }

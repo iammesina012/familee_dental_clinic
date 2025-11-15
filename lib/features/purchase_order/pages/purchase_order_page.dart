@@ -12,6 +12,7 @@ import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:familee_dental/shared/services/user_data_service.dart';
 import 'package:familee_dental/shared/services/connectivity_service.dart';
 import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -45,8 +46,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
   String? _userName;
   String? _userRole;
-  static String? _cachedUserName;
-  static String? _cachedUserRole;
+  final _userDataService = UserDataService();
   bool?
       _hasConnection; // Track connectivity status (null = checking, true = online, false = offline)
 
@@ -391,12 +391,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   void initState() {
     super.initState();
     try {
-      if (_cachedUserName != null) {
-        _userName = _cachedUserName;
-      }
-      if (_cachedUserRole != null) {
-        _userRole = _cachedUserRole;
-      }
+      // Load user data from Hive first (avoid placeholders)
+      _loadUserDataFromHive();
 
       _load();
       _loadUserData();
@@ -408,6 +404,25 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       });
     } catch (e) {
       // Error handling
+    }
+  }
+
+  /// Load user data from Hive (no placeholders)
+  Future<void> _loadUserDataFromHive() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser != null) {
+        await _userDataService.loadFromHive(currentUser.id);
+        if (mounted) {
+          setState(() {
+            _userName = _userDataService.userName;
+            _userRole = _userDataService.userRole;
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore errors - best effort
     }
   }
 
@@ -435,34 +450,44 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
             .maybeSingle();
 
         if (mounted) {
-          setState(() {
-            if (response != null &&
-                response['name'] != null &&
-                response['name'].toString().trim().isNotEmpty) {
-              // Use data from user_roles table
-              _userName = response['name'].toString().trim();
-              _userRole = response['role']?.toString().trim() ?? 'Admin';
-              _cachedUserName = _userName;
-              _cachedUserRole = _userRole;
-            } else {
-              // Fallback to auth user data
-              final displayName =
-                  currentUser.userMetadata?['display_name']?.toString().trim();
-              final emailName = currentUser.email?.split('@')[0].trim();
-              _userName = displayName ?? emailName ?? 'User';
-              _userRole = 'Admin';
-              _cachedUserName = _userName;
-              _cachedUserRole = _userRole;
-            }
-          });
+          if (response != null &&
+              response['name'] != null &&
+              response['name'].toString().trim().isNotEmpty) {
+            // Use data from user_roles table
+            final name = response['name'].toString().trim();
+            final role = response['role']?.toString().trim() ?? 'Admin';
+
+            setState(() {
+              _userName = name;
+              _userRole = role;
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          } else {
+            // Fallback to auth user data
+            final displayName =
+                currentUser.userMetadata?['display_name']?.toString().trim();
+            final emailName = currentUser.email?.split('@')[0].trim();
+            final name = displayName ?? emailName ?? 'User';
+            final role = 'Admin';
+
+            setState(() {
+              _userName = name;
+              _userRole = role;
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          }
         }
       }
     } catch (e) {
       print('Error loading user data: $e');
       if (mounted) {
         setState(() {
-          _userName = _cachedUserName ?? 'User';
-          _userRole = _cachedUserRole ?? 'Admin';
+          _userName = _userDataService.userName;
+          _userRole = _userDataService.userRole;
         });
       }
     }

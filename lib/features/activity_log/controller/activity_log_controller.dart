@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
 
 class ActivityLogController extends ChangeNotifier {
   // Private variables
@@ -131,7 +133,20 @@ class ActivityLogController extends ChangeNotifier {
   Future<void> _subscribeToSelectedDate() async {
     try {
       final targetDate = _selectedDate;
-      final cached = _getCachedActivities(targetDate);
+      final dateKey = _dateKey(targetDate);
+
+      // 1. Check in-memory cache first
+      var cached = _getCachedActivities(targetDate);
+
+      // 2. If in-memory cache is null, auto-load from Hive
+      if (cached == null) {
+        final hiveData = await _loadActivitiesFromHive(dateKey);
+        if (hiveData != null && hiveData.isNotEmpty) {
+          _cachedActivitiesByDate[dateKey] =
+              hiveData; // Populate in-memory cache
+          cached = hiveData;
+        }
+      }
 
       if (cached != null) {
         _allActivities = cached;
@@ -142,8 +157,8 @@ class ActivityLogController extends ChangeNotifier {
       }
       notifyListeners();
 
+      // 3. Fetch from Supabase and subscribe to realtime updates
       final range = _buildUtcRangeForDate(targetDate);
-
       await _fetchActivitiesForRange(range, cacheDate: targetDate);
 
       if (_isSameDay(_selectedDate, targetDate)) {
@@ -303,13 +318,72 @@ class ActivityLogController extends ChangeNotifier {
         .toList(growable: false);
     _cachedActivitiesByDate[key] = cachedList;
 
+    // Save to Hive for persistence
+    unawaited(_saveActivitiesToHive(key, cachedList));
+
     if (_cachedActivitiesByDate.length > _maxCachedDates) {
       final keys = _cachedActivitiesByDate.keys.toList()
         ..sort(); // oldest first
       while (keys.length > _maxCachedDates) {
         final removeKey = keys.removeAt(0);
         _cachedActivitiesByDate.remove(removeKey);
+        // Also remove from Hive
+        unawaited(_removeActivitiesFromHive(removeKey));
       }
+    }
+  }
+
+  /// Save activities for a specific date to Hive
+  Future<void> _saveActivitiesToHive(
+      String dateKey, List<Map<String, dynamic>> activities) async {
+    try {
+      // Convert DateTime objects to ISO8601 strings for JSON serialization
+      final serializedActivities = activities.map((activity) {
+        final serialized = Map<String, dynamic>.from(activity);
+        if (serialized['date'] is DateTime) {
+          serialized['date'] =
+              (serialized['date'] as DateTime).toIso8601String();
+        }
+        return serialized;
+      }).toList();
+
+      final box = await HiveStorage.openBox(HiveStorage.activityLogsBox);
+      await box.put(dateKey, jsonEncode(serializedActivities));
+    } catch (e) {
+      debugPrint('Error saving activities to Hive ($dateKey): $e');
+    }
+  }
+
+  /// Load activities for a specific date from Hive
+  Future<List<Map<String, dynamic>>?> _loadActivitiesFromHive(
+      String dateKey) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.activityLogsBox);
+      final jsonStr = box.get(dateKey) as String?;
+      if (jsonStr != null) {
+        final jsonList = jsonDecode(jsonStr) as List<dynamic>;
+        return jsonList.map((e) {
+          final activity = Map<String, dynamic>.from(e as Map<String, dynamic>);
+          // Convert ISO8601 strings back to DateTime objects
+          if (activity['date'] is String) {
+            activity['date'] = DateTime.parse(activity['date'] as String);
+          }
+          return activity;
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Error loading activities from Hive ($dateKey): $e');
+    }
+    return null;
+  }
+
+  /// Remove activities for a specific date from Hive
+  Future<void> _removeActivitiesFromHive(String dateKey) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.activityLogsBox);
+      await box.delete(dateKey);
+    } catch (e) {
+      debugPrint('Error removing activities from Hive ($dateKey): $e');
     }
   }
 
@@ -563,6 +637,8 @@ class ActivityLogController extends ChangeNotifier {
         return 'Added Supplies';
       case 'removedSupplies':
         return 'Removed Supplies';
+      case 'lowStockBaseline':
+        return 'Threshold';
       default:
         if (key.isEmpty) return key;
         return key[0].toUpperCase() + key.substring(1);
@@ -751,11 +827,29 @@ class ActivityLogController extends ChangeNotifier {
     if (metadata.containsKey('itemName')) {
       orderedEntries.add(const MapEntry('itemName', 'Supply Name'));
     }
+    if (metadata.containsKey('type')) {
+      orderedEntries.add(const MapEntry('type', 'Type'));
+    }
     if (metadata.containsKey('category')) {
       orderedEntries.add(const MapEntry('category', 'Category'));
     }
     if (metadata.containsKey('stock')) {
       orderedEntries.add(const MapEntry('stock', 'Stock'));
+    }
+    if (metadata.containsKey('lowStockBaseline')) {
+      orderedEntries.add(const MapEntry('lowStockBaseline', 'Threshold'));
+    }
+    // Show Packaging Unit if packagingUnit or unit exists
+    if (metadata.containsKey('packagingUnit') || metadata.containsKey('unit')) {
+      orderedEntries.add(const MapEntry('packagingUnit', 'Packaging Unit'));
+    }
+    // Add Packaging Content/Unit if packaging data exists (for add action)
+    if (metadata.containsKey('packagingContent') ||
+        metadata.containsKey('packagingContentQuantity') ||
+        metadata.containsKey('packagingUnit') ||
+        metadata.containsKey('unit')) {
+      orderedEntries.add(
+          const MapEntry('Packaging Content/Unit', 'Packaging Content/Unit'));
     }
     if (metadata.containsKey('unit')) {
       orderedEntries.add(const MapEntry('unit', 'Unit'));
@@ -794,6 +888,38 @@ class ActivityLogController extends ChangeNotifier {
       orderedEntries.add(const MapEntry('expiryDate', 'Expiry Date'));
     }
 
+    // Add field changes that might not be in regular metadata (like Threshold, Packaging Unit, Packaging Content/Unit)
+    if (metadata.containsKey('fieldChanges') &&
+        metadata['fieldChanges'] is Map<String, dynamic>) {
+      final Map<String, dynamic> fieldChanges =
+          metadata['fieldChanges'] as Map<String, dynamic>;
+
+      // Add Threshold if it's in fieldChanges
+      if (fieldChanges.containsKey('Threshold') &&
+          !orderedEntries.any((e) => e.key == 'lowStockBaseline')) {
+        orderedEntries.add(const MapEntry('lowStockBaseline', 'Threshold'));
+      }
+
+      // Add Packaging Unit if it's in fieldChanges
+      if (fieldChanges.containsKey('Packaging Unit') &&
+          !orderedEntries.any((e) => e.key == 'packagingUnit')) {
+        orderedEntries.add(const MapEntry('packagingUnit', 'Packaging Unit'));
+      }
+
+      // Add Packaging Content/Unit if it's in fieldChanges
+      if (fieldChanges.containsKey('Packaging Content/Unit') &&
+          !orderedEntries.any((e) => e.key == 'Packaging Content/Unit')) {
+        orderedEntries.add(
+            const MapEntry('Packaging Content/Unit', 'Packaging Content/Unit'));
+      }
+
+      // Add Type if it's in fieldChanges
+      if (fieldChanges.containsKey('Type') &&
+          !orderedEntries.any((e) => e.key == 'type')) {
+        orderedEntries.add(const MapEntry('type', 'Type'));
+      }
+    }
+
     // Add remaining metadata (excluding internal preset keys and duplicates)
     for (final entry in metadata.entries) {
       final lowerKey = entry.key.toString().toLowerCase();
@@ -805,7 +931,16 @@ class ActivityLogController extends ChangeNotifier {
           entry.key == 'suppliesCount' ||
           entry.key == 'originalSuppliesCount' ||
           entry.key == 'fieldChanges';
-      if (!already && !isDuplicateSpecial && !isInternalPresetKey) {
+      // Exclude separate packaging fields - they're combined into "Packaging Content/Unit"
+      final isPackagingField = entry.key == 'packagingContent' ||
+          entry.key == 'packagingContentQuantity' ||
+          entry.key == 'packagingQuantity' ||
+          entry.key ==
+              'packagingUnit'; // Packaging Unit is shown separately if changed
+      if (!already &&
+          !isDuplicateSpecial &&
+          !isInternalPresetKey &&
+          !isPackagingField) {
         orderedEntries
             .add(MapEntry(entry.key, mapMetadataKeyToLabel(entry.key)));
       }
@@ -816,10 +951,18 @@ class ActivityLogController extends ChangeNotifier {
       switch (k) {
         case 'itemName':
           return 'Name';
+        case 'type':
+          return 'Type';
         case 'category':
           return 'Category';
         case 'stock':
           return 'Stock';
+        case 'lowStockBaseline':
+          return 'Threshold';
+        case 'packagingUnit':
+          return 'Packaging Unit';
+        case 'Packaging Content/Unit':
+          return 'Packaging Content/Unit';
         case 'unit':
           return 'Unit';
         case 'cost':
@@ -874,6 +1017,38 @@ class ActivityLogController extends ChangeNotifier {
           continue;
         }
         value = removedSupplies.join(', ');
+      } else if (entry.key == 'Packaging Content/Unit') {
+        // Combine packaging content quantity and content for display
+        final packagingContentQuantity = metadata['packagingContentQuantity'];
+        final packagingContent = metadata['packagingContent'];
+        final packagingUnit = metadata['packagingUnit'];
+        final unit =
+            metadata['unit']; // Fallback to unit if packagingUnit is null
+
+        // Use packagingUnit if available, otherwise fall back to unit
+        final displayUnit =
+            packagingUnit?.toString() ?? unit?.toString() ?? 'N/A';
+
+        // Check if packaging content is disabled (Pieces, Spool, Tub units)
+        final bool isPackagingContentDisabled = displayUnit == 'Pieces' ||
+            displayUnit == 'Spool' ||
+            displayUnit == 'Tub';
+
+        if (isPackagingContentDisabled ||
+            packagingContent == null ||
+            packagingContent.toString().isEmpty) {
+          // Show just the packaging unit
+          value = displayUnit;
+        } else {
+          // Show quantity + content per unit (e.g., "5 mL per Bottle")
+          final quantity = packagingContentQuantity ?? 1;
+          value = '$quantity ${packagingContent.toString()} per $displayUnit';
+        }
+      } else if (entry.key == 'packagingUnit') {
+        // For Packaging Unit, fall back to unit if packagingUnit is null
+        final packagingUnit = metadata['packagingUnit'];
+        final unit = metadata['unit'];
+        value = packagingUnit?.toString() ?? unit?.toString() ?? 'N/A';
       } else {
         value = metadata[entry.key]?.toString() ?? 'N/A';
         if (entry.key == 'cost') {

@@ -8,6 +8,7 @@ import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:familee_dental/shared/widgets/notification_badge_button.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:familee_dental/shared/services/user_data_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -24,10 +25,13 @@ class _SettingsPageState extends State<SettingsPage> {
   final SettingsController _settingsController = SettingsController();
   String? _userName;
   String? _userRole;
+  final _userDataService = UserDataService();
 
   @override
   void initState() {
     super.initState();
+    // Load user data from Hive first (avoid placeholders)
+    _loadUserDataFromHive();
     _loadUserData();
     _loadSettings();
   }
@@ -45,6 +49,25 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  /// Load user data from Hive (no placeholders)
+  Future<void> _loadUserDataFromHive() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser != null) {
+        await _userDataService.loadFromHive(currentUser.id);
+        if (mounted) {
+          setState(() {
+            _userName = _userDataService.userName;
+            _userRole = _userDataService.userRole;
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore errors - best effort
+    }
+  }
+
   Future<void> _loadUserData() async {
     try {
       final currentUser = Supabase.instance.client.auth.currentUser;
@@ -56,38 +79,42 @@ class _SettingsPageState extends State<SettingsPage> {
             .eq('id', currentUser.id)
             .maybeSingle();
 
-        if (response != null) {
-          setState(() {
-            _userName = response['name']?.toString().trim();
-            _userRole = response['role']?.toString().trim();
-          });
-        }
+        if (response != null &&
+            response['name'] != null &&
+            response['name'].toString().trim().isNotEmpty) {
+          final name = response['name']?.toString().trim() ?? '';
+          final role = response['role']?.toString().trim() ?? 'Admin';
 
-        // Fallback to metadata or email if not found
-        if (_userName == null || _userName!.isEmpty) {
+          setState(() {
+            _userName = name;
+            _userRole = role;
+          });
+
+          // Save to Hive for persistence
+          await _userDataService.saveToHive(currentUser.id, name, role);
+        } else {
+          // Fallback to metadata or email if not found
           final displayName =
               currentUser.userMetadata?['display_name']?.toString().trim();
           final emailName = currentUser.email?.split('@')[0].trim();
-          setState(() {
-            _userName = displayName ?? emailName ?? 'User';
-          });
-        }
+          final name = displayName ?? emailName ?? 'User';
+          final role = 'Admin';
 
-        if (_userRole == null || _userRole!.isEmpty) {
           setState(() {
-            _userRole =
-                currentUser.userMetadata?['role']?.toString().trim() ?? 'Admin';
+            _userName = name;
+            _userRole = role;
           });
+
+          // Save to Hive for persistence
+          await _userDataService.saveToHive(currentUser.id, name, role);
         }
       }
     } catch (e) {
-      // If error occurs, use fallback
-      final currentUser = Supabase.instance.client.auth.currentUser;
-      if (currentUser != null) {
-        final emailName = currentUser.email?.split('@')[0].trim();
+      // If error occurs, use cached data from service if available (loaded from Hive)
+      if (mounted) {
         setState(() {
-          _userName = emailName ?? 'User';
-          _userRole = 'Admin';
+          _userName = _userDataService.userName;
+          _userRole = _userDataService.userRole;
         });
       }
     }

@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
+import 'package:flutter/foundation.dart';
 
 class StockDeductionLogsController {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -58,24 +60,76 @@ class StockDeductionLogsController {
         .toList(growable: false);
     _cachedLogsByDate[key] = cachedList;
 
+    // Save to Hive for persistence
+    unawaited(_saveLogsToHive(key, cachedList));
+
     // Limit cache size to _maxCachedDates
     if (_cachedLogsByDate.length > _maxCachedDates) {
       final keys = _cachedLogsByDate.keys.toList()..sort(); // oldest first
       while (keys.length > _maxCachedDates) {
         final removeKey = keys.removeAt(0);
         _cachedLogsByDate.remove(removeKey);
+        // Also remove from Hive
+        unawaited(_removeLogsFromHive(removeKey));
       }
     }
   }
 
-  Future<List<Map<String, dynamic>>> preloadLogs() async {
-    // Legacy method - kept for backward compatibility
+  /// Save logs for a specific date to Hive
+  Future<void> _saveLogsToHive(
+      String dateKey, List<Map<String, dynamic>> logs) async {
     try {
+      final box = await HiveStorage.openBox(HiveStorage.sdLogsBox);
+      await box.put(dateKey, jsonEncode(logs));
+    } catch (e) {
+      debugPrint('Error saving logs to Hive ($dateKey): $e');
+    }
+  }
+
+  /// Load logs for a specific date from Hive
+  Future<List<Map<String, dynamic>>?> _loadLogsFromHive(String dateKey) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.sdLogsBox);
+      final jsonStr = box.get(dateKey) as String?;
+      if (jsonStr != null) {
+        final jsonList = jsonDecode(jsonStr) as List<dynamic>;
+        return jsonList
+            .map((e) => Map<String, dynamic>.from(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error loading logs from Hive ($dateKey): $e');
+    }
+    return null;
+  }
+
+  /// Remove logs for a specific date from Hive
+  Future<void> _removeLogsFromHive(String dateKey) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.sdLogsBox);
+      await box.delete(dateKey);
+    } catch (e) {
+      debugPrint('Error removing logs from Hive ($dateKey): $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> preloadLogs() async {
+    // Legacy method - now loads from Hive (backward compatible)
+    try {
+      // Try to load today's logs from Hive
+      final today = DateTime.now();
+      final dateKey = _dateKey(today);
+      final hiveData = await _loadLogsFromHive(dateKey);
+      if (hiveData != null && hiveData.isNotEmpty) {
+        _cachedLogsByDate[dateKey] = hiveData;
+        _cachedLogs = hiveData; // Keep legacy cache for backward compatibility
+        return List<Map<String, dynamic>>.from(hiveData);
+      }
+
+      // Fallback to SharedPreferences (backward compatibility)
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_cacheKey);
-      if (raw == null || raw.isEmpty) {
-        _cachedLogs = null;
-      } else {
+      if (raw != null && raw.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
         final restored = decoded
             .map(
@@ -85,7 +139,13 @@ class StockDeductionLogsController {
             )
             .toList(growable: false);
         _cachedLogs = restored;
+        // Also save to Hive for future use
+        if (restored.isNotEmpty) {
+          unawaited(_saveLogsToHive(dateKey, restored));
+        }
+        return List<Map<String, dynamic>>.from(restored);
       }
+      _cachedLogs = null;
     } catch (_) {
       _cachedLogs = null;
     }
@@ -100,6 +160,7 @@ class StockDeductionLogsController {
 
     // Use today's date if not provided
     final targetDate = selectedDate ?? DateTime.now();
+    final dateKey = _dateKey(targetDate);
 
     void safeAdd(List<Map<String, dynamic>> logs) {
       if (!controller.isClosed) {
@@ -138,7 +199,7 @@ class StockDeductionLogsController {
         }
 
         realtimeChannel = _supabase
-            .channel('stock_deduction_logs_${_dateKey(targetDate)}')
+            .channel('stock_deduction_logs_$dateKey')
             .onPostgresChanges(
               event: PostgresChangeEvent.insert,
               schema: 'public',
@@ -167,12 +228,21 @@ class StockDeductionLogsController {
       }
     }
 
-    emitCachedForDate();
-    unawaited(_fetchLogsForDate());
-
     controller
-      ..onListen = () {
+      ..onListen = () async {
+        // 1. Check in-memory cache first
         emitCachedForDate();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (!_cachedLogsByDate.containsKey(dateKey)) {
+          final hiveData = await _loadLogsFromHive(dateKey);
+          if (hiveData != null && hiveData.isNotEmpty) {
+            _cachedLogsByDate[dateKey] = hiveData; // Populate in-memory cache
+            safeAdd(hiveData); // Emit immediately
+          }
+        }
+
+        // 3. Fetch from Supabase and subscribe to realtime updates
         unawaited(_fetchLogsForDate());
       }
       ..onCancel = () async {

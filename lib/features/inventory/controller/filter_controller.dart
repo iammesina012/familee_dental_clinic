@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
 
 class FilterController {
   // Singleton pattern to ensure cache persists across widget rebuilds
@@ -18,50 +20,81 @@ class FilterController {
   // Get all brands for filter
   Stream<List<Brand>> getBrandsStream() {
     final controller = StreamController<List<Brand>>.broadcast();
+    StreamSubscription<List<Map<String, dynamic>>>? supabaseSubscription;
 
-    // Emit cached data immediately if available (no delay - instant feedback)
-    if (_cachedBrands != null) {
-      controller.add(_cachedBrands!);
+    void emitCachedOrEmpty() {
+      if (_cachedBrands != null) {
+        controller.add(_cachedBrands!);
+      }
     }
 
-    try {
-      _supabase.from('brands').stream(primaryKey: ['id']).listen(
-        (data) {
-          try {
-            final brands = data
-                .map((row) => Brand.fromMap(row['id'] as String, row))
-                .toList()
-              ..sort((a, b) => a.name.compareTo(b.name));
+    void startSubscription() {
+      if (supabaseSubscription != null) return;
+      try {
+        supabaseSubscription =
+            _supabase.from('brands').stream(primaryKey: ['id']).listen(
+          (data) {
+            try {
+              final brands = data
+                  .map((row) => Brand.fromMap(row['id'] as String, row))
+                  .toList()
+                ..sort((a, b) => a.name.compareTo(b.name));
 
-            // Cache the result
-            _cachedBrands = brands;
-            controller.add(brands);
-          } catch (e) {
-            // On error, emit cached data if available
+              // Cache the result
+              _cachedBrands = brands;
+              unawaited(_saveBrandsToHive(brands)); // Save to Hive
+              controller.add(brands);
+            } catch (e) {
+              // On error, emit cached data if available
+              if (_cachedBrands != null) {
+                controller.add(_cachedBrands!);
+              } else {
+                controller.add([]);
+              }
+            }
+          },
+          onError: (error) {
+            // On stream error, emit cached data if available
             if (_cachedBrands != null) {
               controller.add(_cachedBrands!);
             } else {
               controller.add([]);
             }
-          }
-        },
-        onError: (error) {
-          // On stream error, emit cached data if available
-          if (_cachedBrands != null) {
-            controller.add(_cachedBrands!);
-          } else {
-            controller.add([]);
-          }
-        },
-      );
-    } catch (e) {
-      // If stream creation fails, emit cached data if available
-      if (_cachedBrands != null) {
-        controller.add(_cachedBrands!);
-      } else {
-        controller.add([]);
+          },
+        );
+      } catch (e) {
+        // If stream creation fails, emit cached data if available
+        if (_cachedBrands != null) {
+          controller.add(_cachedBrands!);
+        } else {
+          controller.add([]);
+        }
       }
     }
+
+    controller
+      ..onListen = () async {
+        // 1. Check in-memory cache first
+        emitCachedOrEmpty();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedBrands == null) {
+          final hiveData = await _loadBrandsFromHive();
+          if (hiveData != null) {
+            _cachedBrands = hiveData; // Populate in-memory cache
+            controller.add(hiveData); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
+        startSubscription();
+      }
+      ..onCancel = () async {
+        if (!controller.hasListener) {
+          await supabaseSubscription?.cancel();
+          supabaseSubscription = null;
+        }
+      };
 
     return controller.stream;
   }
@@ -69,50 +102,81 @@ class FilterController {
   // Get all suppliers for filter
   Stream<List<Supplier>> getSuppliersStream() {
     final controller = StreamController<List<Supplier>>.broadcast();
+    StreamSubscription<List<Map<String, dynamic>>>? supabaseSubscription;
 
-    // Emit cached data immediately if available (no delay - instant feedback)
-    if (_cachedSuppliers != null) {
-      controller.add(_cachedSuppliers!);
+    void emitCachedOrEmpty() {
+      if (_cachedSuppliers != null) {
+        controller.add(_cachedSuppliers!);
+      }
     }
 
-    try {
-      _supabase.from('suppliers').stream(primaryKey: ['id']).listen(
-        (data) {
-          try {
-            final suppliers = data
-                .map((row) => Supplier.fromMap(row['id'] as String, row))
-                .toList()
-              ..sort((a, b) => a.name.compareTo(b.name));
+    void startSubscription() {
+      if (supabaseSubscription != null) return;
+      try {
+        supabaseSubscription =
+            _supabase.from('suppliers').stream(primaryKey: ['id']).listen(
+          (data) {
+            try {
+              final suppliers = data
+                  .map((row) => Supplier.fromMap(row['id'] as String, row))
+                  .toList()
+                ..sort((a, b) => a.name.compareTo(b.name));
 
-            // Cache the result
-            _cachedSuppliers = suppliers;
-            controller.add(suppliers);
-          } catch (e) {
-            // On error, emit cached data if available
+              // Cache the result
+              _cachedSuppliers = suppliers;
+              unawaited(_saveSuppliersToHive(suppliers)); // Save to Hive
+              controller.add(suppliers);
+            } catch (e) {
+              // On error, emit cached data if available
+              if (_cachedSuppliers != null) {
+                controller.add(_cachedSuppliers!);
+              } else {
+                controller.add([]);
+              }
+            }
+          },
+          onError: (error) {
+            // On stream error, emit cached data if available
             if (_cachedSuppliers != null) {
               controller.add(_cachedSuppliers!);
             } else {
               controller.add([]);
             }
-          }
-        },
-        onError: (error) {
-          // On stream error, emit cached data if available
-          if (_cachedSuppliers != null) {
-            controller.add(_cachedSuppliers!);
-          } else {
-            controller.add([]);
-          }
-        },
-      );
-    } catch (e) {
-      // If stream creation fails, emit cached data if available
-      if (_cachedSuppliers != null) {
-        controller.add(_cachedSuppliers!);
-      } else {
-        controller.add([]);
+          },
+        );
+      } catch (e) {
+        // If stream creation fails, emit cached data if available
+        if (_cachedSuppliers != null) {
+          controller.add(_cachedSuppliers!);
+        } else {
+          controller.add([]);
+        }
       }
     }
+
+    controller
+      ..onListen = () async {
+        // 1. Check in-memory cache first
+        emitCachedOrEmpty();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedSuppliers == null) {
+          final hiveData = await _loadSuppliersFromHive();
+          if (hiveData != null) {
+            _cachedSuppliers = hiveData; // Populate in-memory cache
+            controller.add(hiveData); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
+        startSubscription();
+      }
+      ..onCancel = () async {
+        if (!controller.hasListener) {
+          await supabaseSubscription?.cancel();
+          supabaseSubscription = null;
+        }
+      };
 
     return controller.stream;
   }
@@ -365,38 +429,181 @@ class FilterController {
   List<String>? _cachedBrandNames;
   List<String>? _cachedSupplierNames;
 
+  // ===== HIVE PERSISTENT CACHE HELPERS =====
+
+  // Load brands from Hive
+  Future<List<Brand>?> _loadBrandsFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.filterBrandsBox);
+      final jsonStr = box.get('brands') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        return decoded
+            .map((item) => Brand.fromMap(
+                item['id'] as String, item as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save brands to Hive
+  Future<void> _saveBrandsToHive(List<Brand> brands) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.filterBrandsBox);
+      final jsonList = brands.map((b) => {'id': b.id, ...b.toMap()}).toList();
+      await box.put('brands', jsonEncode(jsonList));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Load suppliers from Hive
+  Future<List<Supplier>?> _loadSuppliersFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.filterSuppliersBox);
+      final jsonStr = box.get('suppliers') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        return decoded
+            .map((item) => Supplier.fromMap(
+                item['id'] as String, item as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save suppliers to Hive
+  Future<void> _saveSuppliersToHive(List<Supplier> suppliers) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.filterSuppliersBox);
+      final jsonList =
+          suppliers.map((s) => {'id': s.id, ...s.toMap()}).toList();
+      await box.put('suppliers', jsonEncode(jsonList));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Load brand names from Hive
+  Future<List<String>?> _loadBrandNamesFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.filterBrandNamesBox);
+      final jsonStr = box.get('brand_names') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        return decoded.map((e) => e as String).toList();
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save brand names to Hive
+  Future<void> _saveBrandNamesToHive(List<String> brandNames) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.filterBrandNamesBox);
+      await box.put('brand_names', jsonEncode(brandNames));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Load supplier names from Hive
+  Future<List<String>?> _loadSupplierNamesFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.filterSupplierNamesBox);
+      final jsonStr = box.get('supplier_names') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        return decoded.map((e) => e as String).toList();
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save supplier names to Hive
+  Future<void> _saveSupplierNamesToHive(List<String> supplierNames) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.filterSupplierNamesBox);
+      await box.put('supplier_names', jsonEncode(supplierNames));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
   // Get brand names as list of strings
   Stream<List<String>> getBrandNamesStream() {
     final controller = StreamController<List<String>>.broadcast();
+    StreamSubscription<List<Brand>>? brandsSubscription;
 
-    // Emit cached names immediately if available
-    if (_cachedBrandNames != null) {
-      controller.add(_cachedBrandNames!);
+    void emitCachedOrEmpty() {
+      if (_cachedBrandNames != null) {
+        controller.add(_cachedBrandNames!);
+      }
     }
 
-    getBrandsStream().listen(
-      (brands) {
-        try {
-          final brandNames =
-              brands.map((b) => b.name).where((name) => name != "N/A").toList();
-          _cachedBrandNames = brandNames;
-          controller.add(brandNames);
-        } catch (e) {
+    void startSubscription() {
+      if (brandsSubscription != null) return;
+      brandsSubscription = getBrandsStream().listen(
+        (brands) {
+          try {
+            final brandNames = brands
+                .map((b) => b.name)
+                .where((name) => name != "N/A")
+                .toList();
+            _cachedBrandNames = brandNames;
+            unawaited(_saveBrandNamesToHive(brandNames)); // Save to Hive
+            controller.add(brandNames);
+          } catch (e) {
+            if (_cachedBrandNames != null) {
+              controller.add(_cachedBrandNames!);
+            } else {
+              controller.add([]);
+            }
+          }
+        },
+        onError: (error) {
           if (_cachedBrandNames != null) {
             controller.add(_cachedBrandNames!);
           } else {
             controller.add([]);
           }
+        },
+      );
+    }
+
+    controller
+      ..onListen = () async {
+        // 1. Check in-memory cache first
+        emitCachedOrEmpty();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedBrandNames == null) {
+          final hiveData = await _loadBrandNamesFromHive();
+          if (hiveData != null) {
+            _cachedBrandNames = hiveData; // Populate in-memory cache
+            controller.add(hiveData); // Emit immediately
+          }
         }
-      },
-      onError: (error) {
-        if (_cachedBrandNames != null) {
-          controller.add(_cachedBrandNames!);
-        } else {
-          controller.add([]);
+
+        // 3. Subscribe to brands stream for updates
+        startSubscription();
+      }
+      ..onCancel = () async {
+        if (!controller.hasListener) {
+          await brandsSubscription?.cancel();
+          brandsSubscription = null;
         }
-      },
-    );
+      };
 
     return controller.stream;
   }
@@ -404,37 +611,67 @@ class FilterController {
   // Get supplier names as list of strings
   Stream<List<String>> getSupplierNamesStream() {
     final controller = StreamController<List<String>>.broadcast();
+    StreamSubscription<List<Supplier>>? suppliersSubscription;
 
-    // Emit cached names immediately if available
-    if (_cachedSupplierNames != null) {
-      controller.add(_cachedSupplierNames!);
+    void emitCachedOrEmpty() {
+      if (_cachedSupplierNames != null) {
+        controller.add(_cachedSupplierNames!);
+      }
     }
 
-    getSuppliersStream().listen(
-      (suppliers) {
-        try {
-          final supplierNames = suppliers
-              .map((s) => s.name)
-              .where((name) => name != "N/A")
-              .toList();
-          _cachedSupplierNames = supplierNames;
-          controller.add(supplierNames);
-        } catch (e) {
+    void startSubscription() {
+      if (suppliersSubscription != null) return;
+      suppliersSubscription = getSuppliersStream().listen(
+        (suppliers) {
+          try {
+            final supplierNames = suppliers
+                .map((s) => s.name)
+                .where((name) => name != "N/A")
+                .toList();
+            _cachedSupplierNames = supplierNames;
+            unawaited(_saveSupplierNamesToHive(supplierNames)); // Save to Hive
+            controller.add(supplierNames);
+          } catch (e) {
+            if (_cachedSupplierNames != null) {
+              controller.add(_cachedSupplierNames!);
+            } else {
+              controller.add([]);
+            }
+          }
+        },
+        onError: (error) {
           if (_cachedSupplierNames != null) {
             controller.add(_cachedSupplierNames!);
           } else {
             controller.add([]);
           }
+        },
+      );
+    }
+
+    controller
+      ..onListen = () async {
+        // 1. Check in-memory cache first
+        emitCachedOrEmpty();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedSupplierNames == null) {
+          final hiveData = await _loadSupplierNamesFromHive();
+          if (hiveData != null) {
+            _cachedSupplierNames = hiveData; // Populate in-memory cache
+            controller.add(hiveData); // Emit immediately
+          }
         }
-      },
-      onError: (error) {
-        if (_cachedSupplierNames != null) {
-          controller.add(_cachedSupplierNames!);
-        } else {
-          controller.add([]);
+
+        // 3. Subscribe to suppliers stream for updates
+        startSubscription();
+      }
+      ..onCancel = () async {
+        if (!controller.hasListener) {
+          await suppliersSubscription?.cancel();
+          suppliersSubscription = null;
         }
-      },
-    );
+      };
 
     return controller.stream;
   }

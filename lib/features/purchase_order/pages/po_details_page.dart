@@ -397,7 +397,8 @@ class _PODetailsPageState extends State<PODetailsPage> {
 
   Future<void> _prepareInitialData() async {
     try {
-      await _poSupabase.preloadFromLocalCache();
+      // Pre-loading no longer needed - streams auto-load from Hive
+      // await _poSupabase.preloadFromLocalCache();
     } catch (_) {
       // Ignore errors; caches are optional.
     }

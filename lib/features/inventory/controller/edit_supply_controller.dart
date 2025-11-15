@@ -465,6 +465,12 @@ class EditSupplyController {
           'new': nameController.text.trim(),
         };
       }
+      if (typeController.text.trim() != (originalType ?? '')) {
+        fieldChanges['Type'] = {
+          'previous': originalType ?? 'N/A',
+          'new': typeController.text.trim(),
+        };
+      }
       if (selectedCategory != (originalCategory ?? '')) {
         fieldChanges['Category'] = {
           'previous': originalCategory ?? 'N/A',
@@ -512,6 +518,67 @@ class EditSupplyController {
         };
       }
 
+      // Track threshold changes
+      if (lowStockThreshold != (originalLowStockThreshold ?? 1)) {
+        fieldChanges['Threshold'] = {
+          'previous': originalLowStockThreshold ?? 1,
+          'new': lowStockThreshold,
+        };
+      }
+
+      // Track packaging unit changes
+      if (selectedPackagingUnit != (originalPackagingUnit ?? 'Box')) {
+        fieldChanges['Packaging Unit'] = {
+          'previous': originalPackagingUnit ?? 'Box',
+          'new': selectedPackagingUnit ?? 'Box',
+        };
+      }
+
+      // Track packaging content/unit changes (combine quantity and content)
+      // Check if original packaging content was disabled (Pieces, Spool, Tub units)
+      final bool originalPackagingContentDisabled =
+          originalPackagingUnit == 'Pieces' ||
+              originalPackagingUnit == 'Spool' ||
+              originalPackagingUnit == 'Tub';
+
+      final bool packagingContentChanged =
+          (isPackagingContentDisabled() ? null : selectedPackagingContent) !=
+                  (originalPackagingContentDisabled
+                      ? null
+                      : (originalPackagingContent ?? 'Pieces')) ||
+              (!isPackagingContentDisabled() &&
+                  !originalPackagingContentDisabled &&
+                  packagingContent != (originalPackagingContentQuantity ?? 1));
+
+      if (packagingContentChanged) {
+        // Build previous value
+        String previousValue;
+        if (originalPackagingContentDisabled ||
+            (originalPackagingContent == null ||
+                originalPackagingContent!.isEmpty)) {
+          previousValue = originalPackagingUnit ?? 'Box';
+        } else {
+          previousValue =
+              '${originalPackagingContentQuantity ?? 1} ${originalPackagingContent ?? 'Pieces'}';
+        }
+
+        // Build new value
+        String newValue;
+        if (isPackagingContentDisabled() ||
+            (selectedPackagingContent == null ||
+                selectedPackagingContent!.isEmpty)) {
+          newValue = selectedPackagingUnit ?? 'Box';
+        } else {
+          newValue =
+              '$packagingContent ${selectedPackagingContent ?? 'Pieces'}';
+        }
+
+        fieldChanges['Packaging Content/Unit'] = {
+          'previous': previousValue,
+          'new': newValue,
+        };
+      }
+
       // Log the edit activity with detailed field changes (wrap in try-catch to prevent breaking save)
       try {
         await InventoryActivityController().logInventorySupplyEdited(
@@ -534,6 +601,7 @@ class EditSupplyController {
               ? expiryController.text.trim()
               : null,
           noExpiry: noExpiry,
+          lowStockBaseline: lowStockThreshold,
           fieldChanges: fieldChanges,
         );
       } catch (logError) {
@@ -554,6 +622,9 @@ class EditSupplyController {
                 ? null
                 : expiryController.text.trim(),
             noExpiry,
+            supplyType: typeController.text.trim().isNotEmpty
+                ? typeController.text.trim()
+                : null,
           );
         }
 

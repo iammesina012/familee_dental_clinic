@@ -25,10 +25,20 @@ import 'package:familee_dental/features/backup_restore/pages/backup_restore_page
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:familee_dental/shared/themes/font.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
+import 'package:familee_dental/shared/widgets/connectivity_monitor.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Hive storage
+  try {
+    await HiveStorage.initialize();
+    debugPrint("Hive storage initialized successfully!");
+  } catch (e) {
+    debugPrint("Hive storage init failed: $e");
+  }
 
   // Load environment 1
   await dotenv.load(fileName: ".env");
@@ -76,67 +86,75 @@ Future<void> main() async {
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
 
+  // Global navigator key to access MaterialApp context for toast
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppTheme.themeMode,
       builder: (context, mode, _) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: mode,
-          home: const Scaffold(
-            resizeToAvoidBottomInset: false,
-            body: AuthWrapper(),
+        return ConnectivityMonitor(
+          navigatorKey: navigatorKey,
+          child: MaterialApp(
+            navigatorKey: navigatorKey,
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: mode,
+            home: const Scaffold(
+              resizeToAvoidBottomInset: false,
+              body: AuthWrapper(),
+            ),
+            routes: {
+              '/login': (context) => const Login(),
+              '/forgot-password': (context) => const ForgotPasswordPage(),
+              '/password-reset': (context) => const PasswordResetPage(),
+              '/dashboard': (context) => const Dashboard(),
+              '/inventory': (context) => const Inventory(),
+              '/purchase-order': (context) => const PurchaseOrderPage(),
+              '/create-po': (context) => const CreatePOPage(),
+              '/add-supply': (context) => const AddSupplyPage(),
+              '/edit-supply-po': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments
+                    as Map<String, dynamic>;
+                return EditSupplyPOPage(supply: args);
+              },
+              '/po-details': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments
+                    as Map<String, dynamic>;
+                return PODetailsPage(purchaseOrder: args['purchaseOrder']);
+              },
+              '/stock-deduction': (context) => const StockDeductionPage(),
+              '/stock-deduction/add-supply': (context) =>
+                  const StockDeductionAddSupplyPage(),
+              '/stock-deduction/deduction-logs': (context) =>
+                  const DeductionLogsPage(),
+              '/stock-deduction/approval': (context) => const ApprovalPage(),
+              '/activity-log': (context) => const ActivityLogPage(),
+              '/notifications': (context) => const NotificationsPage(),
+              '/settings': (context) => const SettingsPage(),
+              '/tutorial': (context) => const AppTutorialPage(),
+              '/backup-restore': (context) {
+                final userRoleProvider = UserRoleProvider();
+                if (!userRoleProvider.isOwner) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    Navigator.pushReplacementNamed(context, '/settings');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Access Denied: Only the Owner can access backup and restore functionality.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  });
+                  return const SizedBox(); // Return empty widget while redirecting
+                }
+                return const BackupRestorePage();
+              },
+            },
           ),
-          routes: {
-            '/login': (context) => const Login(),
-            '/forgot-password': (context) => const ForgotPasswordPage(),
-            '/password-reset': (context) => const PasswordResetPage(),
-            '/dashboard': (context) => const Dashboard(),
-            '/inventory': (context) => const Inventory(),
-            '/purchase-order': (context) => const PurchaseOrderPage(),
-            '/create-po': (context) => const CreatePOPage(),
-            '/add-supply': (context) => const AddSupplyPage(),
-            '/edit-supply-po': (context) {
-              final args = ModalRoute.of(context)!.settings.arguments
-                  as Map<String, dynamic>;
-              return EditSupplyPOPage(supply: args);
-            },
-            '/po-details': (context) {
-              final args = ModalRoute.of(context)!.settings.arguments
-                  as Map<String, dynamic>;
-              return PODetailsPage(purchaseOrder: args['purchaseOrder']);
-            },
-            '/stock-deduction': (context) => const StockDeductionPage(),
-            '/stock-deduction/add-supply': (context) =>
-                const StockDeductionAddSupplyPage(),
-            '/stock-deduction/deduction-logs': (context) =>
-                const DeductionLogsPage(),
-            '/stock-deduction/approval': (context) => const ApprovalPage(),
-            '/activity-log': (context) => const ActivityLogPage(),
-            '/notifications': (context) => const NotificationsPage(),
-            '/settings': (context) => const SettingsPage(),
-            '/tutorial': (context) => const AppTutorialPage(),
-            '/backup-restore': (context) {
-              final userRoleProvider = UserRoleProvider();
-              if (!userRoleProvider.isOwner) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  Navigator.pushReplacementNamed(context, '/settings');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'Access Denied: Only the Owner can access backup and restore functionality.'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                });
-                return const SizedBox(); // Return empty widget while redirecting
-              }
-              return const BackupRestorePage();
-            },
-          },
         );
       },
     );

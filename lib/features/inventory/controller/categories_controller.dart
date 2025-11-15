@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
 
 class CategoriesController {
   // Singleton pattern to ensure cache persists across widget rebuilds
@@ -16,6 +18,33 @@ class CategoriesController {
 
   // Stream controller for broadcasting updates
   StreamController<List<String>>? _streamController;
+
+  // ===== HIVE PERSISTENT CACHE HELPERS =====
+
+  // Load categories from Hive
+  Future<List<String>?> _loadCategoriesFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.categoriesBox);
+      final jsonStr = box.get('categories') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        return decoded.map((e) => e as String).toList();
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save categories to Hive
+  Future<void> _saveCategoriesToHive(List<String> categories) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.categoriesBox);
+      await box.put('categories', jsonEncode(categories));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
 
   List<String>? get cachedCategories =>
       _cachedCategories != null ? List<String>.from(_cachedCategories!) : null;
@@ -49,6 +78,21 @@ class CategoriesController {
     // Use a one-time query with timeout to avoid blocking when offline
     // This prevents the app from freezing when trying to establish a stream connection
     Future<void> fetchCategories() async {
+      // 1. Check in-memory cache first
+      if (_cachedCategories != null) {
+        emitCachedOrEmpty(forceEmpty: true);
+      }
+
+      // 2. If in-memory cache is null, auto-load from Hive
+      if (_cachedCategories == null) {
+        final hiveData = await _loadCategoriesFromHive();
+        if (hiveData != null) {
+          _cachedCategories = hiveData; // Populate in-memory cache
+          emitCachedOrEmpty(forceEmpty: true); // Emit immediately
+        }
+      }
+
+      // 3. Then try to fetch from Supabase
       try {
         // Use timeout to prevent hanging when offline
         try {
@@ -63,6 +107,7 @@ class CategoriesController {
 
             // Cache the result
             _cachedCategories = categories;
+            unawaited(_saveCategoriesToHive(categories)); // Save to Hive
             emitCachedOrEmpty(forceEmpty: true);
           } catch (e) {
             emitCachedOrEmpty(forceEmpty: true);
@@ -82,6 +127,7 @@ class CategoriesController {
 
                 // Cache the result
                 _cachedCategories = categories;
+                unawaited(_saveCategoriesToHive(categories)); // Save to Hive
                 emitCachedOrEmpty(forceEmpty: true);
               } catch (e) {
                 emitCachedOrEmpty(forceEmpty: true);
@@ -123,6 +169,7 @@ class CategoriesController {
 
       // Update cache
       _cachedCategories = categories;
+      unawaited(_saveCategoriesToHive(categories)); // Save to Hive
 
       // Notify all listeners immediately
       if (_streamController != null && !_streamController!.isClosed) {

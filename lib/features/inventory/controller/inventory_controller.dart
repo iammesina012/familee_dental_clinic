@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
 
 class InventoryController {
   // Singleton pattern to ensure cache persists across widget rebuilds
@@ -13,6 +15,152 @@ class InventoryController {
   // Cache for last known data (persists across widget rebuilds)
   List<InventoryItem>? _cachedSupplies;
   List<GroupedInventoryItem>? _cachedGroupedSupplies;
+
+  // ===== HIVE PERSISTENT CACHE HELPERS =====
+
+  // Load supplies from Hive
+  Future<List<InventoryItem>?> _loadSuppliesFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.inventorySuppliesBox);
+      final jsonStr = box.get('supplies') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        return decoded
+            .map((item) => _inventoryItemFromMap(item as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save supplies to Hive
+  Future<void> _saveSuppliesToHive(List<InventoryItem> supplies) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.inventorySuppliesBox);
+      final jsonList =
+          supplies.map((item) => _inventoryItemToMap(item)).toList();
+      await box.put('supplies', jsonEncode(jsonList));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Load grouped supplies from Hive
+  Future<List<GroupedInventoryItem>?> _loadGroupedSuppliesFromHive() async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.inventoryGroupedSuppliesBox);
+      final jsonStr = box.get('grouped_supplies') as String?;
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        return decoded
+            .map((item) => _groupedItemFromMap(item as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+    return null;
+  }
+
+  // Save grouped supplies to Hive
+  Future<void> _saveGroupedSuppliesToHive(
+      List<GroupedInventoryItem> groupedSupplies) async {
+    try {
+      final box =
+          await HiveStorage.openBox(HiveStorage.inventoryGroupedSuppliesBox);
+      final jsonList =
+          groupedSupplies.map((item) => _groupedItemToMap(item)).toList();
+      await box.put('grouped_supplies', jsonEncode(jsonList));
+    } catch (e) {
+      // Ignore errors - Hive is best effort
+    }
+  }
+
+  // Helper to convert InventoryItem to Map for JSON
+  Map<String, dynamic> _inventoryItemToMap(InventoryItem item) {
+    return {
+      'id': item.id,
+      'name': item.name,
+      'type': item.type,
+      'imageUrl': item.imageUrl,
+      'category': item.category,
+      'cost': item.cost,
+      'stock': item.stock,
+      'lowStockBaseline': item.lowStockBaseline,
+      'unit': item.unit,
+      'packagingUnit': item.packagingUnit,
+      'packagingContent': item.packagingContent,
+      'packagingQuantity': item.packagingQuantity,
+      'packagingContentQuantity': item.packagingContentQuantity,
+      'supplier': item.supplier,
+      'brand': item.brand,
+      'expiry': item.expiry,
+      'noExpiry': item.noExpiry,
+      'archived': item.archived,
+      'createdAt': item.createdAt?.toIso8601String(),
+    };
+  }
+
+  // Helper to convert Map to InventoryItem from JSON
+  InventoryItem _inventoryItemFromMap(Map<String, dynamic> map) {
+    DateTime? createdAt;
+    if (map['createdAt'] != null) {
+      try {
+        createdAt = DateTime.parse(map['createdAt'] as String);
+      } catch (e) {
+        createdAt = null;
+      }
+    }
+    return InventoryItem(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      type: map['type'] as String?,
+      imageUrl: map['imageUrl'] as String? ?? '',
+      category: map['category'] as String? ?? '',
+      cost: (map['cost'] as num?)?.toDouble() ?? 0.0,
+      stock: (map['stock'] as num?)?.toInt() ?? 0,
+      lowStockBaseline: (map['lowStockBaseline'] as num?)?.toInt(),
+      unit: map['unit'] as String? ?? '',
+      packagingUnit: map['packagingUnit'] as String?,
+      packagingContent: map['packagingContent'] as String?,
+      packagingQuantity: (map['packagingQuantity'] as num?)?.toInt(),
+      packagingContentQuantity:
+          (map['packagingContentQuantity'] as num?)?.toInt(),
+      supplier: map['supplier'] as String? ?? '',
+      brand: map['brand'] as String? ?? '',
+      expiry: map['expiry'] as String?,
+      noExpiry: map['noExpiry'] as bool? ?? false,
+      archived: map['archived'] as bool? ?? false,
+      createdAt: createdAt,
+    );
+  }
+
+  // Helper to convert GroupedInventoryItem to Map for JSON
+  Map<String, dynamic> _groupedItemToMap(GroupedInventoryItem item) {
+    return {
+      'productKey': item.productKey,
+      'mainItem': _inventoryItemToMap(item.mainItem),
+      'variants': item.variants.map((v) => _inventoryItemToMap(v)).toList(),
+      'totalStock': item.totalStock,
+      'totalBaseline': item.totalBaseline,
+    };
+  }
+
+  // Helper to convert Map to GroupedInventoryItem from JSON
+  GroupedInventoryItem _groupedItemFromMap(Map<String, dynamic> map) {
+    return GroupedInventoryItem(
+      productKey: map['productKey'] as String,
+      mainItem: _inventoryItemFromMap(map['mainItem'] as Map<String, dynamic>),
+      variants: (map['variants'] as List<dynamic>)
+          .map((v) => _inventoryItemFromMap(v as Map<String, dynamic>))
+          .toList(),
+      totalStock: (map['totalStock'] as num?)?.toInt() ?? 0,
+      totalBaseline: (map['totalBaseline'] as num?)?.toInt() ?? 0,
+    );
+  }
 
   // Get cached supplies (for searching by name and type)
   List<InventoryItem>? getCachedSupplies() => _cachedSupplies;
@@ -97,6 +245,7 @@ class InventoryController {
 
               emitFiltered(items);
               _cachedSupplies = List<InventoryItem>.from(items);
+              unawaited(_saveSuppliesToHive(_cachedSupplies!)); // Save to Hive
             } catch (e) {
               emitCachedOrEmpty(forceEmpty: true);
             }
@@ -111,8 +260,21 @@ class InventoryController {
     }
 
     controller
-      ..onListen = () {
+      ..onListen = () async {
+        // 1. Check in-memory cache first
         emitCachedOrEmpty();
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedSupplies == null) {
+          final hiveData = await _loadSuppliesFromHive();
+          if (hiveData != null) {
+            _cachedSupplies = hiveData; // Populate in-memory cache
+            emitFiltered(
+                List<InventoryItem>.from(hiveData)); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
         startSubscription();
       }
       ..onCancel = () async {
@@ -162,6 +324,8 @@ class InventoryController {
         final grouped = _groupItems(filteredItems);
         safeAdd(grouped);
         _cachedGroupedSupplies = List<GroupedInventoryItem>.from(grouped);
+        unawaited(_saveGroupedSuppliesToHive(
+            _cachedGroupedSupplies!)); // Save to Hive
       } catch (e) {
         emitCachedOrEmpty(forceEmpty: true);
       }
@@ -178,10 +342,23 @@ class InventoryController {
     }
 
     controller
-      ..onListen = () {
+      ..onListen = () async {
+        // 1. Check in-memory cache first
         if (_cachedGroupedSupplies != null) {
           safeAdd(List<GroupedInventoryItem>.from(_cachedGroupedSupplies!));
         }
+
+        // 2. If in-memory cache is null, auto-load from Hive
+        if (_cachedGroupedSupplies == null) {
+          final hiveData = await _loadGroupedSuppliesFromHive();
+          if (hiveData != null) {
+            _cachedGroupedSupplies = hiveData; // Populate in-memory cache
+            safeAdd(
+                List<GroupedInventoryItem>.from(hiveData)); // Emit immediately
+          }
+        }
+
+        // 3. Subscribe to Supabase for updates
         startListening();
       }
       ..onCancel = () async {
