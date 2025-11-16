@@ -28,6 +28,7 @@ import 'package:familee_dental/shared/themes/font.dart';
 import 'package:familee_dental/shared/storage/hive_storage.dart';
 import 'package:familee_dental/shared/widgets/connectivity_monitor.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,12 +90,21 @@ class MainApp extends StatelessWidget {
   // Global navigator key to access MaterialApp context for toast
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
+  static bool _didWarmup = false;
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppTheme.themeMode,
       builder: (context, mode, _) {
+        if (!_didWarmup) {
+          _didWarmup = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Warm brand/supplier caches for offline usage
+            FilterController().preloadFromLocalCache();
+            FilterController().warmUpOnlineIfPossible();
+          });
+        }
         return ConnectivityMonitor(
           navigatorKey: navigatorKey,
           child: MaterialApp(

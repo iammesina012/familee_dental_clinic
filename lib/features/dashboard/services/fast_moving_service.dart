@@ -213,8 +213,9 @@ class FastMovingService {
         }
       }
 
-      // Fetch types (same as before)
+      // Fetch existing non-archived supplies and their types
       final Map<String, String?> typeCache = {};
+      final Set<String> existingNameKeys = {};
       if (uniqueNames.isNotEmpty) {
         try {
           final suppliesResponse = await _supabase
@@ -230,6 +231,8 @@ class FastMovingService {
                 typeCache.containsKey(nameKey)) {
               continue;
             }
+            // Track only non-archived existing supplies
+            existingNameKeys.add(nameKey);
 
             final typeValue = supply['type'];
             if (typeValue != null && typeValue.toString().trim().isNotEmpty) {
@@ -245,6 +248,10 @@ class FastMovingService {
       final Map<String, FastMovingItem> finalAggregates = {};
       for (final entry in aggregates.entries) {
         final nameKey = entry.value['name'].toString().trim().toLowerCase();
+        // Only include entries that still exist as non-archived supplies
+        if (!existingNameKeys.contains(nameKey)) {
+          continue;
+        }
         final String? type = typeCache[nameKey];
         final String typeKey =
             type != null && type.isNotEmpty ? type.trim().toLowerCase() : '';

@@ -49,6 +49,9 @@ class _DashboardState extends State<Dashboard> {
       _hasConnection; // Track connectivity status (null = checking, true = online, false = offline)
   List<FastMovingItem>?
       _lastFastMovingItems; // Keep last data visible during period change
+  List<TurnoverItem>? _lastUsageSpeedItems; // Prevent flash for Usage Speed
+  bool _isUsageSpeedPeriodChanging =
+      false; // Control Usage Speed skeleton independently
 
   final _userDataService = UserDataService();
 
@@ -116,10 +119,10 @@ class _DashboardState extends State<Dashboard> {
             .maybeSingle();
 
         if (mounted) {
-          if (response != null &&
-              response['name'] != null &&
-              response['name'].toString().trim().isNotEmpty) {
-            // Use data from user_roles table
+            if (response != null &&
+                response['name'] != null &&
+                response['name'].toString().trim().isNotEmpty) {
+              // Use data from user_roles table
             final name = response['name'].toString().trim();
             final role = response['role']?.toString().trim() ?? 'Admin';
 
@@ -130,11 +133,11 @@ class _DashboardState extends State<Dashboard> {
 
             // Save to Hive for persistence
             await _userDataService.saveToHive(currentUser.id, name, role);
-          } else {
-            // Fallback to auth user data
-            final displayName =
-                currentUser.userMetadata?['display_name']?.toString().trim();
-            final emailName = currentUser.email?.split('@')[0].trim();
+            } else {
+              // Fallback to auth user data
+              final displayName =
+                  currentUser.userMetadata?['display_name']?.toString().trim();
+              final emailName = currentUser.email?.split('@')[0].trim();
             final name = displayName ?? emailName ?? 'User';
             final role = 'Admin';
 
@@ -1369,11 +1372,11 @@ class _DashboardState extends State<Dashboard> {
                                                       fontSize: 14,
                                                       fontWeight:
                                                           FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                  ),
+                ),
+              ),
+            ],
+          ),
                                           );
                                         },
                                         child: Icon(
@@ -1416,6 +1419,16 @@ class _DashboardState extends State<Dashboard> {
                                         newValue != _selectedUsageSpeedPeriod) {
                                       setState(() {
                                         _selectedUsageSpeedPeriod = newValue;
+                                        _isUsageSpeedPeriodChanging = true;
+                                      });
+                                      Future.delayed(
+                                          const Duration(milliseconds: 500),
+                                          () {
+                                        if (mounted) {
+                                          setState(() {
+                                            _isUsageSpeedPeriodChanging = false;
+                                          });
+                                        }
                                       });
                                     }
                                   },
@@ -1439,14 +1452,28 @@ class _DashboardState extends State<Dashboard> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        FutureBuilder<List<TurnoverItem>>(
+                        StreamBuilder<List<TurnoverItem>>(
                           key: ValueKey(_selectedUsageSpeedPeriod),
-                          future: _turnoverRateService
-                              .computeTurnoverItems(_selectedUsageSpeedPeriod),
+                          // Provide initial data only when offline or not actively changing (allow skeleton online)
+                          initialData: (_hasConnection == true &&
+                                  _isUsageSpeedPeriodChanging)
+                              ? null
+                              : (_turnoverRateService.getCachedTurnoverItems(
+                                      _selectedUsageSpeedPeriod) ??
+                                  _lastUsageSpeedItems),
+                          stream: _turnoverRateService.streamTurnoverItems(
+                            period: _selectedUsageSpeedPeriod,
+                          ),
                           builder: (context, snapshot) {
-                            // Show skeleton loader only when actively waiting
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
+                            // Match Fast Moving: show skeleton ONLINE when changing period or waiting with no data
+                            final shouldShowSkeleton =
+                                (_hasConnection == true) &&
+                                    (_isUsageSpeedPeriodChanging ||
+                                        (snapshot.connectionState ==
+                                                ConnectionState.waiting &&
+                                            !snapshot.hasData &&
+                                            !snapshot.hasError));
+                            if (shouldShowSkeleton) {
                               final baseColor = isDark
                                   ? Colors.grey[800]!
                                   : Colors.grey[300]!;
@@ -1503,8 +1530,16 @@ class _DashboardState extends State<Dashboard> {
                               );
                             }
 
-                            // Get data (will be empty list if no data or error)
-                            final items = snapshot.data ?? [];
+                            // Prefer stream data; fallback to last items to avoid flash
+                            final streamItems = snapshot.data ?? [];
+                            final items = streamItems.isNotEmpty
+                                ? streamItems
+                                : (_lastUsageSpeedItems ?? []);
+
+                            // Update last items when fresh data arrives
+                            if (streamItems.isNotEmpty) {
+                              _lastUsageSpeedItems = streamItems;
+                            }
 
                             // Show empty state if no deductions
                             if (items.isEmpty) {

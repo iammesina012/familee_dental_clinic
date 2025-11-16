@@ -620,9 +620,15 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                                     : null;
                               }(),
                               hint: Text(
-                                _isPackagingContentDisabled()
-                                    ? 'Not applicable'
-                                    : 'Select content',
+                                'Select content',
+                                style: AppFonts.sfProStyle(
+                                  fontSize: 16,
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.6),
+                                ),
+                              ),
+                              disabledHint: Text(
+                                '',
                                 style: AppFonts.sfProStyle(
                                   fontSize: 16,
                                   color: theme.textTheme.bodyMedium?.color

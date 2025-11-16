@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/dashboard/services/inventory_analytics_service.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
 
 /// Turnover Item model
 class TurnoverItem {
@@ -24,6 +27,74 @@ class TurnoverRateService {
   final SupabaseClient _supabase = Supabase.instance.client;
   final InventoryAnalyticsService _analyticsService =
       InventoryAnalyticsService();
+
+  // ===== In-memory cache for Usage Speed (by period) =====
+  final Map<String, List<TurnoverItem>> _cachedTurnoverItems = {};
+  bool _isPreloadingTurnover = false;
+
+  // ===== HIVE PERSISTENT CACHE HELPERS =====
+  Future<List<TurnoverItem>?> _loadTurnoverFromHive(String period) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.usageSpeedBox);
+      final jsonStr = box.get('usage_speed_$period') as String?;
+      if (jsonStr == null) return null;
+      final decoded = jsonDecode(jsonStr) as List<dynamic>;
+      return decoded.map((e) {
+        final m = e as Map<String, dynamic>;
+        return TurnoverItem(
+          name: (m['name'] ?? '').toString(),
+          brand: (m['brand'] ?? '').toString(),
+          quantityConsumed: (m['quantityConsumed'] ?? 0) as int,
+          currentStock: (m['currentStock'] ?? 0) as int,
+          averageStock: (m['averageStock'] ?? 0.0) as double,
+          turnoverRate: (m['turnoverRate'] ?? 0.0) as double,
+        );
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveTurnoverToHive(
+      String period, List<TurnoverItem> items) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.usageSpeedBox);
+      final jsonList = items
+          .map((e) => {
+                'name': e.name,
+                'brand': e.brand,
+                'quantityConsumed': e.quantityConsumed,
+                'currentStock': e.currentStock,
+                'averageStock': e.averageStock,
+                'turnoverRate': e.turnoverRate,
+              })
+          .toList();
+      await box.put('usage_speed_$period', jsonEncode(jsonList));
+    } catch (_) {
+      // best effort
+    }
+  }
+
+  Future<void> preloadTurnoverPeriods() async {
+    if (_isPreloadingTurnover) return;
+    _isPreloadingTurnover = true;
+    try {
+      final periods = ['Monthly', 'Quarterly', 'Yearly'];
+      for (final p in periods) {
+        if (_cachedTurnoverItems.containsKey(p)) continue;
+        final hive = await _loadTurnoverFromHive(p);
+        if (hive != null) {
+          _cachedTurnoverItems[p] = hive;
+          continue;
+        }
+        final computed = await computeTurnoverItems(p);
+        _cachedTurnoverItems[p] = computed;
+        unawaited(_saveTurnoverToHive(p, computed));
+      }
+    } finally {
+      _isPreloadingTurnover = false;
+    }
+  }
 
   /// Get fixed date range for period (Monthly, Quarterly, Yearly)
   /// Public method to access date ranges from dashboard
@@ -319,7 +390,7 @@ class TurnoverRateService {
       }
 
       // Match deductions with supplies and compute turnover
-      // Include ALL items with consumption, even if not in current supplies
+      // Only include items that still exist (non-archived) in current supplies
       final List<TurnoverItem> turnoverItems = [];
       final Map<String, bool> processedKeys =
           {}; // Track processed items to avoid duplicates
@@ -338,8 +409,12 @@ class TurnoverRateService {
         processedKeys[key] = true;
 
         final supply = supplyMap[key];
-        // Use current stock if available, otherwise 0 (item was fully consumed or restocked)
-        final currentStock = supply != null ? (supply['stock'] ?? 0) as int : 0;
+        // Skip items that are no longer present (or archived) in current supplies
+        if (supply == null) {
+          continue;
+        }
+        // Use current stock when present
+        final currentStock = (supply['stock'] ?? 0) as int;
 
         // Get deduction count (frequency) for better turnover calculation
         final deductionCount = (deduction['deductionCount'] ?? 1) as int;
@@ -522,5 +597,100 @@ class TurnoverRateService {
       print('Error computing all-time turnover items: $e');
       return [];
     }
+  }
+}
+
+extension TurnoverRateServiceStreaming on TurnoverRateService {
+  /// Hybrid stream: in-memory -> Hive -> live updates (recompute on changes)
+  Stream<List<TurnoverItem>> streamTurnoverItems({required String period}) {
+    final controller = StreamController<List<TurnoverItem>>.broadcast();
+
+    void emitCached() {
+      if (_cachedTurnoverItems.containsKey(period)) {
+        controller.add(_cachedTurnoverItems[period]!);
+      }
+    }
+
+    void startSubscription() {
+      try {
+        final range = getDateRangeForPeriod(period);
+        final start = range['start']!;
+        final end = range['end']!;
+        final endWithTime = DateTime(end.year, end.month, end.day, 23, 59, 59);
+
+        _supabase
+            .from('stock_deduction_logs')
+            .stream(primaryKey: ['id'])
+            .gte('created_at', start.toIso8601String())
+            .order('created_at', ascending: false)
+            .listen(
+              (data) async {
+                try {
+                  // Ensure date values are parsable and within range (no-op; computation follows)
+                  data.any((log) {
+                    final raw = log['created_at']?.toString();
+                    if (raw == null) return false;
+                    try {
+                      final ts = DateTime.parse(raw);
+                      return ts.isAfter(
+                              start.subtract(const Duration(seconds: 1))) &&
+                          ts.isBefore(
+                              endWithTime.add(const Duration(seconds: 1)));
+                    } catch (_) {
+                      return false;
+                    }
+                  });
+
+                  // If no logs in range, still recompute which will return [] or values
+                  // Use computeTurnoverItems to include supplies info
+                  final computed = await computeTurnoverItems(period);
+                  _cachedTurnoverItems[period] = computed;
+                  unawaited(_saveTurnoverToHive(period, computed));
+                  controller.add(computed);
+                } catch (_) {
+                  emitCached();
+                  controller.add(_cachedTurnoverItems[period] ?? []);
+                }
+              },
+              onError: (_) {
+                emitCached();
+                controller.add(_cachedTurnoverItems[period] ?? []);
+              },
+            );
+      } catch (_) {
+        emitCached();
+        if (!_cachedTurnoverItems.containsKey(period)) {
+          controller.add([]);
+        }
+      }
+    }
+
+    controller
+      ..onListen = () async {
+        // 1) in-memory
+        emitCached();
+
+        // 2) Hive if memory empty
+        if (!_cachedTurnoverItems.containsKey(period)) {
+          final hive = await _loadTurnoverFromHive(period);
+          if (hive != null) {
+            _cachedTurnoverItems[period] = hive;
+            controller.add(hive);
+          }
+        }
+
+        // 3) Live updates
+        startSubscription();
+      }
+      ..onCancel = () {};
+
+    return controller.stream;
+  }
+}
+
+extension TurnoverRateServiceCacheAccess on TurnoverRateService {
+  /// Expose cached turnover items for a given period (if any)
+  List<TurnoverItem>? getCachedTurnoverItems(String period) {
+    return _cachedTurnoverItems[period];
   }
 }

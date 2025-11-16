@@ -405,7 +405,7 @@ class ExpiredSupplyController {
     }).toList();
   }
 
-  /// Group expired items by product (name + brand) and keep one representative
+  /// Group expired items by product (name + brand + type) and keep one representative
   /// batch per product. Prefer the latest expired date; if equal, prefer higher stock.
   List<InventoryItem> groupExpiredByProduct(List<InventoryItem> expiredItems) {
     final Map<String, InventoryItem> keyToItem = {};
@@ -417,7 +417,8 @@ class ExpiredSupplyController {
     }
 
     for (final item in expiredItems) {
-      final key = '${item.name}_${item.brand}';
+      final typeKey = (item.type ?? '').trim();
+      final key = '${item.name}_${item.brand}_$typeKey';
       final current = keyToItem[key];
       if (current == null) {
         keyToItem[key] = item;

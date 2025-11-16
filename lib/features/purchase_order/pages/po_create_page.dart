@@ -1468,91 +1468,175 @@ class _CreatePOPageState extends State<CreatePOPage> {
   }
 
   Future<bool> _showDeleteConfirmation(int baseIndex, int? batchIndex) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return await showDialog<bool>(
           context: context,
+          barrierDismissible: false,
           builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text(
-                'Remove Supply?',
-                style: AppFonts.sfProStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+            return Dialog(
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.red,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      batchIndex == null ? 'Remove Supply' : 'Remove Batch',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Content
+                    Text(
+                      batchIndex == null
+                          ? 'Are you sure you want to remove this supply from the restocking list?'
+                          : 'Are you sure you want to remove this batch from the restocking list?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons (Remove first, then Cancel)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                if (batchIndex == null) {
+                                  // Remove entire item
+                                  addedSupplies.removeAt(baseIndex);
+                                } else {
+                                  // Remove only the specific batch and update quantity
+                                  final supply = addedSupplies[baseIndex];
+                                  final List<dynamic> batches =
+                                      List<dynamic>.from(
+                                          supply['expiryBatches'] ?? []);
+                                  if (batchIndex >= 0 &&
+                                      batchIndex < batches.length) {
+                                    final removed =
+                                        batches.removeAt(batchIndex);
+                                    final int removedQty = int.tryParse(
+                                            '${removed['quantity'] ?? 0}') ??
+                                        0;
+                                    final int currentQty = (supply[
+                                                'quantity'] ??
+                                            0) is int
+                                        ? supply['quantity'] as int
+                                        : int.tryParse(
+                                                '${supply['quantity'] ?? 0}') ??
+                                            0;
+                                    final int newQty = currentQty - removedQty;
+                                    if (batches.isEmpty) {
+                                      if (newQty <= 0) {
+                                        // No batches left and no quantity – remove supply entirely
+                                        addedSupplies.removeAt(baseIndex);
+                                      } else {
+                                        // Keep supply without batches
+                                        supply['expiryBatches'] = [];
+                                        supply['expiryDate'] = null;
+                                        supply['quantity'] = newQty;
+                                        addedSupplies[baseIndex] = supply;
+                                      }
+                                    } else {
+                                      // Keep remaining batches and update aggregate quantity
+                                      supply['expiryBatches'] = batches;
+                                      supply['quantity'] =
+                                          newQty < 0 ? 0 : newQty;
+                                      addedSupplies[baseIndex] = supply;
+                                    }
+                                  }
+                                }
+                              });
+                              Navigator.of(context).pop(true);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              'Remove',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              content: Text(
-                batchIndex == null
-                    ? 'Are you sure you want to remove this supply from the restocking list?'
-                    : 'Are you sure you want to remove this batch from the supply?',
-                style: AppFonts.sfProStyle(fontSize: 16),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(false);
-                  },
-                  child: Text(
-                    'Cancel',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      if (batchIndex == null) {
-                        // Remove entire item
-                        addedSupplies.removeAt(baseIndex);
-                      } else {
-                        // Remove only the specific batch and update quantity
-                        final supply = addedSupplies[baseIndex];
-                        final List<dynamic> batches =
-                            List<dynamic>.from(supply['expiryBatches'] ?? []);
-                        if (batchIndex >= 0 && batchIndex < batches.length) {
-                          final removed = batches.removeAt(batchIndex);
-                          final int removedQty =
-                              int.tryParse('${removed['quantity'] ?? 0}') ?? 0;
-                          final int currentQty = (supply['quantity'] ?? 0)
-                                  is int
-                              ? supply['quantity'] as int
-                              : int.tryParse('${supply['quantity'] ?? 0}') ?? 0;
-                          final int newQty = currentQty - removedQty;
-                          if (batches.isEmpty) {
-                            if (newQty <= 0) {
-                              // No batches left and no quantity – remove supply entirely
-                              addedSupplies.removeAt(baseIndex);
-                            } else {
-                              // Keep supply without batches
-                              supply['expiryBatches'] = [];
-                              supply['expiryDate'] = null;
-                              supply['quantity'] = newQty;
-                              addedSupplies[baseIndex] = supply;
-                            }
-                          } else {
-                            // Keep remaining batches and update aggregate quantity
-                            supply['expiryBatches'] = batches;
-                            supply['quantity'] = newQty < 0 ? 0 : newQty;
-                            addedSupplies[baseIndex] = supply;
-                          }
-                        }
-                      }
-                    });
-                    Navigator.of(context).pop(true);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
-                  child: Text(
-                    'Remove',
-                    style: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
             );
           },
         ) ??

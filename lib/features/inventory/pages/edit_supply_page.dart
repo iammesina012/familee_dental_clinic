@@ -388,6 +388,10 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                 children: [
                                   TextField(
                                     controller: controller.nameController,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                          RegExp(r'[a-zA-Z0-9 ]')),
+                                    ],
                                     decoration: InputDecoration(
                                       labelText: 'Item Name *',
                                       border: OutlineInputBorder(),
@@ -417,6 +421,10 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                 children: [
                                   TextField(
                                     controller: controller.typeController,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                          RegExp(r'[a-zA-Z0-9 ]')),
+                                    ],
                                     decoration: InputDecoration(
                                       labelText: 'Type Name',
                                       border: OutlineInputBorder(),
@@ -497,19 +505,37 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
 
                                   // Don't show loading indicator - just show empty/available categories
 
+                                  // Ensure the dropdown can open even before the categories stream arrives
+                                  // by injecting the currently selected category into the items list if missing.
+                                  final List<String> itemsList =
+                                      List<String>.from(categories);
+                                  final String? selectedCat =
+                                      controller.selectedCategory;
+                                  if (selectedCat != null &&
+                                      selectedCat.trim().isNotEmpty &&
+                                      !itemsList.contains(selectedCat)) {
+                                    itemsList.insert(0, selectedCat);
+                                  }
+
                                   return Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       DropdownButtonFormField<String>(
-                                        value: controller.selectedCategory,
+                                        value: selectedCat != null &&
+                                                itemsList.contains(selectedCat)
+                                            ? selectedCat
+                                            : (itemsList.isNotEmpty
+                                                ? itemsList.first
+                                                : null),
+                                        menuMaxHeight: 240,
                                         decoration: InputDecoration(
                                           labelText: 'Category *',
                                           border: OutlineInputBorder(),
                                           errorStyle:
                                               TextStyle(color: Colors.red),
                                         ),
-                                        items: categories
+                                        items: itemsList
                                             .map((c) => DropdownMenuItem(
                                                 value: c, child: Text(c)))
                                             .toList(),
@@ -549,6 +575,10 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                 children: [
                                   TextField(
                                     controller: controller.supplierController,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                          RegExp(r'[a-zA-Z0-9 ]')),
+                                    ],
                                     decoration: InputDecoration(
                                       labelText: 'Supplier Name *',
                                       border: OutlineInputBorder(),
@@ -579,6 +609,10 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                 children: [
                                   TextField(
                                     controller: controller.brandController,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                          RegExp(r'[a-zA-Z0-9 ]')),
+                                    ],
                                     decoration: InputDecoration(
                                       labelText: 'Brand Name *',
                                       border: OutlineInputBorder(),
@@ -714,6 +748,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                   const SizedBox(height: 6),
                                   DropdownButtonFormField<String>(
                                     value: controller.selectedPackagingUnit,
+                                    menuMaxHeight: 240,
                                     decoration: InputDecoration(
                                       border: OutlineInputBorder(),
                                       errorStyle: TextStyle(color: Colors.red),
@@ -721,12 +756,15 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                     items: [
                                       'Pack',
                                       'Box',
+                                      'Bundle',
                                       'Bottle',
                                       'Jug',
                                       'Pad',
                                       'Pieces',
                                       'Spool',
-                                      'Tub'
+                                      'Tub',
+                                      'Syringe',
+                                      'Roll'
                                     ]
                                         .map((u) => DropdownMenuItem(
                                             value: u, child: Text(u)))
@@ -929,6 +967,7 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                   const SizedBox(height: 6),
                                   DropdownButtonFormField<String>(
                                     value: _getValidPackagingContentValue(),
+                                    menuMaxHeight: 240,
                                     decoration: InputDecoration(
                                       border: OutlineInputBorder(),
                                       errorStyle: TextStyle(color: Colors.red),
@@ -1278,12 +1317,19 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
                                                   context);
                                             }
                                           } else {
-                                            // Other error - show generic error message
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(content: Text(result)),
-                                            );
+                                            if (result ==
+                                                'SUPPLY_NAME_EXISTS') {
+                                              if (!mounted) return;
+                                              await _showDuplicateSupplyWarning(
+                                                  context);
+                                            } else {
+                                              // Other error - show generic error message
+                                              if (!mounted) return;
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(content: Text(result)),
+                                              );
+                                            }
                                           }
                                         }
                                       } catch (e) {
@@ -1675,9 +1721,12 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
         return ['mL', 'L'];
       case 'Pad':
         return ['Cartridge'];
+      case 'Syringe':
+        return ['mL', 'g'];
       case 'Pieces':
       case 'Spool':
       case 'Tub':
+      case 'Roll':
         return []; // These don't need packaging content
       default:
         return ['Pieces', 'Units', 'Items', 'Count'];
@@ -1688,7 +1737,8 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
   bool _isPackagingContentDisabled(String? packagingUnit) {
     return packagingUnit == 'Pieces' ||
         packagingUnit == 'Spool' ||
-        packagingUnit == 'Tub';
+        packagingUnit == 'Tub' ||
+        packagingUnit == 'Roll';
   }
 
   // Helper method to get valid packaging content value
@@ -1704,5 +1754,104 @@ class _EditSupplyPageState extends State<EditSupplyPage> {
     }
 
     return options.first;
+  }
+
+  Future<void> _showDuplicateSupplyWarning(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // X Icon
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.red,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title
+                Text(
+                  'Update Supply Failed',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Message
+                Text(
+                  'A supply with this name already exists in the inventory.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Cancel Button
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }

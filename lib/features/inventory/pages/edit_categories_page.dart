@@ -43,16 +43,12 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     });
   }
 
-  // Helper function to validate alphanumeric input
+  // Helper function to validate alphanumeric input (letters, numbers, spaces only)
   bool _isValidAlphanumeric(String text) {
-    if (text.trim().isEmpty) return false;
-    // Check if the text contains only numbers
-    if (RegExp(r'^[0-9]+$').hasMatch(text.trim())) {
-      return false;
-    }
-    // Check if the text contains at least one letter and allows common characters
-    return RegExp(r'^[a-zA-Z0-9\s\-_\.]+$').hasMatch(text.trim()) &&
-        RegExp(r'[a-zA-Z]').hasMatch(text.trim());
+    final value = text.trim();
+    if (value.isEmpty) return false;
+    // Allow letters, numbers, and spaces only (no special characters)
+    return RegExp(r'^[a-zA-Z0-9 ]+$').hasMatch(value);
   }
 
   Future<void> _saveEdit(String oldName) async {
@@ -73,7 +69,8 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     // Validate alphanumeric input
     if (!_isValidAlphanumeric(newName)) {
       setState(() {
-        validationErrors[oldName] = 'Must contain at least one letter';
+        validationErrors[oldName] =
+            'Letters and numbers only (no special characters)';
       });
       return;
     }
@@ -651,6 +648,30 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
             Row(
               children: [
                 Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: Text(
+                      'Delete',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
                   child: TextButton(
                     onPressed: () => Navigator.of(context).pop(false),
                     style: TextButton.styleFrom(
@@ -675,30 +696,6 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      elevation: 2,
-                    ),
-                    child: Text(
-                      'Delete',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ],
@@ -715,117 +712,128 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
           context: context,
           barrierDismissible: false,
           builder: (context) {
-            return Dialog(
-              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 400,
-                  minWidth: 350,
-                ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon and Title
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00D4AA).withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.edit,
-                        color: Color(0xFF00D4AA),
-                        size: 32,
-                      ),
+            return Scaffold(
+              resizeToAvoidBottomInset: true,
+              backgroundColor: Colors.transparent,
+              body: Center(
+                child: Dialog(
+                  backgroundColor:
+                      isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  insetPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: 400,
+                      minWidth: 350,
                     ),
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      'Update Category',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Content
-                    Text(
-                      'Are you sure you want to change "$oldName" to "$newName"?',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Buttons (Cancel first, then Update - matching exit dialog pattern)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300,
-                                ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00D4AA).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.edit,
+                                color: Color(0xFF00D4AA),
+                                size: 32,
                               ),
                             ),
-                            child: Text(
-                              'Cancel',
+                            const SizedBox(height: 16),
+                            Text(
+                              'Update Category',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: theme.textTheme.titleLarge?.color,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Are you sure you want to change "$oldName" to "$newName"?',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontSize: 16,
                                 fontWeight: FontWeight.w500,
                                 color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
+                                height: 1.4,
                               ),
+                              textAlign: TextAlign.center,
                             ),
-                          ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00D4AA),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      elevation: 2,
+                                    ),
+                                    child: Text(
+                                      'Update',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: BorderSide(
+                                          color: isDark
+                                              ? Colors.grey.shade600
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Cancel',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w500,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              'Update',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -1037,7 +1045,8 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
     // Validate alphanumeric input
     if (!_isValidAlphanumeric(categoryName)) {
       setDialogState(() {
-        addCategoryValidationError = 'Must contain at least one letter';
+        addCategoryValidationError =
+            'Letters and numbers only (no special characters)';
       });
       return;
     }
@@ -1117,117 +1126,128 @@ class _EditCategoriesPageState extends State<EditCategoriesPage> {
           context: context,
           barrierDismissible: false,
           builder: (context) {
-            return Dialog(
-              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 400,
-                  minWidth: 350,
-                ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon and Title
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00D4AA).withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.add_circle,
-                        color: Color(0xFF00D4AA),
-                        size: 32,
-                      ),
+            return Scaffold(
+              resizeToAvoidBottomInset: true,
+              backgroundColor: Colors.transparent,
+              body: Center(
+                child: Dialog(
+                  backgroundColor:
+                      isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  insetPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: 400,
+                      minWidth: 350,
                     ),
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      'Add Category',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Content
-                    Text(
-                      'Are you sure you want to add "$categoryName" as a new category?',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Buttons (Cancel first, then Add - matching exit dialog pattern)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300,
-                                ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00D4AA).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.add_circle,
+                                color: Color(0xFF00D4AA),
+                                size: 32,
                               ),
                             ),
-                            child: Text(
-                              'Cancel',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
+                            const SizedBox(height: 16),
+                            Text(
                               'Add Category',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: theme.textTheme.titleLarge?.color,
                               ),
+                              textAlign: TextAlign.center,
                             ),
-                          ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Are you sure you want to add "$categoryName" as a new category?',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                height: 1.4,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00D4AA),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      elevation: 2,
+                                    ),
+                                    child: Text(
+                                      'Add Category',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: BorderSide(
+                                          color: isDark
+                                              ? Colors.grey.shade600
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Cancel',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w500,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             );

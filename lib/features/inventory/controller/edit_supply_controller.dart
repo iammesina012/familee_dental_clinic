@@ -260,6 +260,23 @@ class EditSupplyController {
     if (error != null) return error;
     final updatedData = buildUpdatedData();
     try {
+      // If name changed, ensure no other active supply already uses this name (case-insensitive)
+      final newName = nameController.text.trim();
+      final oldName = (originalName ?? '').trim();
+      if (newName.toLowerCase() != oldName.toLowerCase()) {
+        final nameExists = await _supabase
+            .from('supplies')
+            .select('id')
+            .ilike('name', newName)
+            .eq('archived', false)
+            .neq('id', docId)
+            .limit(1);
+
+        if (nameExists.isNotEmpty) {
+          return 'SUPPLY_NAME_EXISTS';
+        }
+      }
+
       // Try to merge with an existing batch if name + brand + expiry match
       final String name = (updatedData['name'] ?? '').toString();
       final String brand = (updatedData['brand'] ?? '').toString();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:marquee/marquee.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -392,11 +393,9 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                   }
                 });
               }
-              // Fall back to normal render - use grouped status for consistency
-              final totalStock = _calculateTotals(rows);
-              final totalBaseline = _calculateTotalBaseline(rows);
-              final status = controller.getStatus(updatedItem,
-                  totalStock: totalStock, totalBaseline: totalBaseline);
+              // Fall back to normal render - prefer immediate type-specific status
+              // to avoid briefly showing overall status when switching types.
+              final status = controller.getStatus(updatedItem);
               return _buildScaffold(context, controller, updatedItem, status);
             }
 
@@ -537,7 +536,12 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                     } catch (e) {
                       // Check if it's a network error
                       final errorString = e.toString().toLowerCase();
-                      if (errorString.contains('socketexception') ||
+                      if (errorString
+                          .contains('archive_blocked_stock_remaining')) {
+                        if (context.mounted) {
+                          await _showArchiveBlockedDialog(context);
+                        }
+                      } else if (errorString.contains('socketexception') ||
                           errorString.contains('failed host lookup') ||
                           errorString.contains('no address associated') ||
                           errorString.contains('network is unreachable') ||
@@ -817,6 +821,8 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                                   // If type exists, show dropdown
                                   return DropdownButton<String>(
                                     value: updatedItem.type!,
+                                    // Limit dropdown height to ~5 items (5 * 48px)
+                                    menuMaxHeight: 240,
                                     items: [
                                       // Current type
                                       DropdownMenuItem<String>(
@@ -940,14 +946,16 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 18, vertical: 8),
                           decoration: BoxDecoration(
-                            color: controller.getStatusBgColor(status),
+                            color: controller.getStatusBgColor(
+                                controller.getStatus(updatedItem)),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            status,
+                            controller.getStatus(updatedItem),
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: controller.getStatusTextColor(status),
+                              color: controller.getStatusTextColor(
+                                  controller.getStatus(updatedItem)),
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
                             ),
@@ -1276,6 +1284,105 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
     );
   }
 
+  Future<void> _showArchiveBlockedDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // X Icon
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.red,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title
+                Text(
+                  'Archive Supply Failed',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Message
+                Text(
+                  'You can only archive this supply when all remaining stock is used or adjusted to zero.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Cancel Button
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildCustomDialog(
     BuildContext context, {
     required String title,
@@ -1343,9 +1450,33 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
             ),
             const SizedBox(height: 24),
 
-            // Buttons (Cancel first, then Confirm - matching exit dialog pattern)
+            // Buttons (Confirm first, then Cancel)
             Row(
               children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: confirmColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: Text(
+                      confirmText,
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: TextButton(
                     onPressed: () => Navigator.of(context).pop(false),
@@ -1366,30 +1497,6 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                         fontFamily: 'SF Pro',
                         fontWeight: FontWeight.w500,
                         color: theme.textTheme.bodyMedium?.color,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: confirmColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      elevation: 2,
-                    ),
-                    child: Text(
-                      confirmText,
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
                         fontSize: 16,
                       ),
                     ),
@@ -1435,6 +1542,14 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
     final typeController = TextEditingController();
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    String? typeNameError; // inline validation error for duplicate type names
+    bool _isValidTypeName(String text) {
+      final trimmed = text.trim();
+      if (trimmed.isEmpty) return false;
+      // Allow ONLY letters, numbers, and spaces. Special characters are not allowed.
+      final allowed = RegExp(r'^[a-zA-Z0-9 ]+$');
+      return allowed.hasMatch(trimmed);
+    }
 
     showDialog(
       context: context,
@@ -1514,6 +1629,19 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                           TextField(
                             controller: typeController,
                             autofocus: true,
+                            onChanged: (value) {
+                              // clear inline error while typing
+                              setState(() {
+                                if (value.isEmpty) {
+                                  typeNameError = null;
+                                } else if (!_isValidTypeName(value)) {
+                                  typeNameError =
+                                      'Letters and numbers only (no special characters)';
+                                } else {
+                                  typeNameError = null;
+                                }
+                              });
+                            },
                             decoration: InputDecoration(
                               labelText: 'Type Name',
                               hintText: 'e.g., Color, Size, Type, etc.',
@@ -1525,6 +1653,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                                 borderSide: const BorderSide(
                                     color: Colors.green, width: 2),
                               ),
+                              errorText: typeNameError,
                               labelStyle: TextStyle(
                                 fontFamily: 'SF Pro',
                                 color: theme.textTheme.bodyMedium?.color,
@@ -1561,6 +1690,10 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                           TextField(
                             controller: stockController,
                             keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(3),
+                            ],
                             decoration: InputDecoration(
                               hintText: 'Enter quantity',
                               border: OutlineInputBorder(
@@ -1628,68 +1761,42 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
                                 child: ElevatedButton(
                                   onPressed: () async {
                                     final newType = typeController.text.trim();
+                                    // Basic alphanumeric validation first
+                                    if (!_isValidTypeName(newType)) {
+                                      setState(() {
+                                        typeNameError =
+                                            'Letters and numbers only (no special characters)';
+                                      });
+                                      return;
+                                    }
                                     if (newType.isNotEmpty) {
-                                      // Show confirmation dialog
+                                      // Prevent duplicates: check existing types first (case-insensitive)
+                                      final existingTypes =
+                                          await ViewSupplyController()
+                                              .getSupplyTypes(currentItem.name);
+                                      final exists = existingTypes.any((t) =>
+                                          t.trim().toLowerCase() ==
+                                          newType.toLowerCase());
+                                      if (exists) {
+                                        // Show inline error under the Type Name field
+                                        setState(() {
+                                          typeNameError = 'Name already exists';
+                                        });
+                                        return;
+                                      }
+                                      // Styled confirmation dialog (consistent with other custom dialogs)
                                       final confirmed = await showDialog<bool>(
                                         context: context,
                                         barrierDismissible: false,
                                         builder: (BuildContext context) {
-                                          return AlertDialog(
-                                            backgroundColor: isDark
-                                                ? const Color(0xFF2C2C2C)
-                                                : Colors.white,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            ),
-                                            title: Text(
-                                              'Confirm Add Type',
-                                              style: TextStyle(
-                                                fontFamily: 'SF Pro',
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                                color: theme.textTheme
-                                                    .titleLarge?.color,
-                                              ),
-                                            ),
-                                            content: Text(
-                                              'Add new type "$newType" with stock quantity $stockQuantity?',
-                                              style: TextStyle(
-                                                fontFamily: 'SF Pro',
-                                                fontSize: 16,
-                                                color: theme
-                                                    .textTheme.bodyLarge?.color,
-                                              ),
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () =>
-                                                    Navigator.of(context)
-                                                        .pop(false),
-                                                child: Text(
-                                                  'Cancel',
-                                                  style: TextStyle(
-                                                    fontFamily: 'SF Pro',
-                                                    color: Colors.grey,
-                                                  ),
-                                                ),
-                                              ),
-                                              ElevatedButton(
-                                                onPressed: () =>
-                                                    Navigator.of(context)
-                                                        .pop(true),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.green,
-                                                  foregroundColor: Colors.white,
-                                                ),
-                                                child: Text(
-                                                  'Confirm',
-                                                  style: TextStyle(
-                                                    fontFamily: 'SF Pro',
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
+                                          return _buildCustomDialog(
+                                            context,
+                                            title: 'Confirm Add Type',
+                                            content:
+                                                'Add new type "$newType" with stock quantity of $stockQuantity?',
+                                            confirmText: 'Confirm',
+                                            confirmColor: Colors.green,
+                                            icon: Icons.check_circle,
                                           );
                                         },
                                       );
@@ -1755,6 +1862,27 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
     if (!context.mounted) return;
     try {
       final supabase = Supabase.instance.client;
+
+      // Safety: prevent duplicates by checking the server for existing type (case-insensitive)
+      final duplicateCheck = await supabase
+          .from('supplies')
+          .select('id')
+          .eq('name', currentItem.name)
+          .eq('archived', false)
+          .ilike('type', newType); // case-insensitive match
+      if (duplicateCheck.isNotEmpty) {
+        // Invalidate cache to be safe, then notify user
+        ViewSupplyController().invalidateSupplyTypesCache(currentItem.name);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Type "$newType" already exists.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
 
       // Fetch the most recent type added for this supply name
       final latestSupplyResponse = await supabase

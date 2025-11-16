@@ -178,6 +178,29 @@ class _ExpiredOtherExpiryBatchesState extends State<ExpiredOtherExpiryBatches> {
           ..sort((a, b) =>
               (a['date'] as DateTime).compareTo(b['date'] as DateTime));
 
+        if (grouped.isEmpty) {
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+            ),
+            child: Center(
+              child: Text(
+                "No other expired batches found.",
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 15,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                ),
+              ),
+            ),
+          );
+        }
+
         return Column(
           children: grouped.map((g) {
             final batch = g['item'] as InventoryItem;

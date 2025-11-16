@@ -414,11 +414,42 @@ class ViewSupplyController {
     if (supplyResponse.isEmpty) return;
 
     final String name = (supplyResponse['name'] ?? '').toString();
+    final String type = (supplyResponse['type'] ?? '').toString();
 
-    // Archive all stocks that share the same name
+    // Enforce zero-stock rule: sum all active batches for this name+type
+    try {
+      final List<dynamic> rows = await _supabase
+          .from('supplies')
+          .select('stock, archived, name, type')
+          .eq('name', name)
+          .eq('type', type)
+          .eq('archived', false);
+      int totalActiveStock = 0;
+      for (final row in rows) {
+        final s = (row['stock'] ?? 0) as int;
+        totalActiveStock += s;
+      }
+      if (totalActiveStock > 0) {
+        throw Exception('ARCHIVE_BLOCKED_STOCK_REMAINING');
+      }
+    } catch (e) {
+      // Re-throw to be caught by UI; if it's our sentinel, let it bubble up
+      if (e.toString().contains('ARCHIVE_BLOCKED_STOCK_REMAINING')) {
+        throw e;
+      }
+      // If query failed (e.g., offline), propagate error
+      rethrow;
+    }
+
+    // Archive all stocks that share the same name AND type (only this supply type)
     await _supabase
         .from('supplies')
-        .update({'archived': true}).eq('name', name);
+        .update({'archived': true})
+        .eq('name', name)
+        .eq('type', type);
+
+    // Invalidate cached type list for this supply name so dropdown updates
+    invalidateSupplyTypesCache(name);
 
     // Log the archive activity for the initiating item (single log to avoid spam)
     await InventoryActivityController().logInventorySupplyArchived(
@@ -444,6 +475,28 @@ class ViewSupplyController {
     );
   }
 
+  // Helper to compute total stock for a given supply name+type.
+  // If onlyActive = true, sums only non-archived batches; otherwise includes all.
+  Future<int> getTotalStockByNameAndType(
+    String supplyName,
+    String type, {
+    bool onlyActive = true,
+  }) async {
+    final query = _supabase
+        .from('supplies')
+        .select('stock, archived')
+        .eq('name', supplyName)
+        .eq('type', type);
+    final List<dynamic> rows =
+        onlyActive ? await query.eq('archived', false) : await query;
+    int total = 0;
+    for (final row in rows) {
+      final s = (row['stock'] ?? 0) as int;
+      total += s;
+    }
+    return total;
+  }
+
   Future<void> unarchiveSupply(String docId) async {
     // Get initiating doc to determine supply name
     final supplyResponse =
@@ -452,13 +505,18 @@ class ViewSupplyController {
     if (supplyResponse.isEmpty) return;
 
     final String name = (supplyResponse['name'] ?? '').toString();
+    final String type = (supplyResponse['type'] ?? '').toString();
 
-    // Unarchive all stocks sharing the same name
+    // Unarchive all stocks sharing the same name AND type (only this supply type)
     await _supabase
         .from('supplies')
         .update({'archived': false})
         .eq('name', name)
+        .eq('type', type)
         .eq('archived', true);
+
+    // Invalidate cached type list so restored type appears again
+    invalidateSupplyTypesCache(name);
 
     // Single activity log for the action
     await InventoryActivityController().logInventorySupplyUnarchived(
@@ -482,13 +540,18 @@ class ViewSupplyController {
     if (supplyResponse.isEmpty) return;
 
     final String name = (supplyResponse['name'] ?? '').toString();
+    final String type = (supplyResponse['type'] ?? '').toString();
 
-    // Delete all archived stocks sharing the same name
+    // Delete all archived stocks sharing the same name AND type (only this supply type)
     await _supabase
         .from('supplies')
         .delete()
         .eq('name', name)
+        .eq('type', type)
         .eq('archived', true);
+
+    // Invalidate cached type list so UI can refresh if needed
+    invalidateSupplyTypesCache(name);
 
     // Single activity log
     await InventoryActivityController().logInventorySupplyDeleted(
@@ -518,6 +581,25 @@ class ViewSupplyController {
   void invalidateSupplyTypesCache(String supplyName) {
     debugPrint('[STREAM_CONTROLLER] Invalidating cache for: $supplyName');
     _cachedSupplyTypes.remove(supplyName);
+    // Also remove from Hive persistent cache to avoid stale dropdowns
+    unawaited(() async {
+      try {
+        final box = await HiveStorage.openBox(HiveStorage.viewSupplyTypesBox);
+        final jsonStr = box.get('supply_types_map') as String?;
+        if (jsonStr != null) {
+          final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+          if (decoded.containsKey(supplyName)) {
+            decoded.remove(supplyName);
+            await box.put('supply_types_map', jsonEncode(decoded));
+            debugPrint(
+                '[STREAM_CONTROLLER] Removed "$supplyName" from Hive types cache');
+          }
+        }
+      } catch (e) {
+        debugPrint(
+            '[STREAM_CONTROLLER] Failed to remove "$supplyName" from Hive types cache: $e');
+      }
+    }());
   }
 
   // Get all types for a supply name with caching
@@ -540,6 +622,53 @@ class ViewSupplyController {
             '[STREAM_CONTROLLER] Returning types from Hive for: $supplyName');
         return _cachedSupplyTypes[supplyName]!;
       }
+    }
+
+    // 2b. OFFLINE FALLBACK: derive types from locally cached supplies if Hive had none
+    try {
+      // First attempt: use the view supplies map cache (targeted for view flows)
+      final suppliesMap = await _loadSuppliesMapFromHive();
+      List<String> derived = [];
+      if (suppliesMap != null && suppliesMap.isNotEmpty) {
+        derived = suppliesMap.values
+            .where((it) =>
+                it.name.trim().toLowerCase() == supplyName.trim().toLowerCase())
+            .map((it) => (it.type ?? '').trim())
+            .where((t) => t.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+      }
+
+      // Second attempt: use the main inventory cached supplies (broader cache)
+      if (derived.isEmpty) {
+        try {
+          final invItems =
+              await InventoryController().getSuppliesStream().first;
+          derived = invItems
+              .where((it) =>
+                  it.name.trim().toLowerCase() ==
+                  supplyName.trim().toLowerCase())
+              .map((it) => (it.type ?? '').trim())
+              .where((t) => t.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+        } catch (_) {
+          // best effort; ignore
+        }
+      }
+
+      if (derived.isNotEmpty) {
+        _cachedSupplyTypes[supplyName] = derived;
+        // Persist to Hive so future offline sessions show immediately
+        unawaited(_saveSupplyTypesMapToHive(_cachedSupplyTypes));
+        debugPrint(
+            '[STREAM_CONTROLLER] Derived ${derived.length} types from local cache for: $supplyName');
+        return derived;
+      }
+    } catch (_) {
+      // best effort; continue to online attempt below
     }
 
     try {

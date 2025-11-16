@@ -24,9 +24,9 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
   String? selectedUnit;
   String? minCost, maxCost;
 
-  // View more state variables
-  bool showAllBrands = false;
-  bool showAllSuppliers = false;
+  // Incremental display counts for brands/suppliers chips
+  int _brandsVisibleCount = 5;
+  int _suppliersVisibleCount = 5;
 
   // Controller for dynamic data
   final FilterController filterController = FilterController();
@@ -973,17 +973,62 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                                 ),
                               );
                             }
-                            final brands = snapshot.data ?? [];
-                            return _filterChips(
-                              brands,
-                              selectedBrands,
-                              showViewMore: true,
-                              isExpanded: showAllBrands,
-                              onToggleViewMore: () {
-                                setState(() {
-                                  showAllBrands = !showAllBrands;
-                                });
-                              },
+                            final allBrands = (snapshot.data ?? []).toList();
+                            final visible = allBrands
+                                .take(_brandsVisibleCount.clamp(
+                                    0, allBrands.length))
+                                .toList();
+                            final canViewMore =
+                                _brandsVisibleCount < allBrands.length;
+                            final canViewLess = _brandsVisibleCount > 5;
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _filterChips(
+                                  visible,
+                                  selectedBrands,
+                                  showViewMore: false,
+                                ),
+                                if (canViewMore) ...[
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _brandsVisibleCount =
+                                            (_brandsVisibleCount + 5)
+                                                .clamp(0, allBrands.length);
+                                      });
+                                    },
+                                    child: const Text(
+                                      'View More',
+                                      style: TextStyle(
+                                        color: Color(0xFF4E38D4),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                if (!canViewMore && canViewLess) ...[
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _brandsVisibleCount = 5;
+                                      });
+                                    },
+                                    child: const Text(
+                                      'View Less',
+                                      style: TextStyle(
+                                        color: Color(0xFF4E38D4),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             );
                           },
                         ),
@@ -1026,17 +1071,62 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                                 ),
                               );
                             }
-                            final suppliers = snapshot.data ?? [];
-                            return _filterChips(
-                              suppliers,
-                              selectedSuppliers,
-                              showViewMore: true,
-                              isExpanded: showAllSuppliers,
-                              onToggleViewMore: () {
-                                setState(() {
-                                  showAllSuppliers = !showAllSuppliers;
-                                });
-                              },
+                            final allSuppliers = (snapshot.data ?? []).toList();
+                            final visible = allSuppliers
+                                .take(_suppliersVisibleCount.clamp(
+                                    0, allSuppliers.length))
+                                .toList();
+                            final canViewMore =
+                                _suppliersVisibleCount < allSuppliers.length;
+                            final canViewLess = _suppliersVisibleCount > 5;
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _filterChips(
+                                  visible,
+                                  selectedSuppliers,
+                                  showViewMore: false,
+                                ),
+                                if (canViewMore) ...[
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _suppliersVisibleCount =
+                                            (_suppliersVisibleCount + 5)
+                                                .clamp(0, allSuppliers.length);
+                                      });
+                                    },
+                                    child: const Text(
+                                      'View More',
+                                      style: TextStyle(
+                                        color: Color(0xFF4E38D4),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                if (!canViewMore && canViewLess) ...[
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _suppliersVisibleCount = 5;
+                                      });
+                                    },
+                                    child: const Text(
+                                      'View Less',
+                                      style: TextStyle(
+                                        color: Color(0xFF4E38D4),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             );
                           },
                         ),

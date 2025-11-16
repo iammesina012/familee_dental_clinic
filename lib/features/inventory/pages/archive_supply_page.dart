@@ -4,7 +4,6 @@ import 'package:familee_dental/features/inventory/components/inventory_item_card
 import 'package:familee_dental/features/inventory/controller/archive_supply_controller.dart';
 import 'package:familee_dental/features/inventory/pages/view_supply_page.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
-import 'package:familee_dental/shared/themes/font.dart';
 import 'package:shimmer/shimmer.dart';
 
 class ArchiveSupplyPage extends StatefulWidget {
@@ -42,6 +41,7 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
 
   // ─── Grouping Helpers (archived page) ─────────────────────────────────────
   String _normalizeName(String name) => name.trim().toLowerCase();
+  String _normalizeType(String? type) => (type ?? '').trim().toLowerCase();
 
   DateTime? _parseExpiry(String? raw) {
     if (raw == null || raw.isEmpty) return null;
@@ -49,14 +49,15 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
         DateTime.tryParse(raw.replaceAll('/', '-'));
   }
 
-  List<_ArchivedGroup> _groupByName(List<InventoryItem> items) {
-    final Map<String, List<InventoryItem>> byName = {};
+  // Group archived items by (name + type) so each archived TYPE appears separately
+  List<_ArchivedGroup> _groupByNameAndType(List<InventoryItem> items) {
+    final Map<String, List<InventoryItem>> byKey = {};
     for (final item in items) {
-      final key = _normalizeName(item.name);
-      byName.putIfAbsent(key, () => <InventoryItem>[]).add(item);
+      final key = '${_normalizeName(item.name)}|${_normalizeType(item.type)}';
+      byKey.putIfAbsent(key, () => <InventoryItem>[]).add(item);
     }
     final List<_ArchivedGroup> groups = [];
-    byName.forEach((key, list) {
+    byKey.forEach((key, list) {
       final withImage = list.where((i) => i.imageUrl.isNotEmpty).toList();
       final candidates = withImage.isNotEmpty ? withImage : list;
       candidates.sort((a, b) {
@@ -70,7 +71,11 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
       final representative = candidates.first;
       groups.add(_ArchivedGroup(
         key: key,
-        displayName: representative.name,
+        // show name (type) if type is present to make it clear this is a TYPE archive
+        displayName: representative.type != null &&
+                representative.type!.trim().isNotEmpty
+            ? '${representative.name} (${representative.type})'
+            : representative.name,
         representative: representative,
         otherCount: list.length - 1,
         items: List<InventoryItem>.from(list),
@@ -293,7 +298,7 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                           );
                         }
 
-                        final groups = _groupByName(supplies);
+                        final groups = _groupByNameAndType(supplies);
                         return LayoutBuilder(
                           builder: (context, constraints) {
                             return GridView.builder(
@@ -347,6 +352,8 @@ class ArchiveSupplyPageState extends State<ArchiveSupplyPage> {
                                             Expanded(
                                               child: InventoryItemCard(
                                                 item: group.representative,
+                                                titleOverride:
+                                                    group.displayName,
                                                 showExpiryDate: true,
                                                 hideStock: true,
                                                 hideExpiry: true,

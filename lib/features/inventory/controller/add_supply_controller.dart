@@ -210,6 +210,18 @@ class AddSupplyController {
         return 'ARCHIVED_SUPPLY_EXISTS';
       }
 
+      // Check if any active supply already uses this name (case-insensitive)
+      final nameExists = await _supabase
+          .from('supplies')
+          .select('id')
+          .ilike('name', nameController.text.trim())
+          .eq('archived', false)
+          .limit(1);
+
+      if (nameExists.isNotEmpty) {
+        return 'SUPPLY_NAME_EXISTS';
+      }
+
       // Check if an exact duplicate supply exists (all fields match)
       final supplierValue = supplierController.text.trim().isEmpty
           ? "N/A"

@@ -11,6 +11,7 @@ class InventoryItemCard extends StatelessWidget {
   final bool hideStock;
   final bool hideExpiry;
   final List<InventoryItem>? variants; // Variants for counting status badges
+  final String? titleOverride; // Optional override for displayed name/title
   const InventoryItemCard(
       {required this.item,
       this.status,
@@ -20,6 +21,7 @@ class InventoryItemCard extends StatelessWidget {
       this.hideStock = false,
       this.hideExpiry = false,
       this.variants,
+      this.titleOverride,
       super.key});
 
   String getStatus() {
@@ -225,7 +227,7 @@ class InventoryItemCard extends StatelessWidget {
                 // Flexible text container that adjusts based on expiry display
                 Flexible(
                   child: Text(
-                    item.name,
+                    titleOverride ?? item.name,
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:familee_dental/features/inventory/controller/filter_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
@@ -17,9 +18,9 @@ class ManageBrandsSuppliersPage extends StatefulWidget {
 class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
   final FilterController filterController = FilterController();
 
-  // View more state variables
-  bool showAllBrands = false;
-  bool showAllSuppliers = false;
+  // Incremental display counts
+  int _brandsVisibleCount = 5;
+  int _suppliersVisibleCount = 5;
 
   @override
   Widget build(BuildContext context) {
@@ -148,13 +149,14 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                             );
                           }
 
-                          // Determine which brands to show
-                          List<Brand> displayBrands = validBrands;
-                          bool shouldShowViewMore = validBrands.length > 4;
-
-                          if (shouldShowViewMore && !showAllBrands) {
-                            displayBrands = validBrands.take(4).toList();
-                          }
+                          // Determine which brands to show (5 at start, +5 per tap)
+                          final displayBrands = validBrands
+                              .take(_brandsVisibleCount.clamp(
+                                  0, validBrands.length))
+                              .toList();
+                          final canViewMore =
+                              _brandsVisibleCount < validBrands.length;
+                          final canViewLess = _brandsVisibleCount > 5;
 
                           return Column(
                             children: [
@@ -218,18 +220,40 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                                         ),
                                       ))
                                   .toList(),
-                              // View More/Less button
-                              if (shouldShowViewMore) ...[
+                              // View More/Less controls
+                              if (canViewMore) ...[
                                 SizedBox(height: 12),
                                 Center(
                                   child: TextButton(
                                     onPressed: () {
                                       setState(() {
-                                        showAllBrands = !showAllBrands;
+                                        _brandsVisibleCount =
+                                            (_brandsVisibleCount + 5)
+                                                .clamp(0, validBrands.length);
                                       });
                                     },
                                     child: Text(
-                                      showAllBrands ? 'View Less' : 'View More',
+                                      'View More',
+                                      style: TextStyle(
+                                        color: Color(0xFF4E38D4),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (!canViewMore && canViewLess) ...[
+                                SizedBox(height: 12),
+                                Center(
+                                  child: TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _brandsVisibleCount = 5;
+                                      });
+                                    },
+                                    child: Text(
+                                      'View Less',
                                       style: TextStyle(
                                         color: Color(0xFF4E38D4),
                                         fontWeight: FontWeight.w600,
@@ -333,13 +357,14 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                             );
                           }
 
-                          // Determine which suppliers to show
-                          List<Supplier> displaySuppliers = validSuppliers;
-                          bool shouldShowViewMore = validSuppliers.length > 4;
-
-                          if (shouldShowViewMore && !showAllSuppliers) {
-                            displaySuppliers = validSuppliers.take(4).toList();
-                          }
+                          // Determine which suppliers to show (5 at start, +5 per tap)
+                          final displaySuppliers = validSuppliers
+                              .take(_suppliersVisibleCount.clamp(
+                                  0, validSuppliers.length))
+                              .toList();
+                          final canViewMore =
+                              _suppliersVisibleCount < validSuppliers.length;
+                          final canViewLess = _suppliersVisibleCount > 5;
 
                           return Column(
                             children: [
@@ -403,20 +428,40 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                                         ),
                                       ))
                                   .toList(),
-                              // View More/Less button
-                              if (shouldShowViewMore) ...[
+                              // View More/Less controls
+                              if (canViewMore) ...[
                                 SizedBox(height: 12),
                                 Center(
                                   child: TextButton(
                                     onPressed: () {
                                       setState(() {
-                                        showAllSuppliers = !showAllSuppliers;
+                                        _suppliersVisibleCount =
+                                            (_suppliersVisibleCount + 5).clamp(
+                                                0, validSuppliers.length);
                                       });
                                     },
                                     child: Text(
-                                      showAllSuppliers
-                                          ? 'View Less'
-                                          : 'View More',
+                                      'View More',
+                                      style: TextStyle(
+                                        color: Color(0xFF4E38D4),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (!canViewMore && canViewLess) ...[
+                                SizedBox(height: 12),
+                                Center(
+                                  child: TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _suppliersVisibleCount = 5;
+                                      });
+                                    },
+                                    child: Text(
+                                      'View Less',
                                       style: TextStyle(
                                         color: Color(0xFF4E38D4),
                                         fontWeight: FontWeight.w600,
@@ -479,6 +524,10 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                   SizedBox(height: 24),
                   TextField(
                     controller: controller,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[a-zA-Z0-9 ]')),
+                    ],
                     decoration: InputDecoration(
                       labelText: 'Brand Name',
                       labelStyle: TextStyle(
@@ -539,7 +588,27 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                         onPressed: () async {
                           if (controller.text.trim().isNotEmpty &&
                               controller.text.trim() != oldName) {
-                            // Check connectivity FIRST before any network operations
+                            // Validate: letters and numbers only (no special characters)
+                            if (!RegExp(r'^[a-zA-Z0-9 ]+$')
+                                .hasMatch(controller.text.trim())) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Letters and numbers only (no special characters)',
+                                  ),
+                                  backgroundColor: Colors.red[600],
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                              return;
+                            }
+
+                            // Show confirmation BEFORE any network calls
+                            final confirmed = await _showEditBrandConfirmation(
+                                oldName, controller.text.trim());
+                            if (!confirmed) return;
+
+                            // Only after confirmation, check connectivity
                             final hasConnection = await ConnectivityService()
                                 .hasInternetConnection();
                             if (!hasConnection) {
@@ -550,6 +619,7 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                             }
 
                             try {
+                              // Check if the new name already exists
                               final exists = await filterController
                                   .brandExists(controller.text.trim());
                               if (exists) {
@@ -562,59 +632,18 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                                     duration: Duration(seconds: 2),
                                   ),
                                 );
-                              } else {
-                                // Show confirmation dialog first
-                                final confirmed =
-                                    await _showEditBrandConfirmation(
-                                        oldName, controller.text.trim());
-                                if (confirmed) {
-                                  try {
-                                    await filterController.updateBrandName(
-                                        oldName, controller.text.trim());
-                                    if (mounted) {
-                                      Navigator.pop(context,
-                                          true); // Return true to indicate update was made
-                                    }
-                                  } catch (e) {
-                                    // Check if it's a network error
-                                    final errorString =
-                                        e.toString().toLowerCase();
-                                    if (errorString
-                                            .contains('socketexception') ||
-                                        errorString
-                                            .contains('failed host lookup') ||
-                                        errorString.contains(
-                                            'no address associated') ||
-                                        errorString.contains(
-                                            'network is unreachable') ||
-                                        errorString
-                                            .contains('connection refused') ||
-                                        errorString
-                                            .contains('connection timed out') ||
-                                        errorString
-                                            .contains('clientexception')) {
-                                      if (mounted) {
-                                        await showConnectionErrorDialog(
-                                            context);
-                                      }
-                                    } else {
-                                      // Other error - show generic error message
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                                'Failed to update brand: ${e.toString()}'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  }
-                                }
+                                return;
+                              }
+
+                              // Proceed with update
+                              await filterController.updateBrandName(
+                                  oldName, controller.text.trim());
+                              if (mounted) {
+                                Navigator.pop(context,
+                                    true); // Return true to indicate update was made
                               }
                             } catch (e) {
-                              // Handle errors from brandExists check
+                              // Check if it's a network error
                               final errorString = e.toString().toLowerCase();
                               if (errorString.contains('socketexception') ||
                                   errorString.contains('failed host lookup') ||
@@ -634,7 +663,8 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Error: ${e.toString()}'),
+                                      content: Text(
+                                          'Failed to update brand: ${e.toString()}'),
                                       backgroundColor: Colors.red,
                                     ),
                                   );
@@ -715,6 +745,10 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                   SizedBox(height: 24),
                   TextField(
                     controller: controller,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[a-zA-Z0-9 ]')),
+                    ],
                     decoration: InputDecoration(
                       labelText: 'Supplier Name',
                       labelStyle: TextStyle(
@@ -775,7 +809,28 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                         onPressed: () async {
                           if (controller.text.trim().isNotEmpty &&
                               controller.text.trim() != oldName) {
-                            // Check connectivity FIRST before any network operations
+                            // Validate: letters and numbers only (no special characters)
+                            if (!RegExp(r'^[a-zA-Z0-9 ]+$')
+                                .hasMatch(controller.text.trim())) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Letters and numbers only (no special characters)',
+                                  ),
+                                  backgroundColor: Colors.red[600],
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                              return;
+                            }
+
+                            // Show confirmation BEFORE any network calls
+                            final confirmed =
+                                await _showEditSupplierConfirmation(
+                                    oldName, controller.text.trim());
+                            if (!confirmed) return;
+
+                            // Only after confirmation, check connectivity
                             final hasConnection = await ConnectivityService()
                                 .hasInternetConnection();
                             if (!hasConnection) {
@@ -786,6 +841,7 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                             }
 
                             try {
+                              // Check if the new name already exists
                               final exists = await filterController
                                   .supplierExists(controller.text.trim());
                               if (exists) {
@@ -798,59 +854,18 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                                     duration: Duration(seconds: 2),
                                   ),
                                 );
-                              } else {
-                                // Show confirmation dialog first
-                                final confirmed =
-                                    await _showEditSupplierConfirmation(
-                                        oldName, controller.text.trim());
-                                if (confirmed) {
-                                  try {
-                                    await filterController.updateSupplierName(
-                                        oldName, controller.text.trim());
-                                    if (mounted) {
-                                      Navigator.pop(context,
-                                          true); // Return true to indicate update was made
-                                    }
-                                  } catch (e) {
-                                    // Check if it's a network error
-                                    final errorString =
-                                        e.toString().toLowerCase();
-                                    if (errorString
-                                            .contains('socketexception') ||
-                                        errorString
-                                            .contains('failed host lookup') ||
-                                        errorString.contains(
-                                            'no address associated') ||
-                                        errorString.contains(
-                                            'network is unreachable') ||
-                                        errorString
-                                            .contains('connection refused') ||
-                                        errorString
-                                            .contains('connection timed out') ||
-                                        errorString
-                                            .contains('clientexception')) {
-                                      if (mounted) {
-                                        await showConnectionErrorDialog(
-                                            context);
-                                      }
-                                    } else {
-                                      // Other error - show generic error message
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                                'Failed to update supplier: ${e.toString()}'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  }
-                                }
+                                return;
+                              }
+
+                              // Proceed with update
+                              await filterController.updateSupplierName(
+                                  oldName, controller.text.trim());
+                              if (mounted) {
+                                Navigator.pop(context,
+                                    true); // Return true to indicate update was made
                               }
                             } catch (e) {
-                              // Handle errors from supplierExists check
+                              // Check if it's a network error
                               final errorString = e.toString().toLowerCase();
                               if (errorString.contains('socketexception') ||
                                   errorString.contains('failed host lookup') ||
@@ -870,7 +885,8 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Error: ${e.toString()}'),
+                                      content: Text(
+                                          'Failed to update supplier: ${e.toString()}'),
                                       backgroundColor: Colors.red,
                                     ),
                                   );
@@ -1061,69 +1077,78 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
 
     return Dialog(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
       ),
       elevation: 8,
-      backgroundColor: theme.dialogBackgroundColor,
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width < 768 ? 300 : 400,
+          maxWidth: 400,
+          minWidth: 350,
         ),
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: theme.dialogBackgroundColor,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Icon and Title
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: confirmColor.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  icon,
-                  color: confirmColor,
-                  size: 32,
-                ),
+                child: Icon(icon, color: confirmColor, size: 32),
               ),
               const SizedBox(height: 16),
-
-              // Title
               Text(
                 title,
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: TextStyle(
+                  fontFamily: 'SF Pro',
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  color: theme.textTheme.titleLarge?.color,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
-
-              // Content
               Text(
                 content,
-                style: theme.textTheme.bodyLarge?.copyWith(
+                style: TextStyle(
+                  fontFamily: 'SF Pro',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                   color: theme.textTheme.bodyMedium?.color,
                   height: 1.4,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-
-              // Buttons
               Row(
                 children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: confirmColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: Text(
+                        confirmText,
+                        style: TextStyle(
+                          fontFamily: 'SF Pro',
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop(false),
@@ -1140,30 +1165,12 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
                       ),
                       child: Text(
                         'Cancel',
-                        style: theme.textTheme.bodyLarge?.copyWith(
+                        style: TextStyle(
+                          fontFamily: 'SF Pro',
                           fontWeight: FontWeight.w500,
+                          color: theme.textTheme.bodyMedium?.color,
+                          fontSize: 16,
                         ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: confirmColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        confirmText,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
                       ),
                     ),
                   ),
@@ -1185,117 +1192,128 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
           context: context,
           barrierDismissible: false,
           builder: (context) {
-            return Dialog(
-              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 400,
-                  minWidth: 350,
-                ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon and Title
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00D4AA).withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.edit,
-                        color: Color(0xFF00D4AA),
-                        size: 32,
-                      ),
+            return Scaffold(
+              resizeToAvoidBottomInset: true,
+              backgroundColor: Colors.transparent,
+              body: Center(
+                child: Dialog(
+                  backgroundColor:
+                      isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  insetPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: 400,
+                      minWidth: 350,
                     ),
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      'Update Brand',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Content
-                    Text(
-                      'Are you sure you want to change "$oldName" to "$newName"?',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Buttons (Cancel first, then Update - matching exit dialog pattern)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300,
-                                ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00D4AA).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.edit,
+                                color: Color(0xFF00D4AA),
+                                size: 32,
                               ),
                             ),
-                            child: Text(
-                              'Cancel',
+                            const SizedBox(height: 16),
+                            Text(
+                              'Update Brand',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: theme.textTheme.titleLarge?.color,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Are you sure you want to change "$oldName" to "$newName"?',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontSize: 16,
                                 fontWeight: FontWeight.w500,
                                 color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
+                                height: 1.4,
                               ),
+                              textAlign: TextAlign.center,
                             ),
-                          ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00D4AA),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      elevation: 2,
+                                    ),
+                                    child: Text(
+                                      'Update',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: BorderSide(
+                                          color: isDark
+                                              ? Colors.grey.shade600
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Cancel',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w500,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              'Update',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -1313,117 +1331,128 @@ class _ManageBrandsSuppliersPageState extends State<ManageBrandsSuppliersPage> {
           context: context,
           barrierDismissible: false,
           builder: (context) {
-            return Dialog(
-              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 400,
-                  minWidth: 350,
-                ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon and Title
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00D4AA).withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.edit,
-                        color: Color(0xFF00D4AA),
-                        size: 32,
-                      ),
+            return Scaffold(
+              resizeToAvoidBottomInset: true,
+              backgroundColor: Colors.transparent,
+              body: Center(
+                child: Dialog(
+                  backgroundColor:
+                      isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  insetPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: 400,
+                      minWidth: 350,
                     ),
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      'Update Supplier',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Content
-                    Text(
-                      'Are you sure you want to change "$oldName" to "$newName"?',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Buttons (Cancel first, then Update - matching exit dialog pattern)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300,
-                                ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00D4AA).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.edit,
+                                color: Color(0xFF00D4AA),
+                                size: 32,
                               ),
                             ),
-                            child: Text(
-                              'Cancel',
+                            const SizedBox(height: 16),
+                            Text(
+                              'Update Supplier',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: theme.textTheme.titleLarge?.color,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Are you sure you want to change "$oldName" to "$newName"?',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontSize: 16,
                                 fontWeight: FontWeight.w500,
                                 color: theme.textTheme.bodyMedium?.color,
-                                fontSize: 16,
+                                height: 1.4,
                               ),
+                              textAlign: TextAlign.center,
                             ),
-                          ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00D4AA),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      elevation: 2,
+                                    ),
+                                    child: Text(
+                                      'Update',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: BorderSide(
+                                          color: isDark
+                                              ? Colors.grey.shade600
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Cancel',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro',
+                                        fontWeight: FontWeight.w500,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D4AA),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: Text(
-                              'Update',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro',
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             );

@@ -348,6 +348,15 @@ class POSupabaseController {
   Stream<List<PurchaseOrder>> getClosedPOsStream() {
     final controller = StreamController<List<PurchaseOrder>>.broadcast();
 
+    int _poCodeNumber(PurchaseOrder po) => _extractPoNumber(po.code);
+    void _sortByDateThenCode(List<PurchaseOrder> list) {
+      list.sort((a, b) {
+        final int dateCmp = b.createdAt.compareTo(a.createdAt); // desc
+        if (dateCmp != 0) return dateCmp;
+        return _poCodeNumber(b).compareTo(_poCodeNumber(a)); // desc
+      });
+    }
+
     void emitCachedOrEmpty({bool forceEmpty = false}) {
       if (_cachedClosedPOs != null) {
         controller.add(_cachedClosedPOs!);
@@ -365,8 +374,7 @@ class POSupabaseController {
               final list = data.map((row) {
                 return PurchaseOrder.fromMap(row);
               }).toList();
-              list.sort((a, b) =>
-                  _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
+              _sortByDateThenCode(list);
 
               // Cache the result
               _cachedClosedPOs = list;
@@ -396,6 +404,7 @@ class POSupabaseController {
           final hiveData =
               await _loadPOsFromHive(HiveStorage.poClosedPOsBox, 'closed_pos');
           if (hiveData != null) {
+            _sortByDateThenCode(hiveData);
             _cachedClosedPOs = hiveData; // Populate in-memory cache
             controller.add(hiveData); // Emit immediately
           }
@@ -413,6 +422,15 @@ class POSupabaseController {
 
   Stream<List<PurchaseOrder>> getApprovalPOsStream() {
     final controller = StreamController<List<PurchaseOrder>>.broadcast();
+
+    int _poCodeNumber(PurchaseOrder po) => _extractPoNumber(po.code);
+    void _sortByDateThenCode(List<PurchaseOrder> list) {
+      list.sort((a, b) {
+        final int dateCmp = b.createdAt.compareTo(a.createdAt); // desc
+        if (dateCmp != 0) return dateCmp;
+        return _poCodeNumber(b).compareTo(_poCodeNumber(a)); // desc
+      });
+    }
 
     void emitCachedOrEmpty({bool forceEmpty = false}) {
       if (_cachedApprovalPOs != null) {
@@ -434,8 +452,7 @@ class POSupabaseController {
                   final list = data.map((row) {
                     return PurchaseOrder.fromMap(row);
                   }).toList();
-                  list.sort((a, b) => _extractPoNumber(a.code)
-                      .compareTo(_extractPoNumber(b.code)));
+                  _sortByDateThenCode(list);
 
                   // Cache the result
                   _cachedApprovalPOs = list;
@@ -465,6 +482,7 @@ class POSupabaseController {
           final hiveData = await _loadPOsFromHive(
               HiveStorage.poApprovalPOsBox, 'approval_pos');
           if (hiveData != null) {
+            _sortByDateThenCode(hiveData);
             _cachedApprovalPOs = hiveData; // Populate in-memory cache
             controller.add(hiveData); // Emit immediately
           }
@@ -482,6 +500,15 @@ class POSupabaseController {
 
   Stream<List<PurchaseOrder>> getOpenPOsStream() {
     final controller = StreamController<List<PurchaseOrder>>.broadcast();
+
+    int _poCodeNumber(PurchaseOrder po) => _extractPoNumber(po.code);
+    void _sortByDateThenCode(List<PurchaseOrder> list) {
+      list.sort((a, b) {
+        final int dateCmp = b.createdAt.compareTo(a.createdAt); // desc
+        if (dateCmp != 0) return dateCmp;
+        return _poCodeNumber(b).compareTo(_poCodeNumber(a)); // desc
+      });
+    }
 
     void emitCachedOrEmpty({bool forceEmpty = false}) {
       if (_cachedOpenPOs != null) {
@@ -508,8 +535,7 @@ class POSupabaseController {
                     return po.supplies
                         .every((supply) => supply['status'] == 'Pending');
                   }).toList();
-                  filteredList.sort((a, b) => _extractPoNumber(a.code)
-                      .compareTo(_extractPoNumber(b.code)));
+                  _sortByDateThenCode(filteredList);
 
                   // Cache the result
                   _cachedOpenPOs = filteredList;
@@ -539,6 +565,7 @@ class POSupabaseController {
           final hiveData =
               await _loadPOsFromHive(HiveStorage.poOpenPOsBox, 'open_pos');
           if (hiveData != null) {
+            _sortByDateThenCode(hiveData);
             _cachedOpenPOs = hiveData; // Populate in-memory cache
             controller.add(hiveData); // Emit immediately
           }
@@ -556,6 +583,15 @@ class POSupabaseController {
 
   Stream<List<PurchaseOrder>> getPartialPOsStream() {
     final controller = StreamController<List<PurchaseOrder>>.broadcast();
+
+    int _poCodeNumber(PurchaseOrder po) => _extractPoNumber(po.code);
+    void _sortByDateThenCode(List<PurchaseOrder> list) {
+      list.sort((a, b) {
+        final int dateCmp = b.createdAt.compareTo(a.createdAt); // desc
+        if (dateCmp != 0) return dateCmp;
+        return _poCodeNumber(b).compareTo(_poCodeNumber(a)); // desc
+      });
+    }
 
     void emitCachedOrEmpty({bool forceEmpty = false}) {
       if (_cachedPartialPOs != null) {
@@ -587,8 +623,7 @@ class POSupabaseController {
                 }
                 return false;
               }).toList();
-              filteredList.sort((a, b) =>
-                  _extractPoNumber(a.code).compareTo(_extractPoNumber(b.code)));
+              _sortByDateThenCode(filteredList);
 
               // Cache the result
               _cachedPartialPOs = filteredList;
@@ -618,6 +653,7 @@ class POSupabaseController {
           final hiveData = await _loadPOsFromHive(
               HiveStorage.poPartialPOsBox, 'partial_pos');
           if (hiveData != null) {
+            _sortByDateThenCode(hiveData);
             _cachedPartialPOs = hiveData; // Populate in-memory cache
             controller.add(hiveData); // Emit immediately
           }
@@ -668,8 +704,10 @@ class POSupabaseController {
                           po.status == 'Approval' ||
                           po.status == 'For Approval')
                       .toList(growable: false);
+                  // Include both Closed and Cancelled in closed cache to avoid flicker
                   _cachedClosedPOs = list
-                      .where((po) => po.status == 'Closed')
+                      .where((po) =>
+                          po.status == 'Closed' || po.status == 'Cancelled')
                       .toList(growable: false);
                   _cachedPartialPOs = list
                       .where((po) =>
@@ -723,8 +761,10 @@ class POSupabaseController {
                 .where((po) =>
                     po.status == 'Approval' || po.status == 'For Approval')
                 .toList(growable: false);
+            // Include both Closed and Cancelled in closed cache to avoid flicker
             _cachedClosedPOs = hiveData
-                .where((po) => po.status == 'Closed')
+                .where(
+                    (po) => po.status == 'Closed' || po.status == 'Cancelled')
                 .toList(growable: false);
             _cachedPartialPOs = hiveData
                 .where((po) =>
@@ -768,8 +808,9 @@ class POSupabaseController {
             .where(
                 (po) => po.status == 'Approval' || po.status == 'For Approval')
             .toList(growable: false);
+        // Include both Closed and Cancelled in closed cache to avoid flicker
         _cachedClosedPOs = localPOs
-            .where((po) => po.status == 'Closed')
+            .where((po) => po.status == 'Closed' || po.status == 'Cancelled')
             .toList(growable: false);
 
         // Save individual caches to Hive for faster access

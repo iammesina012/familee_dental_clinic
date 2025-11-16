@@ -245,8 +245,8 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
 
                         return LayoutBuilder(
                           builder: (context, constraints) {
-                            double aspectRatio =
-                                constraints.maxWidth < 400 ? 0.7 : 0.85;
+                            // Match archived card aspect ratio for consistent sizing
+                            const double aspectRatio = 0.75;
                             return GridView.builder(
                               physics: AlwaysScrollableScrollPhysics(),
                               gridDelegate:
@@ -284,6 +284,10 @@ class _ExpiredSupplyPageState extends State<ExpiredSupplyPage> {
                                     status: "Expired", // Force expired status
                                     currentSort: null,
                                     overrideStock: null,
+                                    titleOverride: (item.type != null &&
+                                            item.type!.trim().isNotEmpty)
+                                        ? '${item.name} (${item.type})'
+                                        : null,
                                   ),
                                 );
                               },

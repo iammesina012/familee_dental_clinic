@@ -4384,36 +4384,150 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               final confirm = await showDialog<bool>(
                                     context: context,
                                     barrierDismissible: false,
-                                    builder: (context) => AlertDialog(
-                                      title: Text('Discard changes',
-                                          style: AppFonts.sfProStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold)),
-                                      content: Text(
-                                          'Go back without saving these receipt details?',
-                                          style: AppFonts.sfProStyle(
-                                              fontSize: 14)),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context).pop(false),
-                                          child: Text('Cancel',
-                                              style: AppFonts.sfProStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600)),
+                                    builder: (context) {
+                                      final theme = Theme.of(context);
+                                      final isDark =
+                                          theme.brightness == Brightness.dark;
+                                      return Dialog(
+                                        backgroundColor: isDark
+                                            ? const Color(0xFF2C2C2C)
+                                            : Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
                                         ),
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context).pop(true),
-                                          child: Text('Discard',
-                                              style: AppFonts.sfProStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
-                                                  color:
-                                                      const Color(0xFFEE5A52))),
+                                        child: Container(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 400,
+                                            minWidth: 320,
+                                          ),
+                                          padding: const EdgeInsets.all(24),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(16),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.red
+                                                      .withOpacity(0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.warning_amber_outlined,
+                                                  color: Colors.red,
+                                                  size: 32,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                'Discard changes',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: theme.textTheme
+                                                      .titleLarge?.color,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'Go back without saving these receipt details?',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: theme.textTheme
+                                                      .bodyMedium?.color,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              const SizedBox(height: 24),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: ElevatedButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(context)
+                                                              .pop(true),
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            Colors.red,
+                                                        foregroundColor:
+                                                            Colors.white,
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                        ),
+                                                        elevation: 2,
+                                                      ),
+                                                      child: Text(
+                                                        'Discard',
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(context)
+                                                              .pop(false),
+                                                      style:
+                                                          TextButton.styleFrom(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                          side: BorderSide(
+                                                            color: isDark
+                                                                ? Colors.grey
+                                                                    .shade600
+                                                                : Colors.black
+                                                                    .withOpacity(
+                                                                        0.2),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        'Cancel',
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: theme
+                                                              .textTheme
+                                                              .bodyMedium
+                                                              ?.color,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ],
-                                    ),
+                                      );
+                                    },
                                   ) ??
                                   false;
                               if (confirm) {
@@ -4534,15 +4648,36 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                               });
                                           },
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.grey[800],
-                                            foregroundColor: Colors.white,
-                                            side: const BorderSide(
-                                                color: Color(0xFF00D4AA),
+                                            backgroundColor:
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? Colors.grey[800]
+                                                    : Colors.white,
+                                            foregroundColor:
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? Colors.white
+                                                    : Theme.of(context)
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color,
+                                            side: BorderSide(
+                                                color: Theme.of(context)
+                                                            .brightness ==
+                                                        Brightness.dark
+                                                    ? const Color(0xFF00D4AA)
+                                                    : Colors.black
+                                                        .withOpacity(0.2),
                                                 width: 1),
                                             shape: RoundedRectangleBorder(
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
+                                            elevation:
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? 0
+                                                    : 1,
                                           ),
                                           child: Column(
                                             mainAxisAlignment:
@@ -4559,7 +4694,14 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                 style: AppFonts.sfProStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500,
-                                                  color: Colors.white,
+                                                  color: Theme.of(context)
+                                                              .brightness ==
+                                                          Brightness.dark
+                                                      ? Colors.white
+                                                      : Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color,
                                                 ),
                                               ),
                                             ],
@@ -4584,15 +4726,36 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                               });
                                           },
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.grey[800],
-                                            foregroundColor: Colors.white,
-                                            side: const BorderSide(
-                                                color: Color(0xFF00D4AA),
+                                            backgroundColor:
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? Colors.grey[800]
+                                                    : Colors.white,
+                                            foregroundColor:
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? Colors.white
+                                                    : Theme.of(context)
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color,
+                                            side: BorderSide(
+                                                color: Theme.of(context)
+                                                            .brightness ==
+                                                        Brightness.dark
+                                                    ? const Color(0xFF00D4AA)
+                                                    : Colors.black
+                                                        .withOpacity(0.2),
                                                 width: 1),
                                             shape: RoundedRectangleBorder(
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
+                                            elevation:
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? 0
+                                                    : 1,
                                           ),
                                           child: Column(
                                             mainAxisAlignment:
@@ -4609,7 +4772,14 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                                 style: AppFonts.sfProStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500,
-                                                  color: Colors.white,
+                                                  color: Theme.of(context)
+                                                              .brightness ==
+                                                          Brightness.dark
+                                                      ? Colors.white
+                                                      : Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color,
                                                 ),
                                               ),
                                             ],
@@ -4677,36 +4847,150 @@ class _PODetailsPageState extends State<PODetailsPage> {
                               final confirm = await showDialog<bool>(
                                     context: context,
                                     barrierDismissible: false,
-                                    builder: (context) => AlertDialog(
-                                      title: Text('Discard changes',
-                                          style: AppFonts.sfProStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold)),
-                                      content: Text(
-                                          'Go back without saving these receipt details?',
-                                          style: AppFonts.sfProStyle(
-                                              fontSize: 14)),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context).pop(false),
-                                          child: Text('Cancel',
-                                              style: AppFonts.sfProStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600)),
+                                    builder: (context) {
+                                      final theme = Theme.of(context);
+                                      final isDark =
+                                          theme.brightness == Brightness.dark;
+                                      return Dialog(
+                                        backgroundColor: isDark
+                                            ? const Color(0xFF2C2C2C)
+                                            : Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
                                         ),
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context).pop(true),
-                                          child: Text('Discard',
-                                              style: AppFonts.sfProStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
-                                                  color:
-                                                      const Color(0xFFEE5A52))),
+                                        child: Container(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 400,
+                                            minWidth: 320,
+                                          ),
+                                          padding: const EdgeInsets.all(24),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(16),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.red
+                                                      .withOpacity(0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.warning_amber_outlined,
+                                                  color: Colors.red,
+                                                  size: 32,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                'Discard changes',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: theme.textTheme
+                                                      .titleLarge?.color,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'Go back without saving these receipt details?',
+                                                style: AppFonts.sfProStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: theme.textTheme
+                                                      .bodyMedium?.color,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              const SizedBox(height: 24),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: ElevatedButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(context)
+                                                              .pop(true),
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            Colors.red,
+                                                        foregroundColor:
+                                                            Colors.white,
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                        ),
+                                                        elevation: 2,
+                                                      ),
+                                                      child: Text(
+                                                        'Discard',
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(context)
+                                                              .pop(false),
+                                                      style:
+                                                          TextButton.styleFrom(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                          side: BorderSide(
+                                                            color: isDark
+                                                                ? Colors.grey
+                                                                    .shade600
+                                                                : Colors.black
+                                                                    .withOpacity(
+                                                                        0.2),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        'Cancel',
+                                                        style:
+                                                            AppFonts.sfProStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: theme
+                                                              .textTheme
+                                                              .bodyMedium
+                                                              ?.color,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ],
-                                    ),
+                                      );
+                                    },
                                   ) ??
                                   false;
                               if (confirm) {
@@ -4760,41 +5044,177 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                     final confirm = await showDialog<bool>(
                                           context: context,
                                           barrierDismissible: false,
-                                          builder: (context) => AlertDialog(
-                                            title: Text('Save receipt details',
-                                                style: AppFonts.sfProStyle(
-                                                    fontSize: 16,
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                            content: Text(
-                                                'Do you want to save these receipt details?',
-                                                style: AppFonts.sfProStyle(
-                                                    fontSize: 14)),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () =>
-                                                    Navigator.of(context)
-                                                        .pop(false),
-                                                child: Text('Cancel',
-                                                    style: AppFonts.sfProStyle(
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.w600)),
+                                          builder: (context) {
+                                            final theme = Theme.of(context);
+                                            final isDark = theme.brightness ==
+                                                Brightness.dark;
+                                            return Dialog(
+                                              backgroundColor: isDark
+                                                  ? const Color(0xFF2C2C2C)
+                                                  : Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
                                               ),
-                                              TextButton(
-                                                onPressed: () =>
-                                                    Navigator.of(context)
-                                                        .pop(true),
-                                                child: Text('Save',
-                                                    style: AppFonts.sfProStyle(
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.w600,
+                                              child: Container(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                  maxWidth: 400,
+                                                  minWidth: 320,
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.all(24),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              16),
+                                                      decoration: BoxDecoration(
                                                         color: const Color(
-                                                            0xFF00D4AA))),
+                                                                0xFF00D4AA)
+                                                            .withOpacity(0.1),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.save_outlined,
+                                                        color:
+                                                            Color(0xFF00D4AA),
+                                                        size: 32,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 16),
+                                                    Text(
+                                                      'Save receipt details',
+                                                      style:
+                                                          AppFonts.sfProStyle(
+                                                        fontSize: 20,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: theme.textTheme
+                                                            .titleLarge?.color,
+                                                      ),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    Text(
+                                                      'Do you want to save these receipt details?',
+                                                      style:
+                                                          AppFonts.sfProStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color: theme.textTheme
+                                                            .bodyMedium?.color,
+                                                      ),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                    ),
+                                                    const SizedBox(height: 24),
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: ElevatedButton(
+                                                            onPressed: () =>
+                                                                Navigator.of(
+                                                                        context)
+                                                                    .pop(true),
+                                                            style:
+                                                                ElevatedButton
+                                                                    .styleFrom(
+                                                              backgroundColor:
+                                                                  const Color(
+                                                                      0xFF00D4AA),
+                                                              foregroundColor:
+                                                                  Colors.white,
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                      vertical:
+                                                                          12),
+                                                              shape:
+                                                                  RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            8),
+                                                              ),
+                                                              elevation: 2,
+                                                            ),
+                                                            child: Text(
+                                                              'Save',
+                                                              style: AppFonts
+                                                                  .sfProStyle(
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 12),
+                                                        Expanded(
+                                                          child: TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.of(
+                                                                        context)
+                                                                    .pop(false),
+                                                            style: TextButton
+                                                                .styleFrom(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                      vertical:
+                                                                          12),
+                                                              shape:
+                                                                  RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            8),
+                                                                side:
+                                                                    BorderSide(
+                                                                  color: isDark
+                                                                      ? Colors
+                                                                          .grey
+                                                                          .shade600
+                                                                      : Colors
+                                                                          .black
+                                                                          .withOpacity(
+                                                                              0.2),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              'Cancel',
+                                                              style: AppFonts
+                                                                  .sfProStyle(
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                                color: theme
+                                                                    .textTheme
+                                                                    .bodyMedium
+                                                                    ?.color,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ],
-                                          ),
+                                            );
+                                          },
                                         ) ??
                                         false;
                                     if (!confirm) return;

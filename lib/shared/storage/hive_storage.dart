@@ -11,6 +11,7 @@ class HiveStorage {
       'dashboard_supplies_by_status';
   static const String dashboardPOsByStatusBox = 'dashboard_pos_by_status';
   static const String fastMovingItemsBox = 'fast_moving_items';
+  static const String usageSpeedBox = 'usage_speed_items';
 
   // Box names for inventory module
   static const String inventorySuppliesBox = 'inventory_supplies';

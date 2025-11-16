@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/activity_log/controller/inventory_activity_controller.dart';
 import 'package:familee_dental/shared/storage/hive_storage.dart';
+import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
 
 class FilterController {
   // Singleton pattern to ensure cache persists across widget rebuilds
@@ -674,6 +676,81 @@ class FilterController {
       };
 
     return controller.stream;
+  }
+
+  /// Preload brand/supplier data from local caches and derive from supplies if missing.
+  Future<void> preloadFromLocalCache() async {
+    try {
+      // Load names first
+      final brandNames = await _loadBrandNamesFromHive();
+      if (brandNames != null) {
+        _cachedBrandNames = brandNames;
+      }
+      final supplierNames = await _loadSupplierNamesFromHive();
+      if (supplierNames != null) {
+        _cachedSupplierNames = supplierNames;
+      }
+
+      // Load full lists
+      final brands = await _loadBrandsFromHive();
+      if (brands != null) {
+        _cachedBrands = brands;
+      }
+      final suppliers = await _loadSuppliersFromHive();
+      if (suppliers != null) {
+        _cachedSuppliers = suppliers;
+      }
+
+      // If names are still missing, derive from locally cached supplies
+      if (_cachedBrandNames == null || _cachedSupplierNames == null) {
+        try {
+          final supplies =
+              await InventoryController().getSuppliesStream().first;
+          if (supplies.isNotEmpty) {
+            final derivedBrands = supplies
+                .map((e) => (e.brand).trim())
+                .where((v) => v.isNotEmpty && v != 'N/A')
+                .toSet()
+                .toList()
+              ..sort();
+            final derivedSuppliers = supplies
+                .map((e) => (e.supplier).trim())
+                .where((v) => v.isNotEmpty && v != 'N/A')
+                .toSet()
+                .toList()
+              ..sort();
+
+            if (_cachedBrandNames == null) {
+              _cachedBrandNames = derivedBrands;
+              unawaited(_saveBrandNamesToHive(derivedBrands));
+            }
+            if (_cachedSupplierNames == null) {
+              _cachedSupplierNames = derivedSuppliers;
+              unawaited(_saveSupplierNamesToHive(derivedSuppliers));
+            }
+          }
+        } catch (_) {
+          // best effort only
+        }
+      }
+    } catch (_) {
+      // ignore - best effort
+    }
+  }
+
+  /// Best-effort online warm-up to persist latest lists for future offline sessions.
+  Future<void> warmUpOnlineIfPossible() async {
+    try {
+      final hasNet = await ConnectivityService().hasInternetConnection();
+      if (!hasNet) return;
+      // Trigger one-shot fetches; existing streams will save to Hive
+      unawaited(getBrandNamesStream().first);
+      unawaited(getSupplierNamesStream().first);
+      unawaited(getBrandsStream().first);
+      unawaited(getSuppliersStream().first);
+    } catch (_) {
+      // ignore
+    }
   }
 
   // Migration function to extract existing brands and suppliers from supplies

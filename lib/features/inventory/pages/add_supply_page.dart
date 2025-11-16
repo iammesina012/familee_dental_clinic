@@ -91,9 +91,12 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
         return ['mL', 'L'];
       case 'Pad':
         return ['Cartridge'];
+      case 'Syringe':
+        return ['mL', 'g'];
       case 'Pieces':
       case 'Spool':
       case 'Tub':
+      case 'Roll':
         return []; // These don't need packaging content
       default:
         return ['Pieces', 'Units', 'Items', 'Count'];
@@ -104,7 +107,8 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
   bool _isPackagingContentDisabled(String? packagingUnit) {
     return packagingUnit == 'Pieces' ||
         packagingUnit == 'Spool' ||
-        packagingUnit == 'Tub';
+        packagingUnit == 'Tub' ||
+        packagingUnit == 'Roll';
   }
 
   // Helper method to get valid packaging content value
@@ -373,6 +377,10 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                             children: [
                               TextField(
                                 controller: controller.nameController,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'[a-zA-Z0-9 ]')),
+                                ],
                                 decoration: InputDecoration(
                                   labelText: 'Item Name *',
                                   border: OutlineInputBorder(),
@@ -409,6 +417,10 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                             children: [
                               TextField(
                                 controller: controller.typeController,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'[a-zA-Z0-9 ]')),
+                                ],
                                 decoration: InputDecoration(
                                   labelText: 'Type Name',
                                   border: OutlineInputBorder(),
@@ -444,6 +456,10 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                             children: [
                               TextField(
                                 controller: controller.supplierController,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'[a-zA-Z0-9 ]')),
+                                ],
                                 decoration: InputDecoration(
                                     labelText: 'Supplier Name *',
                                     border: OutlineInputBorder(),
@@ -472,6 +488,10 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                             children: [
                               TextField(
                                 controller: controller.brandController,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'[a-zA-Z0-9 ]')),
+                                ],
                                 decoration: InputDecoration(
                                     labelText: 'Brand Name *',
                                     border: OutlineInputBorder(),
@@ -552,6 +572,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                 children: [
                                   DropdownButtonFormField<String>(
                                     value: controller.selectedCategory,
+                                    menuMaxHeight: 240,
                                     decoration: InputDecoration(
                                       labelText: 'Category *',
                                       border: OutlineInputBorder(),
@@ -720,6 +741,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                               const SizedBox(height: 6),
                               DropdownButtonFormField<String>(
                                 value: controller.selectedPackagingUnit,
+                                menuMaxHeight: 240,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(),
                                   errorStyle: TextStyle(color: Colors.red),
@@ -727,12 +749,15 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                 items: [
                                   'Pack',
                                   'Box',
+                                  'Bundle',
                                   'Bottle',
                                   'Jug',
                                   'Pad',
                                   'Pieces',
                                   'Spool',
-                                  'Tub'
+                                  'Tub',
+                                  'Syringe',
+                                  'Roll'
                                 ]
                                     .map((u) => DropdownMenuItem(
                                         value: u, child: Text(u)))
@@ -945,6 +970,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                         controller.selectedPackagingUnit)
                                     ? null
                                     : _getValidPackagingContentValue(),
+                                menuMaxHeight: 240,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(),
                                   errorStyle: TextStyle(color: Colors.red),
@@ -1269,6 +1295,11 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                             context);
                                       } else if (result ==
                                           'DUPLICATE_SUPPLY_EXISTS') {
+                                        if (!mounted) return;
+                                        await _showDuplicateSupplyWarning(
+                                            context);
+                                      } else if (result ==
+                                          'SUPPLY_NAME_EXISTS') {
                                         if (!mounted) return;
                                         await _showDuplicateSupplyWarning(
                                             context);
