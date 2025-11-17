@@ -416,110 +416,187 @@ class ApprovalCard extends StatelessWidget {
                       ),
                     );
                   }),
-                  // Approve/Reject Buttons (only show for pending and if user has permission)
+
+                  // Remarks Section (only show if remarks exist)
+                  if (approval['remarks'] != null &&
+                      approval['remarks'].toString().trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Remarks:',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        approval['remarks'].toString().trim(),
+                        style: AppFonts.sfProStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // Bottom section with "Deducted by" and Approve/Reject Buttons
                   if (isPending && canApproveReject) ...[
                     const SizedBox(height: 24),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Reject Button
-                        ElevatedButton(
-                          onPressed: isProcessing ? null : onReject,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            disabledBackgroundColor:
-                                Colors.red.withOpacity(0.5),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
+                        // Deducted by section (left side)
+                        if (approval['deducted_by_name'] != null &&
+                            approval['deducted_by_name']
+                                .toString()
+                                .trim()
+                                .isNotEmpty)
+                          Text(
+                            'Deducted by ${approval['deducted_by_name'].toString().trim()}',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: theme.textTheme.bodySmall?.color
+                                  ?.withOpacity(0.7),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isProcessing)
-                                SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
-                                    ),
-                                  ),
-                                )
-                              else
-                                Icon(
-                                  Icons.close,
-                                  size: 18,
-                                  color: Colors.white,
+                          )
+                        else
+                          const SizedBox.shrink(),
+                        // Buttons (right side)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Reject Button
+                            ElevatedButton(
+                              onPressed: isProcessing ? null : onReject,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                disabledBackgroundColor:
+                                    Colors.red.withOpacity(0.5),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
                                 ),
-                              const SizedBox(width: 8),
-                              Text(
-                                isProcessing ? 'Processing...' : 'Reject',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Approve Button
-                        ElevatedButton(
-                          onPressed: isProcessing ? null : onApprove,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            disabledBackgroundColor:
-                                Colors.green.withOpacity(0.5),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isProcessing)
-                                SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isProcessing)
+                                    SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Icon(
+                                      Icons.close,
+                                      size: 18,
+                                      color: Colors.white,
+                                    ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isProcessing ? 'Processing...' : 'Reject',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
                                     ),
                                   ),
-                                )
-                              else
-                                Icon(
-                                  Icons.check,
-                                  size: 18,
-                                  color: Colors.white,
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Approve Button
+                            ElevatedButton(
+                              onPressed: isProcessing ? null : onApprove,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                disabledBackgroundColor:
+                                    Colors.green.withOpacity(0.5),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
                                 ),
-                              const SizedBox(width: 8),
-                              Text(
-                                isProcessing ? 'Processing...' : 'Approve',
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
-                            ],
-                          ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isProcessing)
+                                    SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Icon(
+                                      Icons.check,
+                                      size: 18,
+                                      color: Colors.white,
+                                    ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isProcessing ? 'Processing...' : 'Approve',
+                                    style: AppFonts.sfProStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ], // Close if (isPending) ...[
+                  ],
+                  // Show "Deducted by" even if buttons are not shown (for approved/rejected)
+                  if (!(isPending && canApproveReject) &&
+                      approval['deducted_by_name'] != null &&
+                      approval['deducted_by_name']
+                          .toString()
+                          .trim()
+                          .isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Deducted by ${approval['deducted_by_name'].toString().trim()}',
+                        style: AppFonts.sfProStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: theme.textTheme.bodySmall?.color
+                              ?.withOpacity(0.7),
+                        ),
+                      ),
+                    ),
+                  ],
                 ], // Close if (isExpanded) ...[
               ], // Close Column children list
             ), // Close Column

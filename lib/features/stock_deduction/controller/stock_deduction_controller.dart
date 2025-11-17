@@ -281,15 +281,13 @@ class StockDeductionController {
       }
     }
 
-    // Check for stock level notifications after reverting and log activities
+    // Check for stock level notifications after reverting
     final notificationsController = NotificationsController();
-    final sdActivityController = SdActivityController();
     for (final item in deductionItems) {
       final String? docId = item['docId'] as String?;
       if (docId != null && results.containsKey(docId)) {
         final notificationData =
             results['_notificationData_$docId'] as Map<String, dynamic>?;
-        final logData = results['_logData_$docId'] as Map<String, dynamic>?;
 
         // Check for stock level notifications
         if (notificationData != null) {
@@ -301,16 +299,6 @@ class StockDeductionController {
             itemName,
             newStock as int,
             previousStock as int,
-          );
-        }
-
-        // Log stocks reverted activity
-        if (logData != null) {
-          await sdActivityController.logStockReverted(
-            itemName: logData['itemName'] ?? 'Unknown Item',
-            brand: logData['brand'] ?? 'Unknown Brand',
-            quantity: logData['quantity'] ?? 0,
-            supplier: logData['supplier'] ?? 'Unknown Supplier',
           );
         }
       }

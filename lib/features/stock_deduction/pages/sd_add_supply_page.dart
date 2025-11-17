@@ -19,9 +19,6 @@ class _StockDeductionAddSupplyPageState
   final TextEditingController _searchController = TextEditingController();
   final SdAddSupplyController _controller = SdAddSupplyController();
   String _searchText = '';
-  bool _multiSelectMode = false;
-  final Set<String> _selectedIds = {};
-  final Map<String, InventoryItem> _selectedItems = {};
   bool _isFirstLoad = true;
   List<GroupedInventoryItem> _lastKnownGroups = [];
 
@@ -73,121 +70,6 @@ class _StockDeductionAddSupplyPageState
         );
       },
     );
-  }
-
-  Future<bool> _showNonPriorityWarningDialog(BuildContext context) async {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Circular icon with yellow background and warning icon
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Colors.yellow[50],
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.amber[700],
-                    size: 36,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Title
-                Text(
-                  'Warning',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: theme.textTheme.titleLarge?.color,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Message
-                Text(
-                  'You are deducting a non-priority expiry batch, would you like to proceed?',
-                  textAlign: TextAlign.center,
-                  style: AppFonts.sfProStyle(
-                    fontSize: 16,
-                    color: theme.textTheme.bodyMedium?.color,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Proceed button (yellow)
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amber[700],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: Text(
-                          'Proceed',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Cancel button (white with border)
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: theme.textTheme.bodyMedium?.color,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(
-                            color: Colors.grey[300]!,
-                            width: 1,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: Text(
-                          'Cancel',
-                          style: AppFonts.sfProStyle(
-                            fontSize: 16,
-                            color: theme.textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    return result ?? false;
   }
 
   Widget _buildDetailRow(String label, String value,
@@ -807,22 +689,6 @@ class _StockDeductionAddSupplyPageState
     );
   }
 
-  void _toggleSelect(InventoryItem item) async {
-    if (_controller.isOutOfStock(item)) {
-      await _showOutOfStockDialog(item.name);
-      return;
-    }
-    _controller.toggleSelect(item, _selectedIds, _selectedItems, () {
-      setState(() {});
-    });
-  }
-
-  void _submitSelection() {
-    if (_selectedItems.isEmpty) return;
-    final list = _controller.submitSelection(_selectedItems);
-    Navigator.pop(context, list);
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -1098,100 +964,73 @@ class _StockDeductionAddSupplyPageState
                               final InventoryItem item = validBatches.isNotEmpty
                                   ? validBatches.first
                                   : groupedItem.mainItem;
-                              final bool selected =
-                                  _selectedIds.contains(item.id);
                               return GestureDetector(
-                                onLongPress: () async {
-                                  if (!_multiSelectMode) {
-                                    setState(() => _multiSelectMode = true);
-                                  }
-                                  if (_controller.isDuplicate(
-                                      item.id, existingDocIds)) {
-                                    await _showDuplicateDialog(item.name);
+                                onTap: () async {
+                                  if (_controller.isOutOfStock(item)) {
+                                    await _showOutOfStockDialog(item.name);
                                     return;
                                   }
-                                  _toggleSelect(item);
-                                },
-                                onTap: () async {
-                                  if (_multiSelectMode) {
+
+                                  // Helper to finalize selection after choosing exact batch
+                                  Future<void> finalizeSelection(
+                                      InventoryItem selectedBatch) async {
                                     if (_controller.isDuplicate(
-                                        item.id, existingDocIds)) {
-                                      await _showDuplicateDialog(item.name);
+                                        selectedBatch.id, existingDocIds)) {
+                                      await _showDuplicateDialog(
+                                          selectedBatch.name);
                                       return;
                                     }
-                                    _toggleSelect(item);
+                                    if (!mounted) return;
+                                    Navigator.pop(context,
+                                        _controller.toReturnMap(selectedBatch));
+                                  }
+
+                                  // Check if there are multiple types/variants
+                                  final allBatches = [
+                                    groupedItem.mainItem,
+                                    ...groupedItem.variants
+                                  ];
+                                  final validBatches = allBatches
+                                      .where((batch) => batch.stock > 0)
+                                      .toList();
+
+                                  // Group batches by type (null/empty types are grouped together)
+                                  final Map<String?, List<InventoryItem>>
+                                      batchesByType = {};
+                                  for (final batch in validBatches) {
+                                    final typeKey = (batch.type != null &&
+                                            batch.type!.isNotEmpty)
+                                        ? batch.type
+                                        : null;
+                                    batchesByType[typeKey] ??= [];
+                                    batchesByType[typeKey]!.add(batch);
+                                  }
+
+                                  // If multiple types exist (including null as a type), show type selection dialog
+                                  if (batchesByType.length > 1) {
+                                    final selectedBatch =
+                                        await _showTypeSelectionDialog(
+                                            context, groupedItem, validBatches);
+                                    if (selectedBatch != null) {
+                                      await finalizeSelection(selectedBatch);
+                                    }
                                   } else {
-                                    if (_controller.isOutOfStock(item)) {
-                                      await _showOutOfStockDialog(item.name);
-                                      return;
-                                    }
-
-                                    // Helper to finalize selection after choosing exact batch
-                                    Future<void> finalizeSelection(
-                                        InventoryItem selectedBatch) async {
-                                      if (_controller.isDuplicate(
-                                          selectedBatch.id, existingDocIds)) {
-                                        await _showDuplicateDialog(
-                                            selectedBatch.name);
-                                        return;
-                                      }
-                                      if (!mounted) return;
-                                      Navigator.pop(
-                                          context,
-                                          _controller
-                                              .toReturnMap(selectedBatch));
-                                    }
-
-                                    // Check if there are multiple types/variants
-                                    final allBatches = [
-                                      groupedItem.mainItem,
-                                      ...groupedItem.variants
-                                    ];
-                                    final validBatches = allBatches
-                                        .where((batch) => batch.stock > 0)
-                                        .toList();
-
-                                    // Group batches by type (null/empty types are grouped together)
-                                    final Map<String?, List<InventoryItem>>
-                                        batchesByType = {};
-                                    for (final batch in validBatches) {
-                                      final typeKey = (batch.type != null &&
-                                              batch.type!.isNotEmpty)
-                                          ? batch.type
-                                          : null;
-                                      batchesByType[typeKey] ??= [];
-                                      batchesByType[typeKey]!.add(batch);
-                                    }
-
-                                    // If multiple types exist (including null as a type), show type selection dialog
-                                    if (batchesByType.length > 1) {
-                                      final selectedBatch =
-                                          await _showTypeSelectionDialog(
-                                              context,
-                                              groupedItem,
-                                              validBatches);
-                                      if (selectedBatch != null) {
-                                        await finalizeSelection(selectedBatch);
-                                      }
-                                    } else {
-                                      // Single type or no type - always show batch selection dialog
-                                      final singleTypeBatches =
-                                          batchesByType.values.first;
-                                      final selectedBatch =
-                                          await _showBatchSelectionDialog(
-                                        context,
-                                        groupedItem.mainItem.name,
-                                        batchesByType.keys.first,
-                                        singleTypeBatches,
-                                      );
-                                      if (selectedBatch != null) {
-                                        await finalizeSelection(selectedBatch);
-                                      }
+                                    // Single type or no type - always show batch selection dialog
+                                    final singleTypeBatches =
+                                        batchesByType.values.first;
+                                    final selectedBatch =
+                                        await _showBatchSelectionDialog(
+                                      context,
+                                      groupedItem.mainItem.name,
+                                      batchesByType.keys.first,
+                                      singleTypeBatches,
+                                    );
+                                    if (selectedBatch != null) {
+                                      await finalizeSelection(selectedBatch);
                                     }
                                   }
                                 },
-                                child: _buildInventoryStyleCard(
-                                    context, item, selected),
+                                child: _buildInventoryStyleCard(context, item),
                               );
                             },
                           );
@@ -1200,56 +1039,6 @@ class _StockDeductionAddSupplyPageState
                     },
                   ),
                 ),
-                if (_multiSelectMode)
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _selectedItems.isEmpty
-                                  ? null
-                                  : _submitSelection,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _selectedItems.isEmpty
-                                    ? Colors.grey[400]
-                                    : const Color(0xFF00D4AA),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                              ),
-                              child: Text(
-                                _selectedItems.isEmpty
-                                    ? 'Add (0)'
-                                    : 'Add (${_selectedItems.length})',
-                                style: AppFonts.sfProStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _multiSelectMode = false;
-                                _selectedIds.clear();
-                                _selectedItems.clear();
-                              });
-                            },
-                            child: Text(
-                              'Cancel',
-                              style: AppFonts.sfProStyle(fontSize: 16),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -1258,8 +1047,7 @@ class _StockDeductionAddSupplyPageState
     );
   }
 
-  Widget _buildInventoryStyleCard(
-      BuildContext context, InventoryItem item, bool selected) {
+  Widget _buildInventoryStyleCard(BuildContext context, InventoryItem item) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
@@ -1267,9 +1055,6 @@ class _StockDeductionAddSupplyPageState
       decoration: BoxDecoration(
         color: scheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: selected
-            ? Border.all(color: const Color(0xFF00D4AA), width: 2)
-            : null,
         boxShadow: [
           BoxShadow(
             color: (theme.brightness == Brightness.dark
@@ -1336,30 +1121,6 @@ class _StockDeductionAddSupplyPageState
               ],
             ),
           ),
-
-          // Selection indicator
-          if (_multiSelectMode)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: selected ? const Color(0xFF00D4AA) : scheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: selected
-                        ? const Color(0xFF00D4AA)
-                        : theme.dividerColor.withOpacity(0.4),
-                    width: 2,
-                  ),
-                ),
-                child: selected
-                    ? const Icon(Icons.check, color: Colors.white, size: 16)
-                    : null,
-              ),
-            ),
         ],
       ),
     );

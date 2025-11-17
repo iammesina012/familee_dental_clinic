@@ -414,16 +414,28 @@ class ViewSupplyController {
     if (supplyResponse.isEmpty) return;
 
     final String name = (supplyResponse['name'] ?? '').toString();
-    final String type = (supplyResponse['type'] ?? '').toString();
+    final dynamic typeValue = supplyResponse['type'];
+    final String? type =
+        typeValue != null && typeValue.toString().trim().isNotEmpty
+            ? typeValue.toString()
+            : null;
 
     // Enforce zero-stock rule: sum all active batches for this name+type
     try {
-      final List<dynamic> rows = await _supabase
+      var stockQuery = _supabase
           .from('supplies')
           .select('stock, archived, name, type')
           .eq('name', name)
-          .eq('type', type)
           .eq('archived', false);
+
+      // Handle null type correctly - in PostgreSQL, NULL = '' doesn't match NULL values
+      if (type != null) {
+        stockQuery = stockQuery.eq('type', type);
+      } else {
+        stockQuery = stockQuery.or('type.is.null,type.eq.');
+      }
+
+      final List<dynamic> rows = await stockQuery;
       int totalActiveStock = 0;
       for (final row in rows) {
         final s = (row['stock'] ?? 0) as int;
@@ -442,11 +454,17 @@ class ViewSupplyController {
     }
 
     // Archive all stocks that share the same name AND type (only this supply type)
-    await _supabase
-        .from('supplies')
-        .update({'archived': true})
-        .eq('name', name)
-        .eq('type', type);
+    var updateQuery =
+        _supabase.from('supplies').update({'archived': true}).eq('name', name);
+
+    // Handle null type correctly - in PostgreSQL, NULL = '' doesn't match NULL values
+    if (type != null) {
+      updateQuery = updateQuery.eq('type', type);
+    } else {
+      updateQuery = updateQuery.or('type.is.null,type.eq.');
+    }
+
+    await updateQuery;
 
     // Invalidate cached type list for this supply name so dropdown updates
     invalidateSupplyTypesCache(name);
@@ -505,15 +523,27 @@ class ViewSupplyController {
     if (supplyResponse.isEmpty) return;
 
     final String name = (supplyResponse['name'] ?? '').toString();
-    final String type = (supplyResponse['type'] ?? '').toString();
+    final dynamic typeValue = supplyResponse['type'];
+    final String? type =
+        typeValue != null && typeValue.toString().trim().isNotEmpty
+            ? typeValue.toString()
+            : null;
 
     // Unarchive all stocks sharing the same name AND type (only this supply type)
-    await _supabase
+    var updateQuery = _supabase
         .from('supplies')
         .update({'archived': false})
         .eq('name', name)
-        .eq('type', type)
         .eq('archived', true);
+
+    // Handle null type correctly - in PostgreSQL, NULL = '' doesn't match NULL values
+    if (type != null) {
+      updateQuery = updateQuery.eq('type', type);
+    } else {
+      updateQuery = updateQuery.or('type.is.null,type.eq.');
+    }
+
+    await updateQuery;
 
     // Invalidate cached type list so restored type appears again
     invalidateSupplyTypesCache(name);

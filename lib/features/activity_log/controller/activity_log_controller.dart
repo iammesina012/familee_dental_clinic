@@ -701,6 +701,10 @@ class ActivityLogController extends ChangeNotifier {
     final bool isPurchaseOrder = (category == 'Purchase Order') ||
         metadata.containsKey('poCode') ||
         metadata.containsKey('poName');
+    final bool isStockDeductionApprovalRejection =
+        action == 'stock_deduction_approved' ||
+            action == 'stock_deduction_rejected' ||
+            action == 'deduction_log_created';
 
     // Handle supplies array path (per-supply blocks)
     if (hasSuppliesArray) {
@@ -743,26 +747,56 @@ class ActivityLogController extends ChangeNotifier {
 
         addRow('Supply Name', (s['supplyName'] ?? 'N/A').toString());
 
-        if (changesByLabel.containsKey('Brand Name')) {
-          final ch = changesByLabel['Brand Name'] as Map<String, dynamic>;
-          addRow(
-              'Brand Name',
-              '${ch['previous']?.toString() ?? 'N/A'} → '
-                  '${ch['new']?.toString() ?? 'N/A'}');
-        } else {
-          addRow(
-              'Brand Name', (s['brandName'] ?? s['brand'] ?? 'N/A').toString());
-        }
+        // For stock deduction approval/rejection, show different fields
+        if (isStockDeductionApprovalRejection) {
+          // Expiry - always show
+          final expiryStr = (s['expiry'] ?? 'No Expiry').toString().trim();
+          if (expiryStr.isEmpty || expiryStr.toLowerCase() == 'no expiry') {
+            addRow('Expiry', 'No Expiry');
+          } else {
+            addRow('Expiry', formatDateString(expiryStr));
+          }
 
-        if (changesByLabel.containsKey('Supplier Name')) {
-          final ch = changesByLabel['Supplier Name'] as Map<String, dynamic>;
-          addRow(
-              'Supplier Name',
-              '${ch['previous']?.toString() ?? 'N/A'} → '
-                  '${ch['new']?.toString() ?? 'N/A'}');
+          // Packaging Content/Unit - always show
+          final packagingStr =
+              (s['packagingContentUnit'] ?? 'N/A').toString().trim();
+          addRow('Packaging Content/Unit',
+              packagingStr.isEmpty ? 'N/A' : packagingStr);
+
+          // Purpose - always show
+          final purposeStr = (s['purpose'] ?? 'N/A').toString().trim();
+          addRow('Purpose', purposeStr.isEmpty ? 'N/A' : purposeStr);
+
+          // Quantity label depends on action type
+          final quantityToDeduct = s['quantityToDeduct'] ?? 0;
+          final quantityLabel = (action == 'stock_deduction_approved' ||
+                  action == 'deduction_log_created')
+              ? 'Quantity Deducted'
+              : 'Quantity to Deduct';
+          addRow(quantityLabel, quantityToDeduct.toString());
         } else {
-          addRow('Supplier Name',
-              (s['supplierName'] ?? s['supplier'] ?? 'N/A').toString());
+          // For other actions, show brand and supplier as before
+          if (changesByLabel.containsKey('Brand Name')) {
+            final ch = changesByLabel['Brand Name'] as Map<String, dynamic>;
+            addRow(
+                'Brand Name',
+                '${ch['previous']?.toString() ?? 'N/A'} → '
+                    '${ch['new']?.toString() ?? 'N/A'}');
+          } else {
+            addRow('Brand Name',
+                (s['brandName'] ?? s['brand'] ?? 'N/A').toString());
+          }
+
+          if (changesByLabel.containsKey('Supplier Name')) {
+            final ch = changesByLabel['Supplier Name'] as Map<String, dynamic>;
+            addRow(
+                'Supplier Name',
+                '${ch['previous']?.toString() ?? 'N/A'} → '
+                    '${ch['new']?.toString() ?? 'N/A'}');
+          } else {
+            addRow('Supplier Name',
+                (s['supplierName'] ?? s['supplier'] ?? 'N/A').toString());
+          }
         }
 
         // The following fields are PO-specific. Only show for Purchase Order.
@@ -775,7 +809,25 @@ class ActivityLogController extends ChangeNotifier {
                 '${ch['previous']?.toString() ?? 'N/A'} → '
                     '${ch['new']?.toString() ?? 'N/A'}');
           } else if (s.containsKey('quantity')) {
-            addRow('Quantity', (s['quantity'] ?? 0).toString());
+            // For partial receive actions, show received/total format
+            if (action == 'purchase_order_partially_received' &&
+                s.containsKey('receivedQuantities')) {
+              final receivedQuantitiesRaw = s['receivedQuantities'];
+              if (receivedQuantitiesRaw != null &&
+                  receivedQuantitiesRaw is Map) {
+                final receivedQuantities =
+                    Map<String, int>.from(receivedQuantitiesRaw);
+                final totalReceived =
+                    receivedQuantities.values.fold(0, (sum, qty) => sum + qty);
+                final totalQuantity =
+                    int.tryParse('${s['quantity'] ?? 0}') ?? 0;
+                addRow('Quantity', '$totalReceived/$totalQuantity');
+              } else {
+                addRow('Quantity', (s['quantity'] ?? 0).toString());
+              }
+            } else {
+              addRow('Quantity', (s['quantity'] ?? 0).toString());
+            }
           }
 
           // Cost
@@ -813,6 +865,18 @@ class ActivityLogController extends ChangeNotifier {
 
         if (i < suppliesList.length - 1) {
           addDivider();
+        }
+      }
+
+      // Show Remarks for stock deduction approval/rejection (top-level, not per supply)
+      if (isStockDeductionApprovalRejection &&
+          metadata.containsKey('remarks')) {
+        final remarksStr = metadata['remarks'].toString().trim();
+        if (remarksStr.isNotEmpty) {
+          if (rows.isNotEmpty) {
+            addDivider();
+          }
+          addRow('Remarks', remarksStr);
         }
       }
 
@@ -1053,6 +1117,22 @@ class ActivityLogController extends ChangeNotifier {
         value = metadata[entry.key]?.toString() ?? 'N/A';
         if (entry.key == 'cost') {
           value = formatPeso(metadata[entry.key]);
+        } else if (entry.key == 'quantity') {
+          // For partial receive actions, show received/total format
+          if (action == 'purchase_order_partially_received' &&
+              isPurchaseOrder &&
+              metadata.containsKey('receivedQuantities')) {
+            final receivedQuantitiesRaw = metadata['receivedQuantities'];
+            if (receivedQuantitiesRaw != null && receivedQuantitiesRaw is Map) {
+              final receivedQuantities =
+                  Map<String, int>.from(receivedQuantitiesRaw);
+              final totalReceived =
+                  receivedQuantities.values.fold(0, (sum, qty) => sum + qty);
+              final totalQuantity =
+                  int.tryParse('${metadata['quantity'] ?? 0}') ?? 0;
+              value = '$totalReceived/$totalQuantity';
+            }
+          }
         }
       }
 

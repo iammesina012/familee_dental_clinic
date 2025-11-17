@@ -8,6 +8,7 @@ import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/stock_deduction/pages/sd_approval_card_widget.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -397,6 +398,125 @@ class _ApprovalPageState extends State<ApprovalPage> {
       return;
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check,
+                    color: Colors.green,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Confirm Approval',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Are you sure you want to approve?',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          'Approve',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: isDark
+                                  ? Colors.grey.shade600
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodyMedium?.color,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
     // Mark as processing
     if (approvalId != null) {
       _processingApprovalIds.add(approvalId);
@@ -545,6 +665,7 @@ class _ApprovalPageState extends State<ApprovalPage> {
               'packagingContent': supply['packagingContent'],
               'packagingContentQuantity': supply['packagingContentQuantity'],
               'packagingUnit': supply['packagingUnit'],
+              'purpose': supply['purpose'],
             });
           }
         }
@@ -569,6 +690,14 @@ class _ApprovalPageState extends State<ApprovalPage> {
 
       // Update approval status to approved
       await _approvalController.approveApproval(approval['id']);
+
+      // Log approval activity
+      final SdActivityController sdActivityController = SdActivityController();
+      await sdActivityController.logApprovalApproved(
+        purpose: purpose,
+        supplies: List<Map<String, dynamic>>.from(supplies),
+        remarks: remarks,
+      );
 
       // Add to blacklist immediately to prevent it from ever appearing again
       final approvalId = approval['id']?.toString();
@@ -664,40 +793,119 @@ class _ApprovalPageState extends State<ApprovalPage> {
       return;
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final confirmed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Reject Approval',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          content: Text(
-            'Are you sure you want to reject this approval? This action cannot be undone.',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Cancel',
-                style:
-                    AppFonts.sfProStyle(fontSize: 16, color: Colors.grey[700]),
-              ),
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: Text(
-                'Reject',
-                style: AppFonts.sfProStyle(
-                    fontSize: 16,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.red,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Reject Approval',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white),
-              ),
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Are you sure you want to reject this approval?',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          'Reject',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: isDark
+                                  ? Colors.grey.shade600
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodyMedium?.color,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -713,6 +921,23 @@ class _ApprovalPageState extends State<ApprovalPage> {
     try {
       await _approvalController.rejectApproval(approval['id']);
 
+      // Get purpose and remarks for logging
+      final presetName =
+          approval['presetName'] ?? approval['name'] ?? 'Unknown Preset';
+      final purpose = approval['purpose']?.toString().isNotEmpty == true
+          ? approval['purpose'].toString()
+          : presetName;
+      final remarks = approval['remarks']?.toString() ?? '';
+
+      // Log rejection activity
+      final SdActivityController sdActivityController = SdActivityController();
+      final supplies = approval['supplies'] as List<dynamic>? ?? [];
+      await sdActivityController.logApprovalRejected(
+        purpose: purpose,
+        supplies: List<Map<String, dynamic>>.from(supplies),
+        remarks: remarks,
+      );
+
       // Add to blacklist immediately to prevent it from ever appearing again
       final approvalId = approval['id']?.toString();
       if (approvalId != null) {
@@ -725,6 +950,86 @@ class _ApprovalPageState extends State<ApprovalPage> {
           _allApprovals.removeWhere((a) => a['id'] == approval['id']);
           _lastKnownApprovals.removeWhere((a) => a['id'] == approval['id']);
         });
+      }
+
+      // Convert rejected supplies back to deduction format and navigate to stock deduction page
+      if (supplies.isNotEmpty) {
+        // Get current inventory to get current stock values
+        List<GroupedInventoryItem> currentInventory = [];
+        try {
+          currentInventory = await _inventoryController
+              .getGroupedSuppliesStream(archived: false)
+              .first;
+        } catch (e) {
+          print('Error loading current inventory: $e');
+        }
+
+        // Convert approval supplies back to deduction format
+        List<Map<String, dynamic>> restoredDeductions = [];
+        for (final supply in supplies) {
+          if (supply is Map<String, dynamic>) {
+            final supplyDocId = supply['docId']?.toString();
+            final quantity = supply['quantity'] ?? 0;
+
+            if (supplyDocId == null || supplyDocId.isEmpty || quantity <= 0) {
+              continue;
+            }
+
+            // Find the current batch to get up-to-date stock
+            InventoryItem? currentBatch;
+            for (final item in currentInventory) {
+              if (item.mainItem.id == supplyDocId) {
+                currentBatch = item.mainItem;
+                break;
+              }
+              for (final variant in item.variants) {
+                if (variant.id == supplyDocId) {
+                  currentBatch = variant;
+                  break;
+                }
+              }
+              if (currentBatch != null) break;
+            }
+
+            // If batch not found or out of stock, skip it
+            if (currentBatch == null || currentBatch.stock <= 0) {
+              continue;
+            }
+
+            // Convert to deduction format
+            restoredDeductions.add({
+              'docId': supplyDocId,
+              'name': supply['name'] ?? '',
+              'type': supply['type'],
+              'brand': supply['brand'] ?? '',
+              'imageUrl': supply['imageUrl'] ?? '',
+              'expiry': supply['expiry'],
+              'noExpiry': supply['noExpiry'] ?? false,
+              'stock': currentBatch.stock,
+              'deductQty': quantity, // Restore original quantity
+              'purpose': supply['purpose'] ?? null, // Restore original purpose
+              'packagingContent': supply['packagingContent'],
+              'packagingContentQuantity': supply['packagingContentQuantity'],
+              'packagingUnit': supply['packagingUnit'],
+              'applyToAll': false,
+            });
+          }
+        }
+
+        // Navigate to stock deduction page with restored items and remarks
+        if (restoredDeductions.isNotEmpty && mounted) {
+          final remarks = approval['remarks']?.toString() ?? '';
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/stock-deduction',
+            (route) =>
+                route.settings.name == '/stock-deduction' ||
+                route.settings.name == '/dashboard',
+            arguments: {
+              'restoredDeductions': restoredDeductions,
+              'remarks': remarks,
+            },
+          );
+        }
       }
 
       // Don't reinitialize the stream - let Supabase real-time handle it automatically

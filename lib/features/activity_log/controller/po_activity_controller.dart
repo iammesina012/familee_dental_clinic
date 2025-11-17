@@ -302,7 +302,7 @@ class PoActivityController {
     );
   }
 
-  /// Log purchase order removed (deleted from Open section)
+  /// Log purchase order cancelled (deleted from Open section)
   Future<void> logPurchaseOrderRemoved({
     required String poCode,
     required String poName,
@@ -354,9 +354,9 @@ class PoActivityController {
     }
 
     await _logActivity(
-      action: 'purchase_order_removed',
+      action: 'purchase_order_cancelled',
       category: 'Purchase Order',
-      description: 'Removed #$normalizedCode: $poName',
+      description: 'Cancelled #$normalizedCode: $poName',
       metadata: {
         'supplies': normalizedSupplies,
         'supplyName': firstSupply['supplyName'] ?? 'N/A',
@@ -489,6 +489,100 @@ class PoActivityController {
       action: 'purchase_order_approved',
       category: 'Purchase Order',
       description: 'Approved #$normalizedCode: $poName',
+      metadata: {
+        'supplies': normalizedSupplies,
+        'supplyName': firstSupply['supplyName'] ?? 'N/A',
+        'brandName': firstSupply['brandName'] ?? 'N/A',
+        'supplierName': firstSupply['supplierName'] ?? 'N/A',
+        'quantity': firstSupply['quantity'] ?? 0,
+        'subtotal': firstSupply['cost'] ?? 0.0,
+        'expiryDate': firstSupply['expiryDate'] ?? 'No expiry date',
+        'expiryBatches': expiryBatches,
+      },
+    );
+  }
+
+  /// Log purchase order partially received
+  Future<void> logPurchaseOrderPartiallyReceived({
+    required String poCode,
+    required String poName,
+    required List<Map<String, dynamic>> supplies,
+  }) async {
+    // Normalize code (avoid double #)
+    final normalizedCode =
+        poCode.startsWith('#') ? poCode.substring(1) : poCode;
+
+    // Build normalized supplies list for details
+    final List<Map<String, dynamic>> normalizedSupplies = supplies.map((s) {
+      final List<Map<String, dynamic>> batches = [];
+      if (s['expiryBatches'] is List) {
+        for (final b in (s['expiryBatches'] as List)) {
+          final qty = (b['quantity'] ?? 0) as int;
+          final exp = (b['expiryDate'] ?? '').toString();
+          batches.add({
+            'quantity': qty,
+            'expiryDate': exp.isEmpty ? 'No expiry date' : exp,
+          });
+        }
+      }
+
+      // Handle receivedQuantities for partial receives
+      final receivedQuantitiesRaw = s['receivedQuantities'];
+      final Map<String, int> receivedQuantities = {};
+      if (receivedQuantitiesRaw != null && receivedQuantitiesRaw is Map) {
+        receivedQuantities.addAll(
+          Map<String, int>.from(receivedQuantitiesRaw),
+        );
+      }
+
+      // Create expiry batches from receivedQuantities if no expiryBatches
+      if (batches.isEmpty && receivedQuantities.isNotEmpty) {
+        for (final entry in receivedQuantities.entries) {
+          batches.add({
+            'quantity': entry.value,
+            'expiryDate': entry.key.isEmpty ? 'No expiry date' : entry.key,
+          });
+        }
+      }
+
+      final supplyMap = <String, dynamic>{
+        'supplyName': s['supplyName'] ?? s['name'] ?? 'N/A',
+        'brandName': s['brandName'] ?? s['brand'] ?? 'N/A',
+        'supplierName': s['supplierName'] ?? s['supplier'] ?? 'N/A',
+        'quantity': s['quantity'] ?? 0,
+        'cost': s['cost'] ?? 0.0,
+        'expiryDate': s['expiryDate'] ?? 'No expiry date',
+        'expiryBatches': batches,
+      };
+
+      if (receivedQuantities.isNotEmpty) {
+        supplyMap['receivedQuantities'] = receivedQuantities;
+      }
+
+      return supplyMap;
+    }).toList();
+
+    // Use first item for backward-compatible top-level details
+    final firstSupply =
+        normalizedSupplies.isNotEmpty ? normalizedSupplies.first : {};
+
+    // Collect expiry batches (if present)
+    final List<Map<String, dynamic>> expiryBatches = [];
+    if (firstSupply['expiryBatches'] is List) {
+      for (final b in (firstSupply['expiryBatches'] as List)) {
+        final qty = (b['quantity'] ?? 0) as int;
+        final exp = (b['expiryDate'] ?? '').toString();
+        expiryBatches.add({
+          'quantity': qty,
+          'expiryDate': exp.isEmpty ? 'No expiry date' : exp,
+        });
+      }
+    }
+
+    await _logActivity(
+      action: 'purchase_order_partially_received',
+      category: 'Purchase Order',
+      description: 'Partially Received #$normalizedCode: $poName',
       metadata: {
         'supplies': normalizedSupplies,
         'supplyName': firstSupply['supplyName'] ?? 'N/A',

@@ -1466,7 +1466,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                               elevation: 2,
                             ),
                             child: Text(
-                              'Cancel',
+                              'Proceed',
                               style: TextStyle(
                                 fontFamily: 'SF Pro',
                                 fontWeight: FontWeight.w500,

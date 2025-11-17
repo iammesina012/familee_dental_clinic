@@ -305,6 +305,34 @@ class StockDeductionLogsController {
       throw Exception('No authenticated user');
     }
 
+    // Get user name from user_roles table
+    String? createdByName;
+    try {
+      final userResponse = await _supabase
+          .from('user_roles')
+          .select('name')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+      if (userResponse != null &&
+          userResponse['name'] != null &&
+          userResponse['name'].toString().trim().isNotEmpty) {
+        createdByName = userResponse['name'].toString().trim();
+      } else {
+        // Fallback to metadata or email
+        final displayName =
+            currentUser.userMetadata?['display_name']?.toString().trim();
+        final emailName = currentUser.email?.split('@')[0].trim();
+        createdByName = displayName ?? emailName ?? 'Unknown User';
+      }
+    } catch (_) {
+      // Fallback if user_roles lookup fails
+      final displayName =
+          currentUser.userMetadata?['display_name']?.toString().trim();
+      final emailName = currentUser.email?.split('@')[0].trim();
+      createdByName = displayName ?? emailName ?? 'Unknown User';
+    }
+
     final dataToSave = Map<String, dynamic>.from(logData);
     if (dataToSave.containsKey('id')) {
       dataToSave.remove('id');
@@ -314,6 +342,7 @@ class StockDeductionLogsController {
     dataToSave['created_by_email'] = currentUser.email;
     dataToSave['created_by_role'] =
         await _getUserRole(currentUser.id) ?? 'Unknown';
+    dataToSave['created_by_name'] = createdByName;
     await _supabase.from(_table).insert(dataToSave);
   }
 

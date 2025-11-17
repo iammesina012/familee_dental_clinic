@@ -1176,20 +1176,28 @@ class PODetailsController {
       await _poController.save(updatedPO);
       print('Debug: PO saved successfully with all partial receives');
 
-      // Log activities for all supplies
-      for (final supplyEntry in supplyQuantities.entries) {
-        final supplyId = supplyEntry.key;
-        final expiryQuantities = supplyEntry.value;
-
-        for (final expiryEntry in expiryQuantities.entries) {
-          final expiryDate = expiryEntry.key;
-          final receivedQty = expiryEntry.value;
-
-          await _logPartialReceiveActivity(
-              po.id, supplyId, receivedQty, expiryDate);
+      // Collect supplies that were partially received or fully received from this partial receive
+      final List<Map<String, dynamic>> partiallyReceivedSupplies = [];
+      for (final supply in updatedSupplies) {
+        final status = supply['status']?.toString() ?? '';
+        // Include supplies that are Partially Received or Received (which were part of this partial receive)
+        if (status == 'Partially Received' || status == 'Received') {
+          // Only include if it has lastPartialReceiveQuantities (indicating it was just updated)
+          if (supply['lastPartialReceiveQuantities'] != null) {
+            partiallyReceivedSupplies.add(supply);
+          }
         }
       }
-      print('Debug: All activities logged successfully');
+
+      // Log activity for partial receive
+      if (partiallyReceivedSupplies.isNotEmpty) {
+        await PoActivityController().logPurchaseOrderPartiallyReceived(
+          poCode: po.code,
+          poName: po.name,
+          supplies: partiallyReceivedSupplies,
+        );
+        print('Debug: Partial receive activity logged successfully');
+      }
 
       return updatedPO;
     } catch (e) {

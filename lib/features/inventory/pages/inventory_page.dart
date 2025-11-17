@@ -1002,6 +1002,10 @@ class _InventoryState extends State<Inventory> {
                         currentSort: selectedSort,
                         overrideStock: groupedItem.totalStock,
                         variants: groupedItem.variants,
+                        titleOverride: groupedItem.mainItem.type != null &&
+                                groupedItem.mainItem.type!.isNotEmpty
+                            ? "${groupedItem.mainItem.name} (${groupedItem.mainItem.type})"
+                            : null,
                       ),
                     );
                   },

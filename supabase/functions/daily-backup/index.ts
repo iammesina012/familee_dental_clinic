@@ -151,9 +151,10 @@ async function createBackupForUser(supabase: any, userId: string, userEmail: str
     'purchase_orders',
     'notifications',
     'activity_logs',
-    'user_roles',
     'po_suggestions',
-    'stock_deduction_presets',
+    'stock_deduction_logs',
+    'stock_deduction_approvals',
+    'recipient_suggestions',
   ]
 
   const collections: Record<string, any[]> = {}
@@ -300,4 +301,3 @@ async function logBackupActivity(supabase: any, userId: string, filename: string
     console.error('Error logging backup activity:', error)
   }
 }
-

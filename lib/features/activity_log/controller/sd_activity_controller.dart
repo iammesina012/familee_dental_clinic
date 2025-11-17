@@ -178,22 +178,108 @@ class SdActivityController {
     );
   }
 
-  /// Log stock revert (undo) activities
-  Future<void> logStockReverted({
-    required String itemName,
-    required String brand,
-    required int quantity,
-    required String supplier,
+  /// Log stock deduction approval approved
+  Future<void> logApprovalApproved({
+    required String purpose,
+    required List<Map<String, dynamic>> supplies,
+    String? remarks,
   }) async {
     await _logActivity(
-      action: 'stock_reverted',
+      action: 'stock_deduction_approved',
       category: 'Stock Deduction',
-      description: 'Stocks Reverted',
+      description: 'Approved: $purpose',
       metadata: {
-        'itemName': itemName,
-        'brand': brand,
-        'quantity': quantity,
-        'supplier': supplier,
+        'purpose': purpose,
+        'remarks': remarks ?? '',
+        'suppliesCount': supplies.length,
+        'supplies': supplies.map((supply) {
+          // Format expiry
+          final noExpiry = supply['noExpiry'] == true;
+          String expiryStr = 'No Expiry';
+          if (!noExpiry && supply['expiry'] != null) {
+            final expiry = supply['expiry'].toString().trim();
+            if (expiry.isNotEmpty) {
+              expiryStr = expiry;
+            }
+          }
+
+          // Format packaging content/unit
+          final packagingContentQuantity = supply['packagingContentQuantity'];
+          final packagingContent = supply['packagingContent'];
+          final packagingUnit = supply['packagingUnit'];
+          String packagingStr = '';
+          if (packagingContent != null &&
+              packagingContent.toString().isNotEmpty &&
+              packagingUnit != null &&
+              packagingUnit.toString().isNotEmpty) {
+            packagingStr =
+                '${packagingContentQuantity ?? ''} ${packagingContent} per $packagingUnit';
+          } else if (packagingUnit != null &&
+              packagingUnit.toString().isNotEmpty) {
+            packagingStr = packagingUnit.toString();
+          }
+
+          return {
+            'supplyName': supply['name'] ?? 'Unknown',
+            'expiry': expiryStr,
+            'packagingContentUnit': packagingStr,
+            'purpose': supply['purpose'] ?? purpose,
+            'quantityToDeduct': supply['quantity'] ?? 0,
+          };
+        }).toList(),
+      },
+    );
+  }
+
+  /// Log stock deduction approval rejected
+  Future<void> logApprovalRejected({
+    required String purpose,
+    required List<Map<String, dynamic>> supplies,
+    String? remarks,
+  }) async {
+    await _logActivity(
+      action: 'stock_deduction_rejected',
+      category: 'Stock Deduction',
+      description: 'Rejected: $purpose',
+      metadata: {
+        'purpose': purpose,
+        'remarks': remarks ?? '',
+        'suppliesCount': supplies.length,
+        'supplies': supplies.map((supply) {
+          // Format expiry
+          final noExpiry = supply['noExpiry'] == true;
+          String expiryStr = 'No Expiry';
+          if (!noExpiry && supply['expiry'] != null) {
+            final expiry = supply['expiry'].toString().trim();
+            if (expiry.isNotEmpty) {
+              expiryStr = expiry;
+            }
+          }
+
+          // Format packaging content/unit
+          final packagingContentQuantity = supply['packagingContentQuantity'];
+          final packagingContent = supply['packagingContent'];
+          final packagingUnit = supply['packagingUnit'];
+          String packagingStr = '';
+          if (packagingContent != null &&
+              packagingContent.toString().isNotEmpty &&
+              packagingUnit != null &&
+              packagingUnit.toString().isNotEmpty) {
+            packagingStr =
+                '${packagingContentQuantity ?? ''} ${packagingContent} per $packagingUnit';
+          } else if (packagingUnit != null &&
+              packagingUnit.toString().isNotEmpty) {
+            packagingStr = packagingUnit.toString();
+          }
+
+          return {
+            'supplyName': supply['name'] ?? 'Unknown',
+            'expiry': expiryStr,
+            'packagingContentUnit': packagingStr,
+            'purpose': supply['purpose'] ?? purpose,
+            'quantityToDeduct': supply['quantity'] ?? 0,
+          };
+        }).toList(),
       },
     );
   }
@@ -210,13 +296,41 @@ class SdActivityController {
       metadata: {
         'purpose': purpose,
         'suppliesCount': supplies.length,
-        'supplies': supplies
-            .map((supply) => {
-                  'supplyName': supply['name'] ?? 'Unknown',
-                  'brand': supply['brand'] ?? 'Unknown',
-                  'supplier': supply['supplier'] ?? 'Unknown',
-                })
-            .toList(),
+        'supplies': supplies.map((supply) {
+          // Format expiry
+          final noExpiry = supply['noExpiry'] == true;
+          String expiryStr = 'No Expiry';
+          if (!noExpiry && supply['expiry'] != null) {
+            final expiry = supply['expiry'].toString().trim();
+            if (expiry.isNotEmpty) {
+              expiryStr = expiry;
+            }
+          }
+
+          // Format packaging content/unit
+          final packagingContentQuantity = supply['packagingContentQuantity'];
+          final packagingContent = supply['packagingContent'];
+          final packagingUnit = supply['packagingUnit'];
+          String packagingStr = '';
+          if (packagingContent != null &&
+              packagingContent.toString().isNotEmpty &&
+              packagingUnit != null &&
+              packagingUnit.toString().isNotEmpty) {
+            packagingStr =
+                '${packagingContentQuantity ?? ''} ${packagingContent} per $packagingUnit';
+          } else if (packagingUnit != null &&
+              packagingUnit.toString().isNotEmpty) {
+            packagingStr = packagingUnit.toString();
+          }
+
+          return {
+            'supplyName': supply['name'] ?? 'Unknown',
+            'expiry': expiryStr,
+            'packagingContentUnit': packagingStr,
+            'purpose': supply['purpose'] ?? purpose,
+            'quantityToDeduct': supply['quantity'] ?? supply['deductQty'] ?? 0,
+          };
+        }).toList(),
       },
     );
   }

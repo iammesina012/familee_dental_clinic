@@ -10,7 +10,6 @@ import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/auth/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/controller/catalog_controller.dart';
-import 'package:familee_dental/features/stock_deduction/controller/sd_logs_controller.dart';
 import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 
@@ -29,6 +28,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
 
   String? _userName;
   String? _userRole;
+  String? _savedRemarks; // Store remarks from rejected approvals
 
   @override
   void initState() {
@@ -37,7 +37,33 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _currentRoute = ModalRoute.of(context);
       _prePopulateCaches();
+      _checkForRestoredDeductions();
     });
+  }
+
+  void _checkForRestoredDeductions() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map<String, dynamic> && args['restoredDeductions'] is List) {
+      final restoredDeductions = args['restoredDeductions'] as List<dynamic>;
+      // Store remarks if provided
+      if (args['remarks'] != null) {
+        _savedRemarks = args['remarks'].toString().trim();
+      }
+      if (restoredDeductions.isNotEmpty) {
+        setState(() {
+          for (final deduction in restoredDeductions) {
+            if (deduction is Map<String, dynamic>) {
+              // Check for duplicates before adding
+              final docId = deduction['docId']?.toString();
+              if (docId != null &&
+                  !_deductions.any((d) => d['docId'] == docId)) {
+                _deductions.add(Map<String, dynamic>.from(deduction));
+              }
+            }
+          }
+        });
+      }
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -92,6 +118,8 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
       _currentRoute = newRoute;
       // Remove undo banner when navigating away from this page
       _removeUndoOverlay();
+      // Check for restored deductions when route changes
+      _checkForRestoredDeductions();
     }
   }
 
@@ -199,7 +227,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
 
   // Intentionally no snackbar/info popups here for duplicates; handled in Add Supply page
 
-  Future<void> _save() async {
+  Future<void> _save({String remarks = ''}) async {
     if (_deductions.isEmpty) return;
 
     final hasMissingPurpose = _deductions.any((deduction) {
@@ -253,7 +281,7 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             purpose, // Use purpose as preset_name for direct deductions
         'supplies': supplies,
         'purpose': purpose,
-        'remarks': '',
+        'remarks': remarks,
       });
 
       // Clear the deductions list since they've been sent for approval
@@ -391,40 +419,119 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   }
 
   Future<bool> _confirmLeave() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final shouldLeave = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Discard changes?',
-            style:
-                AppFonts.sfProStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          content: Text(
-            'You have supplies added. If you leave this page, your list will be cleared.',
-            style: AppFonts.sfProStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Stay',
-                style:
-                    AppFonts.sfProStyle(fontSize: 16, color: Colors.grey[700]),
-              ),
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: Text(
-                'Leave',
-                style: AppFonts.sfProStyle(
-                    fontSize: 16,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.warning_amber_outlined,
+                    color: Colors.red,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Discard changes?',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white),
-              ),
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'You have supplies added. If you leave this page, your list will be cleared.',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          'Leave',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: isDark
+                                  ? Colors.grey.shade600
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          'Stay',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodyMedium?.color,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -1540,121 +1647,192 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
 
   Future<void> _confirmDeductAndSave() async {
     if (_deductions.isEmpty) return;
-    final confirmed = await _showDeductConfirmationDialog(context);
-    if (confirmed != true) return;
-    await _save();
+    final remarks = await _showDeductConfirmationDialog(context);
+    if (remarks == null) return; // User cancelled
+    // Clear saved remarks after using them
+    _savedRemarks = null;
+    await _save(remarks: remarks);
   }
 
-  Future<bool> _showDeductConfirmationDialog(BuildContext context) async {
+  Future<String?> _showDeductConfirmationDialog(BuildContext context) async {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final TextEditingController remarksController =
+        TextEditingController(text: _savedRemarks ?? '');
 
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 400,
-                  minWidth: 350,
-                ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.playlist_remove,
-                        size: 36,
-                        color: Colors.red,
-                      ),
+    return await showDialog<String?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+              maxHeight: 600,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Confirm Deduction',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      textAlign: TextAlign.center,
+                    child: const Icon(
+                      Icons.playlist_remove,
+                      size: 36,
+                      color: Colors.red,
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Are you sure you want to send this deduction request for approval?',
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Confirm Deduction',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: theme.textTheme.titleLarge?.color,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'This will deduct all listed supplies for this period.',
+                    style: AppFonts.sfProStyle(
+                      fontSize: 16,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Remarks (optional)',
                       style: AppFonts.sfProStyle(
-                        fontSize: 16,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                         color: theme.textTheme.bodyMedium?.color,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: remarksController,
+                    maxLines: 3,
+                    maxLength: 500,
+                    decoration: InputDecoration(
+                      hintText:
+                          'ex. Monthly stock count – Nov 2025, expired items disposed',
+                      hintStyle: AppFonts.sfProStyle(
+                        fontSize: 14,
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF00D4AA),
+                          width: 2,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: isDark
+                          ? Colors.grey[800]?.withOpacity(0.3)
+                          : Colors.grey[50],
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                    ),
+                    style: AppFonts.sfProStyle(
+                      fontSize: 14,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            final remarks = remarksController.text.trim();
+                            Navigator.of(context).pop(remarks);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text(
-                              'Yes',
-                              style: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                          ),
+                          child: Text(
+                            'Yes',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              'No',
-                              style: AppFonts.sfProStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: theme.textTheme.bodyMedium?.color,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(null),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(
+                                color: isDark
+                                    ? Colors.grey.shade600
+                                    : Colors.grey.shade300,
                               ),
                             ),
                           ),
+                          child: Text(
+                            'No',
+                            style: AppFonts.sfProStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            );
-          },
-        ) ??
-        false;
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -1808,13 +1986,11 @@ class _PurposeSelectionDialog extends StatefulWidget {
 class _PurposeSelectionDialogState extends State<_PurposeSelectionDialog> {
   String? selectedPurpose;
   final TextEditingController otherPurposeController = TextEditingController();
-  final TextEditingController remarksController = TextEditingController();
   bool showOtherField = false;
 
   @override
   void dispose() {
     otherPurposeController.dispose();
-    remarksController.dispose();
     super.dispose();
   }
 
@@ -1916,52 +2092,6 @@ class _PurposeSelectionDialogState extends State<_PurposeSelectionDialog> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    Text(
-                      'Remarks',
-                      style: AppFonts.sfProStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: remarksController,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: 'Add remarks (optional)',
-                        hintStyle: AppFonts.sfProStyle(
-                          fontSize: 14,
-                          color: theme.textTheme.bodySmall?.color
-                              ?.withOpacity(0.6),
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: theme.dividerColor.withOpacity(0.3),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: theme.dividerColor.withOpacity(0.3),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF00D4AA),
-                            width: 2,
-                          ),
-                        ),
-                        filled: true,
-                        fillColor: isDark
-                            ? theme.colorScheme.surface
-                            : Colors.grey[50],
-                        contentPadding: const EdgeInsets.all(12),
-                      ),
-                      style: AppFonts.sfProStyle(fontSize: 14),
-                    ),
                   ],
                 ),
               ),
@@ -2007,10 +2137,8 @@ class _PurposeSelectionDialogState extends State<_PurposeSelectionDialog> {
                           final purpose = selectedPurpose == 'Other'
                               ? otherPurposeController.text.trim()
                               : selectedPurpose!;
-                          final remarks = remarksController.text.trim();
                           Navigator.of(context).pop({
                             'purpose': purpose,
-                            'remarks': remarks.isEmpty ? null : remarks,
                           });
                         },
                   style: ElevatedButton.styleFrom(

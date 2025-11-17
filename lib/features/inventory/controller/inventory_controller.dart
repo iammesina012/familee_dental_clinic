@@ -375,11 +375,12 @@ class InventoryController {
   List<GroupedInventoryItem> _groupItems(List<InventoryItem> items) {
     final Map<String, List<InventoryItem>> grouped = {};
 
-    // Group items by name + category (normalize to avoid case/whitespace mismatches)
+    // Group items by name + category + type (normalize to avoid case/whitespace mismatches)
     for (final item in items) {
       final nameKey = (item.name).trim().toLowerCase();
       final categoryKey = (item.category).trim().toLowerCase();
-      final key = '${nameKey}_${categoryKey}';
+      final typeKey = (item.type ?? '').trim().toLowerCase();
+      final key = '${nameKey}_${categoryKey}_$typeKey';
       if (!grouped.containsKey(key)) {
         grouped[key] = [];
       }
@@ -468,8 +469,10 @@ class InventoryController {
   Stream<List<InventoryItem>> getProductVariants(String productKey) {
     return getSuppliesStream().map((items) {
       return items.where((item) {
-        final key =
-            '${item.name.trim().toLowerCase()}_${item.category.trim().toLowerCase()}';
+        final nameKey = item.name.trim().toLowerCase();
+        final categoryKey = item.category.trim().toLowerCase();
+        final typeKey = (item.type ?? '').trim().toLowerCase();
+        final key = '${nameKey}_${categoryKey}_$typeKey';
         return key == productKey;
       }).toList();
     });

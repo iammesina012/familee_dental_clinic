@@ -43,9 +43,10 @@ class BackupRestoreService {
     'purchase_orders',
     'notifications',
     'activity_logs',
-    'user_roles',
     'po_suggestions',
     'stock_deduction_logs',
+    'stock_deduction_approvals',
+    'recipient_suggestions',
   ];
 
   BackupRestoreService({
@@ -87,29 +88,32 @@ class BackupRestoreService {
         <String, List<Map<String, dynamic>>>{};
     int processed = 0;
 
-    for (final String table in _allTables) {
-      final List<Map<String, dynamic>> items = <Map<String, dynamic>>[];
-
+    // Query all tables in parallel for faster backup creation
+    final List<Future<void>> futures = _allTables.map((table) async {
       try {
         final response =
             await _supabase.from(table).select('*').order('id').limit(pageSize);
 
-        for (final item in response) {
-          items.add({
-            'id': item['id']?.toString() ?? '',
-            'data': item,
-          });
-        }
+        final items = (response as List)
+            .map((item) => {
+                  'id': item['id']?.toString() ?? '',
+                  'data': item,
+                })
+            .toList();
 
+        tables[table] = items;
+
+        // Update progress atomically
         processed += items.length;
         if (onProgress != null) onProgress(processed);
       } catch (e) {
         print('Error backing up table $table: $e');
-        // Continue with other tables even if one fails
+        tables[table] = [];
       }
+    }).toList();
 
-      tables[table] = items;
-    }
+    // Wait for all table queries to complete in parallel
+    await Future.wait(futures);
 
     // Compute a simple checksum of the tables content to detect no-op backups
     final String tablesJsonForHash = jsonEncode(tables);
@@ -244,12 +248,17 @@ class BackupRestoreService {
     });
     int processed = 0;
 
-    // Process each table
+    // Process each table for true restore: delete ALL existing data, then insert backup data
+    // This ensures the database exactly matches the backup state
+    const int batchSize = 100;
     for (final entry in tablesMap.entries) {
       final String table = entry.key;
       final dynamic listDyn = entry.value;
 
       if (listDyn is! List) continue;
+
+      // Collect all backup data for this table
+      final List<Map<String, dynamic>> allItems = <Map<String, dynamic>>[];
 
       for (final item in listDyn) {
         if (item is! Map<String, dynamic>) {
@@ -266,24 +275,175 @@ class BackupRestoreService {
           continue;
         }
 
+        // Ensure id is in the data map for proper insert
+        final Map<String, dynamic> itemData =
+            Map<String, dynamic>.from(dataDyn);
+        itemData['id'] = id; // Explicitly set id in data
+        allItems.add(itemData);
+      }
+
+      // Delete ALL existing rows from this table (true restore - removes everything not in backup)
+      // This is critical - we must delete everything before inserting backup data
+      bool deleteSuccessful = false;
+      int deleteAttempts = 0;
+      const int maxDeleteAttempts = 3;
+
+      while (!deleteSuccessful && deleteAttempts < maxDeleteAttempts) {
         try {
-          // Use upsert to handle both insert and update
-          await _supabase.from(table).upsert(
-                Map<String, dynamic>.from(dataDyn),
-                onConflict: 'id',
-              );
+          deleteAttempts++;
+          print('Delete attempt $deleteAttempts for table $table');
+
+          // First, get all existing IDs
+          final existingRows = await _supabase.from(table).select('id');
+
+          if (existingRows.isEmpty) {
+            print('Table $table is already empty');
+            deleteSuccessful = true;
+            break;
+          }
+
+          final List<String> existingIds = existingRows
+              .map((row) => row['id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList();
+
+          print(
+              'Found ${existingIds.length} existing rows in table $table - deleting...');
+
+          // Delete in batches to avoid query size limits
+          for (int i = 0; i < existingIds.length; i += batchSize) {
+            final batchIds = existingIds.sublist(
+                i,
+                (i + batchSize < existingIds.length)
+                    ? i + batchSize
+                    : existingIds.length);
+
+            await _supabase.from(table).delete().inFilter('id', batchIds);
+            print('Deleted batch ${i ~/ batchSize + 1} from table $table');
+          }
+
+          // Verify delete worked by checking if table is now empty
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          final verifyRows = await _supabase.from(table).select('id');
+
+          if (verifyRows.isEmpty) {
+            print('✓ Successfully deleted all rows from table $table');
+            deleteSuccessful = true;
+          } else {
+            print(
+                '⚠ Warning: Table $table still has ${verifyRows.length} rows after delete. Retrying...');
+            if (deleteAttempts < maxDeleteAttempts) {
+              await Future<void>.delayed(const Duration(milliseconds: 500));
+            }
+          }
         } catch (e) {
-          print('Error restoring item $id to table $table: $e');
-          // Continue with other items even if one fails
-        }
+          print(
+              'Error deleting rows from table $table (attempt $deleteAttempts): $e');
 
-        processed++;
-        if (onProgress != null) onProgress(processed, total);
+          // Try fallback method
+          if (deleteAttempts < maxDeleteAttempts) {
+            try {
+              print('Trying fallback delete method for table $table...');
+              await _supabase.from(table).delete().neq('id', '');
+              await Future<void>.delayed(const Duration(milliseconds: 200));
 
-        // Simple throttling to avoid rate limits
-        if (processed % 100 == 0) {
-          await Future<void>.delayed(const Duration(milliseconds: 100));
+              final verifyRows = await _supabase.from(table).select('id');
+              if (verifyRows.isEmpty) {
+                print('✓ Fallback delete succeeded for table $table');
+                deleteSuccessful = true;
+              }
+            } catch (e2) {
+              print('Fallback delete also failed for table $table: $e2');
+            }
+          }
         }
+      }
+
+      if (!deleteSuccessful) {
+        print(
+            '⚠ WARNING: Could not fully delete all rows from table $table after $maxDeleteAttempts attempts');
+        print('⚠ Proceeding with restore, but some existing data may remain');
+      }
+
+      // Collect backup IDs for cleanup after insert
+      final Set<String> backupIds = allItems
+          .map((item) => item['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      // Insert all backup data in batches
+      if (allItems.isNotEmpty) {
+        print('Restoring ${allItems.length} items to table $table');
+        for (int i = 0; i < allItems.length; i += batchSize) {
+          try {
+            final batch = allItems.sublist(
+                i,
+                (i + batchSize < allItems.length)
+                    ? i + batchSize
+                    : allItems.length);
+
+            await _supabase.from(table).upsert(batch, onConflict: 'id');
+
+            processed += batch.length;
+            if (onProgress != null) onProgress(processed, total);
+
+            // Small delay to avoid rate limits
+            if (i + batchSize < allItems.length) {
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+            }
+          } catch (e) {
+            print('Error restoring batch to table $table: $e');
+            // Mark items as processed even if batch failed
+            final batchSizeActual = (i + batchSize < allItems.length)
+                ? batchSize
+                : allItems.length - i;
+            processed += batchSizeActual;
+            if (onProgress != null) onProgress(processed, total);
+          }
+        }
+      }
+
+      // CRITICAL: Delete any rows that exist but weren't in the backup
+      // This ensures a true restore - removes gibberish/new items added after backup
+      try {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        final allCurrentRows = await _supabase.from(table).select('id');
+
+        if (allCurrentRows.isNotEmpty) {
+          final List<String> rowsToDelete = [];
+
+          for (final row in allCurrentRows) {
+            final rowId = row['id']?.toString() ?? '';
+            if (rowId.isNotEmpty && !backupIds.contains(rowId)) {
+              // This row exists in DB but wasn't in backup - delete it
+              rowsToDelete.add(rowId);
+            }
+          }
+
+          if (rowsToDelete.isNotEmpty) {
+            print(
+                'Found ${rowsToDelete.length} rows in table $table that were not in backup - deleting...');
+
+            // Delete in batches
+            for (int i = 0; i < rowsToDelete.length; i += batchSize) {
+              final batchIds = rowsToDelete.sublist(
+                  i,
+                  (i + batchSize < rowsToDelete.length)
+                      ? i + batchSize
+                      : rowsToDelete.length);
+
+              await _supabase.from(table).delete().inFilter('id', batchIds);
+              print(
+                  'Deleted ${batchIds.length} orphaned rows from table $table');
+            }
+
+            print(
+                '✓ Cleaned up ${rowsToDelete.length} rows from table $table that were not in backup');
+          }
+        }
+      } catch (e) {
+        print('Error cleaning up orphaned rows from table $table: $e');
+        // Continue even if cleanup fails - at least backup data is restored
       }
     }
 

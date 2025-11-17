@@ -344,12 +344,11 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
             final bool hasCached =
                 cachedForDate.isNotEmpty || _lastKnownLogs.isNotEmpty;
 
-            // Show skeleton loader only if no cached data AND no live data AND first load
+            // Show skeleton loader only if still waiting for initial data
+            // Don't show if data has been emitted (even if empty) or if cached data exists
             final bool showSkeleton = (_hasConnection != false) &&
                 _isFirstLoad &&
-                (snapshot.connectionState == ConnectionState.waiting ||
-                    snapshot.connectionState == ConnectionState.active) &&
-                !hasLive &&
+                !snapshot.hasData &&
                 !hasCached;
 
             if (showSkeleton) {
@@ -813,6 +812,55 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
                           supply: supply,
                         );
                       }).toList(),
+
+                    // Remarks Section (only show if remarks exist)
+                    if (log['remarks'] != null &&
+                        log['remarks'].toString().trim().isNotEmpty) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Remarks:',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          log['remarks'].toString().trim(),
+                          style: AppFonts.sfProStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    // Deducted by section
+                    if (log['created_by_name'] != null &&
+                        log['created_by_name']
+                            .toString()
+                            .trim()
+                            .isNotEmpty) ...[
+                      const SizedBox(height: 34),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Deducted by ${log['created_by_name'].toString().trim()}',
+                          style: AppFonts.sfProStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodySmall?.color
+                                ?.withOpacity(0.7),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

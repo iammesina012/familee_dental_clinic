@@ -81,6 +81,8 @@ class ApprovalController {
       'remarks': row['remarks'],
       'status': row['status'] ?? 'pending',
       'created_at': row['created_at']?.toString(),
+      'deducted_by': row['deducted_by'],
+      'deducted_by_name': row['deducted_by_name'],
     };
   }
 
@@ -202,6 +204,39 @@ class ApprovalController {
         createdAt = DateTime.now().toUtc();
       }
 
+      // Get current user info
+      final currentUser = _supabase.auth.currentUser;
+      String? deductedByName;
+
+      if (currentUser != null) {
+        // Try to get user name from user_roles table
+        try {
+          final userResponse = await _supabase
+              .from('user_roles')
+              .select('name')
+              .eq('id', currentUser.id)
+              .maybeSingle();
+
+          if (userResponse != null &&
+              userResponse['name'] != null &&
+              userResponse['name'].toString().trim().isNotEmpty) {
+            deductedByName = userResponse['name'].toString().trim();
+          } else {
+            // Fallback to metadata or email
+            final displayName =
+                currentUser.userMetadata?['display_name']?.toString().trim();
+            final emailName = currentUser.email?.split('@')[0].trim();
+            deductedByName = displayName ?? emailName ?? 'Unknown User';
+          }
+        } catch (_) {
+          // Fallback if user_roles lookup fails
+          final displayName =
+              currentUser.userMetadata?['display_name']?.toString().trim();
+          final emailName = currentUser.email?.split('@')[0].trim();
+          deductedByName = displayName ?? emailName ?? 'Unknown User';
+        }
+      }
+
       final dataToSave = <String, dynamic>{
         'preset_name': approvalData['presetName'] ??
             approvalData['preset_name'] ??
@@ -212,6 +247,8 @@ class ApprovalController {
         'purpose': approvalData['purpose'] ?? '',
         'remarks': approvalData['remarks'] ?? '',
         'created_at': createdAt.toIso8601String(),
+        'deducted_by': currentUser?.id,
+        'deducted_by_name': deductedByName,
       };
 
       await _supabase.from(_table).insert(dataToSave);
@@ -249,6 +286,8 @@ class ApprovalController {
         'remarks': response['remarks'],
         'status': response['status'] ?? 'pending',
         'created_at': response['created_at'],
+        'deducted_by': response['deducted_by'],
+        'deducted_by_name': response['deducted_by_name'],
       };
     } catch (e) {
       return null;
