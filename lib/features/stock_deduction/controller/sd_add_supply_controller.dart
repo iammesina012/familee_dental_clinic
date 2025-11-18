@@ -83,10 +83,29 @@ class SdAddSupplyController {
   ) {
     if (searchText.isEmpty) return groups;
 
-    return groups
-        .where((g) =>
-            g.mainItem.name.toLowerCase().contains(searchText.toLowerCase()))
-        .toList();
+    final lowerSearch = searchText.toLowerCase();
+    return groups.where((g) {
+      // Check main item name
+      if (g.mainItem.name.toLowerCase().contains(lowerSearch)) {
+        return true;
+      }
+      // Check if any variant has matching name or type
+      for (final variant in g.variants) {
+        if (variant.name.toLowerCase().contains(lowerSearch)) {
+          return true;
+        }
+        if (variant.type != null &&
+            variant.type!.toLowerCase().contains(lowerSearch)) {
+          return true;
+        }
+      }
+      // Check main item type
+      if (g.mainItem.type != null &&
+          g.mainItem.type!.toLowerCase().contains(lowerSearch)) {
+        return true;
+      }
+      return false;
+    }).toList();
   }
 
   // Format expiry date for display

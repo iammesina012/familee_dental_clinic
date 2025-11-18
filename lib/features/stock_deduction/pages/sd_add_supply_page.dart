@@ -491,204 +491,6 @@ class _StockDeductionAddSupplyPageState
     );
   }
 
-  Future<InventoryItem?> _showTypeSelectionDialog(
-    BuildContext context,
-    GroupedInventoryItem groupedItem,
-    List<InventoryItem> validBatches,
-  ) async {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    // Group batches by type
-    final Map<String?, List<InventoryItem>> batchesByType = {};
-    for (final batch in validBatches) {
-      final type = batch.type;
-      if (!batchesByType.containsKey(type)) {
-        batchesByType[type] = [];
-      }
-      batchesByType[type]!.add(batch);
-    }
-
-    // Sort batches within each type by expiry (earliest first)
-    for (final typeBatches in batchesByType.values) {
-      typeBatches.sort((a, b) {
-        if (a.noExpiry && b.noExpiry) return 0;
-        if (a.noExpiry) return 1;
-        if (b.noExpiry) return -1;
-
-        final aExpiry = a.expiry != null
-            ? DateTime.tryParse(a.expiry!.replaceAll('/', '-'))
-            : null;
-        final bExpiry = b.expiry != null
-            ? DateTime.tryParse(b.expiry!.replaceAll('/', '-'))
-            : null;
-
-        if (aExpiry == null && bExpiry == null) return 0;
-        if (aExpiry == null) return 1;
-        if (bExpiry == null) return -1;
-        return aExpiry.compareTo(bExpiry);
-      });
-    }
-
-    return await showDialog<InventoryItem>(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Select Type',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: theme.textTheme.titleLarge?.color,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${groupedItem.mainItem.name}',
-                  style: AppFonts.sfProStyle(
-                    fontSize: 14,
-                    color: theme.textTheme.bodyMedium?.color,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: batchesByType.length,
-                    itemBuilder: (context, index) {
-                      final type = batchesByType.keys.elementAt(index);
-                      final batches = batchesByType[type]!;
-
-                      // Calculate total stock for this type
-                      final totalStock = batches.fold<int>(
-                          0, (sum, batch) => sum + batch.stock);
-
-                      // If multiple batches exist for this type, show batch selection
-                      final hasMultipleBatches = batches.length > 1;
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        color: theme.colorScheme.surface,
-                        child: InkWell(
-                          onTap: () async {
-                            // Always show batch selection dialog
-                            final selectedBatch =
-                                await _showBatchSelectionDialog(
-                              context,
-                              groupedItem.mainItem.name,
-                              type,
-                              batches,
-                            );
-                            // If batch was selected, return it and close type dialog
-                            if (selectedBatch != null) {
-                              Navigator.of(context).pop(selectedBatch);
-                            }
-                            // If cancelled, just close batch dialog (type dialog remains open)
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        type != null && type.isNotEmpty
-                                            ? '${groupedItem.mainItem.name}($type)'
-                                            : groupedItem.mainItem.name,
-                                        style: AppFonts.sfProStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color:
-                                              theme.textTheme.bodyLarge?.color,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            'Stock: $totalStock',
-                                            style: AppFonts.sfProStyle(
-                                              fontSize: 14,
-                                              color: theme
-                                                  .textTheme.bodyMedium?.color,
-                                            ),
-                                          ),
-                                          if (hasMultipleBatches) ...[
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: theme.colorScheme.primary
-                                                    .withOpacity(0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                              child: Text(
-                                                '${batches.length} batches',
-                                                style: AppFonts.sfProStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w500,
-                                                  color:
-                                                      theme.colorScheme.primary,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_forward_ios,
-                                    size: 16, color: Colors.grey),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text(
-                        'Cancel',
-                        style: AppFonts.sfProStyle(fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -910,6 +712,77 @@ class _StockDeductionAddSupplyPageState
                         );
                       }
 
+                      // Flatten grouped items by type - each type gets its own card
+                      final List<Map<String, dynamic>> flattenedItems = [];
+                      for (final groupedItem in filtered) {
+                        final allBatches = [
+                          groupedItem.mainItem,
+                          ...groupedItem.variants
+                        ];
+
+                        // Group batches by type
+                        final Map<String?, List<InventoryItem>> batchesByType =
+                            {};
+                        for (final batch in allBatches) {
+                          final typeKey =
+                              (batch.type != null && batch.type!.isNotEmpty)
+                                  ? batch.type
+                                  : null;
+                          batchesByType[typeKey] ??= [];
+                          batchesByType[typeKey]!.add(batch);
+                        }
+
+                        // Create a card for each type
+                        for (final entry in batchesByType.entries) {
+                          final type = entry.key;
+                          final typeBatches = entry.value;
+
+                          // Find the earliest expiry item with stock for display
+                          final validBatches = typeBatches
+                              .where((batch) => batch.stock > 0)
+                              .toList();
+
+                          // Sort by expiry (earliest first, no expiry last)
+                          validBatches.sort((a, b) {
+                            if (a.noExpiry && b.noExpiry) return 0;
+                            if (a.noExpiry) return 1;
+                            if (b.noExpiry) return -1;
+
+                            final aExpiry = a.expiry != null
+                                ? DateTime.tryParse(
+                                    a.expiry!.replaceAll('/', '-'))
+                                : null;
+                            final bExpiry = b.expiry != null
+                                ? DateTime.tryParse(
+                                    b.expiry!.replaceAll('/', '-'))
+                                : null;
+
+                            if (aExpiry == null && bExpiry == null) return 0;
+                            if (aExpiry == null) return 1;
+                            if (bExpiry == null) return -1;
+                            return aExpiry.compareTo(bExpiry);
+                          });
+
+                          // Use earliest expiry item for display, fallback to first batch if no valid batches
+                          final InventoryItem displayItem =
+                              validBatches.isNotEmpty
+                                  ? validBatches.first
+                                  : typeBatches.first;
+
+                          // Calculate total stock for this type
+                          final totalStock = typeBatches.fold<int>(
+                              0, (sum, batch) => sum + batch.stock);
+
+                          flattenedItems.add({
+                            'displayItem': displayItem,
+                            'type': type,
+                            'typeBatches': typeBatches,
+                            'groupedItem': groupedItem,
+                            'totalStock': totalStock,
+                          });
+                        }
+                      }
+
                       return LayoutBuilder(
                         builder: (context, constraints) {
                           return GridView.builder(
@@ -925,49 +798,23 @@ class _StockDeductionAddSupplyPageState
                               // Taller tiles to better fit long names
                               childAspectRatio: 0.75,
                             ),
-                            itemCount: filtered.length,
+                            itemCount: flattenedItems.length,
                             itemBuilder: (context, index) {
-                              final groupedItem = filtered[index];
+                              final itemData = flattenedItems[index];
+                              final displayItem =
+                                  itemData['displayItem'] as InventoryItem;
+                              final type = itemData['type'] as String?;
+                              final typeBatches = itemData['typeBatches']
+                                  as List<InventoryItem>;
+                              final groupedItem = itemData['groupedItem']
+                                  as GroupedInventoryItem;
+                              final totalStock = itemData['totalStock'] as int;
 
-                              // Find the earliest expiry item with stock for display
-                              final allBatches = [
-                                groupedItem.mainItem,
-                                ...groupedItem.variants
-                              ];
-                              final validBatches = allBatches
-                                  .where((batch) => batch.stock > 0)
-                                  .toList();
-
-                              // Sort by expiry (earliest first, no expiry last)
-                              validBatches.sort((a, b) {
-                                if (a.noExpiry && b.noExpiry) return 0;
-                                if (a.noExpiry) return 1;
-                                if (b.noExpiry) return -1;
-
-                                final aExpiry = a.expiry != null
-                                    ? DateTime.tryParse(
-                                        a.expiry!.replaceAll('/', '-'))
-                                    : null;
-                                final bExpiry = b.expiry != null
-                                    ? DateTime.tryParse(
-                                        b.expiry!.replaceAll('/', '-'))
-                                    : null;
-
-                                if (aExpiry == null && bExpiry == null)
-                                  return 0;
-                                if (aExpiry == null) return 1;
-                                if (bExpiry == null) return -1;
-                                return aExpiry.compareTo(bExpiry);
-                              });
-
-                              // Use earliest expiry item for display, fallback to mainItem if no valid batches
-                              final InventoryItem item = validBatches.isNotEmpty
-                                  ? validBatches.first
-                                  : groupedItem.mainItem;
                               return GestureDetector(
                                 onTap: () async {
-                                  if (_controller.isOutOfStock(item)) {
-                                    await _showOutOfStockDialog(item.name);
+                                  if (totalStock <= 0) {
+                                    await _showOutOfStockDialog(
+                                        displayItem.name);
                                     return;
                                   }
 
@@ -976,8 +823,11 @@ class _StockDeductionAddSupplyPageState
                                       InventoryItem selectedBatch) async {
                                     if (_controller.isDuplicate(
                                         selectedBatch.id, existingDocIds)) {
-                                      await _showDuplicateDialog(
-                                          selectedBatch.name);
+                                      final displayName =
+                                          type != null && type.isNotEmpty
+                                              ? '${displayItem.name} ($type)'
+                                              : displayItem.name;
+                                      await _showDuplicateDialog(displayName);
                                       return;
                                     }
                                     if (!mounted) return;
@@ -985,52 +835,20 @@ class _StockDeductionAddSupplyPageState
                                         _controller.toReturnMap(selectedBatch));
                                   }
 
-                                  // Check if there are multiple types/variants
-                                  final allBatches = [
-                                    groupedItem.mainItem,
-                                    ...groupedItem.variants
-                                  ];
-                                  final validBatches = allBatches
-                                      .where((batch) => batch.stock > 0)
-                                      .toList();
-
-                                  // Group batches by type (null/empty types are grouped together)
-                                  final Map<String?, List<InventoryItem>>
-                                      batchesByType = {};
-                                  for (final batch in validBatches) {
-                                    final typeKey = (batch.type != null &&
-                                            batch.type!.isNotEmpty)
-                                        ? batch.type
-                                        : null;
-                                    batchesByType[typeKey] ??= [];
-                                    batchesByType[typeKey]!.add(batch);
-                                  }
-
-                                  // If multiple types exist (including null as a type), show type selection dialog
-                                  if (batchesByType.length > 1) {
-                                    final selectedBatch =
-                                        await _showTypeSelectionDialog(
-                                            context, groupedItem, validBatches);
-                                    if (selectedBatch != null) {
-                                      await finalizeSelection(selectedBatch);
-                                    }
-                                  } else {
-                                    // Single type or no type - always show batch selection dialog
-                                    final singleTypeBatches =
-                                        batchesByType.values.first;
-                                    final selectedBatch =
-                                        await _showBatchSelectionDialog(
-                                      context,
-                                      groupedItem.mainItem.name,
-                                      batchesByType.keys.first,
-                                      singleTypeBatches,
-                                    );
-                                    if (selectedBatch != null) {
-                                      await finalizeSelection(selectedBatch);
-                                    }
+                                  // Go directly to batch selection for this specific type
+                                  final selectedBatch =
+                                      await _showBatchSelectionDialog(
+                                    context,
+                                    groupedItem.mainItem.name,
+                                    type,
+                                    typeBatches,
+                                  );
+                                  if (selectedBatch != null) {
+                                    await finalizeSelection(selectedBatch);
                                   }
                                 },
-                                child: _buildInventoryStyleCard(context, item),
+                                child: _buildInventoryStyleCard(
+                                    context, displayItem, type, totalStock),
                               );
                             },
                           );
@@ -1047,7 +865,8 @@ class _StockDeductionAddSupplyPageState
     );
   }
 
-  Widget _buildInventoryStyleCard(BuildContext context, InventoryItem item) {
+  Widget _buildInventoryStyleCard(
+      BuildContext context, InventoryItem item, String? type, int totalStock) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
@@ -1102,12 +921,14 @@ class _StockDeductionAddSupplyPageState
                 ),
                 const SizedBox(height: 16),
 
-                // Product Name
+                // Product Name with Type
                 Flexible(
                   child: SizedBox(
                     width: double.infinity,
                     child: Text(
-                      item.name,
+                      type != null && type.isNotEmpty
+                          ? '${item.name} ($type)'
+                          : item.name,
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,

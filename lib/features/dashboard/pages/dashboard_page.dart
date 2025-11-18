@@ -119,10 +119,10 @@ class _DashboardState extends State<Dashboard> {
             .maybeSingle();
 
         if (mounted) {
-            if (response != null &&
-                response['name'] != null &&
-                response['name'].toString().trim().isNotEmpty) {
-              // Use data from user_roles table
+          if (response != null &&
+              response['name'] != null &&
+              response['name'].toString().trim().isNotEmpty) {
+            // Use data from user_roles table
             final name = response['name'].toString().trim();
             final role = response['role']?.toString().trim() ?? 'Admin';
 
@@ -133,11 +133,11 @@ class _DashboardState extends State<Dashboard> {
 
             // Save to Hive for persistence
             await _userDataService.saveToHive(currentUser.id, name, role);
-            } else {
-              // Fallback to auth user data
-              final displayName =
-                  currentUser.userMetadata?['display_name']?.toString().trim();
-              final emailName = currentUser.email?.split('@')[0].trim();
+          } else {
+            // Fallback to auth user data
+            final displayName =
+                currentUser.userMetadata?['display_name']?.toString().trim();
+            final emailName = currentUser.email?.split('@')[0].trim();
             final name = displayName ?? emailName ?? 'User';
             final role = 'Admin';
 
@@ -938,350 +938,6 @@ class _DashboardState extends State<Dashboard> {
 
               const SizedBox(height: 12),
 
-              // Fast Moving Supply
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                margin: EdgeInsets.zero,
-                color: isDark
-                    ? const Color(0xFF2C2C2C)
-                    : theme.colorScheme.surface,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: isDark
-                        ? const Color(0xFF2C2C2C)
-                        : theme.colorScheme.surface,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header with icon, title, and subtitle
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.show_chart,
-                                      color: Colors.amber,
-                                      size: 24,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Fast Moving Supply (${_getDateRangeForPeriod(_selectedPeriod)})',
-                                      style: AppFonts.sfProStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color:
-                                            theme.textTheme.bodyMedium?.color,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // Info tooltip
-                                    Tooltip(
-                                      message:
-                                          'This shows which items are deducted from stock most often in the selected period. Higher bars mean that supply is used more frequently and may need closer monitoring or reordering.',
-                                      child: InkWell(
-                                        onTap: () {
-                                          // Show info dialog
-                                          showDialog(
-                                            context: context,
-                                            builder: (context) => AlertDialog(
-                                              contentPadding:
-                                                  const EdgeInsets.fromLTRB(
-                                                      24, 20, 24, 16),
-                                              title: Text(
-                                                'Fast Moving Supply',
-                                                style: AppFonts.sfProStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              content: ConstrainedBox(
-                                                constraints:
-                                                    const BoxConstraints(
-                                                        maxWidth: 500),
-                                                child: Text(
-                                                  'This shows which items are deducted from stock most often in the selected period. Higher bars mean that supply is used more frequently and may need closer monitoring or reordering.',
-                                                  style: AppFonts.sfProStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(context),
-                                                  child: Text(
-                                                    'Got it',
-                                                    style: AppFonts.sfProStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                        child: Icon(
-                                          Icons.info_outline,
-                                          size: 18,
-                                          color: theme.brightness ==
-                                                  Brightness.dark
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                // Period dropdown
-                                DropdownButton<String>(
-                                  value: (_selectedPeriod == 'Weekly' ||
-                                          _selectedPeriod == 'Monthly')
-                                      ? _selectedPeriod
-                                      : 'Weekly', // Fallback to Weekly if invalid
-                                  isDense: true,
-                                  underline:
-                                      Container(), // Remove default underline
-                                  icon: Icon(
-                                    Icons.arrow_drop_down,
-                                    color: theme.textTheme.bodyMedium?.color,
-                                    size: 20,
-                                  ),
-                                  style: AppFonts.sfProStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                  items: ['Weekly', 'Monthly']
-                                      .map((String period) {
-                                    return DropdownMenuItem<String>(
-                                      value: period,
-                                      child: Text(period),
-                                    );
-                                  }).toList(),
-                                  onChanged: (String? newValue) {
-                                    if (newValue != null &&
-                                        newValue != _selectedPeriod) {
-                                      // Check connectivity when period changes
-                                      _checkConnectivity();
-                                      setState(() {
-                                        _selectedPeriod = newValue;
-                                        _isPeriodChanging = true;
-                                      });
-                                      // Reset loading state after a delay to ensure skeleton is visible (only if online)
-                                      Future.delayed(
-                                          const Duration(milliseconds: 500),
-                                          () {
-                                        if (mounted) {
-                                          setState(() {
-                                            _isPeriodChanging = false;
-                                          });
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                            const SizedBox(
-                                height:
-                                    4), // Adjust this value to change spacing
-                            Padding(
-                              padding: const EdgeInsets.only(left: 32),
-                              child: Text(
-                                "Overview of frequently deducted supplies",
-                                style: AppFonts.sfProStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: theme.brightness == Brightness.dark
-                                      ? Colors.grey.shade400
-                                      : Colors.grey.shade600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        StreamBuilder<List<FastMovingItem>>(
-                          key: ValueKey(
-                              _selectedPeriod), // Force rebuild on period change
-                          stream: _fastMovingService.streamTopFastMovingItems(
-                            limit: 5,
-                            window: _getDurationForPeriod(_selectedPeriod),
-                          ),
-                          builder: (context, snapshot) {
-                            // Show skeleton loader only when online AND (period is changing OR waiting for data)
-                            // When offline, cached data shows immediately (no skeleton needed)
-                            final shouldShowSkeleton =
-                                (_hasConnection == true) &&
-                                    (_isPeriodChanging ||
-                                        (snapshot.connectionState ==
-                                                ConnectionState.waiting &&
-                                            !snapshot.hasData &&
-                                            !snapshot.hasError));
-
-                            if (shouldShowSkeleton) {
-                              final baseColor = isDark
-                                  ? Colors.grey[800]!
-                                  : Colors.grey[300]!;
-                              final highlightColor = isDark
-                                  ? Colors.grey[700]!
-                                  : Colors.grey[100]!;
-
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                child: Column(
-                                  children: List.generate(
-                                    5,
-                                    (index) => Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 6),
-                                      child: Shimmer.fromColors(
-                                        baseColor: baseColor,
-                                        highlightColor: highlightColor,
-                                        child: Container(
-                                          height: 48,
-                                          decoration: BoxDecoration(
-                                            color: isDark
-                                                ? Colors.grey[800]
-                                                : Colors.white,
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            // Handle gracefully - show cached data or empty state
-                            final items = snapshot.data ?? [];
-
-                            // Update last items if we have data
-                            if (items.isNotEmpty) {
-                              _lastFastMovingItems = items;
-                            }
-
-                            // If period is changing or waiting, use last data if available to prevent flashing
-                            final displayItems = (items.isEmpty &&
-                                    (_isPeriodChanging ||
-                                        snapshot.connectionState ==
-                                            ConnectionState.waiting) &&
-                                    _lastFastMovingItems != null)
-                                ? _lastFastMovingItems!
-                                : items;
-
-                            // Only show empty state if we have confirmed there's no data
-                            // Don't show empty if we're still waiting or have previous data to show
-                            if (displayItems.isEmpty &&
-                                !_isPeriodChanging &&
-                                snapshot.connectionState !=
-                                    ConnectionState.waiting) {
-                              return Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 48, horizontal: 24),
-                                  child: Text(
-                                    'No deductions recorded yet.',
-                                    style: AppFonts.sfProStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.textTheme.bodyMedium?.color
-                                          ?.withOpacity(0.7),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              );
-                            }
-
-                            // If we're waiting for new data but have old data, show old data
-                            // If we're waiting and have no old data, show skeleton (online) or wait (offline)
-                            if (displayItems.isEmpty &&
-                                (_isPeriodChanging ||
-                                    snapshot.connectionState ==
-                                        ConnectionState.waiting)) {
-                              if (_hasConnection == true) {
-                                // Show skeleton when online and waiting
-                                final baseColor = isDark
-                                    ? Colors.grey[800]!
-                                    : Colors.grey[300]!;
-                                final highlightColor = isDark
-                                    ? Colors.grey[700]!
-                                    : Colors.grey[100]!;
-
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  child: Column(
-                                    children: List.generate(
-                                      5,
-                                      (index) => Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 6),
-                                        child: Shimmer.fromColors(
-                                          baseColor: baseColor,
-                                          highlightColor: highlightColor,
-                                          child: Container(
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              color: isDark
-                                                  ? Colors.grey[800]
-                                                  : Colors.white,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }
-                              // If offline and no data yet, wait silently for cached data
-                              return const SizedBox.shrink();
-                            }
-
-                            // Find max value for scaling
-                            final maxValue = displayItems.isNotEmpty
-                                ? displayItems
-                                    .map((e) => e.quantityDeducted)
-                                    .reduce((a, b) => a > b ? a : b)
-                                : 1;
-
-                            return _buildBarChart(
-                              context: context,
-                              theme: theme,
-                              items: displayItems,
-                              maxValue: maxValue,
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
               // Usage Speed Card
               Card(
                 elevation: 0,
@@ -1372,11 +1028,11 @@ class _DashboardState extends State<Dashboard> {
                                                       fontSize: 14,
                                                       fontWeight:
                                                           FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           );
                                         },
                                         child: Icon(
@@ -2231,12 +1887,12 @@ class _DashboardState extends State<Dashboard> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Left side - Y-axis labels (supply name with brand)
+                // Left side - Y-axis labels (supply name with type)
                 SizedBox(
                   width: 150,
                   child: Text(
-                    item.brand.isNotEmpty
-                        ? '${item.name} (${item.brand})'
+                    item.type != null && item.type!.isNotEmpty
+                        ? '${item.name} (${item.type})'
                         : item.name,
                     style: AppFonts.sfProStyle(
                       fontSize: labelFontSize,
@@ -3137,34 +2793,6 @@ class _DashboardState extends State<Dashboard> {
                       context: context,
                       theme: theme,
                       isDark: isDark,
-                      label: 'Fast Moving Supply',
-                      isSelected: !allReportsSelected &&
-                          selectedReports.contains('Fast Moving Supply'),
-                      isDisabled: allReportsSelected,
-                      onTap: () {
-                        setState(() {
-                          if (allReportsSelected) {
-                            // Deselect "All reports" and select this option
-                            allReportsSelected = false;
-                            selectedReports = {'Fast Moving Supply'};
-                          } else {
-                            // Toggle this option
-                            if (selectedReports
-                                .contains('Fast Moving Supply')) {
-                              selectedReports.remove('Fast Moving Supply');
-                            } else {
-                              selectedReports.add('Fast Moving Supply');
-                            }
-                            selectedReports.remove('All reports');
-                          }
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _buildReportOption(
-                      context: context,
-                      theme: theme,
-                      isDark: isDark,
                       label: 'Usage Speed',
                       isSelected: !allReportsSelected &&
                           selectedReports.contains('Usage Speed'),
@@ -3717,24 +3345,20 @@ class _DashboardState extends State<Dashboard> {
     final purchaseOrdersByStatus =
         await _analyticsService.getPurchaseOrdersByStatus();
 
-    // Fetch deductions for weekly, monthly, and all-time periods
-    final weeklyDeductions = await _fetchAllDeductionsWithDetails('Weekly');
-    final monthlyDeductions = await _fetchAllDeductionsWithDetails('Monthly');
-    final allTimeDeductions = await _fetchAllTimeDeductions();
-
     // Fetch usage speed data for monthly, quarterly, and yearly periods
+    // For reports, fetch ALL items (no limit) to include all data in the period
     final monthlyTurnover =
-        await _turnoverRateService.computeTurnoverItems('Monthly');
-    final quarterlyTurnover =
-        await _turnoverRateService.computeTurnoverItems('Quarterly');
+        await _turnoverRateService.computeTurnoverItems('Monthly', limit: null);
+    final quarterlyTurnover = await _turnoverRateService
+        .computeTurnoverItems('Quarterly', limit: null);
     final yearlyTurnover =
-        await _turnoverRateService.computeTurnoverItems('Yearly');
+        await _turnoverRateService.computeTurnoverItems('Yearly', limit: null);
 
     // Convert usage speed items to serializable format
     final monthlyTurnoverData = monthlyTurnover
         .map((item) => {
               'name': item.name,
-              'brand': item.brand,
+              'type': item.type,
               'quantityConsumed': item.quantityConsumed,
               'currentStock': item.currentStock,
               'averageStock': item.averageStock,
@@ -3745,7 +3369,7 @@ class _DashboardState extends State<Dashboard> {
     final quarterlyTurnoverData = quarterlyTurnover
         .map((item) => {
               'name': item.name,
-              'brand': item.brand,
+              'type': item.type,
               'quantityConsumed': item.quantityConsumed,
               'currentStock': item.currentStock,
               'averageStock': item.averageStock,
@@ -3756,7 +3380,7 @@ class _DashboardState extends State<Dashboard> {
     final yearlyTurnoverData = yearlyTurnover
         .map((item) => {
               'name': item.name,
-              'brand': item.brand,
+              'type': item.type,
               'quantityConsumed': item.quantityConsumed,
               'currentStock': item.currentStock,
               'averageStock': item.averageStock,
@@ -3770,9 +3394,6 @@ class _DashboardState extends State<Dashboard> {
       'poCounts': poCounts,
       'suppliesByStatus': suppliesByStatus,
       'purchaseOrdersByStatus': purchaseOrdersByStatus,
-      'weeklyDeductions': weeklyDeductions,
-      'monthlyDeductions': monthlyDeductions,
-      'allTimeDeductions': allTimeDeductions,
       'monthlyTurnover': monthlyTurnoverData,
       'quarterlyTurnover': quarterlyTurnoverData,
       'yearlyTurnover': yearlyTurnoverData,
@@ -3789,10 +3410,8 @@ class _DashboardState extends State<Dashboard> {
         includeAll || selectedReports.contains('Inventory Check');
     final includePO =
         includeAll || selectedReports.contains('Purchase Order Summary');
-    final includeFastMoving =
-        includeAll || selectedReports.contains('Fast Moving Supply');
     final includeTurnoverRate =
-        includeAll || selectedReports.contains('Turnover Rate');
+        includeAll || selectedReports.contains('Usage Speed');
 
     // Header
     rows.add(['Dashboard Report']);
@@ -3906,137 +3525,41 @@ class _DashboardState extends State<Dashboard> {
       }
     }
 
-    // Fast Moving Supply - Three sections: Weekly, Monthly, All-time
-    if (includeFastMoving) {
-      rows.add(['Fast Moving Supply']);
-      rows.add([]);
-
-      // Weekly Deduction Section
-      final weeklyDateRange = _getDateRangeForPeriod('Weekly');
-      rows.add(['Weekly Deduction']);
-      rows.add(['Period', weeklyDateRange]);
-      rows.add([
-        'Supply Name',
-        'Brand',
-        'Purpose',
-        'Quantity Deducted',
-        'Date Deducted'
-      ]);
-      final weeklyDeductions = data['weeklyDeductions'] as List<dynamic>;
-      if (weeklyDeductions.isEmpty) {
-        rows.add(['No deductions found for this period']);
-      } else {
-        for (final item in weeklyDeductions) {
-          final itemMap = item as Map<String, dynamic>;
-          final name = itemMap['name']?.toString() ?? '';
-          final brand = itemMap['brand']?.toString() ?? '';
-          final purpose = itemMap['purpose']?.toString() ?? 'No Purpose';
-          final quantityDeducted = itemMap['quantityDeducted'] ?? 0;
-          final dateDeducted = itemMap['dateDeducted'] as DateTime?;
-          final dateStr = dateDeducted != null
-              ? _formatDateTimeWithAMPM(dateDeducted)
-              : 'N/A';
-
-          rows.add([
-            name,
-            brand,
-            purpose,
-            quantityDeducted.toString(),
-            dateStr,
-          ]);
-        }
-      }
-      rows.add([]);
-
-      // Monthly Deduction Section
-      final monthlyDateRange = _getDateRangeForPeriod('Monthly');
-      rows.add(['Monthly Deduction']);
-      rows.add(['Period', monthlyDateRange]);
-      rows.add([
-        'Supply Name',
-        'Brand',
-        'Purpose',
-        'Quantity Deducted',
-        'Date Deducted'
-      ]);
-      final monthlyDeductions = data['monthlyDeductions'] as List<dynamic>;
-      if (monthlyDeductions.isEmpty) {
-        rows.add(['No deductions found for this period']);
-      } else {
-        for (final item in monthlyDeductions) {
-          final itemMap = item as Map<String, dynamic>;
-          final name = itemMap['name']?.toString() ?? '';
-          final brand = itemMap['brand']?.toString() ?? '';
-          final purpose = itemMap['purpose']?.toString() ?? 'No Purpose';
-          final quantityDeducted = itemMap['quantityDeducted'] ?? 0;
-          final dateDeducted = itemMap['dateDeducted'] as DateTime?;
-          final dateStr = dateDeducted != null
-              ? _formatDateTimeWithAMPM(dateDeducted)
-              : 'N/A';
-
-          rows.add([
-            name,
-            brand,
-            purpose,
-            quantityDeducted.toString(),
-            dateStr,
-          ]);
-        }
-      }
-      rows.add([]);
-
-      // All-time Deduction Section
-      rows.add(['All-time Deduction']);
-      rows.add(['Period', 'All time']);
-      rows.add([
-        'Supply Name',
-        'Brand',
-        'Purpose',
-        'Quantity Deducted',
-        'Date Deducted'
-      ]);
-      final allTimeDeductions = data['allTimeDeductions'] as List<dynamic>;
-      if (allTimeDeductions.isEmpty) {
-        rows.add(['No deductions found']);
-      } else {
-        for (final item in allTimeDeductions) {
-          final itemMap = item as Map<String, dynamic>;
-          final name = itemMap['name']?.toString() ?? '';
-          final brand = itemMap['brand']?.toString() ?? '';
-          final purpose = itemMap['purpose']?.toString() ?? 'No Purpose';
-          final quantityDeducted = itemMap['quantityDeducted'] ?? 0;
-          final dateDeducted = itemMap['dateDeducted'] as DateTime?;
-          final dateStr = dateDeducted != null
-              ? _formatDateTimeWithAMPM(dateDeducted)
-              : 'N/A';
-
-          rows.add([
-            name,
-            brand,
-            purpose,
-            quantityDeducted.toString(),
-            dateStr,
-          ]);
-        }
-      }
-    }
-
     // Usage Speed - Monthly, Quarterly, Yearly sections
     if (includeTurnoverRate) {
       rows.add(['Usage Speed']);
       rows.add([]);
+
+      // Helper function to get interpretation based on turnover rate
+      String getInterpretation(double turnoverRate) {
+        if (turnoverRate < 0.5) {
+          return 'Slow';
+        } else if (turnoverRate <= 1.5) {
+          return 'Normal';
+        } else {
+          return 'Fast';
+        }
+      }
+
+      // Helper function to format supply name with type
+      String formatSupplyName(String name, String? type) {
+        if (type != null && type.trim().isNotEmpty) {
+          return '$name ($type)';
+        }
+        return name;
+      }
 
       // Monthly Usage Speed Section
       rows.add(['Monthly Usage Speed']);
       rows.add(['Period', 'Last 30 days']);
       rows.add([
         'Supply Name',
-        'Brand',
         'Quantity Consumed',
         'Current Stock',
         'Opening Stock',
         'Average Stock',
-        'Usage Speed'
+        'Usage Speed',
+        'Interpretation'
       ]);
       final monthlyTurnover = (data['monthlyTurnover'] as List<dynamic>?) ?? [];
       if (monthlyTurnover.isEmpty) {
@@ -4045,7 +3568,7 @@ class _DashboardState extends State<Dashboard> {
         for (final item in monthlyTurnover) {
           final itemMap = item as Map<String, dynamic>;
           final name = itemMap['name']?.toString() ?? '';
-          final brand = itemMap['brand']?.toString() ?? '';
+          final type = itemMap['type']?.toString();
           final quantityConsumed = (itemMap['quantityConsumed'] ?? 0) as int;
           final currentStock = (itemMap['currentStock'] ?? 0) as int;
           final averageStock = (itemMap['averageStock'] ?? 0.0) as double;
@@ -4053,13 +3576,13 @@ class _DashboardState extends State<Dashboard> {
           final openingStock = currentStock + quantityConsumed;
 
           rows.add([
-            name,
-            brand.isNotEmpty ? brand : 'N/A',
+            formatSupplyName(name, type),
             quantityConsumed.toString(),
             currentStock.toString(),
             openingStock.toString(),
             averageStock.toStringAsFixed(2),
             turnoverRate.toStringAsFixed(2),
+            getInterpretation(turnoverRate),
           ]);
         }
       }
@@ -4070,12 +3593,12 @@ class _DashboardState extends State<Dashboard> {
       rows.add(['Period', 'Last 3 months']);
       rows.add([
         'Supply Name',
-        'Brand',
         'Quantity Consumed',
         'Current Stock',
         'Opening Stock',
         'Average Stock',
-        'Usage Speed'
+        'Usage Speed',
+        'Interpretation'
       ]);
       final quarterlyTurnover =
           (data['quarterlyTurnover'] as List<dynamic>?) ?? [];
@@ -4085,7 +3608,7 @@ class _DashboardState extends State<Dashboard> {
         for (final item in quarterlyTurnover) {
           final itemMap = item as Map<String, dynamic>;
           final name = itemMap['name']?.toString() ?? '';
-          final brand = itemMap['brand']?.toString() ?? '';
+          final type = itemMap['type']?.toString();
           final quantityConsumed = (itemMap['quantityConsumed'] ?? 0) as int;
           final currentStock = (itemMap['currentStock'] ?? 0) as int;
           final averageStock = (itemMap['averageStock'] ?? 0.0) as double;
@@ -4093,13 +3616,13 @@ class _DashboardState extends State<Dashboard> {
           final openingStock = currentStock + quantityConsumed;
 
           rows.add([
-            name,
-            brand.isNotEmpty ? brand : 'N/A',
+            formatSupplyName(name, type),
             quantityConsumed.toString(),
             currentStock.toString(),
             openingStock.toString(),
             averageStock.toStringAsFixed(2),
             turnoverRate.toStringAsFixed(2),
+            getInterpretation(turnoverRate),
           ]);
         }
       }
@@ -4110,12 +3633,12 @@ class _DashboardState extends State<Dashboard> {
       rows.add(['Period', 'Last 12 months']);
       rows.add([
         'Supply Name',
-        'Brand',
         'Quantity Consumed',
         'Current Stock',
         'Opening Stock',
         'Average Stock',
-        'Usage Speed'
+        'Usage Speed',
+        'Interpretation'
       ]);
       final yearlyTurnover = (data['yearlyTurnover'] as List<dynamic>?) ?? [];
       if (yearlyTurnover.isEmpty) {
@@ -4124,7 +3647,7 @@ class _DashboardState extends State<Dashboard> {
         for (final item in yearlyTurnover) {
           final itemMap = item as Map<String, dynamic>;
           final name = itemMap['name']?.toString() ?? '';
-          final brand = itemMap['brand']?.toString() ?? '';
+          final type = itemMap['type']?.toString();
           final quantityConsumed = (itemMap['quantityConsumed'] ?? 0) as int;
           final currentStock = (itemMap['currentStock'] ?? 0) as int;
           final averageStock = (itemMap['averageStock'] ?? 0.0) as double;
@@ -4132,13 +3655,13 @@ class _DashboardState extends State<Dashboard> {
           final openingStock = currentStock + quantityConsumed;
 
           rows.add([
-            name,
-            brand.isNotEmpty ? brand : 'N/A',
+            formatSupplyName(name, type),
             quantityConsumed.toString(),
             currentStock.toString(),
             openingStock.toString(),
             averageStock.toStringAsFixed(2),
             turnoverRate.toStringAsFixed(2),
+            getInterpretation(turnoverRate),
           ]);
         }
       }
@@ -4157,18 +3680,13 @@ class _DashboardState extends State<Dashboard> {
         includeAll || selectedReports.contains('Inventory Check');
     final includePO =
         includeAll || selectedReports.contains('Purchase Order Summary');
-    final includeFastMoving =
-        includeAll || selectedReports.contains('Fast Moving Supply');
     final includeTurnoverRate =
-        includeAll || selectedReports.contains('Turnover Rate');
+        includeAll || selectedReports.contains('Usage Speed');
 
     final suppliesByStatus =
         data['suppliesByStatus'] as Map<String, List<Map<String, dynamic>>>;
     final purchaseOrdersByStatus = data['purchaseOrdersByStatus']
         as Map<String, List<Map<String, dynamic>>>;
-    final weeklyDeductions = data['weeklyDeductions'] as List;
-    final monthlyDeductions = data['monthlyDeductions'] as List;
-    final allTimeDeductions = data['allTimeDeductions'] as List;
     final monthlyTurnover = (data['monthlyTurnover'] as List<dynamic>?) ?? [];
     final quarterlyTurnover =
         (data['quarterlyTurnover'] as List<dynamic>?) ?? [];
@@ -4577,171 +4095,6 @@ class _DashboardState extends State<Dashboard> {
             widgets.add(pw.SizedBox(height: 24));
           }
 
-          // Fast Moving Supply - Three sections: Weekly, Monthly, All-time
-          if (includeFastMoving) {
-            widgets.add(
-              pw.Text(
-                'Fast Moving Supply',
-                style: pw.TextStyle(
-                  fontSize: 18,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-            );
-            widgets.add(pw.SizedBox(height: 12));
-
-            // Helper function to build deduction table
-            void buildDeductionTable(
-                String title, String periodLabel, List deductions) {
-              widgets.add(
-                pw.Text(
-                  title,
-                  style: pw.TextStyle(
-                    fontSize: 14,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              );
-              widgets.add(pw.SizedBox(height: 8));
-              widgets.add(
-                pw.Text(
-                  'Period: $periodLabel',
-                  style: pw.TextStyle(
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              );
-              widgets.add(pw.SizedBox(height: 8));
-
-              if (deductions.isEmpty) {
-                widgets.add(
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                    child: pw.Text('No deductions found for this period',
-                        style: const pw.TextStyle(fontSize: 10)),
-                  ),
-                );
-              } else {
-                widgets.add(
-                  pw.Table(
-                    border: pw.TableBorder.all(width: 0.5),
-                    columnWidths: {
-                      0: const pw.FlexColumnWidth(2.5),
-                      1: const pw.FlexColumnWidth(1.5),
-                      2: const pw.FlexColumnWidth(2),
-                      3: const pw.FlexColumnWidth(1),
-                      4: const pw.FlexColumnWidth(1.5),
-                    },
-                    children: [
-                      pw.TableRow(
-                        decoration: const pw.BoxDecoration(
-                          color: PdfColor.fromInt(0xFFEFEFEF),
-                        ),
-                        children: [
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('Supply Name',
-                                style: pw.TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold)),
-                          ),
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('Brand',
-                                style: pw.TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold)),
-                          ),
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('Purpose',
-                                style: pw.TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold)),
-                          ),
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('Quantity Deducted',
-                                style: pw.TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold)),
-                          ),
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('Date Deducted',
-                                style: pw.TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                      ...deductions.map((item) {
-                        final itemMap = item as Map<String, dynamic>;
-                        final name = itemMap['name']?.toString() ?? '';
-                        final brand = itemMap['brand']?.toString() ?? '';
-                        final purpose =
-                            itemMap['purpose']?.toString() ?? 'No Purpose';
-                        final quantityDeducted =
-                            itemMap['quantityDeducted'] ?? 0;
-                        final dateDeducted =
-                            itemMap['dateDeducted'] as DateTime?;
-                        final dateStr = dateDeducted != null
-                            ? _formatDateTimeWithAMPM(dateDeducted)
-                            : 'N/A';
-
-                        return pw.TableRow(
-                          children: [
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.all(6),
-                              child: pw.Text(name,
-                                  style: const pw.TextStyle(fontSize: 8)),
-                            ),
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.all(6),
-                              child: pw.Text(brand,
-                                  style: const pw.TextStyle(fontSize: 8)),
-                            ),
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.all(6),
-                              child: pw.Text(purpose,
-                                  style: const pw.TextStyle(fontSize: 8)),
-                            ),
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.all(6),
-                              child: pw.Text(quantityDeducted.toString(),
-                                  style: const pw.TextStyle(fontSize: 8)),
-                            ),
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.all(6),
-                              child: pw.Text(dateStr,
-                                  style: const pw.TextStyle(fontSize: 8)),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ],
-                  ),
-                );
-              }
-              widgets.add(pw.SizedBox(height: 24));
-            }
-
-            // Weekly Deduction Section
-            final weeklyDateRange = _getDateRangeForPeriod('Weekly');
-            buildDeductionTable(
-                'Weekly Deduction', weeklyDateRange, weeklyDeductions);
-
-            // Monthly Deduction Section
-            final monthlyDateRange = _getDateRangeForPeriod('Monthly');
-            buildDeductionTable(
-                'Monthly Deduction', monthlyDateRange, monthlyDeductions);
-
-            // All-time Deduction Section
-            buildDeductionTable(
-                'All-time Deduction', 'All time', allTimeDeductions);
-          }
-
           // Usage Speed - Monthly, Quarterly, Yearly sections
           if (includeTurnoverRate) {
             widgets.add(
@@ -4754,6 +4107,25 @@ class _DashboardState extends State<Dashboard> {
               ),
             );
             widgets.add(pw.SizedBox(height: 12));
+
+            // Helper function to get interpretation based on turnover rate
+            String getInterpretation(double turnoverRate) {
+              if (turnoverRate < 0.5) {
+                return 'Slow';
+              } else if (turnoverRate <= 1.5) {
+                return 'Normal';
+              } else {
+                return 'Fast';
+              }
+            }
+
+            // Helper function to format supply name with type
+            String formatSupplyName(String name, String? type) {
+              if (type != null && type.trim().isNotEmpty) {
+                return '$name ($type)';
+              }
+              return name;
+            }
 
             // Helper function to build usage speed table
             void buildUsageSpeedTable(
@@ -4792,13 +4164,13 @@ class _DashboardState extends State<Dashboard> {
                   pw.Table(
                     border: pw.TableBorder.all(width: 0.5),
                     columnWidths: {
-                      0: const pw.FlexColumnWidth(2.5),
-                      1: const pw.FlexColumnWidth(1.5),
-                      2: const pw.FlexColumnWidth(1),
-                      3: const pw.FlexColumnWidth(1),
-                      4: const pw.FlexColumnWidth(1),
-                      5: const pw.FlexColumnWidth(1.2),
-                      6: const pw.FlexColumnWidth(1),
+                      0: const pw.FlexColumnWidth(3), // Supply Name (with type)
+                      1: const pw.FlexColumnWidth(1), // Qty Consumed
+                      2: const pw.FlexColumnWidth(1), // Current Stock
+                      3: const pw.FlexColumnWidth(1), // Opening Stock
+                      4: const pw.FlexColumnWidth(1.2), // Average Stock
+                      5: const pw.FlexColumnWidth(1), // Usage Speed
+                      6: const pw.FlexColumnWidth(1.2), // Interpretation
                     },
                     children: [
                       pw.TableRow(
@@ -4809,13 +4181,6 @@ class _DashboardState extends State<Dashboard> {
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
                             child: pw.Text('Supply Name',
-                                style: pw.TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold)),
-                          ),
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('Brand',
                                 style: pw.TextStyle(
                                     fontSize: 9,
                                     fontWeight: pw.FontWeight.bold)),
@@ -4855,12 +4220,19 @@ class _DashboardState extends State<Dashboard> {
                                     fontSize: 9,
                                     fontWeight: pw.FontWeight.bold)),
                           ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Interpretation',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
                         ],
                       ),
                       ...usageData.map((item) {
                         final itemMap = item as Map<String, dynamic>;
                         final name = itemMap['name']?.toString() ?? '';
-                        final brand = itemMap['brand']?.toString() ?? '';
+                        final type = itemMap['type']?.toString();
                         final quantityConsumed =
                             (itemMap['quantityConsumed'] ?? 0) as int;
                         final currentStock =
@@ -4875,12 +4247,7 @@ class _DashboardState extends State<Dashboard> {
                           children: [
                             pw.Padding(
                               padding: const pw.EdgeInsets.all(6),
-                              child: pw.Text(name,
-                                  style: const pw.TextStyle(fontSize: 8)),
-                            ),
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.all(6),
-                              child: pw.Text(brand.isNotEmpty ? brand : 'N/A',
+                              child: pw.Text(formatSupplyName(name, type),
                                   style: const pw.TextStyle(fontSize: 8)),
                             ),
                             pw.Padding(
@@ -4906,6 +4273,11 @@ class _DashboardState extends State<Dashboard> {
                             pw.Padding(
                               padding: const pw.EdgeInsets.all(6),
                               child: pw.Text(turnoverRate.toStringAsFixed(2),
+                                  style: const pw.TextStyle(fontSize: 8)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(getInterpretation(turnoverRate),
                                   style: const pw.TextStyle(fontSize: 8)),
                             ),
                           ],

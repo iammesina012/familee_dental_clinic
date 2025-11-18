@@ -7,7 +7,7 @@ import 'package:familee_dental/shared/storage/hive_storage.dart';
 /// Turnover Item model
 class TurnoverItem {
   final String name;
-  final String brand;
+  final String? type;
   final int quantityConsumed;
   final int currentStock;
   final double averageStock;
@@ -15,7 +15,7 @@ class TurnoverItem {
 
   TurnoverItem({
     required this.name,
-    required this.brand,
+    this.type,
     required this.quantityConsumed,
     required this.currentStock,
     required this.averageStock,
@@ -43,7 +43,7 @@ class TurnoverRateService {
         final m = e as Map<String, dynamic>;
         return TurnoverItem(
           name: (m['name'] ?? '').toString(),
-          brand: (m['brand'] ?? '').toString(),
+          type: m['type']?.toString(),
           quantityConsumed: (m['quantityConsumed'] ?? 0) as int,
           currentStock: (m['currentStock'] ?? 0) as int,
           averageStock: (m['averageStock'] ?? 0.0) as double,
@@ -62,7 +62,7 @@ class TurnoverRateService {
       final jsonList = items
           .map((e) => {
                 'name': e.name,
-                'brand': e.brand,
+                'type': e.type,
                 'quantityConsumed': e.quantityConsumed,
                 'currentStock': e.currentStock,
                 'averageStock': e.averageStock,
@@ -173,7 +173,7 @@ class TurnoverRateService {
           .lte('created_at', endDateWithTime.toIso8601String())
           .order('created_at', ascending: false);
 
-      // Aggregate by supply name + brand (matching dashboard behavior)
+      // Aggregate by supply name + type (matching dashboard behavior)
       // Also track deduction count (frequency) for turnover calculation
       final Map<String, Map<String, dynamic>> aggregates = {};
 
@@ -195,7 +195,7 @@ class TurnoverRateService {
             final supplyMap = supply as Map<String, dynamic>?;
             if (supplyMap != null) {
               final name = (supplyMap['name']?.toString() ?? '').trim();
-              final brand = (supplyMap['brand']?.toString() ?? '').trim();
+              final type = supplyMap['type']?.toString().trim();
               final quantity =
                   supplyMap['deductQty'] ?? supplyMap['quantity'] ?? 0;
               final quantityInt = quantity is num
@@ -203,14 +203,14 @@ class TurnoverRateService {
                   : (int.tryParse(quantity.toString()) ?? 0);
 
               if (name.isNotEmpty) {
-                // Create a key for aggregation (name + brand, case-insensitive)
-                final key =
-                    '${name.toLowerCase().trim()}|${brand.toLowerCase().trim()}';
+                // Create a key for aggregation (name + type, case-insensitive)
+                final typeKey = (type ?? '').toLowerCase().trim();
+                final key = '${name.toLowerCase().trim()}|$typeKey';
 
                 if (!aggregates.containsKey(key)) {
                   aggregates[key] = {
                     'name': name,
-                    'brand': brand,
+                    'type': type,
                     'purpose': purpose.isEmpty ? 'No Purpose' : purpose,
                     'dateDeducted': dateDeducted,
                     'quantityDeducted': quantityInt,
@@ -220,7 +220,7 @@ class TurnoverRateService {
                   final current = aggregates[key]!;
                   aggregates[key] = {
                     'name': name,
-                    'brand': brand,
+                    'type': type,
                     // Keep the most recent purpose and date
                     'purpose': purpose.isEmpty ? current['purpose'] : purpose,
                     'dateDeducted': dateDeducted != null &&
@@ -260,7 +260,7 @@ class TurnoverRateService {
           .select('id, purpose, supplies, created_at')
           .order('created_at', ascending: false);
 
-      // Aggregate by supply name + brand (matching dashboard behavior)
+      // Aggregate by supply name + type (matching dashboard behavior)
       // Also track deduction count (frequency) for turnover calculation
       final Map<String, Map<String, dynamic>> aggregates = {};
 
@@ -282,7 +282,7 @@ class TurnoverRateService {
             final supplyMap = supply as Map<String, dynamic>?;
             if (supplyMap != null) {
               final name = (supplyMap['name']?.toString() ?? '').trim();
-              final brand = (supplyMap['brand']?.toString() ?? '').trim();
+              final type = supplyMap['type']?.toString().trim();
               final quantity =
                   supplyMap['deductQty'] ?? supplyMap['quantity'] ?? 0;
               final quantityInt = quantity is num
@@ -290,14 +290,14 @@ class TurnoverRateService {
                   : (int.tryParse(quantity.toString()) ?? 0);
 
               if (name.isNotEmpty) {
-                // Create a key for aggregation (name + brand, case-insensitive)
-                final key =
-                    '${name.toLowerCase().trim()}|${brand.toLowerCase().trim()}';
+                // Create a key for aggregation (name + type, case-insensitive)
+                final typeKey = (type ?? '').toLowerCase().trim();
+                final key = '${name.toLowerCase().trim()}|$typeKey';
 
                 if (!aggregates.containsKey(key)) {
                   aggregates[key] = {
                     'name': name,
-                    'brand': brand,
+                    'type': type,
                     'purpose': purpose.isEmpty ? 'No Purpose' : purpose,
                     'dateDeducted': dateDeducted,
                     'quantityDeducted': quantityInt,
@@ -307,7 +307,7 @@ class TurnoverRateService {
                   final current = aggregates[key]!;
                   aggregates[key] = {
                     'name': name,
-                    'brand': brand,
+                    'type': type,
                     // Keep the most recent purpose and date
                     'purpose': purpose.isEmpty ? current['purpose'] : purpose,
                     'dateDeducted': dateDeducted != null &&
@@ -340,7 +340,10 @@ class TurnoverRateService {
 
   /// Compute turnover items for a given period
   /// Uses historical consumption data to calculate turnover rate
-  Future<List<TurnoverItem>> computeTurnoverItems(String period) async {
+  /// [limit] - Optional limit on number of items to return. If null, returns all items.
+  ///           Defaults to 5 for dashboard display.
+  Future<List<TurnoverItem>> computeTurnoverItems(String period,
+      {int? limit = 5}) async {
     try {
       // Fetch deductions for the period
       final deductions = await _fetchAllDeductionsWithDetails(period);
@@ -352,7 +355,7 @@ class TurnoverRateService {
       // Fetch all supplies grouped by status (for current stock reference)
       final suppliesByStatus = await _analyticsService.getSuppliesByStatus();
 
-      // Create a map of supplies by name+brand key (case-insensitive)
+      // Create a map of supplies by name+type key (case-insensitive)
       // This is optional - we'll include items even if not in current supplies
       final Map<String, Map<String, dynamic>> supplyMap = {};
       if (suppliesByStatus.isNotEmpty) {
@@ -364,12 +367,52 @@ class TurnoverRateService {
           }
         }
 
+        // CRITICAL: Deduplicate by id to prevent counting the same supply multiple times
+        // (A supply should only appear once, but this ensures we don't double-count)
+        final seenIds = <String>{};
+        final uniqueSupplies = <Map<String, dynamic>>[];
         for (final supply in allSupplies) {
+          final id = supply['id']?.toString();
+          if (id != null && !seenIds.contains(id)) {
+            seenIds.add(id);
+            uniqueSupplies.add(supply);
+          }
+        }
+
+        // CRITICAL: Also filter out expired supplies (similar to inventory view)
+        // Only count non-expired supplies for current stock calculation
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final activeSupplies = uniqueSupplies.where((supply) {
+          final noExpiry = supply['noExpiry'] as bool? ?? false;
+          final expiry = supply['expiry']?.toString();
+
+          if (noExpiry || expiry == null || expiry.isEmpty) {
+            return true; // No expiry or no expiry date - include it
+          }
+
+          // Check if expired
+          try {
+            final expiryDate = DateTime.tryParse(expiry.replaceAll('/', '-'));
+            if (expiryDate != null) {
+              final dateOnly =
+                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+              // Exclude expired supplies (expired on or before today)
+              return dateOnly.isAfter(today);
+            }
+          } catch (_) {
+            // If we can't parse the date, include it to be safe
+          }
+          return true;
+        }).toList();
+
+        for (final supply in activeSupplies) {
           final name = (supply['name']?.toString() ?? '').trim();
-          final brand = (supply['brand']?.toString() ?? '').trim();
+          final type = supply['type']?.toString().trim();
           if (name.isNotEmpty) {
-            final key = '${name.toLowerCase()}|${brand.toLowerCase()}';
-            // If multiple supplies with same name+brand, aggregate stock
+            final typeKey = (type ?? '').toLowerCase();
+            final key = '${name.toLowerCase()}|$typeKey';
+            // If multiple supplies with same name+type, aggregate stock
             if (supplyMap.containsKey(key)) {
               final existing = supplyMap[key]!;
               final existingStock = (existing['stock'] ?? 0) as int;
@@ -377,16 +420,91 @@ class TurnoverRateService {
               supplyMap[key] = {
                 ...existing,
                 'stock': existingStock + newStock,
+                '_key': key,
               };
             } else {
               supplyMap[key] = {
                 'name': name,
-                'brand': brand,
+                'type': type,
                 'stock': supply['stock'] ?? 0,
+                '_key': key,
               };
             }
+
+            // Also create an entry keyed by name only (for backwards compatibility with deductions that don't have type)
+            // BUT: Only create this for supplies that actually have no type (null or empty)
+            // CRITICAL FIX: If type is empty, key == nameOnlyKey, so we've already created/updated it above!
+            // Don't create it again or we'll double-count the stock.
+            final nameOnlyKey = '${name.toLowerCase()}|';
+            final hasNoType = type == null || type.isEmpty;
+
+            // Only create nameOnlyKey if it's DIFFERENT from the key we just created
+            // (i.e., if type was not empty, so key != nameOnlyKey)
+            if (hasNoType && key != nameOnlyKey) {
+              // This shouldn't happen (hasNoType means type is empty, so key should == nameOnlyKey)
+              // But just in case, handle it safely
+              if (!supplyMap.containsKey(nameOnlyKey)) {
+                supplyMap[nameOnlyKey] = {
+                  'name': name,
+                  'type': null, // Explicitly null for supplies without types
+                  'stock': supply['stock'] ?? 0,
+                  '_isNameOnlyEntry': true,
+                  '_key': nameOnlyKey,
+                };
+              } else {
+                // Only aggregate if the existing entry also represents supplies without types
+                final existing = supplyMap[nameOnlyKey]!;
+                final existingHasNoType = existing['type'] == null ||
+                    (existing['type']?.toString().trim().isEmpty ?? true);
+
+                if (existingHasNoType) {
+                  final existingStock = (existing['stock'] ?? 0) as int;
+                  final newStock = (supply['stock'] ?? 0) as int;
+                  supplyMap[nameOnlyKey] = {
+                    ...existing,
+                    'stock': existingStock + newStock,
+                    '_isNameOnlyEntry': true,
+                    '_key': nameOnlyKey,
+                  };
+                }
+              }
+            }
+            // If key == nameOnlyKey (type is empty), we already created/updated it above, so skip
           }
         }
+      }
+
+      // CRITICAL: Clean up any incorrectly created nameOnlyKey entries
+      // If there are supplies with types for a name, remove the nameOnlyKey entry to prevent aggregation
+      final keysToRemove = <String>[];
+      for (final entry in supplyMap.entries) {
+        final key = entry.key;
+        if (key.endsWith('|') && key != '|') {
+          // This is a nameOnlyKey (ends with |)
+          final nameOnly = key.substring(0, key.length - 1);
+          // Check if there are any supplies with types for this name
+          bool hasSuppliesWithTypes = false;
+          for (final otherEntry in supplyMap.entries) {
+            final otherKey = otherEntry.key;
+            if (otherKey.startsWith('$nameOnly|') && otherKey != key) {
+              // This is a name+type key
+              final otherSupply = otherEntry.value;
+              final otherType = otherSupply['type']?.toString().trim();
+              if (otherType != null && otherType.isNotEmpty) {
+                hasSuppliesWithTypes = true;
+                break;
+              }
+            }
+          }
+          // If there are supplies with types, remove this nameOnlyKey entry
+          if (hasSuppliesWithTypes) {
+            keysToRemove.add(key);
+          }
+        }
+      }
+      // Remove the incorrectly created entries
+      for (final key in keysToRemove) {
+        supplyMap.remove(key);
       }
 
       // Match deductions with supplies and compute turnover
@@ -397,27 +515,110 @@ class TurnoverRateService {
 
       for (final deduction in deductions) {
         final name = (deduction['name']?.toString() ?? '').trim();
-        final brand = (deduction['brand']?.toString() ?? '').trim();
+        final type = deduction['type']?.toString().trim();
         final quantityConsumed = (deduction['quantityDeducted'] ?? 0) as int;
 
         if (name.isEmpty || quantityConsumed <= 0) continue;
 
-        final key = '${name.toLowerCase()}|${brand.toLowerCase()}';
+        final typeKey = (type ?? '').toLowerCase();
+        final key = '${name.toLowerCase()}|$typeKey';
 
-        // Skip if already processed (aggregated by name+brand)
+        // Skip if already processed (aggregated by name+type)
         if (processedKeys.containsKey(key)) continue;
         processedKeys[key] = true;
 
-        final supply = supplyMap[key];
+        // Try to match by name+type first, then fallback to name only for backwards compatibility
+        Map<String, dynamic>? supply = supplyMap[key];
+
+        // CRITICAL: If deduction has a type (even if empty string), we should ONLY match against exact name+type key
+        // Never fall back to nameOnlyKey for deductions with types, as that would incorrectly aggregate stock
+        final deductionHasNoType = type == null || type.isEmpty;
+
+        if (supply == null && deductionHasNoType) {
+          // Only try nameOnlyKey if deduction truly has no type
+          // BUT: First check if there are ANY supplies with types for this name
+          // If there are, we should NOT use nameOnlyKey to avoid incorrect aggregation
+          bool hasSuppliesWithTypes = false;
+          final nameLower = name.toLowerCase();
+          for (final entry in supplyMap.entries) {
+            final entryKey = entry.key;
+            if (entryKey.startsWith('$nameLower|') &&
+                entryKey != '$nameLower|') {
+              // This is a name+type key (not nameOnlyKey)
+              final entrySupply = entry.value;
+              final entryType = entrySupply['type']?.toString().trim();
+              if (entryType != null && entryType.isNotEmpty) {
+                hasSuppliesWithTypes = true;
+                break;
+              }
+            }
+          }
+
+          // Only use nameOnlyKey if there are NO supplies with types for this name
+          if (!hasSuppliesWithTypes) {
+            final nameOnlyKey = '${name.toLowerCase()}|';
+            final nameOnlySupply = supplyMap[nameOnlyKey];
+
+            // Only use this entry if it's a proper name-only entry (not aggregated from multiple types)
+            // We require BOTH conditions: no type AND the flag, to ensure it's not aggregated
+            if (nameOnlySupply != null) {
+              final entryHasNoType = nameOnlySupply['type'] == null ||
+                  (nameOnlySupply['type']?.toString().trim().isEmpty ?? true);
+              final isNameOnlyEntry =
+                  nameOnlySupply['_isNameOnlyEntry'] == true;
+
+              if (entryHasNoType && isNameOnlyEntry) {
+                // Double-check: ensure this is truly a name-only entry, not aggregated
+                supply = nameOnlySupply;
+              }
+              // If the entry has a type or doesn't have the flag, it means it was aggregated - don't use it
+            }
+          }
+        }
+        // If deduction has a type but no match found, skip it (don't use aggregated entries)
+
         // Skip items that are no longer present (or archived) in current supplies
         if (supply == null) {
           continue;
         }
         // Use current stock when present
+        // CRITICAL: Double-check that we're not using an aggregated entry
+        // If this is a nameOnlyKey entry and there are supplies with types, skip it
+        final supplyKey = supply['_key'] as String?;
+        if (supplyKey != null && supplyKey.endsWith('|')) {
+          // This is a nameOnlyKey entry - verify it's safe to use
+          final nameLower = name.toLowerCase();
+          bool hasSuppliesWithTypes = false;
+          for (final entry in supplyMap.entries) {
+            final entryKey = entry.key;
+            if (entryKey.startsWith('$nameLower|') &&
+                entryKey != '$nameLower|') {
+              final entrySupply = entry.value;
+              final entryType = entrySupply['type']?.toString().trim();
+              if (entryType != null && entryType.isNotEmpty) {
+                hasSuppliesWithTypes = true;
+                break;
+              }
+            }
+          }
+          if (hasSuppliesWithTypes) {
+            // There are supplies with types - don't use this aggregated entry
+            continue;
+          }
+        }
         final currentStock = (supply['stock'] ?? 0) as int;
 
-        // Get deduction count (frequency) for better turnover calculation
-        final deductionCount = (deduction['deductionCount'] ?? 1) as int;
+        // Debug: Log Gauze stock calculation
+        if (name.toLowerCase() == 'gauze') {
+          print(
+              'DEBUG GAUZE: name=$name, type="$type", key=$key, supplyKey=${supply['_key']}, currentStock=$currentStock, supplyMap keys=${supplyMap.keys.where((k) => k.startsWith('gauze|')).toList()}');
+          for (final entry in supplyMap.entries) {
+            if (entry.key.startsWith('gauze|')) {
+              print(
+                  '  - ${entry.key}: stock=${entry.value['stock']}, type=${entry.value['type']}');
+            }
+          }
+        }
 
         // Historical calculation: opening stock = current stock + quantity consumed
         // This represents the stock level at the start of the period (before consumption)
@@ -431,29 +632,23 @@ class TurnoverRateService {
         // Average stock = average of opening and current stock
         averageStock = (openingStock + currentStock) / 2.0;
 
-        // Calculate turnover rate based on consumption and average inventory
-        // If currentStock = 0 (fully consumed), the standard formula gives 2.0
-        // So we use deduction frequency (how many times it was consumed) as a factor
-        if (currentStock == 0 && averageStock > 0) {
-          // Fully consumed items: use deduction frequency to differentiate
-          // Higher frequency = higher turnover (more active consumption)
-          // Base turnover is 2.0, multiply by deduction frequency to show activity
-          // Formula: (quantityConsumed / averageStock) * (1 + deductionCount * 0.2)
-          // This gives: 1 deduction = 2.4, 2 deductions = 2.8, 5 deductions = 4.0, etc.
-          turnoverRate = (quantityConsumed / averageStock) *
-              (1.0 + (deductionCount * 0.2));
-        } else if (averageStock > 0) {
-          // Standard formula: quantity consumed / average stock
+        // Calculate turnover rate: usageSpeed = qtyConsumed / max(averageStock, 1)
+        // Example sanity check:
+        //   qtyConsumed = 9, currentStock = 0, openingStock = 9
+        //   averageStock = (9 + 0) / 2 = 4.5
+        //   turnoverRate = 9 / max(4.5, 1) = 9 / 4.5 = 2.0
+        if (averageStock > 0) {
           turnoverRate = quantityConsumed / averageStock;
         } else {
           // If average stock is 0 (shouldn't happen, but safety check)
-          // Use consumption frequency as turnover indicator
-          turnoverRate = deductionCount > 0 ? deductionCount.toDouble() : 0.0;
+          // Use quantity consumed directly (with minimum denominator of 1)
+          turnoverRate =
+              quantityConsumed > 0 ? quantityConsumed.toDouble() : 0.0;
         }
 
         turnoverItems.add(TurnoverItem(
           name: name,
-          brand: brand,
+          type: type,
           quantityConsumed: quantityConsumed,
           currentStock: currentStock,
           averageStock: averageStock,
@@ -461,9 +656,14 @@ class TurnoverRateService {
         ));
       }
 
-      // Sort by turnover rate (descending) and limit to top 5
+      // Sort by turnover rate (descending)
       turnoverItems.sort((a, b) => b.turnoverRate.compareTo(a.turnoverRate));
-      return turnoverItems.take(5).toList();
+
+      // Apply limit if specified, otherwise return all items
+      if (limit != null && limit > 0) {
+        return turnoverItems.take(limit).toList();
+      }
+      return turnoverItems;
     } catch (e) {
       // On error, return empty list
       print('Error computing turnover items: $e');
@@ -484,7 +684,7 @@ class TurnoverRateService {
       // Fetch all supplies grouped by status (for current stock reference)
       final suppliesByStatus = await _analyticsService.getSuppliesByStatus();
 
-      // Create a map of supplies by name+brand key (case-insensitive)
+      // Create a map of supplies by name+type key (case-insensitive)
       // This is optional - we'll include items even if not in current supplies
       final Map<String, Map<String, dynamic>> supplyMap = {};
       if (suppliesByStatus.isNotEmpty) {
@@ -496,12 +696,52 @@ class TurnoverRateService {
           }
         }
 
+        // CRITICAL: Deduplicate by id to prevent counting the same supply multiple times
+        // (A supply should only appear once, but this ensures we don't double-count)
+        final seenIds2 = <String>{};
+        final uniqueSupplies2 = <Map<String, dynamic>>[];
         for (final supply in allSupplies) {
+          final id = supply['id']?.toString();
+          if (id != null && !seenIds2.contains(id)) {
+            seenIds2.add(id);
+            uniqueSupplies2.add(supply);
+          }
+        }
+
+        // CRITICAL: Also filter out expired supplies (similar to inventory view)
+        // Only count non-expired supplies for current stock calculation
+        final now2 = DateTime.now();
+        final today2 = DateTime(now2.year, now2.month, now2.day);
+        final activeSupplies2 = uniqueSupplies2.where((supply) {
+          final noExpiry = supply['noExpiry'] as bool? ?? false;
+          final expiry = supply['expiry']?.toString();
+
+          if (noExpiry || expiry == null || expiry.isEmpty) {
+            return true; // No expiry or no expiry date - include it
+          }
+
+          // Check if expired
+          try {
+            final expiryDate = DateTime.tryParse(expiry.replaceAll('/', '-'));
+            if (expiryDate != null) {
+              final dateOnly =
+                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+              // Exclude expired supplies (expired on or before today)
+              return dateOnly.isAfter(today2);
+            }
+          } catch (_) {
+            // If we can't parse the date, include it to be safe
+          }
+          return true;
+        }).toList();
+
+        for (final supply in activeSupplies2) {
           final name = (supply['name']?.toString() ?? '').trim();
-          final brand = (supply['brand']?.toString() ?? '').trim();
+          final type = supply['type']?.toString().trim();
           if (name.isNotEmpty) {
-            final key = '${name.toLowerCase()}|${brand.toLowerCase()}';
-            // If multiple supplies with same name+brand, aggregate stock
+            final typeKey = (type ?? '').toLowerCase();
+            final key = '${name.toLowerCase()}|$typeKey';
+            // If multiple supplies with same name+type, aggregate stock
             if (supplyMap.containsKey(key)) {
               final existing = supplyMap[key]!;
               final existingStock = (existing['stock'] ?? 0) as int;
@@ -509,16 +749,91 @@ class TurnoverRateService {
               supplyMap[key] = {
                 ...existing,
                 'stock': existingStock + newStock,
+                '_key': key,
               };
             } else {
               supplyMap[key] = {
                 'name': name,
-                'brand': brand,
+                'type': type,
                 'stock': supply['stock'] ?? 0,
+                '_key': key,
               };
             }
+
+            // Also create an entry keyed by name only (for backwards compatibility with deductions that don't have type)
+            // BUT: Only create this for supplies that actually have no type (null or empty)
+            // CRITICAL FIX: If type is empty, key == nameOnlyKey, so we've already created/updated it above!
+            // Don't create it again or we'll double-count the stock.
+            final nameOnlyKey = '${name.toLowerCase()}|';
+            final hasNoType = type == null || type.isEmpty;
+
+            // Only create nameOnlyKey if it's DIFFERENT from the key we just created
+            // (i.e., if type was not empty, so key != nameOnlyKey)
+            if (hasNoType && key != nameOnlyKey) {
+              // This shouldn't happen (hasNoType means type is empty, so key should == nameOnlyKey)
+              // But just in case, handle it safely
+              if (!supplyMap.containsKey(nameOnlyKey)) {
+                supplyMap[nameOnlyKey] = {
+                  'name': name,
+                  'type': null, // Explicitly null for supplies without types
+                  'stock': supply['stock'] ?? 0,
+                  '_isNameOnlyEntry': true,
+                  '_key': nameOnlyKey,
+                };
+              } else {
+                // Only aggregate if the existing entry also represents supplies without types
+                final existing = supplyMap[nameOnlyKey]!;
+                final existingHasNoType = existing['type'] == null ||
+                    (existing['type']?.toString().trim().isEmpty ?? true);
+
+                if (existingHasNoType) {
+                  final existingStock = (existing['stock'] ?? 0) as int;
+                  final newStock = (supply['stock'] ?? 0) as int;
+                  supplyMap[nameOnlyKey] = {
+                    ...existing,
+                    'stock': existingStock + newStock,
+                    '_isNameOnlyEntry': true,
+                    '_key': nameOnlyKey,
+                  };
+                }
+              }
+            }
+            // If key == nameOnlyKey (type is empty), we already created/updated it above, so skip
           }
         }
+      }
+
+      // CRITICAL: Clean up any incorrectly created nameOnlyKey entries
+      // If there are supplies with types for a name, remove the nameOnlyKey entry to prevent aggregation
+      final keysToRemove2 = <String>[];
+      for (final entry in supplyMap.entries) {
+        final key = entry.key;
+        if (key.endsWith('|') && key != '|') {
+          // This is a nameOnlyKey (ends with |)
+          final nameOnly = key.substring(0, key.length - 1);
+          // Check if there are any supplies with types for this name
+          bool hasSuppliesWithTypes = false;
+          for (final otherEntry in supplyMap.entries) {
+            final otherKey = otherEntry.key;
+            if (otherKey.startsWith('$nameOnly|') && otherKey != key) {
+              // This is a name+type key
+              final otherSupply = otherEntry.value;
+              final otherType = otherSupply['type']?.toString().trim();
+              if (otherType != null && otherType.isNotEmpty) {
+                hasSuppliesWithTypes = true;
+                break;
+              }
+            }
+          }
+          // If there are supplies with types, remove this nameOnlyKey entry
+          if (hasSuppliesWithTypes) {
+            keysToRemove2.add(key);
+          }
+        }
+      }
+      // Remove the incorrectly created entries
+      for (final key in keysToRemove2) {
+        supplyMap.remove(key);
       }
 
       // Match deductions with supplies and compute turnover
@@ -529,23 +844,70 @@ class TurnoverRateService {
 
       for (final deduction in deductions) {
         final name = (deduction['name']?.toString() ?? '').trim();
-        final brand = (deduction['brand']?.toString() ?? '').trim();
+        final type = deduction['type']?.toString().trim();
         final quantityConsumed = (deduction['quantityDeducted'] ?? 0) as int;
 
         if (name.isEmpty || quantityConsumed <= 0) continue;
 
-        final key = '${name.toLowerCase()}|${brand.toLowerCase()}';
+        final typeKey = (type ?? '').toLowerCase();
+        final key = '${name.toLowerCase()}|$typeKey';
 
-        // Skip if already processed (aggregated by name+brand)
+        // Skip if already processed (aggregated by name+type)
         if (processedKeys.containsKey(key)) continue;
         processedKeys[key] = true;
 
-        final supply = supplyMap[key];
+        // Try to match by name+type first, then fallback to name only for backwards compatibility
+        Map<String, dynamic>? supply = supplyMap[key];
+
+        // CRITICAL: If deduction has a type (even if empty string), we should ONLY match against exact name+type key
+        // Never fall back to nameOnlyKey for deductions with types, as that would incorrectly aggregate stock
+        final deductionHasNoType = type == null || type.isEmpty;
+
+        if (supply == null && deductionHasNoType) {
+          // Only try nameOnlyKey if deduction truly has no type
+          // BUT: First check if there are ANY supplies with types for this name
+          // If there are, we should NOT use nameOnlyKey to avoid incorrect aggregation
+          bool hasSuppliesWithTypes = false;
+          final nameLower = name.toLowerCase();
+          for (final entry in supplyMap.entries) {
+            final entryKey = entry.key;
+            if (entryKey.startsWith('$nameLower|') &&
+                entryKey != '$nameLower|') {
+              // This is a name+type key (not nameOnlyKey)
+              final entrySupply = entry.value;
+              final entryType = entrySupply['type']?.toString().trim();
+              if (entryType != null && entryType.isNotEmpty) {
+                hasSuppliesWithTypes = true;
+                break;
+              }
+            }
+          }
+
+          // Only use nameOnlyKey if there are NO supplies with types for this name
+          if (!hasSuppliesWithTypes) {
+            final nameOnlyKey = '${name.toLowerCase()}|';
+            final nameOnlySupply = supplyMap[nameOnlyKey];
+
+            // Only use this entry if it's a proper name-only entry (not aggregated from multiple types)
+            // We require BOTH conditions: no type AND the flag, to ensure it's not aggregated
+            if (nameOnlySupply != null) {
+              final entryHasNoType = nameOnlySupply['type'] == null ||
+                  (nameOnlySupply['type']?.toString().trim().isEmpty ?? true);
+              final isNameOnlyEntry =
+                  nameOnlySupply['_isNameOnlyEntry'] == true;
+
+              if (entryHasNoType && isNameOnlyEntry) {
+                // Double-check: ensure this is truly a name-only entry, not aggregated
+                supply = nameOnlySupply;
+              }
+              // If the entry has a type or doesn't have the flag, it means it was aggregated - don't use it
+            }
+          }
+        }
+        // If deduction has a type but no match found, skip it (don't use aggregated entries)
+
         // Use current stock if available, otherwise 0 (item was fully consumed or restocked)
         final currentStock = supply != null ? (supply['stock'] ?? 0) as int : 0;
-
-        // Get deduction count (frequency) for better turnover calculation
-        final deductionCount = (deduction['deductionCount'] ?? 1) as int;
 
         // Historical calculation: opening stock = current stock + quantity consumed
         // This represents the stock level at the start (before all-time consumption)
@@ -559,29 +921,23 @@ class TurnoverRateService {
         // Average stock = average of opening and current stock
         averageStock = (openingStock + currentStock) / 2.0;
 
-        // Calculate turnover rate based on consumption and average inventory
-        // If currentStock = 0 (fully consumed), the standard formula gives 2.0
-        // So we use deduction frequency (how many times it was consumed) as a factor
-        if (currentStock == 0 && averageStock > 0) {
-          // Fully consumed items: use deduction frequency to differentiate
-          // Higher frequency = higher turnover (more active consumption)
-          // Base turnover is 2.0, multiply by deduction frequency to show activity
-          // Formula: (quantityConsumed / averageStock) * (1 + deductionCount * 0.2)
-          // This gives: 1 deduction = 2.4, 2 deductions = 2.8, 5 deductions = 4.0, etc.
-          turnoverRate = (quantityConsumed / averageStock) *
-              (1.0 + (deductionCount * 0.2));
-        } else if (averageStock > 0) {
-          // Standard formula: quantity consumed / average stock
+        // Calculate turnover rate: usageSpeed = qtyConsumed / max(averageStock, 1)
+        // Example sanity check:
+        //   qtyConsumed = 9, currentStock = 0, openingStock = 9
+        //   averageStock = (9 + 0) / 2 = 4.5
+        //   turnoverRate = 9 / max(4.5, 1) = 9 / 4.5 = 2.0
+        if (averageStock > 0) {
           turnoverRate = quantityConsumed / averageStock;
         } else {
           // If average stock is 0 (shouldn't happen, but safety check)
-          // Use consumption frequency as turnover indicator
-          turnoverRate = deductionCount > 0 ? deductionCount.toDouble() : 0.0;
+          // Use quantity consumed directly (with minimum denominator of 1)
+          turnoverRate =
+              quantityConsumed > 0 ? quantityConsumed.toDouble() : 0.0;
         }
 
         turnoverItems.add(TurnoverItem(
           name: name,
-          brand: brand,
+          type: type,
           quantityConsumed: quantityConsumed,
           currentStock: currentStock,
           averageStock: averageStock,
@@ -589,9 +945,15 @@ class TurnoverRateService {
         ));
       }
 
-      // Sort by turnover rate (descending) and limit to top 5
+      // Sort by turnover rate (descending)
       turnoverItems.sort((a, b) => b.turnoverRate.compareTo(a.turnoverRate));
-      return turnoverItems.take(5).toList();
+
+      // Apply limit if specified, otherwise return all items
+      // For all-time, default to 5 for dashboard display
+      if (turnoverItems.length > 5) {
+        return turnoverItems.take(5).toList();
+      }
+      return turnoverItems;
     } catch (e) {
       // On error, return empty list
       print('Error computing all-time turnover items: $e');

@@ -324,8 +324,14 @@ class ApprovalCard extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  supply['name']?.toString() ??
-                                      'Unknown Supply',
+                                  supply['type'] != null &&
+                                          supply['type']
+                                              .toString()
+                                              .trim()
+                                              .isNotEmpty
+                                      ? '${supply['name']?.toString() ?? 'Unknown Supply'} (${supply['type']})'
+                                      : supply['name']?.toString() ??
+                                          'Unknown Supply',
                                   style: AppFonts.sfProStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,

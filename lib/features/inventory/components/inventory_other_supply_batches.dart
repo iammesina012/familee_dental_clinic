@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/features/inventory/controller/inventory_controller.dart';
 import 'package:familee_dental/features/inventory/pages/view_supply_page.dart';
+import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 import 'package:shimmer/shimmer.dart';
 
 class SupabaseOtherSupplyBatches extends StatefulWidget {
   final InventoryItem item;
-  const SupabaseOtherSupplyBatches({super.key, required this.item});
+  final Function(InventoryItem)? onBatchTap;
+  final bool excludeCurrentItem;
+  const SupabaseOtherSupplyBatches({
+    super.key,
+    required this.item,
+    this.onBatchTap,
+    this.excludeCurrentItem = false,
+  });
 
   @override
   State<SupabaseOtherSupplyBatches> createState() =>
@@ -19,6 +27,9 @@ class _SupabaseOtherSupplyBatchesState
   List<InventoryItem>? _cachedProcessedBatches;
   String? _lastItemId;
 
+  // Controller instance for status calculation (cached)
+  late final ViewSupplyController _statusController = ViewSupplyController();
+
   String _formatPackagingDisplay(InventoryItem batch) {
     if (batch.packagingContentQuantity != null &&
         batch.packagingContentQuantity! > 0 &&
@@ -27,6 +38,52 @@ class _SupabaseOtherSupplyBatchesState
       return "${batch.packagingContentQuantity} ${batch.packagingContent} per ${batch.packagingUnit ?? batch.unit}";
     }
     return batch.packagingUnit ?? batch.unit;
+  }
+
+  // Get individual batch status (for display in Other Supply Batches)
+  // This does NOT affect notifications/dashboard - those use grouped status
+  // IMPORTANT: Uses ONLY individual batch stock and baseline, NOT grouped totals
+  String _getBatchStatus(InventoryItem batch) {
+    // Check archived status first
+    if (batch.archived) {
+      return "Archived";
+    }
+
+    // Check expiry status
+    if (!batch.noExpiry && batch.expiry != null && batch.expiry!.isNotEmpty) {
+      final expiryDate = DateTime.tryParse(batch.expiry!.replaceAll('/', '-'));
+      if (expiryDate != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+
+        // Check if expired
+        if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
+          return "Expired";
+        }
+
+        // Check if expiring soon (within 30 days) - but only if there's stock
+        final daysUntilExpiry = dateOnly.difference(today).inDays;
+        if (daysUntilExpiry <= 30 && batch.stock > 0) {
+          return "Expiring";
+        }
+      }
+    }
+
+    // Check stock status using INDIVIDUAL batch stock (not grouped)
+    if (batch.stock == 0) {
+      return "Out of Stock";
+    }
+
+    // Use manually set threshold for low stock detection - uses INDIVIDUAL batch baseline
+    if (batch.lowStockBaseline != null &&
+        batch.lowStockBaseline! > 0 &&
+        batch.stock <= batch.lowStockBaseline!) {
+      return "Low Stock";
+    }
+
+    return "In Stock";
   }
 
   Widget _buildSkeletonLoader(ThemeData theme, ColorScheme scheme) {
@@ -119,7 +176,18 @@ class _SupabaseOtherSupplyBatchesState
         List<InventoryItem> batches;
         if (useCache && _cachedProcessedBatches != null) {
           // Use cached fully processed batches (already filtered, sorted, and merged)
-          batches = _cachedProcessedBatches!;
+          batches = List.from(_cachedProcessedBatches!);
+
+          // Filter out batches with expiry dates that have 0 stock (apply filter to cached batches too)
+          batches.removeWhere((batch) {
+            if (batch.stock == 0 &&
+                !batch.noExpiry &&
+                batch.expiry != null &&
+                batch.expiry!.isNotEmpty) {
+              return true; // Remove this batch
+            }
+            return false;
+          });
         } else {
           // Process batches from scratch - ALL EXISTING LOGIC PRESERVED
           batches = snapshot.data!.where((batch) {
@@ -128,10 +196,11 @@ class _SupabaseOtherSupplyBatchesState
             final currentCat = widget.item.category.trim().toLowerCase();
             if (batchCat != currentCat) return false;
 
-            // Exclude the item we are viewing
-            // All other batches with same name, type, and category should show,
-            // regardless of brand, supplier, cost, expiry, stock, etc.
-            if (batch.id == widget.item.id) return false;
+            // Exclude the current item only if excludeCurrentItem is true (batch details mode)
+            // In overview mode, include all batches including the current one
+            if (widget.excludeCurrentItem && batch.id == widget.item.id) {
+              return false;
+            }
 
             // Filter out expired batches ONLY for non-archived view and ONLY for items WITH expiry dates.
             // When viewing an archived item, include expired batches so they are visible.
@@ -226,7 +295,8 @@ class _SupabaseOtherSupplyBatchesState
             );
           }
 
-          // Merge batches by normalized (brand, supplier, expiry, unit, cost) and sum stock
+          // Merge batches by normalized (brand, supplier, expiry, unit, cost, type) and sum stock
+          // IMPORTANT: Include type in merge key to ensure batches with different types are not merged together
           String norm(String v) => v.trim().toLowerCase();
           DateTime? parseExpiry2(String? v) {
             if (v == null || v.isEmpty) return null;
@@ -240,8 +310,10 @@ class _SupabaseOtherSupplyBatchesState
             final expKey = exp == null
                 ? 'noexpiry'
                 : '${exp.year}-${exp.month.toString().padLeft(2, '0')}-${exp.day.toString().padLeft(2, '0')}';
+            // Include type in merge key to prevent merging batches with different types
+            final typeKey = norm(b.type ?? '');
             final key =
-                '${norm(b.brand)}|${norm(b.supplier)}|$expKey|${norm(b.unit)}|${b.cost.toStringAsFixed(2)}';
+                '${norm(b.brand)}|${norm(b.supplier)}|$expKey|${norm(b.unit)}|${b.cost.toStringAsFixed(2)}|$typeKey';
             if (merged.containsKey(key)) {
               final existing = merged[key]!;
 
@@ -253,7 +325,9 @@ class _SupabaseOtherSupplyBatchesState
                 category: existing.category,
                 cost: existing.cost,
                 stock: existing.stock + b.stock,
-                lowStockBaseline: null,
+                // Preserve lowStockBaseline from existing or new batch (all batches share same threshold)
+                lowStockBaseline:
+                    existing.lowStockBaseline ?? b.lowStockBaseline,
                 unit: existing.unit,
                 packagingUnit: existing.packagingUnit,
                 packagingContent: existing.packagingContent,
@@ -309,6 +383,18 @@ class _SupabaseOtherSupplyBatchesState
 
           // Use the merged list for rendering
           batches = mergedListTemp;
+
+          // Filter out batches with expiry dates that have 0 stock
+          // Only filter if batch has an expiry date (not no_expiry)
+          batches.removeWhere((batch) {
+            if (batch.stock == 0 &&
+                !batch.noExpiry &&
+                batch.expiry != null &&
+                batch.expiry!.isNotEmpty) {
+              return true; // Remove this batch
+            }
+            return false;
+          });
         }
 
         // Final check for empty (for both cached and newly processed batches)
@@ -377,15 +463,29 @@ class _SupabaseOtherSupplyBatchesState
                   ),
                   Expanded(
                     flex: 2,
-                    child: Text(
-                      "₱${batch.cost.toStringAsFixed(2)}",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
+                    child: Builder(
+                      builder: (context) {
+                        final status = _getBatchStatus(batch);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _statusController.getStatusBgColor(status),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            status,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 11,
+                              color:
+                                  _statusController.getStatusTextColor(status),
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -409,12 +509,17 @@ class _SupabaseOtherSupplyBatchesState
                   IconButton(
                     icon: const Icon(Icons.arrow_forward_ios, size: 16),
                     onPressed: () {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (_) => InventoryViewSupplyPage(
-                              item: batch, skipAutoRedirect: true),
-                        ),
-                      );
+                      if (widget.onBatchTap != null) {
+                        widget.onBatchTap!(batch);
+                      } else {
+                        // Fallback to old behavior if no callback provided
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => InventoryViewSupplyPage(
+                                item: batch, skipAutoRedirect: true),
+                          ),
+                        );
+                      }
                     },
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),

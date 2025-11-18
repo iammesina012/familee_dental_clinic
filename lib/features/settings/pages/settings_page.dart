@@ -152,7 +152,7 @@ class _SettingsPageState extends State<SettingsPage> {
           borderRadius: BorderRadius.circular(10),
           color: theme.colorScheme.surface,
         ),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -559,23 +559,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
 
               const SizedBox(height: 32),
-
-              // Standalone Settings
-              Divider(height: 1, thickness: 1, color: theme.dividerColor),
-              const SizedBox(height: 20),
-              _buildSettingItem(
-                icon: Icons.help_outline,
-                title: "App Tutorial",
-                subtitle: "Learn how to use the app",
-                trailing: const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: null,
-                ),
-                onTap: () {
-                  Navigator.pushNamed(context, '/tutorial');
-                },
-              ),
             ],
           );
         },
@@ -856,7 +839,11 @@ class _SettingsPageState extends State<SettingsPage> {
               : Colors.grey.shade200,
         ),
         Expanded(
-          child: _buildSettingsContent(theme, userRoleProvider),
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: _buildSettingsContent(theme, userRoleProvider),
+          ),
         ),
       ],
     );

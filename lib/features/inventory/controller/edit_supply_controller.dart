@@ -97,7 +97,8 @@ class EditSupplyController {
     originalPackagingContent = item.packagingContent ?? 'Pieces';
     originalPackagingQuantity = item.packagingQuantity ?? 1;
     originalPackagingContentQuantity = item.packagingContentQuantity ?? 1;
-    originalLowStockThreshold = item.lowStockBaseline ?? 1;
+    // Store the actual original value (can be null), don't default to 1 for comparison purposes
+    originalLowStockThreshold = item.lowStockBaseline;
     originalCost = item.cost;
     originalExpiry = item.expiry;
     originalNoExpiry = item.noExpiry;
@@ -440,15 +441,31 @@ class EditSupplyController {
         await _supabase.from('supplies').update(updatedData).eq('id', docId);
       }
 
-      // Update low stock threshold for ALL batches of the same supply (name + category)
-      // This ensures the threshold applies to the overall stock, not just individual batches
+      // Update low stock threshold for ALL batches of the same supply (name + category + type)
+      // This ensures the threshold applies only to this specific supply type, not other types
+      // Compare actual values (originalLowStockThreshold can be null, lowStockThreshold is the new value)
       if (lowStockThreshold != originalLowStockThreshold) {
         final String category = (updatedData['category'] ?? '').toString();
-        await _supabase
+        final String? typeValue = updatedData['type']?.toString().trim();
+        final String? type =
+            typeValue != null && typeValue.isNotEmpty ? typeValue : null;
+
+        // Build query with name and category filters
+        var updateQuery = _supabase
             .from('supplies')
             .update({'low_stock_baseline': lowStockThreshold})
             .eq('name', name)
             .eq('category', category);
+
+        // Filter by type - handle null/empty type correctly
+        if (type != null) {
+          updateQuery = updateQuery.eq('type', type);
+        } else {
+          // For supplies without types, match null or empty type
+          updateQuery = updateQuery.or('type.is.null,type.eq.');
+        }
+
+        await updateQuery;
       }
 
       // Auto-manage brands and suppliers

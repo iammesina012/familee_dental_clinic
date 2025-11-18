@@ -357,9 +357,35 @@ class InventoryAnalyticsService {
                     dateOnly.isAtSameMomentAs(today);
               }
 
-              // Filter out expired supplies for grouping (but we'll check all batches later)
+              // Helper function to check if a supply is expiring (within 30 days)
+              bool isExpiring(InventoryItem supply) {
+                if (supply.noExpiry ||
+                    supply.expiry == null ||
+                    supply.expiry!.isEmpty) {
+                  return false;
+                }
+                final expiryDate =
+                    DateTime.tryParse(supply.expiry!.replaceAll('/', '-'));
+                if (expiryDate == null) return false;
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+                final dateOnly =
+                    DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+
+                // Check if expired first
+                if (dateOnly.isBefore(today) ||
+                    dateOnly.isAtSameMomentAs(today)) {
+                  return false; // It's expired, not expiring
+                }
+
+                // Check if expiring (within 30 days)
+                final daysUntil = dateOnly.difference(today).inDays;
+                return daysUntil <= 30;
+              }
+
+              // Filter out expired and expiring supplies for grouping (but we'll check all batches later)
               final supplies = nonArchivedSupplies.where((supply) {
-                return !isExpired(supply);
+                return !isExpired(supply) && !isExpiring(supply);
               }).toList();
 
               // Group ALL non-archived supplies by name + category + type (including expired)
@@ -397,15 +423,22 @@ class InventoryAnalyticsService {
                 final groupKey = entry.key;
                 final groupItems = entry.value;
 
-                // Check if this group has any expired batches (from allGrouped)
+                // Check if this group has expired or expiring batches (from allGrouped)
                 final allBatchesInGroup = allGrouped[groupKey] ?? [];
-                final hasExpiredBatches =
-                    allBatchesInGroup.any((item) => isExpired(item));
+                final expiredBatchesInGroup =
+                    allBatchesInGroup.where((item) => isExpired(item)).toList();
+                final expiringBatchesInGroup = allBatchesInGroup
+                    .where((item) => isExpiring(item))
+                    .toList();
 
-                // If group has expired batches, exclude it from out of stock counting
-                // (it should be in expired section instead)
-                if (hasExpiredBatches) {
-                  // Skip counting this group in out of stock - it belongs in expired section
+                // Skip groups where ALL batches are expired OR expiring
+                // If a group has both expired/expiring and non-expired/expiring batches, count the non-expired/expiring ones
+                if ((expiredBatchesInGroup.length == allBatchesInGroup.length ||
+                        expiringBatchesInGroup.length ==
+                            allBatchesInGroup.length) &&
+                    allBatchesInGroup.isNotEmpty) {
+                  // All batches are expired or expiring - skip counting this group in stock status
+                  // (it belongs in expired/expiring section instead)
                   continue;
                 }
 

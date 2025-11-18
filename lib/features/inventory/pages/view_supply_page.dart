@@ -34,13 +34,29 @@ class InventoryViewSupplyPage extends StatefulWidget {
 class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
   // Add a key to force rebuild when needed
   Key _streamKey = UniqueKey();
-  Key _dropdownKey = UniqueKey();
+
+  // Track whether we're viewing overview or batch details
+  InventoryItem?
+      _selectedBatch; // null = overview mode, not null = batch details mode
 
   // Method to refresh the stream
   void _refreshStream() {
     setState(() {
       _streamKey = UniqueKey();
-      _dropdownKey = UniqueKey();
+    });
+  }
+
+  // Method to show batch details
+  void _showBatchDetails(InventoryItem batch) {
+    setState(() {
+      _selectedBatch = batch;
+    });
+  }
+
+  // Method to return to overview
+  void _returnToOverview() {
+    setState(() {
+      _selectedBatch = null;
     });
   }
 
@@ -422,804 +438,914 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
 
   Widget _buildScaffold(BuildContext context, ViewSupplyController controller,
       InventoryItem updatedItem, String status) {
+    // Determine which item to display - batch details or overview
+    final displayItem = _selectedBatch ?? updatedItem;
+    final isBatchDetailsMode = _selectedBatch != null;
+
+    // When in batch details mode, fetch latest data from stream for accurate individual status
+    if (isBatchDetailsMode) {
+      // Wrap in StreamBuilder to get latest batch data from database
+      return StreamBuilder<InventoryItem?>(
+        stream: controller.supplyStream(displayItem.id),
+        builder: (context, batchSnapshot) {
+          // Use stream data if available, otherwise fall back to _selectedBatch
+          final freshBatch = batchSnapshot.hasData && batchSnapshot.data != null
+              ? batchSnapshot.data!
+              : displayItem;
+
+          // Calculate individual batch status using fresh data (not grouped totals)
+          final displayStatus = controller.getStatus(freshBatch);
+
+          return _buildScaffoldBody(context, controller, updatedItem, status,
+              freshBatch, displayStatus, isBatchDetailsMode);
+        },
+      );
+    }
+
+    // In overview mode, use the passed status (calculated with grouped totals)
+    final displayStatus = status;
+    return _buildScaffoldBody(context, controller, updatedItem, status,
+        displayItem, displayStatus, isBatchDetailsMode);
+  }
+
+  Widget _buildScaffoldBody(
+      BuildContext context,
+      ViewSupplyController controller,
+      InventoryItem updatedItem,
+      String status,
+      InventoryItem displayItem,
+      String displayStatus,
+      bool isBatchDetailsMode) {
     final theme = Theme.of(context);
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          "Inventory",
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        toolbarHeight: 70,
-        iconTheme: theme.appBarTheme.iconTheme,
-        elevation: theme.appBarTheme.elevation,
-        shadowColor: theme.appBarTheme.shadowColor,
-        actions: [
-          // Show different buttons based on archived status
-          if (!updatedItem.archived) ...[
-            // Edit button - Only for Admin users
-            if (!UserRoleProvider().isStaff)
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.green),
-                tooltip: "Edit",
-                onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EditSupplyPage(
-                        item: updatedItem,
+
+    return WillPopScope(
+      onWillPop: () async {
+        // If viewing batch details, return to overview instead of popping
+        if (isBatchDetailsMode) {
+          _returnToOverview();
+          return false; // Prevent default back action
+        }
+        return true; // Allow default back action for overview
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text(
+            "Inventory",
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          centerTitle: true,
+          backgroundColor: theme.appBarTheme.backgroundColor,
+          toolbarHeight: 70,
+          iconTheme: theme.appBarTheme.iconTheme,
+          elevation: theme.appBarTheme.elevation,
+          shadowColor: theme.appBarTheme.shadowColor,
+          actions: [
+            // Show different buttons based on archived status
+            if (!displayItem.archived) ...[
+              // Edit button - Only for Admin users
+              if (!UserRoleProvider().isStaff)
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.green),
+                  tooltip: "Edit",
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditSupplyPage(
+                          item: displayItem,
+                        ),
                       ),
-                    ),
-                  );
-                  if (result == true) {
-                    // Refresh the stream to get updated data
-                    _refreshStream();
-                    // Avoid showing a snackbar if the item is now expired,
-                    // because this page may immediately redirect to the Expired view
-                    try {
-                      final response = await Supabase.instance.client
-                          .from('supplies')
-                          .select('expiry')
-                          .eq('id', updatedItem.id)
-                          .single();
-                      final expiryStr = response['expiry']?.toString();
-                      bool isExpiredNow = false;
-                      if (expiryStr != null && expiryStr.isNotEmpty) {
-                        final dt = DateTime.tryParse(expiryStr) ??
-                            DateTime.tryParse(expiryStr.replaceAll('/', '-'));
-                        if (dt != null) {
-                          final today = DateTime.now();
-                          final d = DateTime(dt.year, dt.month, dt.day);
-                          final t =
-                              DateTime(today.year, today.month, today.day);
-                          isExpiredNow = d.isBefore(t) || d.isAtSameMomentAs(t);
-                        }
-                      }
-                      if (!isExpiredNow) {
-                        final messenger = ScaffoldMessenger.maybeOf(context);
-                        if (messenger != null) {
-                          messenger.showSnackBar(
-                            const SnackBar(content: Text('Supply updated!')),
-                          );
-                        }
-                      }
-                    } catch (_) {
-                      // Best-effort only; ignore errors
-                    }
-                  }
-                },
-              ),
-            // Archive button - Only for Admin users
-            if (!UserRoleProvider().isStaff)
-              IconButton(
-                icon: const Icon(Icons.archive, color: Colors.orange),
-                tooltip: "Archive",
-                onPressed: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => _buildCustomDialog(
-                      context,
-                      title: 'Archive Supply',
-                      content: 'Are you sure you want to archive this supply?',
-                      confirmText: 'Archive',
-                      confirmColor: Colors.orange,
-                      icon: Icons.archive,
-                    ),
-                  );
-                  if (confirmed == true) {
-                    // Check connectivity before proceeding
-                    final hasConnection =
-                        await ConnectivityService().hasInternetConnection();
-                    if (!hasConnection) {
-                      if (context.mounted) {
-                        await showConnectionErrorDialog(context);
-                      }
-                      return;
-                    }
-
-                    try {
-                      await controller.archiveSupply(updatedItem.id);
-                      // Refresh the stream to show updated status
+                    );
+                    if (result == true) {
+                      // Refresh the stream to get updated data
                       _refreshStream();
-                      if (!context.mounted) return;
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (context) => ArchiveSupplyPage(),
-                        ),
-                      );
-                    } catch (e) {
-                      // Check if it's a network error
-                      final errorString = e.toString().toLowerCase();
-                      if (errorString
-                          .contains('archive_blocked_stock_remaining')) {
-                        if (context.mounted) {
-                          await _showArchiveBlockedDialog(context);
+                      // Avoid showing a snackbar if the item is now expired,
+                      // because this page may immediately redirect to the Expired view
+                      try {
+                        final response = await Supabase.instance.client
+                            .from('supplies')
+                            .select('expiry')
+                            .eq('id', displayItem.id)
+                            .single();
+                        final expiryStr = response['expiry']?.toString();
+                        bool isExpiredNow = false;
+                        if (expiryStr != null && expiryStr.isNotEmpty) {
+                          final dt = DateTime.tryParse(expiryStr) ??
+                              DateTime.tryParse(expiryStr.replaceAll('/', '-'));
+                          if (dt != null) {
+                            final today = DateTime.now();
+                            final d = DateTime(dt.year, dt.month, dt.day);
+                            final t =
+                                DateTime(today.year, today.month, today.day);
+                            isExpiredNow =
+                                d.isBefore(t) || d.isAtSameMomentAs(t);
+                          }
                         }
-                      } else if (errorString.contains('socketexception') ||
-                          errorString.contains('failed host lookup') ||
-                          errorString.contains('no address associated') ||
-                          errorString.contains('network is unreachable') ||
-                          errorString.contains('connection refused') ||
-                          errorString.contains('connection timed out')) {
+                        if (!isExpiredNow) {
+                          final messenger = ScaffoldMessenger.maybeOf(context);
+                          if (messenger != null) {
+                            messenger.showSnackBar(
+                              const SnackBar(content: Text('Supply updated!')),
+                            );
+                          }
+                        }
+                      } catch (_) {
+                        // Best-effort only; ignore errors
+                      }
+                    }
+                  },
+                ),
+              // Archive button - Only for Admin users
+              if (!UserRoleProvider().isStaff)
+                IconButton(
+                  icon: const Icon(Icons.archive, color: Colors.orange),
+                  tooltip: "Archive",
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => _buildCustomDialog(
+                        context,
+                        title: 'Archive Supply',
+                        content:
+                            'Are you sure you want to archive this supply?',
+                        confirmText: 'Archive',
+                        confirmColor: Colors.orange,
+                        icon: Icons.archive,
+                      ),
+                    );
+                    if (confirmed == true) {
+                      // Check connectivity before proceeding
+                      final hasConnection =
+                          await ConnectivityService().hasInternetConnection();
+                      if (!hasConnection) {
                         if (context.mounted) {
                           await showConnectionErrorDialog(context);
                         }
-                      } else {
-                        // Other error - show generic error message
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Failed to archive supply: ${e.toString()}'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
+                        return;
                       }
-                    }
-                  }
-                },
-              ),
-          ] else ...[
-            // Unarchive button - Only for Admin users
-            if (!UserRoleProvider().isStaff)
-              IconButton(
-                icon: const Icon(Icons.unarchive, color: Colors.blue),
-                tooltip: "Unarchive",
-                onPressed: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => _buildCustomDialog(
-                      context,
-                      title: 'Unarchive Supply',
-                      content:
-                          'Are you sure you want to unarchive this supply?',
-                      confirmText: 'Unarchive',
-                      confirmColor: Colors.blue,
-                      icon: Icons.unarchive,
-                    ),
-                  );
-                  if (confirmed == true) {
-                    // Check connectivity before proceeding
-                    final hasConnection =
-                        await ConnectivityService().hasInternetConnection();
-                    if (!hasConnection) {
-                      if (context.mounted) {
-                        await showConnectionErrorDialog(context);
-                      }
-                      return;
-                    }
 
-                    try {
-                      await controller.unarchiveSupply(updatedItem.id);
-                      // Refresh the stream to show updated status
-                      _refreshStream();
-                      if (!context.mounted) return;
-                      Navigator.of(context).pop(
-                          'unarchived'); // Go back to archive page with result
-                    } catch (e) {
-                      // Check if it's a network error
-                      final errorString = e.toString().toLowerCase();
-                      if (errorString.contains('socketexception') ||
-                          errorString.contains('failed host lookup') ||
-                          errorString.contains('no address associated') ||
-                          errorString.contains('network is unreachable') ||
-                          errorString.contains('connection refused') ||
-                          errorString.contains('connection timed out')) {
-                        if (context.mounted) {
-                          await showConnectionErrorDialog(context);
-                        }
-                      } else {
-                        // Other error - show generic error message
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Failed to unarchive supply: ${e.toString()}'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    }
-                  }
-                },
-              ),
-            // Delete button - Only for Admin users
-            if (!UserRoleProvider().isStaff)
-              IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                tooltip: "Delete",
-                onPressed: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => _buildCustomDialog(
-                      context,
-                      title: 'Delete Supply',
-                      content:
-                          'Are you sure you want to delete this supply?\n\nThis action cannot be undone.',
-                      confirmText: 'Delete',
-                      confirmColor: Colors.red,
-                      icon: Icons.delete,
-                    ),
-                  );
-                  if (confirmed == true) {
-                    // Check connectivity before proceeding
-                    final hasConnection =
-                        await ConnectivityService().hasInternetConnection();
-                    if (!hasConnection) {
-                      if (context.mounted) {
-                        await showConnectionErrorDialog(context);
-                      }
-                      return;
-                    }
-
-                    try {
-                      await controller.deleteSupply(updatedItem.id);
-                      if (!context.mounted) return;
-                      Navigator.of(context).pop(); // Go back to archive page
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Supply deleted permanently!'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    } catch (e) {
-                      // Check if it's a network error
-                      final errorString = e.toString().toLowerCase();
-                      if (errorString.contains('socketexception') ||
-                          errorString.contains('failed host lookup') ||
-                          errorString.contains('no address associated') ||
-                          errorString.contains('network is unreachable') ||
-                          errorString.contains('connection refused') ||
-                          errorString.contains('connection timed out')) {
-                        if (context.mounted) {
-                          await showConnectionErrorDialog(context);
-                        }
-                      } else {
-                        // Other error - show generic error message
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Failed to delete supply: ${e.toString()}'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    }
-                  }
-                },
-              ),
-          ],
-        ],
-      ),
-      body: ResponsiveContainer(
-        maxWidth: 1000,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              RefreshIndicator(
-                onRefresh: () async {
-                  // Refresh the stream to reload data from Supabase
-                  _refreshStream();
-                  // Wait for the stream to emit at least one event
-                  // This ensures the RefreshIndicator shows its animation
-                  await controller.supplyStream(widget.item.id).first;
-                },
-                child: SingleChildScrollView(
-                  physics: AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.symmetric(
-                    horizontal:
-                        MediaQuery.of(context).size.width < 768 ? 8.0 : 18.0,
-                    vertical:
-                        MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 18),
-                      // Supply name with type and dropdown
-                      Stack(
-                        children: [
-                          // Centered supply name
-                          Center(
-                            child: Text(
-                              updatedItem.type != null &&
-                                      updatedItem.type!.isNotEmpty
-                                  ? "${updatedItem.name} (${updatedItem.type})"
-                                  : updatedItem.name,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 22,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color),
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                      try {
+                        await controller.archiveSupply(displayItem.id);
+                        // Refresh the stream to show updated status
+                        _refreshStream();
+                        if (!context.mounted) return;
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => ArchiveSupplyPage(),
                           ),
-                          // Dropdown positioned on the right (only for non-archived items)
-                          if (!updatedItem.archived)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              bottom: 0,
-                              child: FutureBuilder<List<String>>(
-                                key:
-                                    _dropdownKey, // Force refresh when data changes
-                                future:
-                                    controller.getSupplyTypes(updatedItem.name),
-                                builder: (context, snapshot) {
-                                  final existingTypes = snapshot.data ?? [];
-
-                                  // If no type exists, show nothing (no dropdown needed)
-                                  if (updatedItem.type == null ||
-                                      updatedItem.type!.isEmpty) {
-                                    return const SizedBox.shrink();
-                                  }
-
-                                  // If type exists, show dropdown
-                                  return DropdownButton<String>(
-                                    value: updatedItem.type!,
-                                    // Limit dropdown height to ~5 items (5 * 48px)
-                                    menuMaxHeight: 240,
-                                    items: [
-                                      // Current type
-                                      DropdownMenuItem<String>(
-                                        value: updatedItem.type!,
-                                        child: Text(updatedItem.type!),
-                                      ),
-                                      // Other existing types
-                                      ...existingTypes
-                                          .where((type) =>
-                                              type != updatedItem.type)
-                                          .map((type) =>
-                                              DropdownMenuItem<String>(
-                                                value: type,
-                                                child: Text(type),
-                                              )),
-                                    ],
-                                    onChanged: (String? newType) {
-                                      if (newType != null &&
-                                          newType != updatedItem.type) {
-                                        _navigateToSupplyType(
-                                            updatedItem.name, newType);
-                                      }
-                                    },
-                                    underline: Container(),
-                                    icon: Icon(
-                                      Icons.arrow_drop_down,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color,
-                                    ),
-                                  );
-                                },
+                        );
+                      } catch (e) {
+                        // Check if it's a network error
+                        final errorString = e.toString().toLowerCase();
+                        if (errorString
+                            .contains('archive_blocked_stock_remaining')) {
+                          if (context.mounted) {
+                            await _showArchiveBlockedDialog(context);
+                          }
+                        } else if (errorString.contains('socketexception') ||
+                            errorString.contains('failed host lookup') ||
+                            errorString.contains('no address associated') ||
+                            errorString.contains('network is unreachable') ||
+                            errorString.contains('connection refused') ||
+                            errorString.contains('connection timed out')) {
+                          if (context.mounted) {
+                            await showConnectionErrorDialog(context);
+                          }
+                        } else {
+                          // Other error - show generic error message
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Failed to archive supply: ${e.toString()}'),
+                                backgroundColor: Colors.red,
                               ),
-                            ),
-                        ],
+                            );
+                          }
+                        }
+                      }
+                    }
+                  },
+                ),
+            ] else ...[
+              // Unarchive button - Only for Admin users
+              if (!UserRoleProvider().isStaff)
+                IconButton(
+                  icon: const Icon(Icons.unarchive, color: Colors.blue),
+                  tooltip: "Unarchive",
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => _buildCustomDialog(
+                        context,
+                        title: 'Unarchive Supply',
+                        content:
+                            'Are you sure you want to unarchive this supply?',
+                        confirmText: 'Unarchive',
+                        confirmColor: Colors.blue,
+                        icon: Icons.unarchive,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        updatedItem.category,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.color
-                              ?.withOpacity(0.7),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Center(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: updatedItem.imageUrl.isNotEmpty
-                              ? CachedNetworkImage(
-                                  imageUrl: updatedItem.imageUrl,
-                                  width: 130,
-                                  height: 130,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) {
-                                    debugPrint(
-                                        '[IMAGE_VIEW] Loading placeholder for ${updatedItem.name} (URL: $url)');
-                                    return Container(
-                                      width: 130,
-                                      height: 130,
-                                      color: Theme.of(context)
-                                          .dividerColor
-                                          .withOpacity(0.15),
-                                      child: const Icon(Icons.image,
-                                          size: 40, color: Colors.grey),
-                                    );
-                                  },
-                                  errorWidget: (context, url, error) {
-                                    debugPrint(
-                                        '[IMAGE_VIEW] ERROR loading ${updatedItem.name} (URL: $url, Error: $error)');
-                                    return Container(
-                                      width: 130,
-                                      height: 130,
-                                      color: Theme.of(context)
-                                          .dividerColor
-                                          .withOpacity(0.15),
-                                      child: const Icon(
-                                          Icons.image_not_supported,
-                                          size: 40,
-                                          color: Colors.grey),
-                                    );
-                                  },
-                                  fadeInDuration:
-                                      const Duration(milliseconds: 200),
-                                  fadeOutDuration:
-                                      const Duration(milliseconds: 100),
-                                )
-                              : Container(
-                                  width: 130,
-                                  height: 130,
-                                  color: Theme.of(context)
-                                      .dividerColor
-                                      .withOpacity(0.15),
-                                  child: const Icon(Icons.image,
-                                      size: 40, color: Colors.grey),
-                                ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: controller.getStatusBgColor(
-                                controller.getStatus(updatedItem)),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            controller.getStatus(updatedItem),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: controller.getStatusTextColor(
-                                  controller.getStatus(updatedItem)),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text("Stock",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15)),
-                                const SizedBox(height: 4),
-                                Text("${updatedItem.stock}",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 15),
-                                    textAlign: TextAlign.center),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text("Packaging Content/Unit",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15)),
-                                const SizedBox(height: 4),
-                                Text(
-                                    updatedItem.packagingContentQuantity !=
-                                                null &&
-                                            updatedItem
-                                                    .packagingContentQuantity! >
-                                                0 &&
-                                            updatedItem.packagingContent !=
-                                                null &&
-                                            updatedItem
-                                                .packagingContent!.isNotEmpty
-                                        ? "${updatedItem.packagingContentQuantity} ${updatedItem.packagingContent} per ${updatedItem.packagingUnit ?? updatedItem.unit}"
-                                        : updatedItem.packagingUnit ??
-                                            updatedItem.unit,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 15),
-                                    textAlign: TextAlign.center),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text("Cost",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15)),
-                                const SizedBox(height: 4),
-                                Text("₱${updatedItem.cost.toStringAsFixed(2)}",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 15),
-                                    textAlign: TextAlign.center),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text("Brand Name",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15)),
-                                const SizedBox(height: 4),
-                                LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final textPainter = TextPainter(
-                                      text: TextSpan(
-                                        text: updatedItem.brand,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                      textDirection: TextDirection.ltr,
-                                    );
-                                    textPainter.layout();
+                    );
+                    if (confirmed == true) {
+                      // Check connectivity before proceeding
+                      final hasConnection =
+                          await ConnectivityService().hasInternetConnection();
+                      if (!hasConnection) {
+                        if (context.mounted) {
+                          await showConnectionErrorDialog(context);
+                        }
+                        return;
+                      }
 
-                                    final textWidth = textPainter.width;
-                                    final containerWidth = constraints.maxWidth;
-
-                                    if (textWidth > containerWidth) {
-                                      // Text is too long, use marquee
-                                      return SizedBox(
-                                        height: 20,
-                                        child: Marquee(
-                                          text: updatedItem.brand,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                  fontWeight: FontWeight.w500,
-                                                  fontSize: 15,
-                                                  color: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.color),
-                                          scrollAxis: Axis.horizontal,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.center,
-                                          blankSpace: 20.0,
-                                          velocity: 30.0,
-                                          pauseAfterRound:
-                                              const Duration(seconds: 1),
-                                          startPadding: 10.0,
-                                          accelerationDuration:
-                                              const Duration(seconds: 1),
-                                          accelerationCurve: Curves.linear,
-                                          decelerationDuration:
-                                              const Duration(milliseconds: 500),
-                                          decelerationCurve: Curves.easeOut,
-                                        ),
-                                      );
-                                    } else {
-                                      // Text fits, use normal text
-                                      return Text(
-                                        updatedItem.brand,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.w500,
-                                                fontSize: 15),
-                                        textAlign: TextAlign.center,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text("Expiry",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  (updatedItem.expiry != null &&
-                                          updatedItem.expiry!.isNotEmpty)
-                                      ? updatedItem.expiry!.replaceAll('-', '/')
-                                      : "No expiry",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15),
-                                  textAlign: TextAlign.center,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text("Supplier",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15)),
-                                const SizedBox(height: 4),
-                                LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final textPainter = TextPainter(
-                                      text: TextSpan(
-                                        text: updatedItem.supplier,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                      textDirection: TextDirection.ltr,
-                                    );
-                                    textPainter.layout();
-
-                                    final textWidth = textPainter.width;
-                                    final containerWidth = constraints.maxWidth;
-
-                                    if (textWidth > containerWidth) {
-                                      // long text = marquee animation
-                                      return SizedBox(
-                                        height: 20,
-                                        child: Marquee(
-                                          text: updatedItem.supplier,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                  fontWeight: FontWeight.w500,
-                                                  fontSize: 15,
-                                                  color: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.color),
-                                          scrollAxis: Axis.horizontal,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.center,
-                                          blankSpace: 20.0,
-                                          velocity: 30.0,
-                                          pauseAfterRound:
-                                              const Duration(seconds: 1),
-                                          startPadding: 10.0,
-                                          accelerationDuration:
-                                              const Duration(seconds: 1),
-                                          accelerationCurve: Curves.linear,
-                                          decelerationDuration:
-                                              const Duration(milliseconds: 500),
-                                          decelerationCurve: Curves.easeOut,
-                                        ),
-                                      );
-                                    } else {
-                                      // short text = no animation
-                                      return Text(
-                                        updatedItem.supplier,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.w500,
-                                                fontSize: 15),
-                                        textAlign: TextAlign.center,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                      try {
+                        await controller.unarchiveSupply(displayItem.id);
+                        // Refresh the stream to show updated status
+                        _refreshStream();
+                        if (!context.mounted) return;
+                        Navigator.of(context).pop(
+                            'unarchived'); // Go back to archive page with result
+                      } catch (e) {
+                        // Check if it's a network error
+                        final errorString = e.toString().toLowerCase();
+                        if (errorString.contains('socketexception') ||
+                            errorString.contains('failed host lookup') ||
+                            errorString.contains('no address associated') ||
+                            errorString.contains('network is unreachable') ||
+                            errorString.contains('connection refused') ||
+                            errorString.contains('connection timed out')) {
+                          if (context.mounted) {
+                            await showConnectionErrorDialog(context);
+                          }
+                        } else {
+                          // Other error - show generic error message
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Failed to unarchive supply: ${e.toString()}'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    }
+                  },
+                ),
+              // Delete button - Only for Admin users
+              if (!UserRoleProvider().isStaff)
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  tooltip: "Delete",
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => _buildCustomDialog(
+                        context,
+                        title: 'Delete Supply',
+                        content:
+                            'Are you sure you want to delete this supply?\n\nThis action cannot be undone.',
+                        confirmText: 'Delete',
+                        confirmColor: Colors.red,
+                        icon: Icons.delete,
                       ),
-                      const SizedBox(height: 28),
-                      Divider(
-                          thickness: 1.2,
-                          height: 36,
-                          color: Theme.of(context).dividerColor),
-                      if (!widget.hideOtherExpirySection) ...[
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: 10.0, top: 2.0),
-                            child: Text(
-                              "Other Supply Batches",
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18),
-                            ),
+                    );
+                    if (confirmed == true) {
+                      // Check connectivity before proceeding
+                      final hasConnection =
+                          await ConnectivityService().hasInternetConnection();
+                      if (!hasConnection) {
+                        if (context.mounted) {
+                          await showConnectionErrorDialog(context);
+                        }
+                        return;
+                      }
+
+                      try {
+                        await controller.deleteSupply(displayItem.id);
+                        if (!context.mounted) return;
+                        Navigator.of(context).pop(); // Go back to archive page
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Supply deleted permanently!'),
+                            backgroundColor: Colors.red,
                           ),
-                        ),
-                        // Show live supply batches from Supabase; if none, fall back to embedded batches if present
-                        SupabaseOtherSupplyBatches(item: updatedItem),
-                        _EmbeddedExpiryBatchesFallback(item: updatedItem),
-                      ],
-                    ],
+                        );
+                      } catch (e) {
+                        // Check if it's a network error
+                        final errorString = e.toString().toLowerCase();
+                        if (errorString.contains('socketexception') ||
+                            errorString.contains('failed host lookup') ||
+                            errorString.contains('no address associated') ||
+                            errorString.contains('network is unreachable') ||
+                            errorString.contains('connection refused') ||
+                            errorString.contains('connection timed out')) {
+                          if (context.mounted) {
+                            await showConnectionErrorDialog(context);
+                          }
+                        } else {
+                          // Other error - show generic error message
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Failed to delete supply: ${e.toString()}'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    }
+                  },
+                ),
+            ],
+          ],
+        ),
+        body: ResponsiveContainer(
+          maxWidth: 1000,
+          child: SafeArea(
+            child: Stack(
+              children: [
+                RefreshIndicator(
+                  onRefresh: () async {
+                    // Refresh the stream to reload data from Supabase
+                    _refreshStream();
+                    // Wait for the stream to emit at least one event
+                    // This ensures the RefreshIndicator shows its animation
+                    await controller.supplyStream(displayItem.id).first;
+                  },
+                  child: SingleChildScrollView(
+                    physics: AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.symmetric(
+                      horizontal:
+                          MediaQuery.of(context).size.width < 768 ? 8.0 : 18.0,
+                      vertical:
+                          MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0,
+                    ),
+                    child: isBatchDetailsMode
+                        ? _buildBatchDetailsView(
+                            context, controller, displayItem, displayStatus)
+                        : _buildOverviewView(
+                            context, controller, updatedItem, displayStatus),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  // Build overview view showing total stock and batches
+  Widget _buildOverviewView(
+      BuildContext context,
+      ViewSupplyController controller,
+      InventoryItem updatedItem,
+      String status) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: Supabase.instance.client
+          .from('supplies')
+          .select('*')
+          .eq('name', updatedItem.name)
+          .eq('brand', updatedItem.brand)
+          .eq('type', updatedItem.type ?? '')
+          .timeout(const Duration(seconds: 2),
+              onTimeout: () => <Map<String, dynamic>>[]),
+      builder: (context, batchSnap) {
+        int totalStock = 0;
+        int? totalBaseline;
+
+        if (batchSnap.hasData && batchSnap.data!.isNotEmpty) {
+          totalStock = _calculateTotals(batchSnap.data!);
+          totalBaseline = _calculateTotalBaseline(batchSnap.data!);
+        } else {
+          // Fallback to cache
+          final (cachedTotalStock, cachedTotalBaseline) =
+              _getGroupedTotalsFromCache(updatedItem);
+          totalStock = cachedTotalStock ?? updatedItem.stock;
+          totalBaseline = cachedTotalBaseline;
+        }
+
+        // Overview status uses total stock vs baseline (grouped logic for overview)
+        // Individual batches in "Other Supply Batches" list show their own individual status
+        final overallStatus = controller.getStatus(updatedItem,
+            totalStock: totalStock, totalBaseline: totalBaseline);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: 18),
+            // Supply name with type and dropdown
+            Stack(
+              children: [
+                // Centered supply name
+                Center(
+                  child: Text(
+                    updatedItem.type != null && updatedItem.type!.isNotEmpty
+                        ? "${updatedItem.name} (${updatedItem.type})"
+                        : updatedItem.name,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                        color: Theme.of(context).textTheme.bodyMedium?.color),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              updatedItem.category,
+              style: TextStyle(
+                fontSize: 15,
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.color
+                    ?.withOpacity(0.7),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: updatedItem.imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: updatedItem.imageUrl,
+                        width: 130,
+                        height: 130,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) {
+                          debugPrint(
+                              '[IMAGE_VIEW] Loading placeholder for ${updatedItem.name} (URL: $url)');
+                          return Container(
+                            width: 130,
+                            height: 130,
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withOpacity(0.15),
+                            child: const Icon(Icons.image,
+                                size: 40, color: Colors.grey),
+                          );
+                        },
+                        errorWidget: (context, url, error) {
+                          debugPrint(
+                              '[IMAGE_VIEW] ERROR loading ${updatedItem.name} (URL: $url, Error: $error)');
+                          return Container(
+                            width: 130,
+                            height: 130,
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withOpacity(0.15),
+                            child: const Icon(Icons.image_not_supported,
+                                size: 40, color: Colors.grey),
+                          );
+                        },
+                        fadeInDuration: const Duration(milliseconds: 200),
+                        fadeOutDuration: const Duration(milliseconds: 100),
+                      )
+                    : Container(
+                        width: 130,
+                        height: 130,
+                        color: Theme.of(context).dividerColor.withOpacity(0.15),
+                        child: const Icon(Icons.image,
+                            size: 40, color: Colors.grey),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Total Stock display for overview
+            Text(
+              "Total Stock: $totalStock",
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                decoration: BoxDecoration(
+                  color: controller.getStatusBgColor(overallStatus),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  overallStatus,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: controller.getStatusTextColor(overallStatus),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            Divider(
+                thickness: 1.2,
+                height: 36,
+                color: Theme.of(context).dividerColor),
+            if (!widget.hideOtherExpirySection) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10.0, top: 2.0),
+                  child: Text(
+                    "Other Supply Batches",
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ),
+              ),
+              // Show live supply batches from Supabase; if none, fall back to embedded batches if present
+              SupabaseOtherSupplyBatches(
+                item: updatedItem,
+                onBatchTap: _showBatchDetails,
+                excludeCurrentItem:
+                    false, // Include all batches in overview mode
+              ),
+              _EmbeddedExpiryBatchesFallback(item: updatedItem),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  // Build batch details view showing all detailed fields
+  Widget _buildBatchDetailsView(
+      BuildContext context,
+      ViewSupplyController controller,
+      InventoryItem displayItem,
+      String status) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(height: 18),
+        // Supply name with type
+        Text(
+          displayItem.type != null && displayItem.type!.isNotEmpty
+              ? "${displayItem.name} (${displayItem.type})"
+              : displayItem.name,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: 22,
+              color: Theme.of(context).textTheme.bodyMedium?.color),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          displayItem.category,
+          style: TextStyle(
+            fontSize: 15,
+            color:
+                Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: displayItem.imageUrl.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: displayItem.imageUrl,
+                    width: 130,
+                    height: 130,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) {
+                      debugPrint(
+                          '[IMAGE_VIEW] Loading placeholder for ${displayItem.name} (URL: $url)');
+                      return Container(
+                        width: 130,
+                        height: 130,
+                        color: Theme.of(context).dividerColor.withOpacity(0.15),
+                        child: const Icon(Icons.image,
+                            size: 40, color: Colors.grey),
+                      );
+                    },
+                    errorWidget: (context, url, error) {
+                      debugPrint(
+                          '[IMAGE_VIEW] ERROR loading ${displayItem.name} (URL: $url, Error: $error)');
+                      return Container(
+                        width: 130,
+                        height: 130,
+                        color: Theme.of(context).dividerColor.withOpacity(0.15),
+                        child: const Icon(Icons.image_not_supported,
+                            size: 40, color: Colors.grey),
+                      );
+                    },
+                    fadeInDuration: const Duration(milliseconds: 200),
+                    fadeOutDuration: const Duration(milliseconds: 100),
+                  )
+                : Container(
+                    width: 130,
+                    height: 130,
+                    color: Theme.of(context).dividerColor.withOpacity(0.15),
+                    child:
+                        const Icon(Icons.image, size: 40, color: Colors.grey),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            decoration: BoxDecoration(
+              color: controller.getStatusBgColor(status),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              status,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: controller.getStatusTextColor(status),
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text("Stock",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  Text("${displayItem.stock}",
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w500, fontSize: 15),
+                      textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text("Packaging Content/Unit",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  Text(
+                      displayItem.packagingContentQuantity != null &&
+                              displayItem.packagingContentQuantity! > 0 &&
+                              displayItem.packagingContent != null &&
+                              displayItem.packagingContent!.isNotEmpty
+                          ? "${displayItem.packagingContentQuantity} ${displayItem.packagingContent} per ${displayItem.packagingUnit ?? displayItem.unit}"
+                          : displayItem.packagingUnit ?? displayItem.unit,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w500, fontSize: 15),
+                      textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text("Cost",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  Text("₱${displayItem.cost.toStringAsFixed(2)}",
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w500, fontSize: 15),
+                      textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text("Brand Name",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final textPainter = TextPainter(
+                        text: TextSpan(
+                          text: displayItem.brand,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                          ),
+                        ),
+                        textDirection: TextDirection.ltr,
+                      );
+                      textPainter.layout();
+
+                      final textWidth = textPainter.width;
+                      final containerWidth = constraints.maxWidth;
+
+                      if (textWidth > containerWidth) {
+                        // Text is too long, use marquee
+                        return SizedBox(
+                          height: 20,
+                          child: Marquee(
+                            text: displayItem.brand,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 15,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color),
+                            scrollAxis: Axis.horizontal,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            blankSpace: 20.0,
+                            velocity: 30.0,
+                            pauseAfterRound: const Duration(seconds: 1),
+                            startPadding: 10.0,
+                            accelerationDuration: const Duration(seconds: 1),
+                            accelerationCurve: Curves.linear,
+                            decelerationDuration:
+                                const Duration(milliseconds: 500),
+                            decelerationCurve: Curves.easeOut,
+                          ),
+                        );
+                      } else {
+                        // Text fits, use normal text
+                        return Text(
+                          displayItem.brand,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                  fontWeight: FontWeight.w500, fontSize: 15),
+                          textAlign: TextAlign.center,
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text("Expiry",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  Text(
+                    (displayItem.expiry != null &&
+                            displayItem.expiry!.isNotEmpty)
+                        ? displayItem.expiry!.replaceAll('-', '/')
+                        : "No expiry",
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w500, fontSize: 15),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text("Supplier",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final textPainter = TextPainter(
+                        text: TextSpan(
+                          text: displayItem.supplier,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                          ),
+                        ),
+                        textDirection: TextDirection.ltr,
+                      );
+                      textPainter.layout();
+
+                      final textWidth = textPainter.width;
+                      final containerWidth = constraints.maxWidth;
+
+                      if (textWidth > containerWidth) {
+                        // long text = marquee animation
+                        return SizedBox(
+                          height: 20,
+                          child: Marquee(
+                            text: displayItem.supplier,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 15,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color),
+                            scrollAxis: Axis.horizontal,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            blankSpace: 20.0,
+                            velocity: 30.0,
+                            pauseAfterRound: const Duration(seconds: 1),
+                            startPadding: 10.0,
+                            accelerationDuration: const Duration(seconds: 1),
+                            accelerationCurve: Curves.linear,
+                            decelerationDuration:
+                                const Duration(milliseconds: 500),
+                            decelerationCurve: Curves.easeOut,
+                          ),
+                        );
+                      } else {
+                        // short text = no animation
+                        return Text(
+                          displayItem.supplier,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                  fontWeight: FontWeight.w500, fontSize: 15),
+                          textAlign: TextAlign.center,
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        Divider(
+            thickness: 1.2, height: 36, color: Theme.of(context).dividerColor),
+        if (!widget.hideOtherExpirySection) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10.0, top: 2.0),
+              child: Text(
+                "Other Supply Batches",
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ),
+          // Show live supply batches from Supabase; if none, fall back to embedded batches if present
+          SupabaseOtherSupplyBatches(
+            item: displayItem,
+            onBatchTap: _showBatchDetails,
+            excludeCurrentItem:
+                true, // Exclude current batch in batch details mode
+          ),
+          _EmbeddedExpiryBatchesFallback(item: displayItem),
+        ],
+      ],
     );
   }
 
@@ -1447,33 +1573,6 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         ),
       ),
     );
-  }
-
-  // Helper method to navigate to a specific supply type
-  void _navigateToSupplyType(String supplyName, String type) async {
-    debugPrint(
-        '[VIEW_SUPPLY] _navigateToSupplyType called for: $supplyName, type: $type');
-    final viewController = ViewSupplyController();
-    final item = await viewController.getSupplyByNameAndType(supplyName, type);
-
-    if (item != null && context.mounted) {
-      debugPrint(
-          '[VIEW_SUPPLY] Navigating to supply: ${item.name} (${item.type})');
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => InventoryViewSupplyPage(
-            item: item,
-            skipAutoRedirect: widget.skipAutoRedirect,
-            hideOtherExpirySection: widget.hideOtherExpirySection,
-          ),
-        ),
-      );
-    } else {
-      debugPrint(
-          '[VIEW_SUPPLY] Could not find supply: $supplyName, type: $type');
-      // Silently fail - don't show error message if supply not found
-      // This could happen when offline and supply not in cache
-    }
   }
 }
 
