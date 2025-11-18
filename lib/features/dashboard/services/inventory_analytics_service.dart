@@ -630,6 +630,7 @@ class InventoryAnalyticsService {
       final allSupplies = response.map((row) {
         final name = row['name'] ?? '';
         final type = row['type'] ?? '';
+        final category = row['category'] ?? '';
         final stock = (row['stock'] ?? 0).toInt();
         // Format supply name with type: "Surgical Mask(Pink)" - separate from quantity
         String displayName = name;
@@ -641,6 +642,7 @@ class InventoryAnalyticsService {
           'id': row['id'] as String,
           'name': name,
           'type': type,
+          'category': category,
           'displayName': displayName,
           'stock': stock,
           'lowStockBaseline': row['low_stock_baseline'] != null
@@ -658,11 +660,78 @@ class InventoryAnalyticsService {
       }).toList();
 
       // Filter out archived supplies
-      final supplies =
+      final nonArchivedSupplies =
           allSupplies.where((supply) => !supply['archived']).toList();
 
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
+
+      // Helper function to check if a supply is expired
+      bool isExpired(Map<String, dynamic> supply) {
+        final noExpiry = supply['noExpiry'] as bool;
+        final expiry = supply['expiry'] as String?;
+        if (noExpiry || expiry == null || expiry.isEmpty) {
+          return false;
+        }
+        final expiryDate = DateTime.tryParse(expiry.replaceAll('/', '-'));
+        if (expiryDate == null) return false;
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+        return dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today);
+      }
+
+      // Helper function to check if a supply is expiring (within 30 days)
+      bool isExpiring(Map<String, dynamic> supply) {
+        final noExpiry = supply['noExpiry'] as bool;
+        final expiry = supply['expiry'] as String?;
+        if (noExpiry || expiry == null || expiry.isEmpty) {
+          return false;
+        }
+        final expiryDate = DateTime.tryParse(expiry.replaceAll('/', '-'));
+        if (expiryDate == null) return false;
+        final dateOnly =
+            DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+
+        // Check if expired first
+        if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
+          return false; // It's expired, not expiring
+        }
+
+        // Check if expiring (within 30 days)
+        final daysUntil = dateOnly.difference(today).inDays;
+        return daysUntil <= 30;
+      }
+
+      // Filter out expired and expiring supplies for grouping
+      final supplies = nonArchivedSupplies.where((supply) {
+        return !isExpired(supply) && !isExpiring(supply);
+      }).toList();
+
+      // Group ALL non-archived supplies by name + category + type (including expired/expiring)
+      final Map<String, List<Map<String, dynamic>>> allGrouped = {};
+      for (final supply in nonArchivedSupplies) {
+        final nameKey = (supply['name'] as String).trim().toLowerCase();
+        final categoryKey = (supply['category'] as String).trim().toLowerCase();
+        final typeKey = (supply['type'] as String? ?? '').trim().toLowerCase();
+        final key = '${nameKey}_${categoryKey}_$typeKey';
+        if (!allGrouped.containsKey(key)) {
+          allGrouped[key] = [];
+        }
+        allGrouped[key]!.add(supply);
+      }
+
+      // Group non-expired/non-expiring supplies by name + category + type
+      final Map<String, List<Map<String, dynamic>>> grouped = {};
+      for (final supply in supplies) {
+        final nameKey = (supply['name'] as String).trim().toLowerCase();
+        final categoryKey = (supply['category'] as String).trim().toLowerCase();
+        final typeKey = (supply['type'] as String? ?? '').trim().toLowerCase();
+        final key = '${nameKey}_${categoryKey}_$typeKey';
+        if (!grouped.containsKey(key)) {
+          grouped[key] = [];
+        }
+        grouped[key]!.add(supply);
+      }
 
       final Map<String, List<Map<String, dynamic>>> suppliesByStatus = {
         'In Stock': [],
@@ -672,58 +741,87 @@ class InventoryAnalyticsService {
         'Expired': [],
       };
 
-      for (final supply in supplies) {
-        final stock = supply['stock'] as int;
-        final noExpiry = supply['noExpiry'] as bool;
-        final expiry = supply['expiry'] as String?;
+      // Process grouped supplies (for stock status)
+      for (final entry in grouped.entries) {
+        final groupKey = entry.key;
+        final groupItems = entry.value;
 
-        String status = 'In Stock';
-        bool isExpired = false;
-        bool isExpiring = false;
+        // Check if this group has expired or expiring batches
+        final allBatchesInGroup = allGrouped[groupKey] ?? [];
+        final expiredBatchesInGroup =
+            allBatchesInGroup.where((item) => isExpired(item)).toList();
+        final expiringBatchesInGroup =
+            allBatchesInGroup.where((item) => isExpiring(item)).toList();
 
-        // Check expiry first
-        if (!noExpiry && expiry != null && expiry.isNotEmpty) {
-          final expiryDate = DateTime.tryParse(expiry.replaceAll('/', '-'));
-          if (expiryDate != null) {
-            final dateOnly =
-                DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
-            if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today)) {
-              isExpired = true;
-              status = 'Expired';
-            } else {
-              final daysUntil = dateOnly.difference(today).inDays;
-              if (daysUntil <= 30) {
-                isExpiring = true;
-                status = 'Expiring';
-              }
-            }
+        // Skip groups where ALL batches are expired OR expiring
+        if ((expiredBatchesInGroup.length == allBatchesInGroup.length ||
+                expiringBatchesInGroup.length == allBatchesInGroup.length) &&
+            allBatchesInGroup.isNotEmpty) {
+          continue;
+        }
+
+        // Calculate total stock for this group
+        final totalStock =
+            groupItems.fold(0, (sum, item) => sum + (item['stock'] as int));
+
+        // Get threshold (pick first non-null baseline from any batch in group)
+        int? totalBaseline;
+        for (final item in groupItems) {
+          final baseline = item['lowStockBaseline'] as int?;
+          if (baseline != null && baseline > 0) {
+            totalBaseline = baseline;
+            break;
           }
         }
 
-        // Determine stock status (if not expired/expiring) using manually set threshold
-        if (!isExpired && !isExpiring) {
-          if (stock == 0) {
-            status = 'Out of Stock';
-          } else {
-            final lowStockBaseline = supply['lowStockBaseline'] as int?;
-            // Use manually set threshold for low stock detection
-            if (lowStockBaseline != null &&
-                lowStockBaseline > 0 &&
-                stock <= lowStockBaseline) {
-              status = 'Low Stock';
-            } else {
-              status = 'In Stock';
-            }
-          }
+        // Pick first item in group as representative
+        final representativeItem = Map<String, dynamic>.from(groupItems.first);
+        representativeItem['stock'] = totalStock; // Use grouped total stock
+        representativeItem['lowStockBaseline'] = totalBaseline;
+
+        // Determine status based on grouped totals
+        String status;
+        if (totalStock == 0) {
+          status = 'Out of Stock';
+        } else if (totalBaseline != null &&
+            totalBaseline > 0 &&
+            totalStock <= totalBaseline) {
+          status = 'Low Stock';
+        } else {
+          status = 'In Stock';
         }
 
-        // Add status field to supply
-        supply['status'] = status;
-        supply['expiryDisplay'] = noExpiry || expiry == null || expiry.isEmpty
-            ? 'No expiry'
-            : expiry.replaceAll('/', '-');
+        representativeItem['status'] = status;
+        representativeItem['expiryDisplay'] =
+            'No expiry'; // Grouped items may have mixed expiry
 
-        suppliesByStatus[status]!.add(supply);
+        suppliesByStatus[status]!.add(representativeItem);
+      }
+
+      // Process expired supplies (individually, not grouped)
+      for (final supply in nonArchivedSupplies) {
+        if (isExpired(supply)) {
+          final supplyCopy = Map<String, dynamic>.from(supply);
+          supplyCopy['status'] = 'Expired';
+          final expiry = supply['expiry'] as String?;
+          supplyCopy['expiryDisplay'] = expiry != null && expiry.isNotEmpty
+              ? expiry.replaceAll('/', '-')
+              : 'No expiry';
+          suppliesByStatus['Expired']!.add(supplyCopy);
+        }
+      }
+
+      // Process expiring supplies (individually, not grouped)
+      for (final supply in nonArchivedSupplies) {
+        if (isExpiring(supply)) {
+          final supplyCopy = Map<String, dynamic>.from(supply);
+          supplyCopy['status'] = 'Expiring';
+          final expiry = supply['expiry'] as String?;
+          supplyCopy['expiryDisplay'] = expiry != null && expiry.isNotEmpty
+              ? expiry.replaceAll('/', '-')
+              : 'No expiry';
+          suppliesByStatus['Expiring']!.add(supplyCopy);
+        }
       }
 
       // Cache the result (in-memory + Hive)
@@ -752,6 +850,7 @@ class InventoryAnalyticsService {
         final allSupplies = response.map((row) {
           final name = row['name'] ?? '';
           final type = row['type'] ?? '';
+          final category = row['category'] ?? '';
           final stock = (row['stock'] ?? 0).toInt();
           String displayName = name;
           if (type != null && type.toString().trim().isNotEmpty) {
@@ -762,8 +861,12 @@ class InventoryAnalyticsService {
             'id': row['id'] as String,
             'name': name,
             'type': type,
+            'category': category,
             'displayName': displayName,
             'stock': stock,
+            'lowStockBaseline': row['low_stock_baseline'] != null
+                ? (row['low_stock_baseline'] as num).toInt()
+                : null,
             'packagingUnit': row['packaging_unit'] ?? row['unit'] ?? '',
             'packagingContent': row['packaging_content'] ?? '',
             'brand': row['brand'] ?? 'N/A',
@@ -775,11 +878,70 @@ class InventoryAnalyticsService {
           };
         }).toList();
 
-        final supplies =
+        final nonArchivedSupplies =
             allSupplies.where((supply) => !supply['archived']).toList();
 
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
+
+        // Helper functions
+        bool isExpired(Map<String, dynamic> supply) {
+          final noExpiry = supply['noExpiry'] as bool;
+          final expiry = supply['expiry'] as String?;
+          if (noExpiry || expiry == null || expiry.isEmpty) return false;
+          final expiryDate = DateTime.tryParse(expiry.replaceAll('/', '-'));
+          if (expiryDate == null) return false;
+          final dateOnly =
+              DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+          return dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today);
+        }
+
+        bool isExpiring(Map<String, dynamic> supply) {
+          final noExpiry = supply['noExpiry'] as bool;
+          final expiry = supply['expiry'] as String?;
+          if (noExpiry || expiry == null || expiry.isEmpty) return false;
+          final expiryDate = DateTime.tryParse(expiry.replaceAll('/', '-'));
+          if (expiryDate == null) return false;
+          final dateOnly =
+              DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+          if (dateOnly.isBefore(today) || dateOnly.isAtSameMomentAs(today))
+            return false;
+          final daysUntil = dateOnly.difference(today).inDays;
+          return daysUntil <= 30;
+        }
+
+        final supplies = nonArchivedSupplies.where((supply) {
+          return !isExpired(supply) && !isExpiring(supply);
+        }).toList();
+
+        // Group supplies
+        final Map<String, List<Map<String, dynamic>>> allGrouped = {};
+        for (final supply in nonArchivedSupplies) {
+          final nameKey = (supply['name'] as String).trim().toLowerCase();
+          final categoryKey =
+              (supply['category'] as String).trim().toLowerCase();
+          final typeKey =
+              (supply['type'] as String? ?? '').trim().toLowerCase();
+          final key = '${nameKey}_${categoryKey}_$typeKey';
+          if (!allGrouped.containsKey(key)) {
+            allGrouped[key] = [];
+          }
+          allGrouped[key]!.add(supply);
+        }
+
+        final Map<String, List<Map<String, dynamic>>> grouped = {};
+        for (final supply in supplies) {
+          final nameKey = (supply['name'] as String).trim().toLowerCase();
+          final categoryKey =
+              (supply['category'] as String).trim().toLowerCase();
+          final typeKey =
+              (supply['type'] as String? ?? '').trim().toLowerCase();
+          final key = '${nameKey}_${categoryKey}_$typeKey';
+          if (!grouped.containsKey(key)) {
+            grouped[key] = [];
+          }
+          grouped[key]!.add(supply);
+        }
 
         final Map<String, List<Map<String, dynamic>>> suppliesByStatus = {
           'In Stock': [],
@@ -789,56 +951,80 @@ class InventoryAnalyticsService {
           'Expired': [],
         };
 
-        for (final supply in supplies) {
-          final stock = supply['stock'] as int;
-          final noExpiry = supply['noExpiry'] as bool;
-          final expiry = supply['expiry'] as String?;
+        // Process grouped supplies
+        for (final entry in grouped.entries) {
+          final groupKey = entry.key;
+          final groupItems = entry.value;
 
-          String status = 'In Stock';
-          bool isExpired = false;
-          bool isExpiring = false;
+          final allBatchesInGroup = allGrouped[groupKey] ?? [];
+          final expiredBatchesInGroup =
+              allBatchesInGroup.where((item) => isExpired(item)).toList();
+          final expiringBatchesInGroup =
+              allBatchesInGroup.where((item) => isExpiring(item)).toList();
 
-          if (!noExpiry && expiry != null && expiry.isNotEmpty) {
-            final expiryDate = DateTime.tryParse(expiry.replaceAll('/', '-'));
-            if (expiryDate != null) {
-              final dateOnly =
-                  DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
-              if (dateOnly.isBefore(today) ||
-                  dateOnly.isAtSameMomentAs(today)) {
-                isExpired = true;
-                status = 'Expired';
-              } else {
-                final daysUntil = dateOnly.difference(today).inDays;
-                if (daysUntil <= 30) {
-                  isExpiring = true;
-                  status = 'Expiring';
-                }
-              }
+          if ((expiredBatchesInGroup.length == allBatchesInGroup.length ||
+                  expiringBatchesInGroup.length == allBatchesInGroup.length) &&
+              allBatchesInGroup.isNotEmpty) {
+            continue;
+          }
+
+          final totalStock =
+              groupItems.fold(0, (sum, item) => sum + (item['stock'] as int));
+
+          int? totalBaseline;
+          for (final item in groupItems) {
+            final baseline = item['lowStockBaseline'] as int?;
+            if (baseline != null && baseline > 0) {
+              totalBaseline = baseline;
+              break;
             }
           }
 
-          if (!isExpired && !isExpiring) {
-            if (stock == 0) {
-              status = 'Out of Stock';
-            } else {
-              final lowStockBaseline = supply['lowStockBaseline'] as int?;
-              // Use manually set threshold for low stock detection
-              if (lowStockBaseline != null &&
-                  lowStockBaseline > 0 &&
-                  stock <= lowStockBaseline) {
-                status = 'Low Stock';
-              } else {
-                status = 'In Stock';
-              }
-            }
+          final representativeItem =
+              Map<String, dynamic>.from(groupItems.first);
+          representativeItem['stock'] = totalStock;
+          representativeItem['lowStockBaseline'] = totalBaseline;
+
+          String status;
+          if (totalStock == 0) {
+            status = 'Out of Stock';
+          } else if (totalBaseline != null &&
+              totalBaseline > 0 &&
+              totalStock <= totalBaseline) {
+            status = 'Low Stock';
+          } else {
+            status = 'In Stock';
           }
 
-          supply['status'] = status;
-          supply['expiryDisplay'] = noExpiry || expiry == null || expiry.isEmpty
-              ? 'No expiry'
-              : expiry.replaceAll('/', '-');
+          representativeItem['status'] = status;
+          representativeItem['expiryDisplay'] = 'No expiry';
 
-          suppliesByStatus[status]!.add(supply);
+          suppliesByStatus[status]!.add(representativeItem);
+        }
+
+        // Process expired/expiring individually
+        for (final supply in nonArchivedSupplies) {
+          if (isExpired(supply)) {
+            final supplyCopy = Map<String, dynamic>.from(supply);
+            supplyCopy['status'] = 'Expired';
+            final expiry = supply['expiry'] as String?;
+            supplyCopy['expiryDisplay'] = expiry != null && expiry.isNotEmpty
+                ? expiry.replaceAll('/', '-')
+                : 'No expiry';
+            suppliesByStatus['Expired']!.add(supplyCopy);
+          }
+        }
+
+        for (final supply in nonArchivedSupplies) {
+          if (isExpiring(supply)) {
+            final supplyCopy = Map<String, dynamic>.from(supply);
+            supplyCopy['status'] = 'Expiring';
+            final expiry = supply['expiry'] as String?;
+            supplyCopy['expiryDisplay'] = expiry != null && expiry.isNotEmpty
+                ? expiry.replaceAll('/', '-')
+                : 'No expiry';
+            suppliesByStatus['Expiring']!.add(supplyCopy);
+          }
         }
 
         _cachedSuppliesByStatus = suppliesByStatus;

@@ -172,6 +172,9 @@ class StockDeductionLogsController {
       final cached = _getCachedLogsForDate(targetDate);
       if (cached != null) {
         safeAdd(cached);
+      } else {
+        // Emit empty list if no cache - ensures stream always emits
+        safeAdd(const <Map<String, dynamic>>[]);
       }
     }
 

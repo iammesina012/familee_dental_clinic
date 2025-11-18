@@ -3,6 +3,12 @@ import 'package:familee_dental/features/settings/controller/edit_user_controller
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditUserPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -39,10 +45,15 @@ class _EditUserPageState extends State<EditUserPage> {
   String _originalRole = 'Admin';
   String _originalStatus = 'Active';
 
+  // In-memory cache for employee data
+  Map<String, dynamic>? _cachedEmployeeData;
+
   @override
   void initState() {
     super.initState();
+    // Initialize controllers immediately with widget.user to prevent LateInitializationError
     _initializeForm();
+    _loadEmployeeData();
     _checkPermissions();
   }
 
@@ -62,6 +73,68 @@ class _EditUserPageState extends State<EditUserPage> {
           Navigator.maybePop(context);
         }
       });
+    }
+  }
+
+  Future<void> _loadEmployeeData() async {
+    try {
+      final uid = widget.user['uid'] ?? '';
+      if (uid.isEmpty) {
+        // No uid, controllers already initialized with widget.user
+        return;
+      }
+
+      // 1. First, try to load from Hive cache (for offline support)
+      await _loadEmployeeFromHive(uid);
+
+      // 2. If cached data found, update form with cached data
+      if (_cachedEmployeeData != null) {
+        _initializeFormFromData(_cachedEmployeeData!);
+      } else {
+        // No cache, use widget.user (already initialized in initState)
+        _cachedEmployeeData = widget.user;
+      }
+
+      // 3. Try to fetch fresh data from Supabase (if online)
+      try {
+        final supabase = Supabase.instance.client;
+        final response = await supabase
+            .from('user_roles')
+            .select('*')
+            .eq('id', uid)
+            .limit(1)
+            .maybeSingle();
+
+        if (response != null) {
+          final freshData = {
+            'uid': uid,
+            'name': response['name'] ?? '',
+            'displayName': response['name'] ?? '',
+            'username': response['username'] ?? '',
+            'email': response['email'] ?? '',
+            'role': response['role'] ?? 'Staff',
+            'isActive': response['is_active'] ?? true,
+            'createdAt': response['created_at'],
+            'updatedAt': response['updated_at'],
+          };
+
+          // Save to cache
+          await _saveEmployeeToHive(uid, freshData);
+          _cachedEmployeeData = freshData;
+
+          // Update form if mounted
+          if (mounted) {
+            _initializeFormFromData(freshData);
+          }
+        }
+      } catch (e) {
+        // If Supabase fetch fails (e.g., offline), use cached data
+        debugPrint('Error fetching employee from Supabase: $e');
+        // Cached data is already loaded above, so we're good
+      }
+    } catch (e) {
+      debugPrint('Error loading employee data: $e');
+      // Controllers already initialized with widget.user in initState
     }
   }
 
@@ -86,6 +159,75 @@ class _EditUserPageState extends State<EditUserPage> {
 
     // Initialize role
     _selectedRole = widget.user['role'] ?? 'Admin';
+
+    // Store original values
+    _originalName = _nameController.text;
+    _originalUsername = _usernameController.text;
+    _originalEmail = _emailController.text;
+    _originalRole = _selectedRole;
+    _originalStatus = _selectedStatus;
+  }
+
+  void _initializeFormFromData(Map<String, dynamic> data) {
+    // Update existing controllers (don't create new ones to avoid memory leaks)
+    _nameController.text = data['displayName'] ?? data['name'] ?? '';
+    _usernameController.text = data['username'] ?? data['displayName'] ?? '';
+    _emailController.text = data['email'] ?? '';
+
+    // Initialize status based on isActive field, with fallback
+    final isActive = data['isActive'];
+
+    if (isActive == true) {
+      _selectedStatus = 'Active';
+    } else if (isActive == false) {
+      _selectedStatus = 'Inactive';
+    } else {
+      // Fallback if isActive is null or undefined
+      _selectedStatus = 'Active';
+    }
+
+    // Initialize role
+    _selectedRole = data['role'] ?? 'Admin';
+
+    // Store original values
+    _originalName = _nameController.text;
+    _originalUsername = _usernameController.text;
+    _originalEmail = _emailController.text;
+    _originalRole = _selectedRole;
+    _originalStatus = _selectedStatus;
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// Load employee data from Hive cache
+  Future<void> _loadEmployeeFromHive(String uid) async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.editEmployeeBox);
+      final employeeDataStr = box.get('employee_$uid') as String?;
+
+      if (employeeDataStr != null) {
+        _cachedEmployeeData =
+            jsonDecode(employeeDataStr) as Map<String, dynamic>;
+        // Don't update form here - let _initializeFormFromData handle it
+        // This prevents creating new controllers
+      }
+    } catch (e) {
+      debugPrint('Error loading employee from Hive: $e');
+    }
+  }
+
+  /// Save employee data to Hive cache
+  Future<void> _saveEmployeeToHive(
+      String uid, Map<String, dynamic> employeeData) async {
+    try {
+      _cachedEmployeeData = employeeData;
+      final box = await HiveStorage.openBox(HiveStorage.editEmployeeBox);
+      await box.put('employee_$uid', jsonEncode(employeeData));
+    } catch (e) {
+      debugPrint('Error saving employee to Hive: $e');
+    }
   }
 
   @override
@@ -307,8 +449,13 @@ class _EditUserPageState extends State<EditUserPage> {
                               label: 'Name',
                               hint: 'Enter name',
                               validator: (value) {
-                                if (value == null || value.isEmpty) {
+                                if (value == null || value.trim().isEmpty) {
                                   return 'Name is required';
+                                }
+                                // Only allow letters and spaces
+                                final namePattern = RegExp(r'^[a-zA-Z\s]+$');
+                                if (!namePattern.hasMatch(value.trim())) {
+                                  return 'Name can only contain letters and spaces';
                                 }
                                 return null;
                               },
@@ -323,8 +470,14 @@ class _EditUserPageState extends State<EditUserPage> {
                               label: 'Username',
                               hint: 'Enter username',
                               validator: (value) {
-                                if (value == null || value.isEmpty) {
+                                if (value == null || value.trim().isEmpty) {
                                   return 'Username is required';
+                                }
+                                // Only allow letters and numbers
+                                final usernamePattern =
+                                    RegExp(r'^[a-zA-Z0-9]+$');
+                                if (!usernamePattern.hasMatch(value.trim())) {
+                                  return 'Username can only contain letters and numbers';
                                 }
                                 return null;
                               },
@@ -401,7 +554,9 @@ class _EditUserPageState extends State<EditUserPage> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: _isSaving ? null : _saveUser,
+                                onPressed: (_isSaving || !_hasUnsavedChanges)
+                                    ? null
+                                    : _showSaveConfirmationDialog,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF00D4AA),
                                   padding:
@@ -467,6 +622,7 @@ class _EditUserPageState extends State<EditUserPage> {
           controller: controller,
           keyboardType: keyboardType,
           validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           onChanged: (value) {
             _markAsChanged();
             if (fieldKey != null && validationErrors[fieldKey] != null) {
@@ -688,6 +844,137 @@ class _EditUserPageState extends State<EditUserPage> {
     );
   }
 
+  Future<void> _showSaveConfirmationDialog() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00D4AA).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.save,
+                    color: Color(0xFF00D4AA),
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Save Changes',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Are you sure you want to save these changes?',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textTheme.bodyMedium?.color,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          'Yes',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: isDark
+                                  ? Colors.grey.shade600
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          'No',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodyMedium?.color,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      // Check network connection after confirmation
+      final hasConnection = await ConnectivityService().hasInternetConnection();
+      if (!hasConnection) {
+        if (mounted) {
+          await showConnectionErrorDialog(context);
+        }
+        return;
+      }
+      await _saveUser();
+    }
+  }
+
   Future<void> _saveUser() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -719,6 +1006,21 @@ class _EditUserPageState extends State<EditUserPage> {
     setState(() => _isSaving = false);
 
     if (result['success'] == true) {
+      // Save updated data to cache
+      final updatedData = {
+        'uid': widget.user['uid'],
+        'name': _nameController.text.trim(),
+        'displayName': _nameController.text.trim(),
+        'username': _usernameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'role': _selectedRole,
+        'isActive': _selectedStatus == 'Active',
+        'createdAt':
+            widget.user['createdAt'] ?? _cachedEmployeeData?['createdAt'],
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      await _saveEmployeeToHive(widget.user['uid'], updatedData);
+
       // Log employee profile edited activity
       await _settingsActivityController.logEmployeeProfileEdited(
         employeeName: _nameController.text.trim(),
@@ -732,7 +1034,15 @@ class _EditUserPageState extends State<EditUserPage> {
       final successMsg =
           (result['message'] as String?) ?? 'User updated successfully';
       if (mounted) {
-        _hasUnsavedChanges = false; // Reset flag on successful save
+        // Update original values after successful save
+        setState(() {
+          _originalName = _nameController.text.trim();
+          _originalUsername = _usernameController.text.trim();
+          _originalEmail = _emailController.text.trim();
+          _originalRole = _selectedRole;
+          _originalStatus = _selectedStatus;
+          _hasUnsavedChanges = false; // Reset flag on successful save
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(successMsg),
@@ -757,33 +1067,27 @@ class _EditUserPageState extends State<EditUserPage> {
   }
 
   void _showResetPasswordDialog() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        final theme = Theme.of(context);
         return Dialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
           ),
-          elevation: 8,
-          backgroundColor: theme.dialogBackgroundColor,
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
           child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: theme.dialogBackgroundColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+              minWidth: 350,
             ),
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Icon and Title
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -797,8 +1101,6 @@ class _EditUserPageState extends State<EditUserPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Title
                 Text(
                   'Reset Password',
                   style: TextStyle(
@@ -810,51 +1112,33 @@ class _EditUserPageState extends State<EditUserPage> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-
-                // Content
                 Text(
-                  'Are you sure you want to reset the password for "${widget.user['name'] ?? widget.user['displayName']}"?\n\nThis will set their password to the default password.',
+                  'Are you sure you want to reset the password for "${widget.user['name'] ?? widget.user['displayName']}"?',
                   style: TextStyle(
                     fontFamily: 'SF Pro',
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                    color: theme.textTheme.bodyMedium?.color,
                     height: 1.4,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-
-                // Buttons
                 Row(
                   children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: BorderSide(color: theme.dividerColor),
-                          ),
-                        ),
-                        child: Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro',
-                            fontWeight: FontWeight.w500,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.7),
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () async {
                           Navigator.of(context).pop();
+                          // Check network connection after confirmation
+                          final hasConnection = await ConnectivityService()
+                              .hasInternetConnection();
+                          if (!hasConnection) {
+                            if (mounted) {
+                              await showConnectionErrorDialog(context);
+                            }
+                            return;
+                          }
                           await _resetPassword();
                         },
                         style: ElevatedButton.styleFrom(
@@ -867,11 +1151,37 @@ class _EditUserPageState extends State<EditUserPage> {
                           elevation: 2,
                         ),
                         child: const Text(
-                          'Reset Password',
+                          'Yes',
                           style: TextStyle(
                             fontFamily: 'SF Pro',
                             fontWeight: FontWeight.w500,
                             color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: isDark
+                                  ? Colors.grey.shade600
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          'No',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            color: theme.textTheme.bodyMedium?.color,
                             fontSize: 16,
                           ),
                         ),
@@ -923,12 +1233,27 @@ class _EditUserPageState extends State<EditUserPage> {
     } catch (e) {
       setState(() => _isSaving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error resetting password: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error resetting password: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }

@@ -944,8 +944,12 @@ class _InventoryState extends State<Inventory> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          InventoryViewSupplyPage(item: t.mainItem),
+                      builder: (context) => InventoryViewSupplyPage(
+                        supplyName: t.mainItem.name,
+                        supplyCategory: t.mainItem.category,
+                        supplyType: t.mainItem.type,
+                        supplyBrand: t.mainItem.brand,
+                      ),
                     ),
                   );
                 });
@@ -954,7 +958,7 @@ class _InventoryState extends State<Inventory> {
 
             return LayoutBuilder(
               builder: (context, constraints) {
-                double aspectRatio = constraints.maxWidth < 400 ? 0.7 : 0.85;
+                double aspectRatio = constraints.maxWidth < 400 ? 0.65 : 0.75;
                 return GridView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -987,7 +991,12 @@ class _InventoryState extends State<Inventory> {
                             builder: (context) {
                               debugPrint(
                                   '[NAVIGATION] Building ViewSupplyPage for ${item.name} at ${DateTime.now()}');
-                              return InventoryViewSupplyPage(item: item);
+                              return InventoryViewSupplyPage(
+                                supplyName: item.name,
+                                supplyCategory: item.category,
+                                supplyType: item.type,
+                                supplyBrand: item.brand,
+                              );
                             },
                           ),
                         ).then((_) {

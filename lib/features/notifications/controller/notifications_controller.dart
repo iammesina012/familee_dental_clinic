@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
 import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
+import 'package:familee_dental/shared/providers/user_role_provider.dart';
 
 class AppNotification {
   final String id;
@@ -16,6 +18,7 @@ class AppNotification {
   final String? supplyName; // optional payload for inventory
   final String? supplyType; // optional payload for supply type
   final String? poCode; // optional payload for purchase orders
+  final String? sdTimestamp; // optional payload for stock deduction
 
   AppNotification({
     required this.id,
@@ -27,6 +30,7 @@ class AppNotification {
     this.supplyName,
     this.supplyType,
     this.poCode,
+    this.sdTimestamp,
   });
 
   factory AppNotification.fromMap(String id, Map<String, dynamic> data) {
@@ -40,6 +44,7 @@ class AppNotification {
       supplyName: data['supply_name']?.toString(),
       supplyType: data['supply_type']?.toString(),
       poCode: data['po_code']?.toString(),
+      sdTimestamp: data['sd_timestamp']?.toString(),
     );
   }
 
@@ -53,6 +58,7 @@ class AppNotification {
       if (supplyName != null) 'supply_name': supplyName,
       if (supplyType != null) 'supply_type': supplyType,
       if (poCode != null) 'po_code': poCode,
+      if (sdTimestamp != null) 'sd_timestamp': sdTimestamp,
     };
   }
 
@@ -87,7 +93,6 @@ class NotificationsController {
   // Local preferences keys
   static const String _kInventoryPref = 'settings.notify_inventory';
   static const String _kApprovalPref = 'settings.notify_approval';
-  static const String _kCacheKey = 'notifications_cache_v1';
 
   List<AppNotification>? _cachedNotifications;
 
@@ -148,14 +153,14 @@ class NotificationsController {
 
     Future<void> persist(List<AppNotification> notifications) async {
       try {
-        final prefs = await SharedPreferences.getInstance();
+        final box = await HiveStorage.openBox(HiveStorage.notificationsBox);
         final serializable = notifications
             .map((n) => {
                   'id': n.id,
                   'data': n.toMap(),
                 })
             .toList();
-        await prefs.setString(_kCacheKey, jsonEncode(serializable));
+        await box.put('notifications', jsonEncode(serializable));
       } catch (_) {
         // Ignore cache persistence errors
       }
@@ -205,8 +210,8 @@ class NotificationsController {
 
   Future<List<AppNotification>> preloadFromLocalCache() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_kCacheKey);
+      final box = await HiveStorage.openBox(HiveStorage.notificationsBox);
+      final raw = box.get('notifications') as String?;
       if (raw == null || raw.isEmpty) {
         _cachedNotifications = null;
         return const [];
@@ -234,6 +239,7 @@ class NotificationsController {
     String? supplyName,
     String? supplyType,
     String? poCode,
+    String? sdTimestamp,
   }) async {
     // Before creating, enforce user preferences
     final typeLower = type.toLowerCase();
@@ -246,23 +252,30 @@ class NotificationsController {
         typeLower == 'in_stock' ||
         typeLower == 'expired' ||
         typeLower == 'expiring';
-    final isApprovalType = typeLower.startsWith('po_');
+    final isApprovalType =
+        typeLower.startsWith('po_') || typeLower.startsWith('sd_');
 
     if ((isInventoryType && !invEnabled) || (isApprovalType && !apprEnabled)) {
       return; // Respect preferences: do not create notification
     }
 
+    // Build insert data - only include columns that exist in the database
+    final Map<String, dynamic> insertData = {
+      'title': title,
+      'message': message,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'type': type,
+      'is_read': false,
+      if (supplyName != null) 'supply_name': supplyName,
+      // Note: supply_type column doesn't exist in notifications table yet
+      // if (supplyType != null) 'supply_type': supplyType,
+      if (poCode != null) 'po_code': poCode,
+      if (sdTimestamp != null) 'sd_timestamp': sdTimestamp,
+    };
+
     final response = await _supabase
         .from('notifications')
-        .insert({
-          'title': title,
-          'message': message,
-          'created_at': DateTime.now().toUtc().toIso8601String(),
-          'type': type,
-          'is_read': false,
-          if (supplyName != null) 'supply_name': supplyName,
-          if (poCode != null) 'po_code': poCode,
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -379,20 +392,43 @@ class NotificationsController {
   }
 
   Future<void> createPORejectedNotification(String poCode) async {
+    final userRole = UserRoleProvider().userRole;
     await createNotification(
       title: 'Purchase Order',
-      message: 'Admin rejected $poCode',
+      message: '$userRole rejected $poCode',
       type: 'po_rejected',
       poCode: poCode,
     );
   }
 
   Future<void> createPOApprovedNotification(String poCode) async {
+    final userRole = UserRoleProvider().userRole;
     await createNotification(
       title: 'Purchase Order',
-      message: 'Admin approved $poCode',
+      message: '$userRole approved $poCode',
       type: 'po_approved',
       poCode: poCode,
+    );
+  }
+
+  // Stock Deduction notifications
+  Future<void> createSDApprovedNotification(String timestamp) async {
+    final userRole = UserRoleProvider().userRole;
+    await createNotification(
+      title: 'Stock Deduction',
+      message: '$userRole approved Stock Deduction - $timestamp',
+      type: 'sd_approved',
+      sdTimestamp: timestamp,
+    );
+  }
+
+  Future<void> createSDRejectedNotification(String timestamp) async {
+    final userRole = UserRoleProvider().userRole;
+    await createNotification(
+      title: 'Stock Deduction',
+      message: '$userRole rejected Stock Deduction - $timestamp',
+      type: 'sd_rejected',
+      sdTimestamp: timestamp,
     );
   }
 
@@ -413,7 +449,9 @@ class NotificationsController {
             type: notification.type,
             isRead: true, // Update to read
             supplyName: notification.supplyName,
+            supplyType: notification.supplyType,
             poCode: notification.poCode,
+            sdTimestamp: notification.sdTimestamp,
           );
         }
         return notification;
@@ -443,7 +481,9 @@ class NotificationsController {
             type: notification.type,
             isRead: true, // Mark all as read
             supplyName: notification.supplyName,
+            supplyType: notification.supplyType,
             poCode: notification.poCode,
+            sdTimestamp: notification.sdTimestamp,
           );
         }).toList();
       }
@@ -549,14 +589,11 @@ class NotificationsController {
 
         // Override stock if specified (for "before" calculation)
         int stock = (row['stock'] ?? 0) as int;
-        if (overrideStock != null) {
+        if (overrideStock != null && overrideId != null) {
           // If overrideId is provided, use it to find the specific batch
-          if (overrideId != null && row['id'] == overrideId) {
+          if (row['id'] == overrideId) {
             stock = overrideStock;
           }
-          // If overrideId is null, try to find batch that matches current stock pattern
-          // (This is a best-effort approach when batchId is not available)
-          // Note: This might not be 100% accurate if multiple batches have the same stock
         }
 
         return InventoryItem(
@@ -584,12 +621,13 @@ class NotificationsController {
         );
       }).toList();
 
-      // Group items by name + category (same logic as InventoryController)
+      // Group items by name + category + type (same logic as InventoryController)
       final Map<String, List<InventoryItem>> grouped = {};
       for (final item in items) {
         final nameKey = item.name.trim().toLowerCase();
         final categoryKey = item.category.trim().toLowerCase();
-        final key = '${nameKey}_${categoryKey}';
+        final typeKey = (item.type ?? '').trim().toLowerCase();
+        final key = '${nameKey}_${categoryKey}_$typeKey';
         if (!grouped.containsKey(key)) {
           grouped[key] = [];
         }
@@ -597,8 +635,22 @@ class NotificationsController {
       }
 
       // Get the first group (should be the supply we're checking)
+      // If we have multiple groups (different types), we need to find the right one
+      // For now, if overrideId is provided, find the group containing that batch
       if (grouped.isEmpty) return (null, 0);
-      final groupItems = grouped.values.first;
+
+      // Initialize with first group as default
+      List<InventoryItem> groupItems = grouped.values.first;
+
+      if (overrideId != null) {
+        // Find the group that contains the batch with overrideId
+        for (final group in grouped.values) {
+          if (group.any((item) => item.id == overrideId)) {
+            groupItems = group;
+            break;
+          }
+        }
+      }
 
       // Filter out expired items (same logic as UI)
       final now = DateTime.now();
@@ -707,9 +759,9 @@ class NotificationsController {
 
         // Override stock if specified (for "before" calculation)
         int stock = (row['stock'] ?? 0) as int;
-        if (overrideStock != null) {
+        if (overrideStock != null && overrideId != null) {
           // If overrideId is provided, use it to find the specific batch
-          if (overrideId != null && row['id'] == overrideId) {
+          if (row['id'] == overrideId) {
             stock = overrideStock;
           }
         }
@@ -882,10 +934,14 @@ class NotificationsController {
       String supplyName, int newStock, int previousStock,
       {String? batchId, String? type}) async {
     try {
+      print(
+          '[NOTIFICATIONS] checkStockLevelNotification called: supplyName=$supplyName, newStock=$newStock, previousStock=$previousStock, batchId=$batchId, type=$type');
+
       // Get type from parameter, or from batchId if available
       String? supplyType = type;
       if (supplyType == null && batchId != null) {
         supplyType = await _getTypeFromBatchId(batchId);
+        print('[NOTIFICATIONS] Got type from batchId: $supplyType');
       }
       final formattedSupplyName =
           _formatSupplyNameWithType(supplyName, supplyType);
@@ -895,7 +951,12 @@ class NotificationsController {
       final bool useTypeSpecific =
           supplyType != null && supplyType.trim().isNotEmpty;
 
+      print(
+          '[NOTIFICATIONS] useTypeSpecific=$useTypeSpecific, formattedSupplyName=$formattedSupplyName');
+
       // Get status BEFORE the change (using previousStock)
+      print(
+          '[NOTIFICATIONS] Calculating statusBefore with overrideStock=$previousStock, overrideId=$batchId');
       final (statusBefore, _) = useTypeSpecific
           ? await _getSupplyStatusByType(
               supplyName,
@@ -909,10 +970,16 @@ class NotificationsController {
               overrideId: batchId,
             );
 
+      print('[NOTIFICATIONS] statusBefore=$statusBefore');
+
       // Get status AFTER the change (current state) - also get totalStock
+      // Note: Database should already be updated at this point
+      print('[NOTIFICATIONS] Calculating statusAfter (current database state)');
       final (statusAfter, totalStock) = useTypeSpecific
           ? await _getSupplyStatusByType(supplyName, supplyType)
           : await _getSupplyStatus(supplyName);
+
+      print('[NOTIFICATIONS] statusAfter=$statusAfter, totalStock=$totalStock');
 
       // If we couldn't calculate status, fall back to old method
       if (statusBefore == null || statusAfter == null) {

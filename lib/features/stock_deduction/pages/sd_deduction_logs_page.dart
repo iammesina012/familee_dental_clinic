@@ -242,7 +242,18 @@ class _DeductionLogsPageState extends State<DeductionLogsPage> {
 
     // Wait for the stream to emit at least one event
     // This ensures the RefreshIndicator shows its animation
-    await _logsStream.first;
+    // Add timeout to prevent hanging if something goes wrong
+    try {
+      await _logsStream.first.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          // Stream will emit empty list via emitCachedForDate if timeout occurs
+          return const <Map<String, dynamic>>[];
+        },
+      );
+    } catch (_) {
+      // Ignore errors - stream should have emitted by now
+    }
   }
 
   Widget _buildSkeletonLoader(BuildContext context) {

@@ -3032,24 +3032,39 @@ class _DashboardState extends State<Dashboard> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to generate report: ${e.toString()}',
-              style: AppFonts.sfProStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to generate report: ${e.toString()}',
+                style: AppFonts.sfProStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
               ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              duration: const Duration(seconds: 3),
             ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+          );
+        }
       }
     }
   }
@@ -3130,24 +3145,39 @@ class _DashboardState extends State<Dashboard> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to generate report: ${e.toString()}',
-              style: AppFonts.sfProStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to generate report: ${e.toString()}',
+                style: AppFonts.sfProStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
               ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              duration: const Duration(seconds: 3),
             ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+          );
+        }
       }
     }
   }

@@ -391,8 +391,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                             height: 130,
                             child: Center(child: CircularProgressIndicator()),
                           )
-                        : (controller.pickedImage != null &&
-                                controller.imageUrl != null)
+                        : (controller.imageUrl != null)
                             ? ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
                                 child: Image.network(
@@ -464,10 +463,18 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                     });
                                   }
 
-                                  // Auto-fill supplier and brand if supply name exists
+                                  // Auto-fill fields if supply name exists
+                                  // Pass type to get type-specific data (like images)
                                   if (value.trim().isNotEmpty) {
-                                    await controller
-                                        .autoFillFromExistingSupply(value);
+                                    await controller.autoFillFromExistingSupply(
+                                      value,
+                                      typeName: controller.typeController.text
+                                              .trim()
+                                              .isNotEmpty
+                                          ? controller.typeController.text
+                                              .trim()
+                                          : null,
+                                    );
                                     setState(
                                         () {}); // Refresh UI to show autofilled values
                                   }
@@ -495,13 +502,27 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
                                   border: OutlineInputBorder(),
                                   errorStyle: TextStyle(color: Colors.red),
                                 ),
-                                onChanged: (value) {
+                                onChanged: (value) async {
                                   _markAsChanged();
                                   // Clear validation error when user types
                                   if (validationErrors['type'] != null) {
                                     setState(() {
                                       validationErrors['type'] = null;
                                     });
+                                  }
+
+                                  // Re-trigger autofill when type changes to get type-specific data (like images)
+                                  if (controller.nameController.text
+                                      .trim()
+                                      .isNotEmpty) {
+                                    await controller.autoFillFromExistingSupply(
+                                      controller.nameController.text.trim(),
+                                      typeName: value.trim().isNotEmpty
+                                          ? value.trim()
+                                          : null,
+                                    );
+                                    setState(
+                                        () {}); // Refresh UI to show autofilled values
                                   }
                                 },
                               ),

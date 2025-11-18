@@ -224,29 +224,36 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                   child: SizedBox(
                     width: 120,
                     height: 120,
-                    child: widget.supply['imageUrl'] != null &&
-                            widget.supply['imageUrl'].isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: widget.supply['imageUrl'],
-                            fit: BoxFit.contain,
-                            placeholder: (context, url) {
-                              return Container(
-                                width: 120,
-                                height: 120,
-                                color: Colors.grey[200],
-                                child: Icon(Icons.image,
-                                    size: 48, color: Colors.grey[400]),
-                              );
-                            },
-                            errorWidget: (context, url, error) {
-                              return Icon(Icons.image_not_supported,
-                                  size: 60, color: Colors.grey);
-                            },
-                            fadeInDuration: const Duration(milliseconds: 200),
-                            fadeOutDuration: const Duration(milliseconds: 100),
-                          )
-                        : Icon(Icons.image_not_supported,
-                            size: 60, color: Colors.grey),
+                    child: () {
+                      // Check both camelCase and snake_case formats
+                      final imageUrl = (widget.supply['imageUrl'] ??
+                              widget.supply['image_url'] ??
+                              '')
+                          .toString();
+                      return imageUrl.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              fit: BoxFit.contain,
+                              placeholder: (context, url) {
+                                return Container(
+                                  width: 120,
+                                  height: 120,
+                                  color: Colors.grey[200],
+                                  child: Icon(Icons.image,
+                                      size: 48, color: Colors.grey[400]),
+                                );
+                              },
+                              errorWidget: (context, url, error) {
+                                return Icon(Icons.image_not_supported,
+                                    size: 60, color: Colors.grey);
+                              },
+                              fadeInDuration: const Duration(milliseconds: 200),
+                              fadeOutDuration:
+                                  const Duration(milliseconds: 100),
+                            )
+                          : Icon(Icons.image_not_supported,
+                              size: 60, color: Colors.grey);
+                    }(),
                   ),
                 ),
                 SizedBox(height: 14),
@@ -1066,7 +1073,9 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
           _isPackagingContentDisabled() ? '' : _selectedPackagingContent,
       'packagingContentQuantity':
           _isPackagingContentDisabled() ? 1 : _packagingContentQuantity,
-      'imageUrl': widget.supply['imageUrl'],
+      'imageUrl':
+          (widget.supply['imageUrl'] ?? widget.supply['image_url'] ?? '')
+              .toString(),
       'status': 'Pending', // Initialize as pending
       // Keep first expiry for backward compatibility
       'expiryDate': expiryBatches.first['expiryDate'],
@@ -1169,7 +1178,7 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: initialDate ?? DateTime.now(),
-                    firstDate: DateTime(2000),
+                    firstDate: DateTime.now(), // Disable past dates
                     lastDate:
                         DateTime.now().add(const Duration(days: 365 * 10)),
                   );
@@ -2095,7 +2104,23 @@ class _EditSupplyPOPageState extends State<EditSupplyPOPage> {
     );
 
     widget.supply['type'] = newType;
-    widget.supply['imageUrl'] = imageUrl;
+    // Preserve existing imageUrl if new data doesn't have one
+    if (imageUrl.isNotEmpty) {
+      widget.supply['imageUrl'] = imageUrl;
+      widget.supply['image_url'] =
+          imageUrl; // Also set snake_case for consistency
+    } else {
+      // Check if there's an existing image in either format
+      final existingImage =
+          (widget.supply['imageUrl'] ?? widget.supply['image_url'] ?? '')
+              .toString();
+      if (existingImage.isEmpty) {
+        // Only set to empty if there was no existing image
+        widget.supply['imageUrl'] = '';
+        widget.supply['image_url'] = '';
+      }
+      // If existingImage is not empty, don't overwrite it
+    }
 
     if (!preservePOData) {
       widget.supply['brand'] = brandFromInventory;

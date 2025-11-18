@@ -490,6 +490,30 @@ class _NotificationTile extends StatelessWidget {
                       title: 'Unable to Open Purchase Order',
                       message: 'Please try again in a moment.');
                 }
+              } else if (notification.type.startsWith('sd_') &&
+                  (notification.sdTimestamp ?? '').isNotEmpty) {
+                // Stock Deduction notifications
+                final String timestamp = notification.sdTimestamp!;
+
+                if (notification.type == 'sd_approved') {
+                  // Navigate to Deduction Logs and show the specific batch
+                  if (context.mounted) {
+                    await Navigator.pushNamed(
+                      context,
+                      '/stock-deduction',
+                      arguments: {
+                        'initialTab': 1, // Deduction Logs tab
+                        'highlightTimestamp': timestamp,
+                      },
+                    );
+                  }
+                } else if (notification.type == 'sd_rejected') {
+                  // Show overlay explaining the rejection
+                  _showNotFoundOverlay(context,
+                      title: 'Stock Deduction Rejected',
+                      message:
+                          'The stock deduction submitted on $timestamp was rejected.');
+                }
               } else if ((notification.supplyName ?? '').isNotEmpty) {
                 // Inventory notifications
                 String name = notification.supplyName!;
@@ -781,6 +805,10 @@ class _NotificationTile extends StatelessWidget {
         return const Color(0xFF8A8A8A);
       case 'po_approved':
         return const Color(0xFF1ACB5D);
+      case 'sd_approved':
+        return const Color(0xFF1ACB5D);
+      case 'sd_rejected':
+        return const Color(0xFFE44B4D);
       default:
         return const Color(0xFFB37BE6);
     }
@@ -804,6 +832,10 @@ class _NotificationTile extends StatelessWidget {
         return Icons.access_time; // clock
       case 'po_approved':
         return Icons.check; // check
+      case 'sd_approved':
+        return Icons.check; // check
+      case 'sd_rejected':
+        return Icons.close; // X
       default:
         return Icons.notifications;
     }

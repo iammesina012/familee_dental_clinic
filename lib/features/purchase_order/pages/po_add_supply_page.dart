@@ -409,6 +409,7 @@ class _AddSupplyPageState extends State<AddSupplyPage> {
       'quantity': 1, // Default quantity
       'cost': item.cost, // Include cost from inventory item
       'imageUrl': item.imageUrl,
+      'image_url': item.imageUrl, // Also set snake_case for consistency
     };
 
     // Navigate directly to Edit Supply page and wait for result

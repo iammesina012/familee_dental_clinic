@@ -312,19 +312,35 @@ class _PODetailsPageState extends State<PODetailsPage> {
           } catch (e) {
             if (!mounted) return;
             setState(() => _isLoading = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Error marking supplies as received: ${e.toString()}',
-                  style: AppFonts.sfProStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white),
+
+            // Check if it's a network error
+            final errorString = e.toString().toLowerCase();
+            if (errorString.contains('socketexception') ||
+                errorString.contains('failed host lookup') ||
+                errorString.contains('no address associated') ||
+                errorString.contains('network is unreachable') ||
+                errorString.contains('connection refused') ||
+                errorString.contains('connection timed out') ||
+                errorString.contains('clientexception') ||
+                errorString.contains('connection abort') ||
+                errorString.contains('software caused connection abort')) {
+              await showConnectionErrorDialog(context);
+            } else {
+              // Other error - show generic error message
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Error marking supplies as received: ${e.toString()}',
+                    style: AppFonts.sfProStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white),
+                  ),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 2),
                 ),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 2),
-              ),
-            );
+              );
+            }
           }
         } else {
           // User chose to go back, uncheck all items
@@ -512,19 +528,34 @@ class _PODetailsPageState extends State<PODetailsPage> {
       print('Error saving remarks: $e');
       // Show error to user
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error saving remarks: ${e.toString()}',
-              style: AppFonts.sfProStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white),
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Error saving remarks: ${e.toString()}',
+                style: AppFonts.sfProStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white),
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
             ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+          );
+        }
       }
     }
   }
@@ -902,12 +933,27 @@ class _PODetailsPageState extends State<PODetailsPage> {
       } catch (e) {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          // Check if it's a network error
+          final errorString = e.toString().toLowerCase();
+          if (errorString.contains('socketexception') ||
+              errorString.contains('failed host lookup') ||
+              errorString.contains('no address associated') ||
+              errorString.contains('network is unreachable') ||
+              errorString.contains('connection refused') ||
+              errorString.contains('connection timed out') ||
+              errorString.contains('clientexception') ||
+              errorString.contains('connection abort') ||
+              errorString.contains('software caused connection abort')) {
+            await showConnectionErrorDialog(context);
+          } else {
+            // Other error - show generic error message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
       return;
@@ -994,12 +1040,27 @@ class _PODetailsPageState extends State<PODetailsPage> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -1154,12 +1215,27 @@ class _PODetailsPageState extends State<PODetailsPage> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -2076,7 +2152,28 @@ class _PODetailsPageState extends State<PODetailsPage> {
                                 }
                               }
 
-                              // Show more specific error message
+                              // Check if it's a network error first
+                              final errorString = e.toString().toLowerCase();
+                              if (errorString.contains('socketexception') ||
+                                  errorString.contains('failed host lookup') ||
+                                  errorString
+                                      .contains('no address associated') ||
+                                  errorString
+                                      .contains('network is unreachable') ||
+                                  errorString.contains('connection refused') ||
+                                  errorString
+                                      .contains('connection timed out') ||
+                                  errorString.contains('clientexception') ||
+                                  errorString.contains('connection abort') ||
+                                  errorString.contains(
+                                      'software caused connection abort')) {
+                                if (mounted && context.mounted) {
+                                  await showConnectionErrorDialog(context);
+                                }
+                                return; // Exit early for network errors
+                              }
+
+                              // Show more specific error message for non-network errors
                               String errorMessage =
                                   'Error processing partial receive';
                               if (e.toString().contains('Supply not found')) {
@@ -4001,17 +4098,35 @@ class _PODetailsPageState extends State<PODetailsPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error approving purchase order',
-            style: AppFonts.sfProStyle(
-                fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white),
+
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception') ||
+          errorString.contains('connection abort') ||
+          errorString.contains('software caused connection abort')) {
+        await showConnectionErrorDialog(context);
+      } else {
+        // Other error - show generic error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error approving purchase order',
+              style: AppFonts.sfProStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
           ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -4176,17 +4291,36 @@ class _PODetailsPageState extends State<PODetailsPage> {
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error rejecting purchase order',
-            style: AppFonts.sfProStyle(
-                fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Error rejecting purchase order',
+                style: AppFonts.sfProStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white),
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -4321,12 +4455,29 @@ class _PODetailsPageState extends State<PODetailsPage> {
       );
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error updating supplies'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error updating supplies'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 

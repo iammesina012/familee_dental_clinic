@@ -339,7 +339,24 @@ class _CreatePOPageState extends State<CreatePOPage> {
       // Navigate back to Purchase Order page and signal success
       Navigator.of(context).pop(true);
     } catch (e) {
-      _showErrorDialog('Failed to save purchase orders: $e');
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception') ||
+          errorString.contains('connection abort') ||
+          errorString.contains('software caused connection abort')) {
+        if (mounted) {
+          await showConnectionErrorDialog(context);
+        }
+      } else {
+        // Other error - show generic error message
+        _showErrorDialog('Failed to save purchase orders: $e');
+      }
     }
   }
 

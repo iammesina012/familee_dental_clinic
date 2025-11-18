@@ -12,6 +12,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:familee_dental/features/inventory/controller/catalog_controller.dart';
 import 'package:familee_dental/features/inventory/controller/view_supply_controller.dart';
 import 'package:familee_dental/features/inventory/data/inventory_item.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
+import 'package:familee_dental/shared/services/user_data_service.dart';
 
 class StockDeductionPage extends StatefulWidget {
   const StockDeductionPage({super.key});
@@ -30,9 +33,13 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   String? _userRole;
   String? _savedRemarks; // Store remarks from rejected approvals
 
+  final _userDataService = UserDataService();
+
   @override
   void initState() {
     super.initState();
+    // Load user data from Hive first (avoid placeholders)
+    _loadUserDataFromHive();
     _loadUserData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _currentRoute = ModalRoute.of(context);
@@ -66,6 +73,25 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     }
   }
 
+  /// Load user data from Hive (no placeholders)
+  Future<void> _loadUserDataFromHive() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser != null) {
+        await _userDataService.loadFromHive(currentUser.id);
+        if (mounted) {
+          setState(() {
+            _userName = _userDataService.userName;
+            _userRole = _userDataService.userRole;
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore errors - best effort
+    }
+  }
+
   Future<void> _loadUserData() async {
     try {
       final supabase = Supabase.instance.client;
@@ -81,30 +107,44 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
             .maybeSingle();
 
         if (mounted) {
-          setState(() {
-            if (response != null &&
-                response['name'] != null &&
-                response['name'].toString().trim().isNotEmpty) {
-              // Use data from user_roles table
-              _userName = response['name'].toString().trim();
-              _userRole = response['role']?.toString().trim() ?? 'Admin';
-            } else {
-              // Fallback to auth user data
-              final displayName =
-                  currentUser.userMetadata?['display_name']?.toString().trim();
-              final emailName = currentUser.email?.split('@')[0].trim();
-              _userName = displayName ?? emailName ?? 'User';
-              _userRole = 'Admin';
-            }
-          });
+          if (response != null &&
+              response['name'] != null &&
+              response['name'].toString().trim().isNotEmpty) {
+            // Use data from user_roles table
+            final name = response['name'].toString().trim();
+            final role = response['role']?.toString().trim() ?? 'Admin';
+
+            setState(() {
+              _userName = name;
+              _userRole = role;
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          } else {
+            // Fallback to auth user data
+            final displayName =
+                currentUser.userMetadata?['display_name']?.toString().trim();
+            final emailName = currentUser.email?.split('@')[0].trim();
+            final name = displayName ?? emailName ?? 'User';
+            final role = 'Admin';
+
+            setState(() {
+              _userName = name;
+              _userRole = role;
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          }
         }
       }
     } catch (e) {
-      print('Error loading user data: $e');
       if (mounted) {
         setState(() {
-          _userName = 'User';
-          _userRole = 'Admin';
+          // Use cached data from service if available (loaded from Hive)
+          _userName = _userDataService.userName;
+          _userRole = _userDataService.userRole;
         });
       }
     }
@@ -230,6 +270,14 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
   Future<void> _save({String remarks = ''}) async {
     if (_deductions.isEmpty) return;
 
+    // Check network connection before proceeding
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (!mounted) return;
+      await showConnectionErrorDialog(context);
+      return;
+    }
+
     final hasMissingPurpose = _deductions.any((deduction) {
       final purpose = (deduction['purpose']?.toString() ?? '').trim();
       return purpose.isEmpty;
@@ -308,16 +356,31 @@ class _StockDeductionPageState extends State<StockDeductionPage> {
     } catch (e) {
       // Show error message if approval creation fails
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to create approval: $e',
-              style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to create approval: $e',
+                style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
             ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+          );
+        }
       }
     }
   }

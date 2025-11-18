@@ -210,60 +210,44 @@ class AddSupplyController {
         return 'ARCHIVED_SUPPLY_EXISTS';
       }
 
-      // Check if any active supply already uses this name (case-insensitive)
-      final nameExists = await _supabase
-          .from('supplies')
-          .select('id')
-          .ilike('name', nameController.text.trim())
-          .eq('archived', false)
-          .limit(1);
-
-      if (nameExists.isNotEmpty) {
-        return 'SUPPLY_NAME_EXISTS';
-      }
-
-      // Check if an exact duplicate supply exists (all fields match)
-      final supplierValue = supplierController.text.trim().isEmpty
-          ? "N/A"
-          : supplierController.text.trim();
+      // Check if an exact duplicate supply exists
+      // Duplicate = same product identity (name, type, brand, category, packaging)
+      // Different batches (supplier, cost, expiry, threshold) are NOT duplicates
       final brandValue = brandController.text.trim().isEmpty
           ? "N/A"
           : brandController.text.trim();
-      final costValue = double.tryParse(costController.text.trim()) ?? 0.0;
+      final typeValue =
+          typeController.text.trim().isEmpty ? "" : typeController.text.trim();
       final categoryValue = selectedCategory ?? "";
       final packagingUnitValue = selectedPackagingUnit ?? "";
       final packagingContentValue = isPackagingContentDisabled()
           ? null
           : (selectedPackagingContent ?? "");
-      final expiryValue = noExpiry || expiryController.text.isEmpty
-          ? null
-          : expiryController.text;
 
-      // Query for potential duplicates - query by key fields first, then check all fields
-      // Note: We query by non-nullable fields, then check nullable fields in code
+      // Query for potential duplicates - query by name, then check product identity fields
       var duplicateQuery = _supabase
           .from('supplies')
           .select(
-              'id, cost, packaging_content, expiry, no_expiry, supplier, brand, category, packaging_unit, low_stock_baseline')
+              'id, type, brand, category, packaging_unit, packaging_content, packaging_content_quantity')
           .eq('name', nameController.text.trim())
           .eq('archived', false);
 
-      // Get all potential matches and check all fields
+      // Get all potential matches and check product identity fields only
       final existingSupplies = await duplicateQuery;
       bool foundDuplicate = false;
 
       for (final row in existingSupplies) {
-        // Check supplier
-        final existingSupplier = (row['supplier'] ?? 'N/A').toString();
-        final supplierMatches = supplierValue == 'N/A'
-            ? (existingSupplier == 'N/A' || existingSupplier.isEmpty)
-            : supplierValue == existingSupplier;
-
         // Check brand
         final existingBrand = (row['brand'] ?? 'N/A').toString();
         final brandMatches = brandValue == 'N/A'
             ? (existingBrand == 'N/A' || existingBrand.isEmpty)
             : brandValue == existingBrand;
+
+        // Check type (treat null and empty as equivalent)
+        final existingType = (row['type'] ?? '').toString();
+        final typeMatches = typeValue.isEmpty
+            ? (existingType.isEmpty)
+            : typeValue == existingType;
 
         // Check category
         final existingCategory = (row['category'] ?? '').toString();
@@ -274,17 +258,6 @@ class AddSupplyController {
         final packagingUnitMatches =
             packagingUnitValue == existingPackagingUnit;
 
-        // Check low stock baseline
-        final existingLowStockBaseline = row['low_stock_baseline'] != null
-            ? (row['low_stock_baseline'] as num).toInt()
-            : null;
-        final lowStockBaselineMatches =
-            lowStockThreshold == (existingLowStockBaseline ?? 0);
-
-        // Check cost (with tolerance for floating point)
-        final existingCost = (row['cost'] ?? 0.0).toDouble();
-        final costMatches = (costValue - existingCost).abs() < 0.01;
-
         // Check packaging content match
         final existingPackagingContent = row['packaging_content'];
         final packagingContentMatches = (packagingContentValue == null &&
@@ -294,26 +267,22 @@ class AddSupplyController {
                 existingPackagingContent != null &&
                 packagingContentValue == existingPackagingContent.toString());
 
-        // Check expiry match
-        final existingExpiry = row['expiry'];
-        final existingNoExpiry = row['no_expiry'] ?? false;
-        final expiryMatches = (expiryValue == null &&
-                (existingExpiry == null ||
-                    existingExpiry.toString().isEmpty ||
-                    existingNoExpiry == true)) ||
-            (expiryValue != null &&
-                existingExpiry != null &&
-                expiryValue == existingExpiry.toString());
+        // Check packaging content quantity match
+        final existingPackagingContentQuantity =
+            row['packaging_content_quantity'] != null
+                ? (row['packaging_content_quantity'] as num).toInt()
+                : 1;
+        final packagingContentQuantityMatches =
+            packagingContent == existingPackagingContentQuantity;
 
-        // All fields must match for it to be a duplicate
-        if (supplierMatches &&
-            brandMatches &&
+        // Product identity fields must match for it to be a duplicate
+        // Different batches (supplier, cost, expiry, threshold) are allowed
+        if (brandMatches &&
+            typeMatches &&
             categoryMatches &&
             packagingUnitMatches &&
-            lowStockBaselineMatches &&
-            costMatches &&
             packagingContentMatches &&
-            expiryMatches) {
+            packagingContentQuantityMatches) {
           foundDuplicate = true;
           break;
         }
@@ -391,30 +360,197 @@ class AddSupplyController {
   }
 
   // Smart autofill methods
-  Future<void> autoFillFromExistingSupply(String supplyName) async {
+  Future<void> autoFillFromExistingSupply(String supplyName,
+      {String? typeName}) async {
     if (supplyName.trim().isEmpty) return;
 
     try {
-      // Find existing supplies with the same name
-      final response = await _supabase
+      // Find ALL existing supplies with the same name (case-insensitive)
+      // If type is provided, also filter by type for image matching
+      // We'll pick the most common values for each field
+      var query = _supabase
           .from('supplies')
-          .select('supplier, brand, type')
-          .eq('name', supplyName.trim())
-          .eq('archived', false)
-          .order('created_at', ascending: false)
-          .limit(1);
+          .select(
+              'supplier, brand, type, category, low_stock_baseline, packaging_unit, packaging_content, packaging_content_quantity, no_expiry, image_url')
+          .ilike('name', supplyName.trim())
+          .eq('archived', false);
+
+      // If type is provided, filter by type for more accurate autofill
+      if (typeName != null && typeName.trim().isNotEmpty) {
+        query = query.ilike('type', typeName.trim());
+      }
+
+      final response = await query;
 
       if (response.isNotEmpty) {
-        final row = response.first;
-        final supplier = row['supplier'] as String?;
-        final brand = row['brand'] as String?;
+        // Count occurrences for each field
+        final Map<String, int> supplierCounts = {};
+        final Map<String, int> brandCounts = {};
+        final Map<String, int> packagingUnitCounts = {};
+        final Map<String, int> packagingContentCounts = {};
+        final Map<int, int> packagingContentQuantityCounts = {};
 
-        // Auto-fill supplier and brand if they exist and are not "N/A"
-        if (supplier != null && supplier.isNotEmpty && supplier != 'N/A') {
-          supplierController.text = supplier;
+        final Map<String, String> supplierExamples = {};
+        final Map<String, String> brandExamples = {};
+        final Map<String, String> packagingUnitExamples = {};
+        final Map<String, String> packagingContentExamples = {};
+
+        String? mostCommonCategory;
+        int? mostCommonLowStockBaseline;
+        int noExpiryCount = 0;
+        int hasExpiryCount = 0;
+        String? firstImageUrl;
+
+        for (final row in response) {
+          final supplier = row['supplier'] as String?;
+          final brand = row['brand'] as String?;
+          final category = row['category'] as String?;
+          final lowStockBaseline = row['low_stock_baseline'] as int?;
+          final packagingUnit = row['packaging_unit'] as String?;
+          final packagingContent = row['packaging_content'] as String?;
+          final packagingContentQuantity =
+              row['packaging_content_quantity'] as int?;
+          final noExpiryFlag = row['no_expiry'] as bool?;
+          final imgUrl = row['image_url'] as String?;
+
+          // Count suppliers (skip N/A)
+          if (supplier != null && supplier.isNotEmpty && supplier != 'N/A') {
+            final key = supplier.toLowerCase();
+            supplierCounts[key] = (supplierCounts[key] ?? 0) + 1;
+            supplierExamples[key] = supplier;
+          }
+
+          // Count brands (skip N/A)
+          if (brand != null && brand.isNotEmpty && brand != 'N/A') {
+            final key = brand.toLowerCase();
+            brandCounts[key] = (brandCounts[key] ?? 0) + 1;
+            brandExamples[key] = brand;
+          }
+
+          // Count packaging units
+          if (packagingUnit != null && packagingUnit.isNotEmpty) {
+            final key = packagingUnit.toLowerCase();
+            packagingUnitCounts[key] = (packagingUnitCounts[key] ?? 0) + 1;
+            packagingUnitExamples[key] = packagingUnit;
+          }
+
+          // Count packaging content
+          if (packagingContent != null && packagingContent.isNotEmpty) {
+            final key = packagingContent.toLowerCase();
+            packagingContentCounts[key] =
+                (packagingContentCounts[key] ?? 0) + 1;
+            packagingContentExamples[key] = packagingContent;
+          }
+
+          // Count packaging content quantity
+          if (packagingContentQuantity != null &&
+              packagingContentQuantity > 0) {
+            packagingContentQuantityCounts[packagingContentQuantity] =
+                (packagingContentQuantityCounts[packagingContentQuantity] ??
+                        0) +
+                    1;
+          }
+
+          // Count no expiry flag
+          if (noExpiryFlag != null) {
+            if (noExpiryFlag == true) {
+              noExpiryCount++;
+            } else {
+              hasExpiryCount++;
+            }
+          }
+
+          // Track most common category
+          if (category != null && category.isNotEmpty) {
+            if (mostCommonCategory == null || category == mostCommonCategory) {
+              mostCommonCategory = category;
+            }
+          }
+
+          // Track most common low stock baseline
+          if (lowStockBaseline != null && lowStockBaseline > 0) {
+            if (mostCommonLowStockBaseline == null ||
+                lowStockBaseline == mostCommonLowStockBaseline) {
+              mostCommonLowStockBaseline = lowStockBaseline;
+            }
+          }
+
+          // Track first non-empty image URL
+          if (firstImageUrl == null && imgUrl != null && imgUrl.isNotEmpty) {
+            firstImageUrl = imgUrl;
+          }
         }
-        if (brand != null && brand.isNotEmpty && brand != 'N/A') {
-          brandController.text = brand;
+
+        // Find most common supplier
+        if (supplierCounts.isNotEmpty) {
+          final mostCommonSupplierKey = supplierCounts.entries
+              .reduce((a, b) => a.value > b.value ? a : b)
+              .key;
+          supplierController.text = supplierExamples[mostCommonSupplierKey]!;
+        }
+
+        // Find most common brand
+        if (brandCounts.isNotEmpty) {
+          final mostCommonBrandKey = brandCounts.entries
+              .reduce((a, b) => a.value > b.value ? a : b)
+              .key;
+          brandController.text = brandExamples[mostCommonBrandKey]!;
+        }
+
+        // Find most common packaging unit
+        if (packagingUnitCounts.isNotEmpty) {
+          final mostCommonPackagingUnitKey = packagingUnitCounts.entries
+              .reduce((a, b) => a.value > b.value ? a : b)
+              .key;
+          selectedPackagingUnit =
+              packagingUnitExamples[mostCommonPackagingUnitKey]!;
+        }
+
+        // Find most common packaging content
+        if (packagingContentCounts.isNotEmpty) {
+          final mostCommonPackagingContentKey = packagingContentCounts.entries
+              .reduce((a, b) => a.value > b.value ? a : b)
+              .key;
+          selectedPackagingContent =
+              packagingContentExamples[mostCommonPackagingContentKey]!;
+        }
+
+        // Find most common packaging content quantity
+        if (packagingContentQuantityCounts.isNotEmpty) {
+          final mostCommonPackagingContentQuantity =
+              packagingContentQuantityCounts.entries
+                  .reduce((a, b) => a.value > b.value ? a : b)
+                  .key;
+          packagingContentController.text =
+              mostCommonPackagingContentQuantity.toString();
+          packagingContent = mostCommonPackagingContentQuantity;
+        }
+
+        // Set no expiry flag based on majority
+        if (noExpiryCount > hasExpiryCount) {
+          noExpiry = true;
+        } else if (hasExpiryCount > 0) {
+          noExpiry = false;
+        }
+
+        // Auto-fill category if it exists
+        if (mostCommonCategory != null) {
+          selectedCategory = mostCommonCategory;
+        }
+
+        // Auto-fill low stock threshold if it exists
+        if (mostCommonLowStockBaseline != null) {
+          lowStockThresholdController.text =
+              mostCommonLowStockBaseline.toString();
+          lowStockThreshold = mostCommonLowStockBaseline;
+        }
+
+        // Auto-fill image ONLY if type is specified and matches
+        // This prevents grabbing wrong type's image (e.g., Pink vs Blue surgical mask)
+        if (typeName != null &&
+            typeName.trim().isNotEmpty &&
+            firstImageUrl != null) {
+          imageUrl = firstImageUrl;
         }
       }
     } catch (e) {

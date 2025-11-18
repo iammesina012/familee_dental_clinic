@@ -158,11 +158,20 @@ class StockDeductionController {
             final newStock = notificationData['newStock'] ?? 0;
             final previousStock = notificationData['previousStock'] ?? 0;
 
+            // For FIFO deductions affecting multiple batches, we don't have a single batchId
+            // The notification controller will calculate status from the database
+            // Get the first batch's docId as a reference if available
+            final String? firstBatchId = allBatches.isNotEmpty
+                ? allBatches.first['docId'] as String?
+                : null;
+
             // Check for stock level notifications (will recalculate total stock from DB)
             await notificationsController.checkStockLevelNotification(
               name,
               newStock as int,
               previousStock as int,
+              batchId:
+                  firstBatchId, // Pass first batch ID for type/category lookup
             );
           }
         }
@@ -203,10 +212,12 @@ class StockDeductionController {
           final newStock = notificationData['newStock'] ?? 0;
           final previousStock = notificationData['previousStock'] ?? 0;
 
+          // Pass batchId so notification controller can accurately calculate status before/after
           await notificationsController.checkStockLevelNotification(
             name,
             newStock as int,
             previousStock as int,
+            batchId: docId,
           );
         }
       }
@@ -295,10 +306,12 @@ class StockDeductionController {
           final newStock = notificationData['newStock'] ?? 0;
           final previousStock = notificationData['previousStock'] ?? 0;
 
+          // Pass batchId so notification controller can accurately calculate status before/after
           await notificationsController.checkStockLevelNotification(
             itemName,
             newStock as int,
             previousStock as int,
+            batchId: docId,
           );
         }
       }

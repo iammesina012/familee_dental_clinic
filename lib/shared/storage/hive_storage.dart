@@ -34,6 +34,18 @@ class HiveStorage {
   // Box name for user data (username and role)
   static const String userDataBox = 'user_data';
 
+  // Box name for edit profile data (name, username, email, role, id)
+  static const String editProfileBox = 'edit_profile_data';
+
+  // Box name for employee list data
+  static const String employeeListBox = 'employee_list';
+
+  // Box name for individual employee data (for Edit Employee page)
+  static const String editEmployeeBox = 'edit_employee_data';
+
+  // Box name for backup and restore data (backup list and auto-backup settings)
+  static const String backupRestoreBox = 'backup_restore_data';
+
   // Box names for purchase order module
   static const String poOpenPOsBox = 'po_open_pos';
   static const String poPartialPOsBox = 'po_partial_pos';
@@ -49,6 +61,9 @@ class HiveStorage {
   // Box names for activity log module
   static const String activityLogsBox =
       'activity_logs'; // Per-date logs stored with date keys
+
+  // Box name for notifications module
+  static const String notificationsBox = 'notifications';
 
   /// Initialize Hive storage
   /// Call this once in main() before runApp()

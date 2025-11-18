@@ -5,6 +5,11 @@ import 'package:familee_dental/features/backup_restore/services/backup_restore_s
 import 'package:familee_dental/features/backup_restore/services/automatic_backup_service.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
+import 'package:familee_dental/shared/storage/hive_storage.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shimmer/shimmer.dart';
 
 class BackupRestorePage extends StatefulWidget {
@@ -31,6 +36,11 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
   bool _isLoadingAutoBackupSettings = true;
   bool _hasBackupsLoaded = false;
 
+  // In-memory cache for backup list and settings
+  List<BackupFileMeta>? _cachedBackups;
+  bool? _cachedAutoBackupEnabled;
+  DateTime? _cachedLastBackupDate;
+
   @override
   void initState() {
     super.initState();
@@ -39,21 +49,77 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
   }
 
   Future<void> _loadAutoBackupSettings() async {
-    // Check if backup is needed first
-    await AutomaticBackupService.checkAndCreateBackupIfNeeded();
+    try {
+      // 1. First, try to load from Hive cache (for offline support)
+      if (_cachedAutoBackupEnabled == null) {
+        await _loadAutoBackupSettingsFromHive();
+      }
 
-    final isEnabled = await AutomaticBackupService.isAutoBackupEnabled();
-    final lastDate = await AutomaticBackupService.getLastBackupDate();
-    if (mounted) {
-      setState(() {
-        _isAutoBackupEnabled = isEnabled;
-        _lastBackupDate = lastDate;
-        _isLoadingAutoBackupSettings = false;
-        // Only show content when both backups AND settings are loaded
-        if (_hasBackupsLoaded) {
-          _isFirstLoad = false;
+      // 2. If cached data found, use it immediately
+      if (_cachedAutoBackupEnabled != null) {
+        if (mounted) {
+          setState(() {
+            _isAutoBackupEnabled = _cachedAutoBackupEnabled!;
+            _lastBackupDate = _cachedLastBackupDate;
+            _isLoadingAutoBackupSettings = false;
+            // Only show content when both backups AND settings are loaded
+            if (_hasBackupsLoaded) {
+              _isFirstLoad = false;
+            }
+          });
         }
-      });
+      }
+
+      // 3. Try to fetch fresh data from Supabase (if online)
+      try {
+        // Check if backup is needed first
+        await AutomaticBackupService.checkAndCreateBackupIfNeeded();
+
+        final isEnabled = await AutomaticBackupService.isAutoBackupEnabled();
+        final lastDate = await AutomaticBackupService.getLastBackupDate();
+
+        // Save to cache
+        await _saveAutoBackupSettingsToHive(isEnabled, lastDate);
+        _cachedAutoBackupEnabled = isEnabled;
+        _cachedLastBackupDate = lastDate;
+
+        if (mounted) {
+          setState(() {
+            _isAutoBackupEnabled = isEnabled;
+            _lastBackupDate = lastDate;
+            _isLoadingAutoBackupSettings = false;
+            // Only show content when both backups AND settings are loaded
+            if (_hasBackupsLoaded) {
+              _isFirstLoad = false;
+            }
+          });
+        }
+      } catch (e) {
+        // If Supabase fetch fails (e.g., offline), use cached data
+        debugPrint('Error fetching auto-backup settings from Supabase: $e');
+        // Cached data is already loaded above, so we're good
+        if (_cachedAutoBackupEnabled == null && mounted) {
+          // No cache available, set defaults
+          setState(() {
+            _isAutoBackupEnabled = false;
+            _lastBackupDate = null;
+            _isLoadingAutoBackupSettings = false;
+            if (_hasBackupsLoaded) {
+              _isFirstLoad = false;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading auto-backup settings: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingAutoBackupSettings = false;
+          if (_hasBackupsLoaded) {
+            _isFirstLoad = false;
+          }
+        });
+      }
     }
   }
 
@@ -64,23 +130,16 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
       });
     }
     try {
-      final files = await _service.listBackups();
-      if (mounted) {
-        setState(() {
-          _backups = files;
-          _hasBackupsLoaded = true;
-          // Only mark as loaded when both backups AND settings are loaded
-          if (!_isLoadingAutoBackupSettings) {
-            _isFirstLoad = false;
-          }
-        });
+      // 1. First, try to load from Hive cache (for offline support)
+      if (_cachedBackups == null) {
+        await _loadBackupsFromHive();
       }
-    } catch (e) {
-      // Hide raw error for no_changes; only show snackbar above
-      if (!(e is StateError && e.message == 'no_changes')) {
+
+      // 2. If cached data found, use it immediately
+      if (_cachedBackups != null) {
         if (mounted) {
           setState(() {
-            _error = e.toString();
+            _backups = _cachedBackups!;
             _hasBackupsLoaded = true;
             // Only mark as loaded when both backups AND settings are loaded
             if (!_isLoadingAutoBackupSettings) {
@@ -89,6 +148,141 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
           });
         }
       }
+
+      // 3. Try to fetch fresh data from Supabase (if online)
+      try {
+        final files = await _service.listBackups();
+
+        // Save to cache
+        await _saveBackupsToHive(files);
+        _cachedBackups = files;
+
+        if (mounted) {
+          setState(() {
+            _backups = files;
+            _hasBackupsLoaded = true;
+            // Only mark as loaded when both backups AND settings are loaded
+            if (!_isLoadingAutoBackupSettings) {
+              _isFirstLoad = false;
+            }
+          });
+        }
+      } catch (e) {
+        // If Supabase fetch fails (e.g., offline), use cached data
+        debugPrint('Error fetching backups from Supabase: $e');
+        // Hide raw error for no_changes; only show snackbar above
+        if (!(e is StateError && e.message == 'no_changes')) {
+          if (mounted) {
+            setState(() {
+              if (_cachedBackups == null) {
+                _error = e.toString();
+              }
+              _hasBackupsLoaded = true;
+              // Only mark as loaded when both backups AND settings are loaded
+              if (!_isLoadingAutoBackupSettings) {
+                _isFirstLoad = false;
+              }
+            });
+          }
+        } else {
+          // Handle no_changes case
+          if (mounted) {
+            setState(() {
+              _hasBackupsLoaded = true;
+              if (!_isLoadingAutoBackupSettings) {
+                _isFirstLoad = false;
+              }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading backups: $e');
+      if (mounted) {
+        setState(() {
+          _hasBackupsLoaded = true;
+          if (!_isLoadingAutoBackupSettings) {
+            _isFirstLoad = false;
+          }
+        });
+      }
+    }
+  }
+
+  /// Load backup list from Hive cache
+  Future<void> _loadBackupsFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.backupRestoreBox);
+      final backupsStr = box.get('backups') as String?;
+
+      if (backupsStr != null) {
+        final jsonList = jsonDecode(backupsStr) as List<dynamic>;
+        _cachedBackups = jsonList.map((e) {
+          final map = e as Map<String, dynamic>;
+          return BackupFileMeta(
+            name: map['name'] ?? '',
+            fullPath: map['fullPath'] ?? '',
+            timestampUtc: map['timestampUtc'] != null
+                ? DateTime.tryParse(map['timestampUtc'] as String)
+                : null,
+          );
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Error loading backups from Hive: $e');
+    }
+  }
+
+  /// Save backup list to Hive cache
+  Future<void> _saveBackupsToHive(List<BackupFileMeta> backups) async {
+    try {
+      _cachedBackups = backups;
+      final box = await HiveStorage.openBox(HiveStorage.backupRestoreBox);
+      final jsonList = backups
+          .map((backup) => {
+                'name': backup.name,
+                'fullPath': backup.fullPath,
+                'timestampUtc': backup.timestampUtc?.toIso8601String(),
+              })
+          .toList();
+      await box.put('backups', jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('Error saving backups to Hive: $e');
+    }
+  }
+
+  /// Load auto-backup settings from Hive cache
+  Future<void> _loadAutoBackupSettingsFromHive() async {
+    try {
+      final box = await HiveStorage.openBox(HiveStorage.backupRestoreBox);
+      final settingsStr = box.get('autoBackupSettings') as String?;
+
+      if (settingsStr != null) {
+        final settings = jsonDecode(settingsStr) as Map<String, dynamic>;
+        _cachedAutoBackupEnabled = settings['enabled'] as bool? ?? false;
+        _cachedLastBackupDate = settings['lastBackupDate'] != null
+            ? DateTime.tryParse(settings['lastBackupDate'] as String)
+            : null;
+      }
+    } catch (e) {
+      debugPrint('Error loading auto-backup settings from Hive: $e');
+    }
+  }
+
+  /// Save auto-backup settings to Hive cache
+  Future<void> _saveAutoBackupSettingsToHive(
+      bool enabled, DateTime? lastBackupDate) async {
+    try {
+      _cachedAutoBackupEnabled = enabled;
+      _cachedLastBackupDate = lastBackupDate;
+      final box = await HiveStorage.openBox(HiveStorage.backupRestoreBox);
+      final settings = {
+        'enabled': enabled,
+        'lastBackupDate': lastBackupDate?.toIso8601String(),
+      };
+      await box.put('autoBackupSettings', jsonEncode(settings));
+    } catch (e) {
+      debugPrint('Error saving auto-backup settings to Hive: $e');
     }
   }
 
@@ -162,13 +356,30 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup failed: $e')),
-        );
-        if (mounted) {
-          setState(() {
-            _error = e.toString();
-          });
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          if (mounted) {
+            await showConnectionErrorDialog(context);
+          }
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Backup failed: $e')),
+          );
+          if (mounted) {
+            setState(() {
+              _error = e.toString();
+            });
+          }
         }
       }
     } finally {
@@ -216,13 +427,31 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restore failed: $e')),
-      );
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-        });
+
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception') ||
+          errorString.contains('connection abort') ||
+          errorString.contains('software caused connection abort')) {
+        if (mounted) {
+          await showConnectionErrorDialog(context);
+        }
+      } else {
+        // Other error - show generic error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore failed: $e')),
+        );
+        if (mounted) {
+          setState(() {
+            _error = e.toString();
+          });
+        }
       }
     } finally {
       if (mounted) {
@@ -797,6 +1026,15 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
     );
 
     if (confirmed == true) {
+      // Check network connection AFTER confirmation
+      final hasConnection = await ConnectivityService().hasInternetConnection();
+      if (!hasConnection) {
+        if (mounted) {
+          await showConnectionErrorDialog(context);
+        }
+        return;
+      }
+
       await _backupNow();
     }
   }
@@ -925,11 +1163,29 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
     );
 
     if (confirmed == true) {
+      // Check network connection AFTER confirmation
+      final hasConnection = await ConnectivityService().hasInternetConnection();
+      if (!hasConnection) {
+        if (mounted) {
+          await showConnectionErrorDialog(context);
+        }
+        return;
+      }
+
       await _restoreFrom(meta);
     }
   }
 
   Future<void> _toggleAutoBackup(bool enabled) async {
+    // Check network connection before toggling
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (mounted) {
+        await showConnectionErrorDialog(context);
+      }
+      return;
+    }
+
     try {
       if (enabled) {
         await AutomaticBackupService.enableAutoBackup();

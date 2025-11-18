@@ -561,11 +561,23 @@ class InventoryController {
           }
         }
 
-        // Unit filter
-        if (filters['unit'] != null &&
-            filters['unit'].toString().isNotEmpty &&
-            item.mainItem.unit != filters['unit']) {
-          return false;
+        // Packaging unit filter
+        if (filters['packagingUnit'] != null &&
+            filters['packagingUnit'].toString().isNotEmpty) {
+          final itemPackagingUnit =
+              item.mainItem.packagingUnit ?? item.mainItem.unit;
+          if (itemPackagingUnit != filters['packagingUnit']) {
+            return false;
+          }
+        }
+
+        // Packaging content filter
+        if (filters['packagingContent'] != null &&
+            filters['packagingContent'].toString().isNotEmpty) {
+          final itemPackagingContent = item.mainItem.packagingContent;
+          if (itemPackagingContent != filters['packagingContent']) {
+            return false;
+          }
         }
 
         // Cost range filter

@@ -21,7 +21,8 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
   final Set<String> selectedSuppliers = {};
   final Set<String> selectedStockStatus = {};
   final Set<String> selectedExpiry = {};
-  String? selectedUnit;
+  String? selectedPackagingUnit;
+  String? selectedPackagingContent;
   String? minCost, maxCost;
 
   // Incremental display counts for brands/suppliers chips
@@ -34,7 +35,19 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
   // Static data lists
   final stockStatuses = ["In Stock", "Low Stock", "Out of Stock"];
   final expiryOptions = ["Expiring", "No Expiry"];
-  final units = ['Box', 'Pieces', 'Pack'];
+  final packagingUnits = [
+    'Box',
+    'Pack',
+    'Bundle',
+    'Bottle',
+    'Jug',
+    'Pad',
+    'Syringe',
+    'Pieces',
+    'Spool',
+    'Tub',
+    'Roll'
+  ];
 
   @override
   void initState() {
@@ -69,9 +82,14 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
       selectedExpiry.addAll((filters['expiry'] as List).cast<String>());
     }
 
-    // Load unit
-    if (filters['unit'] != null) {
-      selectedUnit = filters['unit'] as String?;
+    // Load packaging unit
+    if (filters['packagingUnit'] != null) {
+      selectedPackagingUnit = filters['packagingUnit'] as String?;
+    }
+
+    // Load packaging content
+    if (filters['packagingContent'] != null) {
+      selectedPackagingContent = filters['packagingContent'] as String?;
     }
 
     // Load cost range
@@ -89,7 +107,8 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
       selectedSuppliers.clear();
       selectedStockStatus.clear();
       selectedExpiry.clear();
-      selectedUnit = null;
+      selectedPackagingUnit = null;
+      selectedPackagingContent = null;
       minCost = null;
       maxCost = null;
     });
@@ -107,12 +126,46 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
       "suppliers": selectedSuppliers.toList(),
       "stockStatus": selectedStockStatus.toList(),
       "expiry": selectedExpiry.toList(),
-      "unit": selectedUnit,
+      "packagingUnit": selectedPackagingUnit,
+      "packagingContent": selectedPackagingContent,
       "minCost": minCost,
       "maxCost": maxCost,
     };
     if (widget.onApply != null) widget.onApply!(filters);
     Navigator.pop(context);
+  }
+
+  // Helper method to get packaging content options based on selected unit
+  List<String> _getPackagingContentOptions(String? packagingUnit) {
+    switch (packagingUnit) {
+      case 'Pack':
+      case 'Box':
+      case 'Bundle':
+        return ['Pieces'];
+      case 'Bottle':
+        return ['mL', 'L'];
+      case 'Jug':
+        return ['mL', 'L'];
+      case 'Pad':
+        return ['Cartridge'];
+      case 'Syringe':
+        return ['mL', 'g'];
+      case 'Pieces':
+      case 'Spool':
+      case 'Tub':
+      case 'Roll':
+        return []; // These don't need packaging content
+      default:
+        return ['Pieces', 'Units', 'Items', 'Count'];
+    }
+  }
+
+  // Helper method to check if packaging content should be disabled
+  bool _isPackagingContentDisabled(String? packagingUnit) {
+    return packagingUnit == 'Pieces' ||
+        packagingUnit == 'Spool' ||
+        packagingUnit == 'Tub' ||
+        packagingUnit == 'Roll';
   }
 
   void _showAddBrandDialog() {
@@ -187,21 +240,67 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                   ElevatedButton(
                     onPressed: () async {
                       if (controller.text.trim().isNotEmpty) {
-                        final success = await filterController
-                            .addBrandIfNotExists(controller.text.trim());
-                        if (success) {
-                          Navigator.pop(context);
-                        } else {
-                          // Close dialog first, then show error message
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Brand "${controller.text.trim()}" already exists!'),
-                              backgroundColor: Colors.red[600],
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
+                        // Check connectivity before proceeding
+                        final hasConnection =
+                            await ConnectivityService().hasInternetConnection();
+                        if (!hasConnection) {
+                          if (context.mounted) {
+                            await showConnectionErrorDialog(context);
+                          }
+                          return;
+                        }
+
+                        try {
+                          final success = await filterController
+                              .addBrandIfNotExists(controller.text.trim());
+                          if (success) {
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                            }
+                          } else {
+                            // Close dialog first, then show error message
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Brand "${controller.text.trim()}" already exists!'),
+                                  backgroundColor: Colors.red[600],
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          // Check if it's a network error
+                          final errorString = e.toString().toLowerCase();
+                          if (errorString.contains('socketexception') ||
+                              errorString.contains('failed host lookup') ||
+                              errorString.contains('no address associated') ||
+                              errorString.contains('network is unreachable') ||
+                              errorString.contains('connection refused') ||
+                              errorString.contains('connection timed out') ||
+                              errorString.contains('clientexception') ||
+                              errorString.contains('connection abort') ||
+                              errorString.contains(
+                                  'software caused connection abort')) {
+                            if (context.mounted) {
+                              await showConnectionErrorDialog(context);
+                            }
+                          } else {
+                            // Other error - show generic error message
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Failed to add brand: ${e.toString()}'),
+                                  backgroundColor: Colors.red[600],
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                            }
+                          }
                         }
                       }
                     },
@@ -305,21 +404,67 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                   ElevatedButton(
                     onPressed: () async {
                       if (controller.text.trim().isNotEmpty) {
-                        final success = await filterController
-                            .addSupplierIfNotExists(controller.text.trim());
-                        if (success) {
-                          Navigator.pop(context);
-                        } else {
-                          // Close dialog first, then show error message
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Supplier "${controller.text.trim()}" already exists!'),
-                              backgroundColor: Colors.red[600],
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
+                        // Check connectivity before proceeding
+                        final hasConnection =
+                            await ConnectivityService().hasInternetConnection();
+                        if (!hasConnection) {
+                          if (context.mounted) {
+                            await showConnectionErrorDialog(context);
+                          }
+                          return;
+                        }
+
+                        try {
+                          final success = await filterController
+                              .addSupplierIfNotExists(controller.text.trim());
+                          if (success) {
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                            }
+                          } else {
+                            // Close dialog first, then show error message
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Supplier "${controller.text.trim()}" already exists!'),
+                                  backgroundColor: Colors.red[600],
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          // Check if it's a network error
+                          final errorString = e.toString().toLowerCase();
+                          if (errorString.contains('socketexception') ||
+                              errorString.contains('failed host lookup') ||
+                              errorString.contains('no address associated') ||
+                              errorString.contains('network is unreachable') ||
+                              errorString.contains('connection refused') ||
+                              errorString.contains('connection timed out') ||
+                              errorString.contains('clientexception') ||
+                              errorString.contains('connection abort') ||
+                              errorString.contains(
+                                  'software caused connection abort')) {
+                            if (context.mounted) {
+                              await showConnectionErrorDialog(context);
+                            }
+                          } else {
+                            // Other error - show generic error message
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Failed to add supplier: ${e.toString()}'),
+                                  backgroundColor: Colors.red[600],
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                            }
+                          }
                         }
                       }
                     },
@@ -1171,22 +1316,90 @@ class _InventoryFilterModalState extends State<InventoryFilterModal> {
                           ],
                         ),
                         const SizedBox(height: 20),
-                        DropdownButtonFormField<String>(
-                          value: selectedUnit,
-                          decoration: InputDecoration(
-                            labelText: "Inventory Unit",
-                            border: OutlineInputBorder(),
-                          ),
-                          items: units
-                              .map((unit) => DropdownMenuItem(
-                                    value: unit,
-                                    child: Text(unit,
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.w500)),
-                                  ))
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedUnit = val),
+                        _sectionTitle("Packaging Unit & Content"),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: selectedPackagingUnit,
+                                decoration: InputDecoration(
+                                  labelText: "Packaging Unit",
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: packagingUnits
+                                    .map((unit) => DropdownMenuItem(
+                                          value: unit,
+                                          child: Text(unit,
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w500)),
+                                        ))
+                                    .toList(),
+                                onChanged: (val) {
+                                  setState(() {
+                                    selectedPackagingUnit = val;
+                                    // Reset packaging content if the new unit doesn't need it
+                                    if (val != null &&
+                                        _isPackagingContentDisabled(val)) {
+                                      selectedPackagingContent = null;
+                                    } else if (val != null) {
+                                      // Get new options for the selected unit
+                                      final options =
+                                          _getPackagingContentOptions(val);
+                                      // Validate current selection - if it doesn't exist in new options, reset it
+                                      if (selectedPackagingContent != null &&
+                                          !options.contains(
+                                              selectedPackagingContent)) {
+                                        selectedPackagingContent = null;
+                                      }
+                                      // Set default content if none is selected and options are available
+                                      if (selectedPackagingContent == null &&
+                                          options.isNotEmpty) {
+                                        selectedPackagingContent =
+                                            options.first;
+                                      }
+                                    } else {
+                                      // Unit is null, reset content
+                                      selectedPackagingContent = null;
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: () {
+                                  final options = _getPackagingContentOptions(
+                                      selectedPackagingUnit);
+                                  // Only return value if it exists in the options list
+                                  if (selectedPackagingContent != null &&
+                                      options
+                                          .contains(selectedPackagingContent)) {
+                                    return selectedPackagingContent;
+                                  }
+                                  return null;
+                                }(),
+                                decoration: InputDecoration(
+                                  labelText: "Packaging Content",
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: _getPackagingContentOptions(
+                                        selectedPackagingUnit)
+                                    .map((content) => DropdownMenuItem(
+                                          value: content,
+                                          child: Text(content,
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w500)),
+                                        ))
+                                    .toList(),
+                                onChanged: _isPackagingContentDisabled(
+                                        selectedPackagingUnit)
+                                    ? null
+                                    : (val) => setState(
+                                        () => selectedPackagingContent = val),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 24),
                       ],

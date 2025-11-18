@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:familee_dental/shared/storage/hive_storage.dart';
+import 'package:familee_dental/shared/services/user_data_service.dart';
 
 class ActivityLogController extends ChangeNotifier {
   // Private variables
@@ -148,24 +149,59 @@ class ActivityLogController extends ChangeNotifier {
         }
       }
 
-      if (cached != null) {
+      // Always set cached data first (like stock deduction logs)
+      // This ensures UI shows cached data immediately, even if Supabase fetch fails
+      if (cached != null && cached.isNotEmpty) {
         _allActivities = cached;
         _isLoading = false;
+        notifyListeners(); // Notify immediately with cached data
       } else {
+        // Only set empty if we truly have no cached data
         _allActivities = [];
-        _isLoading = true;
+        _isLoading = false; // Set to false even if empty to avoid skeleton
+        notifyListeners(); // Notify immediately
       }
-      notifyListeners();
 
-      // 3. Fetch from Supabase and subscribe to realtime updates
+      // 3. Fetch from Supabase and subscribe to realtime updates (non-blocking)
+      // Don't await - let it run in background without blocking cached data display
       final range = _buildUtcRangeForDate(targetDate);
-      await _fetchActivitiesForRange(range, cacheDate: targetDate);
-
-      if (_isSameDay(_selectedDate, targetDate)) {
-        _attachRealtimeChannel(range);
-      }
+      unawaited(
+          _fetchActivitiesForRange(range, cacheDate: targetDate).then((_) {
+        // Only attach realtime channel if still on the same date
+        if (_isSameDay(_selectedDate, targetDate)) {
+          _attachRealtimeChannel(range);
+        }
+      }).catchError((error) {
+        // If fetch fails, ensure we still have cached data displayed
+        // The catch block in _fetchActivitiesForRange should handle this,
+        // but this is a safety net
+        print('Error in fetch activities: $error');
+      }));
     } catch (e) {
       print('Error starting activity stream: $e');
+      // On error, ensure cached data is preserved
+      final errorDate = _selectedDate;
+      final cached = _getCachedActivities(errorDate);
+      if (cached != null && cached.isNotEmpty) {
+        _allActivities = cached;
+        _isLoading = false;
+        notifyListeners();
+      } else {
+        // If no in-memory cache, try loading from Hive
+        final dateKey = _dateKey(errorDate);
+        final hiveData = await _loadActivitiesFromHive(dateKey);
+        if (hiveData != null && hiveData.isNotEmpty) {
+          _cachedActivitiesByDate[dateKey] = hiveData;
+          _allActivities = hiveData;
+          _isLoading = false;
+          notifyListeners();
+        } else {
+          // Only set empty if we truly have no cached data
+          _allActivities = [];
+          _isLoading = false;
+          notifyListeners();
+        }
+      }
     }
   }
 
@@ -226,24 +262,57 @@ class ActivityLogController extends ChangeNotifier {
     try {
       final User? currentUser = _supabase.auth.currentUser;
       if (currentUser == null) {
-        _currentUserRole = 'staff';
+        _currentUserRole =
+            'owner'; // Default to most permissive to show cached data
         return;
       }
 
+      // First, try to load from cached UserDataService (which loads from Hive)
+      // This ensures correct role filtering when offline
+      final userDataService = UserDataService();
+      await userDataService.loadFromHive(currentUser.id);
+      if (userDataService.userRole != null &&
+          userDataService.userRole!.isNotEmpty) {
+        _currentUserRole = userDataService.userRole!;
+        return; // Use cached role - this ensures correct filtering when offline
+      }
+
+      // If not in cache, try fetching from Supabase
       final response = await _supabase
           .from('user_roles')
-          .select('role')
+          .select('role, name')
           .eq('id', currentUser.id)
           .maybeSingle();
 
       if (response != null && response['role'] != null) {
         _currentUserRole = response['role'] as String;
+        // Save to UserDataService for next time (when offline)
+        final name = response['name']?.toString().trim();
+        if (name != null && name.isNotEmpty) {
+          await userDataService.saveToHive(
+              currentUser.id, name, _currentUserRole);
+        }
       } else {
-        _currentUserRole = 'staff'; // Default fallback
+        _currentUserRole =
+            'owner'; // Default to most permissive to show cached data
       }
     } catch (e) {
       print('Error loading current user role: $e');
-      _currentUserRole = 'staff'; // Default to most restrictive on error
+      // On error (e.g., offline), try to use cached role from UserDataService
+      final userDataService = UserDataService();
+      final User? currentUser = _supabase.auth.currentUser;
+      if (currentUser != null) {
+        await userDataService.loadFromHive(currentUser.id);
+        if (userDataService.userRole != null &&
+            userDataService.userRole!.isNotEmpty) {
+          _currentUserRole = userDataService.userRole!;
+        } else {
+          // Only default to 'owner' if truly no cached role exists
+          _currentUserRole = 'owner';
+        }
+      } else {
+        _currentUserRole = 'owner';
+      }
     }
   }
 
@@ -404,19 +473,38 @@ class ActivityLogController extends ChangeNotifier {
           .order('created_at', ascending: false);
 
       final List<dynamic> rows = response as List<dynamic>;
-      _allActivities = rows
+      final fetchedActivities = rows
           .map((row) => Map<String, dynamic>.from(row as Map))
           .map(_mapRowToActivity)
           .toList(growable: false);
 
-      if (cacheDate != null) {
+      // Only update if we got valid data and we're still on the same date
+      if (cacheDate != null && _isSameDay(_selectedDate, cacheDate)) {
+        _allActivities = fetchedActivities;
         _cacheActivitiesForDate(cacheDate, _allActivities);
+        _isLoading = false;
+        notifyListeners();
       }
-
-      _isLoading = false;
-      notifyListeners();
     } catch (e) {
       print('Error fetching activities: $e');
+      // On error (e.g., offline), ALWAYS try to restore cached data
+      if (cacheDate != null) {
+        final cached = _getCachedActivities(cacheDate);
+        if (cached != null && cached.isNotEmpty) {
+          // Restore cached data if available
+          _allActivities = cached;
+        } else {
+          // If no in-memory cache, try loading from Hive
+          final dateKey = _dateKey(cacheDate);
+          final hiveData = await _loadActivitiesFromHive(dateKey);
+          if (hiveData != null && hiveData.isNotEmpty) {
+            _cachedActivitiesByDate[dateKey] = hiveData;
+            _allActivities = hiveData;
+          }
+          // If still empty and resetLoading was true, we already cleared it above
+          // If resetLoading was false, preserve whatever was there (should be cached from _subscribeToSelectedDate)
+        }
+      }
       _isLoading = false;
       notifyListeners();
     }

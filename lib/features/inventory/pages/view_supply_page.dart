@@ -16,15 +16,32 @@ import 'package:familee_dental/shared/services/connectivity_service.dart';
 import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class InventoryViewSupplyPage extends StatefulWidget {
-  final InventoryItem item;
+  final InventoryItem?
+      item; // Optional - only needed when viewing specific batch
+  final String?
+      supplyName; // For overview mode - identify supply by name+category+type
+  final String? supplyCategory;
+  final String? supplyType;
+  final String? supplyBrand; // Also needed for batch queries
   final bool skipAutoRedirect; // when navigating from Other Supply Batches
   final bool
       hideOtherExpirySection; // hide Other Supply Batches section (e.g., from Expired page)
-  const InventoryViewSupplyPage(
-      {super.key,
-      required this.item,
-      this.skipAutoRedirect = false,
-      this.hideOtherExpirySection = false});
+
+  const InventoryViewSupplyPage({
+    super.key,
+    this.item,
+    this.supplyName,
+    this.supplyCategory,
+    this.supplyType,
+    this.supplyBrand,
+    this.skipAutoRedirect = false,
+    this.hideOtherExpirySection = false,
+  }) : assert(
+            item != null ||
+                (supplyName != null &&
+                    supplyCategory != null &&
+                    supplyBrand != null),
+            'Either item or (supplyName + supplyCategory + supplyBrand) must be provided');
 
   @override
   State<InventoryViewSupplyPage> createState() =>
@@ -35,10 +52,6 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
   // Add a key to force rebuild when needed
   Key _streamKey = UniqueKey();
 
-  // Track whether we're viewing overview or batch details
-  InventoryItem?
-      _selectedBatch; // null = overview mode, not null = batch details mode
-
   // Method to refresh the stream
   void _refreshStream() {
     setState(() {
@@ -46,18 +59,35 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
     });
   }
 
-  // Method to show batch details
+  // Method to show batch details - navigate to new page with item parameter
+  // If in overview mode, use push (so back goes to overview)
+  // If already in batch mode, use pushReplacement (to avoid stacking)
   void _showBatchDetails(InventoryItem batch) {
-    setState(() {
-      _selectedBatch = batch;
-    });
-  }
+    final bool isOverviewMode = widget.item == null;
 
-  // Method to return to overview
-  void _returnToOverview() {
-    setState(() {
-      _selectedBatch = null;
-    });
+    if (isOverviewMode) {
+      // From overview: use push so back button returns to overview
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => InventoryViewSupplyPage(
+            item: batch,
+            skipAutoRedirect: true,
+          ),
+        ),
+      );
+    } else {
+      // From batch details: use pushReplacement to avoid stacking
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => InventoryViewSupplyPage(
+            item: batch,
+            skipAutoRedirect: true,
+          ),
+        ),
+      );
+    }
   }
 
   // Calculate total stock from batch data
@@ -135,13 +165,25 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
       final cachedGrouped = inventoryController.getCachedGroupedSupplies();
 
       if (cachedGrouped != null) {
-        // Find the grouped item that matches this item
+        // Find the grouped item that matches this item (must match name, category, AND type)
         for (final grouped in cachedGrouped) {
-          if (grouped.mainItem.name == item.name &&
-              grouped.mainItem.category == item.category) {
+          // Normalize type for comparison (null and empty string are equivalent)
+          final groupedType =
+              (grouped.mainItem.type ?? '').trim().toLowerCase();
+          final itemType = (item.type ?? '').trim().toLowerCase();
+
+          if (grouped.mainItem.name.trim().toLowerCase() ==
+                  item.name.trim().toLowerCase() &&
+              grouped.mainItem.category.trim().toLowerCase() ==
+                  item.category.trim().toLowerCase() &&
+              groupedType == itemType) {
+            debugPrint(
+                '[VIEW_SUPPLY] Found cached grouped totals: stock=${grouped.totalStock}, baseline=${grouped.totalBaseline}');
             return (grouped.totalStock, grouped.totalBaseline);
           }
         }
+        debugPrint(
+            '[VIEW_SUPPLY] No matching grouped item found in cache for: ${item.name} (${item.type})');
       }
     } catch (e) {
       debugPrint('[VIEW_SUPPLY] Error getting cached grouped data: $e');
@@ -152,10 +194,15 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
   @override
   void initState() {
     super.initState();
-    debugPrint(
-        '[VIEW_SUPPLY] initState called for item: ${widget.item.name} (ID: ${widget.item.id})');
-    debugPrint(
-        '[VIEW_SUPPLY] Image URL: ${widget.item.imageUrl.isEmpty ? "EMPTY" : widget.item.imageUrl}');
+    if (widget.item != null) {
+      debugPrint(
+          '[VIEW_SUPPLY] initState called for item: ${widget.item!.name} (ID: ${widget.item!.id})');
+      debugPrint(
+          '[VIEW_SUPPLY] Image URL: ${widget.item!.imageUrl.isEmpty ? "EMPTY" : widget.item!.imageUrl}');
+    } else {
+      debugPrint(
+          '[VIEW_SUPPLY] initState called for supply: ${widget.supplyName} (${widget.supplyType})');
+    }
     debugPrint('[VIEW_SUPPLY] initState start time: ${DateTime.now()}');
     _refreshStream();
     debugPrint('[VIEW_SUPPLY] initState completed at: ${DateTime.now()}');
@@ -163,12 +210,25 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('[VIEW_SUPPLY] build() called for item: ${widget.item.name}');
     final controller = ViewSupplyController();
+
+    // Determine if we're in overview mode (from inventory card) or batch mode (viewing specific batch)
+    final bool isOverviewMode =
+        widget.item == null && widget.supplyName != null;
+
+    if (isOverviewMode) {
+      debugPrint(
+          '[VIEW_SUPPLY] build() called in OVERVIEW MODE for: ${widget.supplyName} (${widget.supplyType})');
+      return _buildOverviewMode(context, controller);
+    }
+
+    // Batch mode - viewing specific batch (from "Other Supply Batches" tap or old navigation)
+    debugPrint(
+        '[VIEW_SUPPLY] build() called in BATCH MODE for item: ${widget.item!.name}');
 
     return StreamBuilder<InventoryItem?>(
       key: _streamKey,
-      stream: controller.supplyStream(widget.item.id),
+      stream: controller.supplyStream(widget.item!.id),
       builder: (context, snapshot) {
         debugPrint(
             '[VIEW_SUPPLY] StreamBuilder snapshot state: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, hasError: ${snapshot.hasError}');
@@ -177,7 +237,7 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         // This ensures we always have data to display and never show loading indicator
         final updatedItem = snapshot.hasData && snapshot.data != null
             ? snapshot.data!
-            : widget.item;
+            : widget.item!;
 
         debugPrint(
             '[VIEW_SUPPLY] Using item: ${updatedItem.name}, Image URL: ${updatedItem.imageUrl.isEmpty ? "EMPTY" : updatedItem.imageUrl}');
@@ -206,43 +266,9 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
         // Query same name+brand and pick the earliest non-null expiry
         // UI-only re-route; no backend change
         if (widget.skipAutoRedirect) {
-          // Even with skipAutoRedirect, we still want grouped status for consistency
-          // Query batches to calculate grouped totals
-          return FutureBuilder<List<Map<String, dynamic>>>(
-            future: () {
-              return Supabase.instance.client
-                  .from('supplies')
-                  .select('*')
-                  .eq('name', updatedItem.name)
-                  .eq('brand', updatedItem.brand)
-                  .eq('type', updatedItem.type ?? '')
-                  .timeout(
-                const Duration(seconds: 2),
-                onTimeout: () {
-                  return <Map<String, dynamic>>[];
-                },
-              );
-            }(),
-            builder: (context, batchSnap) {
-              // Use cached grouped data immediately if available
-              final (cachedTotalStock, cachedTotalBaseline) =
-                  _getGroupedTotalsFromCache(updatedItem);
-
-              // If we have batch data, use it; otherwise use cache or fallback to individual
-              int? totalStock = cachedTotalStock;
-              int? totalBaseline = cachedTotalBaseline;
-
-              if (batchSnap.hasData && batchSnap.data!.isNotEmpty) {
-                totalStock = _calculateTotals(batchSnap.data!);
-                // Calculate totalBaseline from batch data
-                totalBaseline = _calculateTotalBaseline(batchSnap.data!);
-              }
-
-              final status = controller.getStatus(updatedItem,
-                  totalStock: totalStock, totalBaseline: totalBaseline);
-              return _buildScaffold(context, controller, updatedItem, status);
-            },
-          );
+          // Batch details mode: show individual batch status, not grouped totals
+          final status = controller.getStatus(updatedItem);
+          return _buildScaffold(context, controller, updatedItem, status);
         }
         debugPrint('[VIEW_SUPPLY] Starting FutureBuilder for batch query');
         final batchQueryStart = DateTime.now();
@@ -424,6 +450,140 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
     );
   }
 
+  // Build overview mode for grouped supplies (from inventory card)
+  // Queries all batches and shows aggregated totals - no specific batch ID
+  // Uses hybrid caching (in-memory + Hive) for offline support and instant display
+  Widget _buildOverviewMode(
+      BuildContext context, ViewSupplyController controller) {
+    debugPrint(
+        '[VIEW_SUPPLY] Building overview mode for: ${widget.supplyName}');
+
+    // Get cached grouped supplies immediately for offline support and instant display
+    final inventoryController = InventoryController();
+    final cachedGrouped = inventoryController.getCachedGroupedSupplies();
+
+    // Find the matching grouped item from cache
+    GroupedInventoryItem? cachedItem;
+    if (cachedGrouped != null) {
+      for (final grouped in cachedGrouped) {
+        final groupedType = (grouped.mainItem.type ?? '').trim().toLowerCase();
+        final widgetType = (widget.supplyType ?? '').trim().toLowerCase();
+
+        if (grouped.mainItem.name.trim().toLowerCase() ==
+                widget.supplyName!.trim().toLowerCase() &&
+            grouped.mainItem.category.trim().toLowerCase() ==
+                widget.supplyCategory!.trim().toLowerCase() &&
+            groupedType == widgetType) {
+          cachedItem = grouped;
+          debugPrint(
+              '[VIEW_SUPPLY] Found cached grouped item: ${grouped.mainItem.name} (${grouped.mainItem.type})');
+          break;
+        }
+      }
+    }
+
+    // Query all batches matching this supply (name + brand + type)
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: () {
+        debugPrint('[VIEW_SUPPLY] Querying batches for overview');
+        return Supabase.instance.client
+            .from('supplies')
+            .select('*')
+            .eq('name', widget.supplyName!)
+            .eq('brand', widget.supplyBrand!)
+            .eq('type', widget.supplyType ?? '')
+            .eq('archived', false)
+            .timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            debugPrint('[VIEW_SUPPLY] Batch query TIMEOUT after 2s');
+            return <Map<String, dynamic>>[];
+          },
+        );
+      }(),
+      builder: (context, batchSnap) {
+        // While waiting for fresh data, show cached data immediately (no loading flash)
+        if (batchSnap.connectionState == ConnectionState.waiting) {
+          if (cachedItem != null) {
+            debugPrint('[VIEW_SUPPLY] Using cached data while waiting');
+            return _buildScaffold(
+              context,
+              controller,
+              cachedItem.mainItem,
+              cachedItem.getStatus(),
+            );
+          }
+          // Only show loading spinner if no cache available
+          return Scaffold(
+            resizeToAvoidBottomInset: false,
+            appBar: AppBar(title: Text("Inventory")),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        // If error or no data (offline), fallback to cache
+        if (batchSnap.hasError ||
+            !batchSnap.hasData ||
+            batchSnap.data!.isEmpty) {
+          if (cachedItem != null) {
+            debugPrint('[VIEW_SUPPLY] Using cached data (offline or error)');
+            return _buildScaffold(
+              context,
+              controller,
+              cachedItem.mainItem,
+              cachedItem.getStatus(),
+            );
+          }
+          // No cache available - show error
+          return Scaffold(
+            resizeToAvoidBottomInset: false,
+            appBar: AppBar(title: Text("Inventory")),
+            body: Center(child: Text("No batches found")),
+          );
+        }
+
+        // Fresh data available - calculate aggregated totals
+        debugPrint('[VIEW_SUPPLY] Using fresh data from database');
+        final batches = batchSnap.data!;
+        final totalStock = _calculateTotals(batches);
+        final totalBaseline = _calculateTotalBaseline(batches);
+
+        // Pick any batch for display data (first one) - just for name, category, etc.
+        final firstBatchData = batches.first;
+        final firstBatch = InventoryItem(
+          id: firstBatchData['id'] as String,
+          name: firstBatchData['name'] ?? '',
+          type: firstBatchData['type'],
+          imageUrl: firstBatchData['image_url'] ?? '',
+          category: firstBatchData['category'] ?? '',
+          cost: (firstBatchData['cost'] ?? 0).toDouble(),
+          stock: totalStock, // Use aggregated stock
+          lowStockBaseline: totalBaseline, // Use aggregated baseline
+          unit: firstBatchData['unit'] ?? '',
+          packagingUnit: firstBatchData['packaging_unit'],
+          packagingContent: firstBatchData['packaging_content'],
+          packagingQuantity: firstBatchData['packaging_quantity'],
+          packagingContentQuantity:
+              firstBatchData['packaging_content_quantity'],
+          supplier: firstBatchData['supplier'] ?? '',
+          brand: firstBatchData['brand'] ?? '',
+          expiry: firstBatchData['expiry'],
+          noExpiry: firstBatchData['no_expiry'] ?? false,
+          archived: firstBatchData['archived'] ?? false,
+        );
+
+        // Calculate status based on aggregated totals
+        final status = controller.getStatus(firstBatch,
+            totalStock: totalStock, totalBaseline: totalBaseline);
+
+        debugPrint(
+            '[VIEW_SUPPLY] Overview totals: stock=$totalStock, baseline=$totalBaseline, status=$status');
+
+        return _buildScaffold(context, controller, firstBatch, status);
+      },
+    );
+  }
+
   bool _isItemExpired(InventoryItem item) {
     if (item.noExpiry || item.expiry == null || item.expiry!.isEmpty) {
       return false;
@@ -438,34 +598,12 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
 
   Widget _buildScaffold(BuildContext context, ViewSupplyController controller,
       InventoryItem updatedItem, String status) {
-    // Determine which item to display - batch details or overview
-    final displayItem = _selectedBatch ?? updatedItem;
-    final isBatchDetailsMode = _selectedBatch != null;
+    // Simplified scaffold - either in overview mode (from inventory) or batch mode (from navigation)
+    // The mode is determined by which parameters were passed to the widget
+    final bool isBatchDetailsMode = widget.item != null;
 
-    // When in batch details mode, fetch latest data from stream for accurate individual status
-    if (isBatchDetailsMode) {
-      // Wrap in StreamBuilder to get latest batch data from database
-      return StreamBuilder<InventoryItem?>(
-        stream: controller.supplyStream(displayItem.id),
-        builder: (context, batchSnapshot) {
-          // Use stream data if available, otherwise fall back to _selectedBatch
-          final freshBatch = batchSnapshot.hasData && batchSnapshot.data != null
-              ? batchSnapshot.data!
-              : displayItem;
-
-          // Calculate individual batch status using fresh data (not grouped totals)
-          final displayStatus = controller.getStatus(freshBatch);
-
-          return _buildScaffoldBody(context, controller, updatedItem, status,
-              freshBatch, displayStatus, isBatchDetailsMode);
-        },
-      );
-    }
-
-    // In overview mode, use the passed status (calculated with grouped totals)
-    final displayStatus = status;
     return _buildScaffoldBody(context, controller, updatedItem, status,
-        displayItem, displayStatus, isBatchDetailsMode);
+        updatedItem, status, isBatchDetailsMode);
   }
 
   Widget _buildScaffoldBody(
@@ -478,325 +616,313 @@ class _InventoryViewSupplyPageState extends State<InventoryViewSupplyPage> {
       bool isBatchDetailsMode) {
     final theme = Theme.of(context);
 
-    return WillPopScope(
-      onWillPop: () async {
-        // If viewing batch details, return to overview instead of popping
-        if (isBatchDetailsMode) {
-          _returnToOverview();
-          return false; // Prevent default back action
-        }
-        return true; // Allow default back action for overview
-      },
-      child: Scaffold(
-        resizeToAvoidBottomInset: false,
-        backgroundColor: theme.scaffoldBackgroundColor,
-        appBar: AppBar(
-          title: Text(
-            "Inventory",
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          centerTitle: true,
-          backgroundColor: theme.appBarTheme.backgroundColor,
-          toolbarHeight: 70,
-          iconTheme: theme.appBarTheme.iconTheme,
-          elevation: theme.appBarTheme.elevation,
-          shadowColor: theme.appBarTheme.shadowColor,
-          actions: [
-            // Show different buttons based on archived status
-            if (!displayItem.archived) ...[
-              // Edit button - Only for Admin users
-              if (!UserRoleProvider().isStaff)
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.green),
-                  tooltip: "Edit",
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EditSupplyPage(
-                          item: displayItem,
-                        ),
-                      ),
-                    );
-                    if (result == true) {
-                      // Refresh the stream to get updated data
-                      _refreshStream();
-                      // Avoid showing a snackbar if the item is now expired,
-                      // because this page may immediately redirect to the Expired view
-                      try {
-                        final response = await Supabase.instance.client
-                            .from('supplies')
-                            .select('expiry')
-                            .eq('id', displayItem.id)
-                            .single();
-                        final expiryStr = response['expiry']?.toString();
-                        bool isExpiredNow = false;
-                        if (expiryStr != null && expiryStr.isNotEmpty) {
-                          final dt = DateTime.tryParse(expiryStr) ??
-                              DateTime.tryParse(expiryStr.replaceAll('/', '-'));
-                          if (dt != null) {
-                            final today = DateTime.now();
-                            final d = DateTime(dt.year, dt.month, dt.day);
-                            final t =
-                                DateTime(today.year, today.month, today.day);
-                            isExpiredNow =
-                                d.isBefore(t) || d.isAtSameMomentAs(t);
-                          }
-                        }
-                        if (!isExpiredNow) {
-                          final messenger = ScaffoldMessenger.maybeOf(context);
-                          if (messenger != null) {
-                            messenger.showSnackBar(
-                              const SnackBar(content: Text('Supply updated!')),
-                            );
-                          }
-                        }
-                      } catch (_) {
-                        // Best-effort only; ignore errors
-                      }
-                    }
-                  },
-                ),
-              // Archive button - Only for Admin users
-              if (!UserRoleProvider().isStaff)
-                IconButton(
-                  icon: const Icon(Icons.archive, color: Colors.orange),
-                  tooltip: "Archive",
-                  onPressed: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => _buildCustomDialog(
-                        context,
-                        title: 'Archive Supply',
-                        content:
-                            'Are you sure you want to archive this supply?',
-                        confirmText: 'Archive',
-                        confirmColor: Colors.orange,
-                        icon: Icons.archive,
-                      ),
-                    );
-                    if (confirmed == true) {
-                      // Check connectivity before proceeding
-                      final hasConnection =
-                          await ConnectivityService().hasInternetConnection();
-                      if (!hasConnection) {
-                        if (context.mounted) {
-                          await showConnectionErrorDialog(context);
-                        }
-                        return;
-                      }
-
-                      try {
-                        await controller.archiveSupply(displayItem.id);
-                        // Refresh the stream to show updated status
-                        _refreshStream();
-                        if (!context.mounted) return;
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (context) => ArchiveSupplyPage(),
-                          ),
-                        );
-                      } catch (e) {
-                        // Check if it's a network error
-                        final errorString = e.toString().toLowerCase();
-                        if (errorString
-                            .contains('archive_blocked_stock_remaining')) {
-                          if (context.mounted) {
-                            await _showArchiveBlockedDialog(context);
-                          }
-                        } else if (errorString.contains('socketexception') ||
-                            errorString.contains('failed host lookup') ||
-                            errorString.contains('no address associated') ||
-                            errorString.contains('network is unreachable') ||
-                            errorString.contains('connection refused') ||
-                            errorString.contains('connection timed out')) {
-                          if (context.mounted) {
-                            await showConnectionErrorDialog(context);
-                          }
-                        } else {
-                          // Other error - show generic error message
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    'Failed to archive supply: ${e.toString()}'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      }
-                    }
-                  },
-                ),
-            ] else ...[
-              // Unarchive button - Only for Admin users
-              if (!UserRoleProvider().isStaff)
-                IconButton(
-                  icon: const Icon(Icons.unarchive, color: Colors.blue),
-                  tooltip: "Unarchive",
-                  onPressed: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => _buildCustomDialog(
-                        context,
-                        title: 'Unarchive Supply',
-                        content:
-                            'Are you sure you want to unarchive this supply?',
-                        confirmText: 'Unarchive',
-                        confirmColor: Colors.blue,
-                        icon: Icons.unarchive,
-                      ),
-                    );
-                    if (confirmed == true) {
-                      // Check connectivity before proceeding
-                      final hasConnection =
-                          await ConnectivityService().hasInternetConnection();
-                      if (!hasConnection) {
-                        if (context.mounted) {
-                          await showConnectionErrorDialog(context);
-                        }
-                        return;
-                      }
-
-                      try {
-                        await controller.unarchiveSupply(displayItem.id);
-                        // Refresh the stream to show updated status
-                        _refreshStream();
-                        if (!context.mounted) return;
-                        Navigator.of(context).pop(
-                            'unarchived'); // Go back to archive page with result
-                      } catch (e) {
-                        // Check if it's a network error
-                        final errorString = e.toString().toLowerCase();
-                        if (errorString.contains('socketexception') ||
-                            errorString.contains('failed host lookup') ||
-                            errorString.contains('no address associated') ||
-                            errorString.contains('network is unreachable') ||
-                            errorString.contains('connection refused') ||
-                            errorString.contains('connection timed out')) {
-                          if (context.mounted) {
-                            await showConnectionErrorDialog(context);
-                          }
-                        } else {
-                          // Other error - show generic error message
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    'Failed to unarchive supply: ${e.toString()}'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      }
-                    }
-                  },
-                ),
-              // Delete button - Only for Admin users
-              if (!UserRoleProvider().isStaff)
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  tooltip: "Delete",
-                  onPressed: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => _buildCustomDialog(
-                        context,
-                        title: 'Delete Supply',
-                        content:
-                            'Are you sure you want to delete this supply?\n\nThis action cannot be undone.',
-                        confirmText: 'Delete',
-                        confirmColor: Colors.red,
-                        icon: Icons.delete,
-                      ),
-                    );
-                    if (confirmed == true) {
-                      // Check connectivity before proceeding
-                      final hasConnection =
-                          await ConnectivityService().hasInternetConnection();
-                      if (!hasConnection) {
-                        if (context.mounted) {
-                          await showConnectionErrorDialog(context);
-                        }
-                        return;
-                      }
-
-                      try {
-                        await controller.deleteSupply(displayItem.id);
-                        if (!context.mounted) return;
-                        Navigator.of(context).pop(); // Go back to archive page
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Supply deleted permanently!'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      } catch (e) {
-                        // Check if it's a network error
-                        final errorString = e.toString().toLowerCase();
-                        if (errorString.contains('socketexception') ||
-                            errorString.contains('failed host lookup') ||
-                            errorString.contains('no address associated') ||
-                            errorString.contains('network is unreachable') ||
-                            errorString.contains('connection refused') ||
-                            errorString.contains('connection timed out')) {
-                          if (context.mounted) {
-                            await showConnectionErrorDialog(context);
-                          }
-                        } else {
-                          // Other error - show generic error message
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    'Failed to delete supply: ${e.toString()}'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      }
-                    }
-                  },
-                ),
-            ],
-          ],
+    return Scaffold(
+      resizeToAvoidBottomInset: false,
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          "Inventory",
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
-        body: ResponsiveContainer(
-          maxWidth: 1000,
-          child: SafeArea(
-            child: Stack(
-              children: [
-                RefreshIndicator(
-                  onRefresh: () async {
-                    // Refresh the stream to reload data from Supabase
-                    _refreshStream();
-                    // Wait for the stream to emit at least one event
-                    // This ensures the RefreshIndicator shows its animation
-                    await controller.supplyStream(displayItem.id).first;
-                  },
-                  child: SingleChildScrollView(
-                    physics: AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.symmetric(
-                      horizontal:
-                          MediaQuery.of(context).size.width < 768 ? 8.0 : 18.0,
-                      vertical:
-                          MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0,
+        centerTitle: true,
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        toolbarHeight: 70,
+        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: theme.appBarTheme.elevation,
+        shadowColor: theme.appBarTheme.shadowColor,
+        actions: [
+          // Show different buttons based on archived status
+          if (!displayItem.archived) ...[
+            // Edit button - Only for Admin users and only in batch details mode (not in overview)
+            if (!UserRoleProvider().isStaff && isBatchDetailsMode)
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.green),
+                tooltip: "Edit",
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditSupplyPage(
+                        item: displayItem,
+                      ),
                     ),
-                    child: isBatchDetailsMode
-                        ? _buildBatchDetailsView(
-                            context, controller, displayItem, displayStatus)
-                        : _buildOverviewView(
-                            context, controller, updatedItem, displayStatus),
+                  );
+                  if (result == true) {
+                    // Refresh the stream to get updated data
+                    _refreshStream();
+                    // Avoid showing a snackbar if the item is now expired,
+                    // because this page may immediately redirect to the Expired view
+                    try {
+                      final response = await Supabase.instance.client
+                          .from('supplies')
+                          .select('expiry')
+                          .eq('id', displayItem.id)
+                          .single();
+                      final expiryStr = response['expiry']?.toString();
+                      bool isExpiredNow = false;
+                      if (expiryStr != null && expiryStr.isNotEmpty) {
+                        final dt = DateTime.tryParse(expiryStr) ??
+                            DateTime.tryParse(expiryStr.replaceAll('/', '-'));
+                        if (dt != null) {
+                          final today = DateTime.now();
+                          final d = DateTime(dt.year, dt.month, dt.day);
+                          final t =
+                              DateTime(today.year, today.month, today.day);
+                          isExpiredNow = d.isBefore(t) || d.isAtSameMomentAs(t);
+                        }
+                      }
+                      if (!isExpiredNow) {
+                        final messenger = ScaffoldMessenger.maybeOf(context);
+                        if (messenger != null) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Supply updated!')),
+                          );
+                        }
+                      }
+                    } catch (_) {
+                      // Best-effort only; ignore errors
+                    }
+                  }
+                },
+              ),
+            // Archive button - Only for Admin users
+            if (!UserRoleProvider().isStaff)
+              IconButton(
+                icon: const Icon(Icons.archive, color: Colors.orange),
+                tooltip: "Archive",
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => _buildCustomDialog(
+                      context,
+                      title: 'Archive Supply',
+                      content: 'Are you sure you want to archive this supply?',
+                      confirmText: 'Archive',
+                      confirmColor: Colors.orange,
+                      icon: Icons.archive,
+                    ),
+                  );
+                  if (confirmed == true) {
+                    // Check connectivity before proceeding
+                    final hasConnection =
+                        await ConnectivityService().hasInternetConnection();
+                    if (!hasConnection) {
+                      if (context.mounted) {
+                        await showConnectionErrorDialog(context);
+                      }
+                      return;
+                    }
+
+                    try {
+                      await controller.archiveSupply(displayItem.id);
+                      // Refresh the stream to show updated status
+                      _refreshStream();
+                      if (!context.mounted) return;
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (context) => ArchiveSupplyPage(),
+                        ),
+                      );
+                    } catch (e) {
+                      // Check if it's a network error
+                      final errorString = e.toString().toLowerCase();
+                      if (errorString
+                          .contains('archive_blocked_stock_remaining')) {
+                        if (context.mounted) {
+                          await _showArchiveBlockedDialog(context);
+                        }
+                      } else if (errorString.contains('socketexception') ||
+                          errorString.contains('failed host lookup') ||
+                          errorString.contains('no address associated') ||
+                          errorString.contains('network is unreachable') ||
+                          errorString.contains('connection refused') ||
+                          errorString.contains('connection timed out')) {
+                        if (context.mounted) {
+                          await showConnectionErrorDialog(context);
+                        }
+                      } else {
+                        // Other error - show generic error message
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Failed to archive supply: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  }
+                },
+              ),
+          ] else ...[
+            // Unarchive button - Only for Admin users
+            if (!UserRoleProvider().isStaff)
+              IconButton(
+                icon: const Icon(Icons.unarchive, color: Colors.blue),
+                tooltip: "Unarchive",
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => _buildCustomDialog(
+                      context,
+                      title: 'Unarchive Supply',
+                      content:
+                          'Are you sure you want to unarchive this supply?',
+                      confirmText: 'Unarchive',
+                      confirmColor: Colors.blue,
+                      icon: Icons.unarchive,
+                    ),
+                  );
+                  if (confirmed == true) {
+                    // Check connectivity before proceeding
+                    final hasConnection =
+                        await ConnectivityService().hasInternetConnection();
+                    if (!hasConnection) {
+                      if (context.mounted) {
+                        await showConnectionErrorDialog(context);
+                      }
+                      return;
+                    }
+
+                    try {
+                      await controller.unarchiveSupply(displayItem.id);
+                      // Refresh the stream to show updated status
+                      _refreshStream();
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop(
+                          'unarchived'); // Go back to archive page with result
+                    } catch (e) {
+                      // Check if it's a network error
+                      final errorString = e.toString().toLowerCase();
+                      if (errorString.contains('socketexception') ||
+                          errorString.contains('failed host lookup') ||
+                          errorString.contains('no address associated') ||
+                          errorString.contains('network is unreachable') ||
+                          errorString.contains('connection refused') ||
+                          errorString.contains('connection timed out')) {
+                        if (context.mounted) {
+                          await showConnectionErrorDialog(context);
+                        }
+                      } else {
+                        // Other error - show generic error message
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Failed to unarchive supply: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  }
+                },
+              ),
+            // Delete button - Only for Admin users
+            if (!UserRoleProvider().isStaff)
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                tooltip: "Delete",
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => _buildCustomDialog(
+                      context,
+                      title: 'Delete Supply',
+                      content:
+                          'Are you sure you want to delete this supply?\n\nThis action cannot be undone.',
+                      confirmText: 'Delete',
+                      confirmColor: Colors.red,
+                      icon: Icons.delete,
+                    ),
+                  );
+                  if (confirmed == true) {
+                    // Check connectivity before proceeding
+                    final hasConnection =
+                        await ConnectivityService().hasInternetConnection();
+                    if (!hasConnection) {
+                      if (context.mounted) {
+                        await showConnectionErrorDialog(context);
+                      }
+                      return;
+                    }
+
+                    try {
+                      await controller.deleteSupply(displayItem.id);
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop(); // Go back to archive page
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Supply deleted permanently!'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    } catch (e) {
+                      // Check if it's a network error
+                      final errorString = e.toString().toLowerCase();
+                      if (errorString.contains('socketexception') ||
+                          errorString.contains('failed host lookup') ||
+                          errorString.contains('no address associated') ||
+                          errorString.contains('network is unreachable') ||
+                          errorString.contains('connection refused') ||
+                          errorString.contains('connection timed out')) {
+                        if (context.mounted) {
+                          await showConnectionErrorDialog(context);
+                        }
+                      } else {
+                        // Other error - show generic error message
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Failed to delete supply: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  }
+                },
+              ),
+          ],
+        ],
+      ),
+      body: ResponsiveContainer(
+        maxWidth: 1000,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: () async {
+                  // Refresh the stream to reload data from Supabase
+                  _refreshStream();
+                  // Wait for the stream to emit at least one event
+                  // This ensures the RefreshIndicator shows its animation
+                  await controller.supplyStream(displayItem.id).first;
+                },
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.symmetric(
+                    horizontal:
+                        MediaQuery.of(context).size.width < 768 ? 8.0 : 18.0,
+                    vertical:
+                        MediaQuery.of(context).size.width < 768 ? 8.0 : 16.0,
                   ),
+                  child: isBatchDetailsMode
+                      ? _buildBatchDetailsView(
+                          context, controller, displayItem, displayStatus)
+                      : _buildOverviewView(
+                          context, controller, updatedItem, displayStatus),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

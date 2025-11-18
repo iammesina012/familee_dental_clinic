@@ -9,8 +9,30 @@ import 'package:familee_dental/features/stock_deduction/pages/sd_approval_card_w
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/activity_log/controller/sd_activity_controller.dart';
+import 'package:familee_dental/features/notifications/controller/notifications_controller.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
+
+// Helper function to format date for notifications
+String _formatDateForNotification(DateTime dateTime) {
+  final local = dateTime.toLocal();
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final year = local.year.toString();
+
+  int hour = local.hour;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12;
+  if (hour == 0) {
+    hour = 12;
+  }
+  final hourStr = hour.toString();
+
+  return '$month/$day/$year - $hourStr:$minute $period';
+}
 
 class ApprovalPage extends StatefulWidget {
   const ApprovalPage({super.key});
@@ -517,6 +539,14 @@ class _ApprovalPageState extends State<ApprovalPage> {
 
     if (confirmed != true) return;
 
+    // Check network connection before proceeding
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (!mounted) return;
+      await showConnectionErrorDialog(context);
+      return;
+    }
+
     // Mark as processing
     if (approvalId != null) {
       _processingApprovalIds.add(approvalId);
@@ -699,6 +729,22 @@ class _ApprovalPageState extends State<ApprovalPage> {
         remarks: remarks,
       );
 
+      // Create notification for approval
+      try {
+        final createdAtRaw = approval['created_at'];
+        DateTime? createdAt;
+        if (createdAtRaw is String) {
+          createdAt = DateTime.tryParse(createdAtRaw);
+        } else if (createdAtRaw is DateTime) {
+          createdAt = createdAtRaw;
+        }
+        final formattedDate = createdAt != null
+            ? _formatDateForNotification(createdAt)
+            : _formatDateForNotification(DateTime.now());
+        await NotificationsController()
+            .createSDApprovedNotification(formattedDate);
+      } catch (_) {}
+
       // Add to blacklist immediately to prevent it from ever appearing again
       final approvalId = approval['id']?.toString();
       if (approvalId != null) {
@@ -750,16 +796,32 @@ class _ApprovalPageState extends State<ApprovalPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to approve: $e',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception') ||
+          errorString.contains('connection abort') ||
+          errorString.contains('software caused connection abort')) {
+        await showConnectionErrorDialog(context);
+      } else {
+        // Other error - show generic error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to approve: $e',
+              style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+        );
+      }
     } finally {
       // Remove from processing set
       if (approvalId != null && mounted) {
@@ -912,6 +974,14 @@ class _ApprovalPageState extends State<ApprovalPage> {
 
     if (confirmed != true) return;
 
+    // Check network connection before proceeding
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (!mounted) return;
+      await showConnectionErrorDialog(context);
+      return;
+    }
+
     // Mark as processing
     if (approvalId != null) {
       _processingApprovalIds.add(approvalId);
@@ -937,6 +1007,22 @@ class _ApprovalPageState extends State<ApprovalPage> {
         supplies: List<Map<String, dynamic>>.from(supplies),
         remarks: remarks,
       );
+
+      // Create notification for rejection
+      try {
+        final createdAtRaw = approval['created_at'];
+        DateTime? createdAt;
+        if (createdAtRaw is String) {
+          createdAt = DateTime.tryParse(createdAtRaw);
+        } else if (createdAtRaw is DateTime) {
+          createdAt = createdAtRaw;
+        }
+        final formattedDate = createdAt != null
+            ? _formatDateForNotification(createdAt)
+            : _formatDateForNotification(DateTime.now());
+        await NotificationsController()
+            .createSDRejectedNotification(formattedDate);
+      } catch (_) {}
 
       // Add to blacklist immediately to prevent it from ever appearing again
       final approvalId = approval['id']?.toString();
@@ -1050,16 +1136,32 @@ class _ApprovalPageState extends State<ApprovalPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to reject approval: $e',
-            style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+
+      // Check if it's a network error
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('socketexception') ||
+          errorString.contains('failed host lookup') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('network is unreachable') ||
+          errorString.contains('connection refused') ||
+          errorString.contains('connection timed out') ||
+          errorString.contains('clientexception') ||
+          errorString.contains('connection abort') ||
+          errorString.contains('software caused connection abort')) {
+        await showConnectionErrorDialog(context);
+      } else {
+        // Other error - show generic error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to reject approval: $e',
+              style: AppFonts.sfProStyle(fontSize: 14, color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+        );
+      }
     } finally {
       // Remove from processing set
       if (approvalId != null && mounted) {

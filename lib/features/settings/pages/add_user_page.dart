@@ -3,6 +3,8 @@ import 'package:familee_dental/features/settings/controller/add_user_controller.
 import 'package:familee_dental/shared/widgets/responsive_container.dart';
 import 'package:familee_dental/shared/providers/user_role_provider.dart';
 import 'package:familee_dental/features/activity_log/controller/settings_activity_controller.dart';
+import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/widgets/connection_error_dialog.dart';
 
 class AddUserPage extends StatefulWidget {
   const AddUserPage({super.key});
@@ -415,7 +417,7 @@ class _AddUserPageState extends State<AddUserPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isCreating ? null : _createUser,
+                          onPressed: _isCreating ? null : _handleCreateUser,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00D4AA),
                             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -647,73 +649,238 @@ class _AddUserPageState extends State<AddUserPage> {
     );
   }
 
+  Future<void> _handleCreateUser() async {
+    // Show confirmation dialog first
+    final confirmed = await _showCreateUserConfirmationDialog();
+    if (!confirmed) return; // User cancelled
+
+    // Check network connection AFTER confirmation
+    final hasConnection = await ConnectivityService().hasInternetConnection();
+    if (!hasConnection) {
+      if (mounted) {
+        await showConnectionErrorDialog(context);
+      }
+      return;
+    }
+
+    // Proceed with creating user
+    await _createUser();
+  }
+
+  Future<bool> _showCreateUserConfirmationDialog() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  minWidth: 350,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.person_add,
+                        color: Color(0xFF00D4AA),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Create Employee',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Are you sure you want to create this employee?',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyMedium?.color,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: const Text(
+                              'Create',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro',
+                                fontWeight: FontWeight.w500,
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+  }
+
   Future<void> _createUser() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isCreating = true);
 
-    // Check for duplicates before creating
-    final isUsernameTaken =
-        await _controller.isUsernameTaken(_usernameController.text.trim());
-    final isEmailTaken =
-        await _controller.isEmailTaken(_emailController.text.trim());
+    try {
+      // Check for duplicates before creating
+      final isUsernameTaken =
+          await _controller.isUsernameTaken(_usernameController.text.trim());
+      final isEmailTaken =
+          await _controller.isEmailTaken(_emailController.text.trim());
 
-    if (isUsernameTaken) {
-      setState(() {
-        _isCreating = false;
-        _usernameError = 'Username is already taken';
-      });
-      return;
-    }
+      if (isUsernameTaken) {
+        setState(() {
+          _isCreating = false;
+          _usernameError = 'Username is already taken';
+        });
+        return;
+      }
 
-    if (isEmailTaken) {
-      setState(() {
-        _isCreating = false;
-        _emailError = 'Email is already taken';
-      });
-      return;
-    }
+      if (isEmailTaken) {
+        setState(() {
+          _isCreating = false;
+          _emailError = 'Email is already taken';
+        });
+        return;
+      }
 
-    final result = await _controller.createUser(
-      name: _nameController.text.trim(),
-      username: _usernameController.text.trim(),
-      email: _emailController.text.trim(),
-      password: 'famiLee2021', // Default password for all new users
-      role: _selectedRole,
-      isActive: true, // Always create new users as active
-    );
-
-    setState(() {
-      _isCreating = false;
-      _usernameError = null;
-      _emailError = null;
-    });
-
-    if (result['success']) {
-      // Log employee added activity
-      await _settingsActivityController.logEmployeeAdded(
-        employeeName: _nameController.text.trim(),
-        employeeRole: _selectedRole,
+      final result = await _controller.createUser(
+        name: _nameController.text.trim(),
+        username: _usernameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: 'famiLee2021', // Default password for all new users
+        role: _selectedRole,
+        isActive: true, // Always create new users as active
       );
 
-      if (mounted) {
-        _hasUnsavedChanges = false; // Reset flag on successful save
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('User created successfully'),
-            backgroundColor: Color(0xFF00D4AA),
-          ),
+      setState(() {
+        _isCreating = false;
+        _usernameError = null;
+        _emailError = null;
+      });
+
+      if (result['success']) {
+        // Log employee added activity
+        await _settingsActivityController.logEmployeeAdded(
+          employeeName: _nameController.text.trim(),
+          employeeRole: _selectedRole,
         );
-        Navigator.pop(context, true); // Return true to indicate success
+
+        if (mounted) {
+          _hasUnsavedChanges = false; // Reset flag on successful save
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('User created successfully'),
+              backgroundColor: Color(0xFF00D4AA),
+            ),
+          );
+          Navigator.pop(context, true); // Return true to indicate success
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating user: ${result['error']}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
-    } else {
+    } catch (e) {
+      setState(() => _isCreating = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error creating user: ${result['error']}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Check if it's a network error
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('socketexception') ||
+            errorString.contains('failed host lookup') ||
+            errorString.contains('no address associated') ||
+            errorString.contains('network is unreachable') ||
+            errorString.contains('connection refused') ||
+            errorString.contains('connection timed out') ||
+            errorString.contains('clientexception') ||
+            errorString.contains('connection abort') ||
+            errorString.contains('software caused connection abort')) {
+          await showConnectionErrorDialog(context);
+        } else {
+          // Other error - show generic error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating user: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }

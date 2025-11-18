@@ -10,6 +10,7 @@ import 'package:familee_dental/shared/themes/font.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:familee_dental/shared/services/connectivity_service.dart';
+import 'package:familee_dental/shared/services/user_data_service.dart';
 
 class ActivityLogPage extends StatefulWidget {
   const ActivityLogPage({super.key});
@@ -29,9 +30,13 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
   bool? _hasConnection;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
+  final _userDataService = UserDataService();
+
   @override
   void initState() {
     super.initState();
+    // Load user data from Hive first (avoid placeholders)
+    _loadUserDataFromHive();
     _loadUserData();
     _searchController.addListener(() {
       _controller.updateSearchQuery(_searchController.text);
@@ -108,49 +113,78 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     });
   }
 
-  Future<void> _loadUserData() async {
+  /// Load user data from Hive (no placeholders)
+  Future<void> _loadUserDataFromHive() async {
     try {
-      final currentUser = Supabase.instance.client.auth.currentUser;
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
       if (currentUser != null) {
-        // Try to get name and role from user_roles table
-        final response = await Supabase.instance.client
-            .from('user_roles')
-            .select('*')
-            .eq('id', currentUser.id)
-            .maybeSingle();
-
-        if (response != null) {
+        await _userDataService.loadFromHive(currentUser.id);
+        if (mounted) {
           setState(() {
-            _userName = response['name']?.toString().trim();
-            _userRole = response['role']?.toString().trim();
-          });
-        }
-
-        // Fallback to metadata or email if not found
-        if (_userName == null || _userName!.isEmpty) {
-          final displayName =
-              currentUser.userMetadata?['display_name']?.toString().trim();
-          final emailName = currentUser.email?.split('@')[0].trim();
-          setState(() {
-            _userName = displayName ?? emailName ?? 'User';
-          });
-        }
-
-        if (_userRole == null || _userRole!.isEmpty) {
-          setState(() {
-            _userRole =
-                currentUser.userMetadata?['role']?.toString().trim() ?? 'Admin';
+            _userName = _userDataService.userName;
+            _userRole = _userDataService.userRole;
           });
         }
       }
     } catch (e) {
-      // If error occurs, use fallback
-      final currentUser = Supabase.instance.client.auth.currentUser;
+      // Ignore errors - best effort
+    }
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+
       if (currentUser != null) {
-        final emailName = currentUser.email?.split('@')[0].trim();
+        // Try to get user data from user_roles table (same approach as Dashboard)
+        final response = await supabase
+            .from('user_roles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .limit(1)
+            .maybeSingle();
+
+        if (mounted) {
+          if (response != null &&
+              response['name'] != null &&
+              response['name'].toString().trim().isNotEmpty) {
+            // Use data from user_roles table
+            final name = response['name'].toString().trim();
+            final role = response['role']?.toString().trim() ?? 'Admin';
+
+            setState(() {
+              _userName = name;
+              _userRole = role;
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          } else {
+            // Fallback to auth user data
+            final displayName =
+                currentUser.userMetadata?['display_name']?.toString().trim();
+            final emailName = currentUser.email?.split('@')[0].trim();
+            final name = displayName ?? emailName ?? 'User';
+            final role = 'Admin';
+
+            setState(() {
+              _userName = name;
+              _userRole = role;
+            });
+
+            // Save to Hive for persistence
+            await _userDataService.saveToHive(currentUser.id, name, role);
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _userName = emailName ?? 'User';
-          _userRole = 'Admin';
+          // Use cached data from service if available (loaded from Hive)
+          _userName = _userDataService.userName;
+          _userRole = _userDataService.userRole;
         });
       }
     }
